@@ -1,0 +1,27 @@
+OBJDIRS += client
+
+CLIB_SRCFILES := client/printfmt.c client/printf.c client/string.c client/syscall.c
+CLIB_SRCFILES := $(wildcard $(CLIB_SRCFILES))
+CLIB_OBJFILES := $(patsubst client/%.c, $(OBJDIR)/client/%.o, $(CLIB_SRCFILES))
+CLIB_OBJFILES := $(patsubst client/%.S, $(OBJDIR)/client/%.o, $(CLIB_OBJFILES))
+
+$(OBJDIR)/client/libclient.a: $(CLIB_OBJFILES)
+	@echo + ar[CLIENT] $@
+	$(V)$(AR) r $@ $(CLIB_OBJFILES)
+
+$(OBJDIR)/client/%.o: client/%.c
+	@echo + cc[CLIENT] $<
+	@mkdir -p $(@D)
+	$(V)$(CC) -nostdinc $(USER_CFLAGS) -c -o $@ $<
+
+$(OBJDIR)/client/%.o: client/%.S
+	@echo + as[CLIENT] $<
+	@mkdir -p $(@D)
+	$(V)$(CC) -nostdinc $(USER_CFLAGS) -c -o $@ $<
+
+$(OBJDIR)/client/%: $(OBJDIR)/client/%.o $(OBJDIR)/client/entry.o $(OBJDIR)/client/libclient.a  
+	@echo + ld[CLIENT] $@
+	$(V)$(LD) -o $@ $(USER_LDFLAGS) $(OBJDIR)/client/entry.o $@.o \
+		-L$(OBJDIR)/client -lclient $(GCC_LIB) -b binary $(OBJDIR)/client/client1
+	$(V)$(OBJDUMP) -S $@ > $@.asm
+	$(V)$(NM) -n $@ > $@.sym

@@ -1,0 +1,33 @@
+
+1. write a small kernel that manages secondary CPUs (there will be an instance per CPU).
+
+This kernel needs to provide the following API to the rest of the kernel:
+
+start a process on the CPU
+stop a process on the CPU
+done status report: is there a process on CPU / process terminated.
+
+// Can one CPU send another CPU an intterupt?
+
+Most likely this API will be accomplished by CPU polling a specific data structure
+(something like a Proc data structure), which would occur on timer interrupt.
+
+All faults / SYSCALL ints must be forwarded to the management app.
+( This may be challenging due to necessity of creating kernel buffers -- 
+  we should not map client's pages to management - otherwise we'll leak data.
+To accomplish this, we may need to define an API for kernel buffers....
+else we may need to create virtual hardware -- which is basically an API.
+)
+
+The management app is provided with the following API:
+  register an event/signal handler (reentrant issues?)
+
+  terminal communication (PUTS / GETC)
+
+  load a process on the CPU (elf?)
+  start CPU
+  stop / reset CPU
+  get status of CPU
+  
+  address space management of the process (add / remove pages)
+ 

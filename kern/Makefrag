@@ -1,0 +1,90 @@
+#
+# Makefile fragment for the kernel.
+# This is NOT a complete makefile;
+# you must run GNU make in the top-level directory
+# where the GNUmakefile is located.
+#
+
+OBJDIRS += kern
+
+# entry.S must be first, so that it's the first code in the text segment!!!
+#
+# We also snatch the use of a few handy source files
+# from the lib directory, to avoid gratuitous code duplication.
+include kern/arch/Makefrag
+include kern/debug/Makefrag
+include kern/mem/Makefrag
+include kern/pmap/Makefrag
+include kern/as/Makefrag
+include kern/proc/Makefrag
+include kern/msgqueue/Makefrag
+#include kern/usermode/Makefrag
+
+# Build files only if they exist.
+KERN_SRCFILES += kern/master.c
+KERN_SRCFILES += kern/slave.c
+KERN_SRCFILES := $(wildcard $(KERN_SRCFILES))
+
+# Binary program images to embed within the kernel.
+KERN_BINFILES += user/mgmt
+KERN_BINFILES += boot/bootother
+#KERN_BINFILES += kern2/kern2
+#KERN_BINFILES += $(patsubst %,user/%,$(KERN_INITFILES))
+KERN_OBJFILES := $(patsubst %.c, $(OBJDIR)/%.o, $(KERN_SRCFILES))
+KERN_OBJFILES := $(patsubst %.S, $(OBJDIR)/%.o, $(KERN_OBJFILES))
+
+KERN_BINFILES := $(patsubst %, $(OBJDIR)/%, $(KERN_BINFILES))
+
+# How to build kernel object files
+$(OBJDIR)/kern/%.o: kern/%.c
+	@echo + cc $<
+	@mkdir -p $(@D)
+	$(V)$(CC) -nostdinc $(KERN_CFLAGS) -c -o $@ $<
+
+$(OBJDIR)/kern/%.o: kern/%.S
+	@echo + as $<
+	@mkdir -p $(@D)
+	$(V)$(CC) -nostdinc $(KERN_CFLAGS) -c -o $@ $<
+
+# How to build the kernel itself
+$(OBJDIR)/kern/kernel: $(KERN_OBJFILES) $(KERN_BINFILES)
+	@echo + ld $@
+	$(V)$(LD) -o $@ $(KERN_LDFLAGS) $(KERN_OBJFILES) $(GCC_LIB) -b binary $(KERN_BINFILES)
+	$(V)$(OBJDUMP) -S $@ > $@.asm
+	$(V)$(NM) -n $@ > $@.sym
+
+# How to build the kernel disk image
+$(OBJDIR)/kern/kernel.img: $(OBJDIR)/kern/kernel $(OBJDIR)/boot/bootblock
+	@echo + mk $@
+	$(V)dd if=/dev/zero of=$(OBJDIR)/kern/kernel.img~ count=10000 2>/dev/null
+	$(V)dd if=$(OBJDIR)/boot/bootblock of=$(OBJDIR)/kern/kernel.img~ conv=notrunc 2>/dev/null
+	$(V)dd if=$(OBJDIR)/kern/kernel of=$(OBJDIR)/kern/kernel.img~ seek=1 conv=notrunc 2>/dev/null
+	$(V)mv $(OBJDIR)/kern/kernel.img~ $(OBJDIR)/kern/kernel.img
+
+all: $(OBJDIR)/kern/kernel.img
+
+grub: $(OBJDIR)/pios-grub
+
+$(OBJDIR)/pios-grub: $(OBJDIR)/kern/kernel
+	@echo + oc $@
+	$(V)$(OBJCOPY) --adjust-vma=0x10000000 $^ $@
+
+# Create VMware disk image to run under VMware, VirtualBox, etc.
+%.vmdk: %.img
+	qemu-img convert -f raw -O vmdk $*.img $*.vmdk
+
+# Run PIOS under VirtualBox
+vbox: $(OBJDIR)/kern/kernel.vmdk vbox-stop
+	@VBoxManage storageattach PIOS --storagectl "IDE Controller" --port 0 \
+		--device 0 --type hdd --medium `/bin/pwd`/obj/kern/kernel.vmdk
+	VBoxManage startvm PIOS
+
+# Stop VirtualBox's PIOS virtual machine
+vbox-stop:
+	@VBoxManage controlvm PIOS poweroff >/dev/null 2>&1 || true
+	@until VBoxManage showvminfo PIOS -machinereadable | \
+		grep -q 'VMState="poweroff"' ; do echo waiting; sleep 1; done
+	@VBoxManage storageattach PIOS --storagectl "IDE Controller" --port 0 \
+		--device 0 --type hdd --medium none >/dev/null 2>&1 || true
+	@VBoxManage closemedium disk `/bin/pwd`/obj/kern/kernel.vmdk \
+		>/dev/null 2>&1 || true
