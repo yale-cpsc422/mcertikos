@@ -4,6 +4,7 @@
 #include <inc/arch/mmu.h>
 #include <inc/arch/mp.h>
 #include <inc/arch/mem.h>
+#include <inc/arch/pic.h>
 
 #include <inc/arch/context.h>
 
@@ -51,6 +52,7 @@ void entry_init(void) {
 	// Initialize simple memory allocator
 	// Depends on NVRAM / primitive memory instructions (to get the size of memory)
 	mem_init();
+	pic_init();
 
 	// enable the system of contexts (needs to be done only once)
 	// depends on the memory subsystem.

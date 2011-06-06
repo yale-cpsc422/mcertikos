@@ -183,6 +183,7 @@ void kstack_init()
 	assert(pi);
 	mem_incref(pi);
 	c->registered_callbacks = (callback*)mem_pi2ptr(pi);
+	memset(c->registered_callbacks, 0, PAGESIZE);
 
 
 	c->booted = true;
