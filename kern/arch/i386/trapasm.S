@@ -1,7 +1,7 @@
 /* Trap handler entry and exit code. */
 /* See COPYRIGHT for copyright information. */
 
-#include <inc/arch/x86.h>
+#include <architecture/x86.h>
 #include <architecture/context_internal.h>
 
 /* The TRAPHANDLER macro defines a globally-visible function for handling

@@ -1,8 +1,8 @@
 /* See COPYRIGHT for copyright information. */
 
-#include <inc/arch/x86.h>
-#include <inc/arch/stdarg.h>
-#include <inc/arch/mem.h>
+#include <architecture/x86.h>
+#include <inc/stdarg.h>
+#include <architecture/mem.h>
 
 #include <kern/debug/video.h>
 #include <kern/debug/kbd.h>

@@ -1,5 +1,5 @@
-#include <inc/arch/x86.h>
-#include <inc/arch/elf.h>
+#include <architecture/x86.h>
+#include <inc/elf.h>
 
 /**********************************************************************
  * This a dirt simple boot loader, whose sole job is to boot

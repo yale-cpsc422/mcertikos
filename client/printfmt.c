@@ -2,8 +2,8 @@
 // used in common by printf, sprintf, fprintf, etc.
 // This code is also used by both the kernel and user programs.
 
-#include <inc/arch/types.h>
-#include <inc/arch/stdarg.h>
+#include <architecture/types.h>
+#include <inc/stdarg.h>
 
 #include <client/string.h>
 #include <client/stdio.h>

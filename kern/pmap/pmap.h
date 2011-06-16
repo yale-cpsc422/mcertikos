@@ -3,7 +3,7 @@
 #ifndef PIOS_KERN_PTABLE_H
 #define PIOS_KERN_PTABLE_H
 
-#include <inc/arch/x86.h>
+#include <architecture/x86.h>
 #include <kern/mem/mem.h>
 
 

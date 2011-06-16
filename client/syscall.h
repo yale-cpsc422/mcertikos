@@ -1,7 +1,7 @@
 #ifndef CLIENT_SYSCALL_H
 #define CLIENT_SYSCALL_H
 
-#include <inc/arch/gcc.h>
+#include <inc/gcc.h>
 
 void puts(const char *s);
 int getc(void); 

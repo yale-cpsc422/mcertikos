@@ -156,7 +156,7 @@ gdb-boot: $(IMAGS)
 
 # For deleting the build
 clean:
-	rm -rf $(OBJDIR)/*
+	rm -rf $(OBJDIR)/* $(OBJDIR)/.deps
 
 realclean: clean
 	rm -rf lab$(LAB).tar.gz grade-log

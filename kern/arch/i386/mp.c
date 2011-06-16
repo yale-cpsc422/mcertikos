@@ -3,15 +3,15 @@
 // http://developer.intel.com/design/pentium/datashts/24201606.pdf
 // This source file adapted from xv6.
 
-#include <inc/arch/types.h>
-#include <inc/arch/mem.h>
-#include <inc/arch/x86.h>
-#include <inc/arch/mmu.h>
+#include <architecture/types.h>
+#include <architecture/mem.h>
+#include <architecture/x86.h>
+#include <architecture/mmu.h>
 
-#include <inc/arch/mp.h>
+#include <architecture/mp.h>
 
 #include <architecture/mp_internal.h>
-#include <inc/arch/pic.h>
+#include <architecture/pic.h>
 
 #include <kern/debug/debug.h>
 #include <kern/debug/stdio.h>

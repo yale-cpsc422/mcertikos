@@ -1,8 +1,8 @@
 #ifndef PIOS_INC_STDIO_H
 #define PIOS_INC_STDIO_H
 
-#include <inc/arch/types.h>
-#include <inc/arch/stdarg.h>
+#include <architecture/types.h>
+#include <inc/stdarg.h>
 
 #ifndef NULL
 #define NULL	((void *) 0)

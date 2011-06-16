@@ -14,10 +14,10 @@
 
 #ifndef __ASSEMBLER__
 
-#include <inc/arch/gcc.h>
-#include <inc/arch/types.h>
-#include <inc/arch/x86.h>
-#include <inc/arch/mmu.h>
+#include <inc/gcc.h>
+#include <architecture/types.h>
+#include <architecture/x86.h>
+#include <architecture/mmu.h>
 
 
 // This struct represents the format of the trap frames

@@ -1,8 +1,8 @@
 // Driver code for the 8259A Programmable Interrupt Controller (PIC).
 // See COPYRIGHT for copyright information.
 
-#include <inc/arch/x86.h>
-#include <inc/arch/pic.h>
+#include <architecture/x86.h>
+#include <architecture/pic.h>
 #include <architecture/pic_internal.h>
 #include <kern/debug/debug.h>
 #include <kern/debug/stdio.h>

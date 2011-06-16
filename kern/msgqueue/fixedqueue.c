@@ -1,9 +1,9 @@
-#include <inc/arch/gcc.h>
-#include <inc/arch/x86.h>
-#include <inc/arch/types.h>
-#include <inc/arch/mem.h>
-#include <inc/arch/mmu.h>
-#include <inc/arch/spinlock.h>
+#include <inc/gcc.h>
+#include <architecture/x86.h>
+#include <architecture/types.h>
+#include <architecture/mem.h>
+#include <architecture/mmu.h>
+#include <architecture/spinlock.h>
 
 #include <kern/mem/mem.h>
 

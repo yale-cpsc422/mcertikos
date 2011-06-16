@@ -1,7 +1,7 @@
 #ifndef PIOS_ARCH_MEM_H
 #define PIOS_ARCH_MEM_H
 
-#include <inc/arch/types.h>
+#include <architecture/types.h>
 
 
 // returns the sizes of physical memory

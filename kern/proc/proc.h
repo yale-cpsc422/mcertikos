@@ -1,8 +1,8 @@
 #ifndef KERN_PROC_PROC_H
 #define KERN_PROC_PROC_H
 
-#include <inc/arch/types.h>
-#include <inc/arch/context.h>
+#include <architecture/types.h>
+#include <architecture/context.h>
 #include <kern/as/as.h>
 #include <inc/user.h>
 

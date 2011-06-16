@@ -4,8 +4,8 @@
 #ifndef PIOS_KERN_DEBUG_H_
 #define PIOS_KERN_DEBUG_H_
 
-#include <inc/arch/types.h>
-#include <inc/arch/gcc.h>
+#include <architecture/types.h>
+#include <inc/gcc.h>
 
 
 #define DEBUG_TRACEFRAMES	10

@@ -3,8 +3,8 @@
 #ifndef PIOS_KERN_CONTEXT_H
 #define PIOS_KERN_CONTEXT_H
 
-#include <inc/arch/types.h>
-#include <inc/arch/mmu.h>
+#include <architecture/types.h>
+#include <architecture/mmu.h>
 
 #ifndef __ASSEMBLER
 

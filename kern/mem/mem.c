@@ -1,11 +1,11 @@
 // Physical memory management.
 // See COPYRIGHT for copyright information.
 
-#include <inc/arch/x86.h>
-#include <inc/arch/mmu.h>
-#include <inc/arch/mem.h>
+#include <architecture/x86.h>
+#include <architecture/mmu.h>
+#include <architecture/mem.h>
 
-#include <inc/arch/spinlock.h>
+#include <architecture/spinlock.h>
 
 #include <kern/debug/debug.h>
 #include <kern/debug/stdio.h>

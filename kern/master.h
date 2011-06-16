@@ -3,7 +3,7 @@
 #ifndef PIOS_KERN_MASTER_H
 #define PIOS_KERN_MASTER_H
 
-#include <inc/arch/gcc.h>
+#include <inc/gcc.h>
 
 // Called on each processor to initialize the kernel.
 void init(void);

@@ -1,10 +1,10 @@
-#include <inc/arch/types.h>
+#include <architecture/types.h>
 
 #include <inc/user.h>
 #include <user/stdio.h>
 #include <user/string.h>
 #include <user/syscall.h>
-#include <inc/arch/elf.h>
+#include <inc/elf.h>
 
 #define MAX_PROG 10
 #define MAX_PROGNAME 50

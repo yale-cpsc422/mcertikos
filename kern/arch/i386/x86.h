@@ -1,8 +1,8 @@
 #ifndef PIOS_INC_X86_H
 #define PIOS_INC_X86_H
 
-#include <inc/arch/types.h>
-#include <inc/arch/gcc.h>
+#include <architecture/types.h>
+#include <inc/gcc.h>
 
 // EFLAGS register
 #define FL_CF		0x00000001	// Carry Flag

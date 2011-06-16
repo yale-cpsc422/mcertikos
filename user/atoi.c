@@ -1,4 +1,4 @@
-#include <inc/arch/types.h>
+#include <architecture/types.h>
 #include <user/stdio.h>
 
 

@@ -1,12 +1,12 @@
-#include <inc/arch/gcc.h>
-#include <inc/arch/types.h>
-#include <inc/arch/x86.h>
-#include <inc/arch/mmu.h>
-#include <inc/arch/mp.h>
-#include <inc/arch/pic.h>
-#include <inc/arch/mem.h>
+#include <inc/gcc.h>
+#include <architecture/types.h>
+#include <architecture/x86.h>
+#include <architecture/mmu.h>
+#include <architecture/mp.h>
+#include <architecture/pic.h>
+#include <architecture/mem.h>
 
-#include <inc/arch/context.h>
+#include <architecture/context.h>
 
 #include <kern/debug/debug.h>
 #include <kern/debug/stdio.h>

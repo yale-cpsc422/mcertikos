@@ -3,7 +3,7 @@
 #ifndef PIOS_KERN_SLAVE_H
 #define PIOS_KERN_SLAVE_H
 
-#include <inc/arch/gcc.h>
+#include <inc/gcc.h>
 
 
 // Called on each processor to initialize the kernel.

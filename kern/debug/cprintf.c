@@ -5,8 +5,8 @@
 // It is very important that it always go to the console, especially when 
 // debugging file descriptor code!
 
-#include <inc/arch/types.h>
-#include <inc/arch/stdarg.h>
+#include <architecture/types.h>
+#include <inc/stdarg.h>
 
 #include <kern/debug/console.h>
 #include <kern/debug/stdio.h>

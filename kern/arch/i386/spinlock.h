@@ -4,7 +4,7 @@
 #ifndef PIOS_KERN_SPINLOCK_H
 #define PIOS_KERN_SPINLOCK_H
 
-#include <inc/arch/types.h>
+#include <architecture/types.h>
 
 // Mutual exclusion lock.
 typedef uint32_t spinlock; // spinlock is just a number

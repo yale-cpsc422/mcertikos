@@ -3,7 +3,7 @@
 #ifndef PIOS_KERN_AS_H
 #define PIOS_KERN_AS_H
 
-#include <inc/arch/x86.h>
+#include <architecture/x86.h>
 #include <kern/mem/mem.h>
 
 // Page directory entries and page table entries are 32-bit integers.

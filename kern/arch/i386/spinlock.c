@@ -1,8 +1,8 @@
 // Mutual exclusion spin locks.
 // Adapted from xv6.
 
-#include <inc/arch/x86.h>
-#include <inc/arch/spinlock.h>
+#include <architecture/x86.h>
+#include <architecture/spinlock.h>
 
 #include <kern/debug/debug.h>
 

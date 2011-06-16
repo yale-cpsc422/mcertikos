@@ -2,8 +2,8 @@
 #define USER_SYSCALL_H
 
 #include <inc/user.h>
-#include <inc/arch/gcc.h>
-#include <inc/arch/types.h>
+#include <inc/gcc.h>
+#include <architecture/types.h>
 
 void puts(const char *s);
 int getc(void); 

@@ -1,6 +1,6 @@
 // Text-mode CGA/VGA display output
 
-#include <inc/arch/mem.h>
+#include <architecture/mem.h>
 #include <kern/debug/video.h>
 
 

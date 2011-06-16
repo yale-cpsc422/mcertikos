@@ -2,8 +2,8 @@
 // Called throughout the kernel, especially by assert() macro.
 // See COPYRIGHT for copyright information.
 
-#include <inc/arch/x86.h>
-#include <inc/arch/stdarg.h>
+#include <architecture/x86.h>
+#include <inc/stdarg.h>
 
 #include <kern/debug/stdio.h>
 #include <kern/debug/console.h>

@@ -1,7 +1,7 @@
 #ifndef PIOS_INC_MMU_H
 #define PIOS_INC_MMU_H
 
-#include <inc/arch/gcc.h>
+#include <inc/gcc.h>
 
 /*
  * This file contains definitions for the x86 memory management unit (MMU),
@@ -130,7 +130,7 @@
 
 #else	// not __ASSEMBLER__
 
-#include <inc/arch/types.h>
+#include <architecture/types.h>
 
 // Segment Descriptors
 typedef struct segdesc {

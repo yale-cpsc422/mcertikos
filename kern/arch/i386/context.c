@@ -2,10 +2,10 @@
 // global descriptor table (GDT) and task state segment (TSS)
 // See COPYRIGHT for copyright information.
 
-#include <inc/arch/gcc.h>
-#include <inc/arch/x86.h>
-#include <inc/arch/mp.h>
-#include <inc/arch/mem.h>
+#include <inc/gcc.h>
+#include <architecture/x86.h>
+#include <architecture/mp.h>
+#include <architecture/mem.h>
 
 #include <kern/mem/mem.h>
 

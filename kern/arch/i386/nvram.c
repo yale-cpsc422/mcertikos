@@ -5,8 +5,8 @@
  * generates interrupts on IRQ 0.
  */
 
-#include <inc/arch/x86.h>
-#include <inc/arch/nvram.h>
+#include <architecture/x86.h>
+#include <architecture/nvram.h>
 #include <architecture/nvram_internal.h>
 
 

@@ -1,4 +1,4 @@
-#include <inc/arch/mmu.h>
+#include <architecture/mmu.h>
 
 # Start the CPU: switch to 32-bit protected mode, jump into C.
 # The BIOS loads this code from the first sector of the hard disk into

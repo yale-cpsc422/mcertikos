@@ -3,8 +3,8 @@
 #ifndef PIOS_KERN_VIDEO_H_
 #define PIOS_KERN_VIDEO_H_
 
-#include <inc/arch/types.h>
-#include <inc/arch/x86.h>
+#include <architecture/types.h>
+#include <architecture/x86.h>
 
 
 #define MONO_BASE	0x3B4

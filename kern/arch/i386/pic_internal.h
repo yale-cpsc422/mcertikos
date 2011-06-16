@@ -13,7 +13,7 @@
 
 
 #ifndef __ASSEMBLER__
-#include <inc/arch/types.h>
+#include <architecture/types.h>
 extern uint16_t irq_mask_8259A;
 #endif // !__ASSEMBLER__
 

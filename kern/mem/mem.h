@@ -3,7 +3,7 @@
 #ifndef PIOS_KERN_MEM_H
 #define PIOS_KERN_MEM_H
 
-#include <inc/arch/types.h>
+#include <architecture/types.h>
 
 
 // At physical address MEM_IO (640K) there is a 384K hole for I/O.

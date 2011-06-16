@@ -1,7 +1,7 @@
 #ifndef USER_H
 #define USER_H
 
-#include <inc/arch/types.h>
+#include <architecture/types.h>
 
 // The number of the interrupt on which the syscalls happend
 #define T_SYSCALL 48

@@ -1,9 +1,9 @@
 // Basic memory manipulation functions.
 
-#include <inc/arch/x86.h>
-#include <inc/arch/mmu.h>
-#include <inc/arch/mem.h>
-#include <inc/arch/nvram.h>
+#include <architecture/x86.h>
+#include <architecture/mmu.h>
+#include <architecture/mem.h>
+#include <architecture/nvram.h>
 
 // Using assembly for memset/memmove
 // makes some difference on real hardware,

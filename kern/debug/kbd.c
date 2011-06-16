@@ -1,7 +1,7 @@
 // Keyboard input code
 
-#include <inc/arch/types.h>
-#include <inc/arch/x86.h>
+#include <architecture/types.h>
+#include <architecture/x86.h>
 
 #include <kern/debug/stdio.h>
 #include <kern/debug/console.h>

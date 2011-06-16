@@ -3,7 +3,7 @@
 #ifndef PIOS_KERN_CONSOLE_H_
 #define PIOS_KERN_CONSOLE_H_
 
-#include <inc/arch/types.h>
+#include <architecture/types.h>
 
 
 #define CONSBUFSIZE 512

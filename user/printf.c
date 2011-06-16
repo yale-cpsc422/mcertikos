@@ -5,9 +5,9 @@
 // It is very important that it always go to the console, especially when 
 // debugging file descriptor code!
 
-#include <inc/arch/gcc.h>
-#include <inc/arch/types.h>
-#include <inc/arch/stdarg.h>
+#include <inc/gcc.h>
+#include <architecture/types.h>
+#include <inc/stdarg.h>
 
 #include <user/stdio.h>
 #include <user/syscall.h>

@@ -3,7 +3,7 @@
 #ifndef PIOS_DEV_PIC_H
 #define PIOS_DEV_PIC_H
 
-#include <inc/arch/types.h>
+#include <architecture/types.h>
 
 void pic_init(void);
 void pic_setmask(uint16_t mask);

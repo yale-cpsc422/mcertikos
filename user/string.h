@@ -1,7 +1,7 @@
 #ifndef PIOS_INC_STRING_H
 #define PIOS_INC_STRING_H
 
-#include <inc/arch/types.h>
+#include <architecture/types.h>
 
 int	strlen(const char *s);
 int	strnlen(const char *s, size_t size);
