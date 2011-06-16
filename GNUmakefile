@@ -9,7 +9,7 @@ OBJDIR := obj
 
 -include conf/env.mk
 
-TOP = .
+TOP := $(shell echo $${PWD- `pwd`})
 
 # Cross-compiler toolchain
 #
@@ -21,35 +21,25 @@ TOP = .
 
 # try to infer the correct GCCPREFIX
 ifndef GCCPREFIX
-GCCPREFIX := $(shell if i386-elf-objdump -i 2>&1 | grep '^elf32-i386$$' >/dev/null 2>&1; \
-	then echo 'i386-elf-'; \
-	elif objdump -i 2>&1 | grep 'elf32-i386' >/dev/null 2>&1; \
-	then echo ''; \
-	else echo "***" 1>&2; \
-	echo "*** Error: Couldn't find an i386-elf version of GCC/binutils." 1>&2; \
-	echo "*** Is the directory with i386-elf-gcc in your PATH?" 1>&2; \
-	echo "*** If your i386-elf toolchain is installed with a command" 1>&2; \
-	echo "*** prefix other than 'i386-elf-', set your GCCPREFIX" 1>&2; \
-	echo "*** environment variable to that prefix and run 'make' again." 1>&2; \
-	echo "*** To turn off this error, run 'gmake GCCPREFIX= ...'." 1>&2; \
-	echo "***" 1>&2; exit 1; fi)
+
+ifeq ($(ARCH), amd64)
+GCCPREFIX := $(shell sh misc/gccprefix.amd64.sh)
+endif
+
+ifeq ($(ARCH), i386)
+GCCPREFIX := $(shell sh misc/gccprefix.i386.sh)
+endif
+
 endif
 
 # try to infer the correct QEMU
 ifndef QEMU
-QEMU := $(shell \
-	if test -x /c/cs422/tools/bin/qemu; \
-	then echo /c/cs422/tools/bin/qemu; exit; \
-	elif which qemu > /dev/null; \
-	then echo qemu; exit; \
-	else \
-	qemu=/Applications/Q.app/Contents/MacOS/i386-softmmu.app/Contents/MacOS/i386-softmmu; \
-	if test -x $$qemu; then echo $$qemu; exit; fi; fi; \
-	echo "***" 1>&2; \
-	echo "*** Error: Couldn't find a working QEMU executable." 1>&2; \
-	echo "*** Is the directory containing the qemu binary in your PATH" 1>&2; \
-	echo "*** or have you tried setting the QEMU variable in conf/env.mk?" 1>&2; \
-	echo "***" 1>&2; exit 1)
+ifeq ($(ARCH), amd64)
+QEMU := qemu-system-x86_64
+endif
+ifeq ($(ARCH), i386)
+QEMU := qemu
+endif
 endif
 
 # try to generate unique GDB and network port numbers
@@ -75,11 +65,21 @@ NCC	:= gcc $(CC_VER) -pipe
 TAR	:= gtar
 PERL	:= perl
 
-# Compiler flags
+# Compiler and linker flags
 # -fno-builtin is required to avoid refs to undefined functions in the kernel.
 # Only optimize to -O1 to discourage inlining, which complicates backtraces.
-CFLAGS := $(CFLAGS) $(DEFS) $(LABDEFS) -O1 -fno-builtin -I$(TOP) -MD 
+CFLAGS := $(CFLAGS) $(DEFS) $(LABDEFS) -O1 -fno-builtin -I$(TOP) -MD -I$(TOP)/inc -I$(TOP)/$(OBJDIR)	 
+
+
+ifeq ($(ARCH), amd64)
+CFLAGS += -Wall -Wno-unused -Werror -gstabs -m64
+LDFLAGS := -m elf_x86_64 -e start -nostdlib
+endif
+
+ifeq ($(ARCH), i386)
 CFLAGS += -Wall -Wno-unused -Werror -gstabs -m32
+LDFLAGS := -m elf_i386 -e start -nostdlib
+endif
 
 # Add -fno-stack-protector if the option exists.
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
@@ -87,9 +87,6 @@ CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 &
 # Kernel versus user compiler flags
 KERN_CFLAGS := $(CFLAGS) -DLAYEROS_KERNEL
 USER_CFLAGS := $(CFLAGS) -DLAYEROS_USER
-
-# Linker flags
-LDFLAGS := -m elf_i386 -e start -nostdlib
 
 KERN_LDFLAGS := $(LDFLAGS) -Ttext=0x00100000
 USER_LDFLAGS := $(LDFLAGS) -Ttext=0x40000000
@@ -143,6 +140,7 @@ qemu-gdb: $(IMAGES) .gdbinit
 	@echo "*** Now run 'gdb'." 1>&2
 	$(QEMU) $(QEMUOPTS) -S $(QEMUPORT)
 
+
 qemu-gdb-nox: $(IMAGES) .gdbinit
 	@echo "*** Now run 'gdb'." 1>&2
 	$(QEMU) -nographic $(QEMUOPTS) -S $(QEMUPORT)
@@ -158,7 +156,7 @@ gdb-boot: $(IMAGS)
 
 # For deleting the build
 clean:
-	rm -rf $(OBJDIR)
+	rm -rf $(OBJDIR)/*
 
 realclean: clean
 	rm -rf lab$(LAB).tar.gz grade-log
@@ -195,6 +193,11 @@ $(OBJDIR)/.deps: $(foreach dir, $(OBJDIRS), $(wildcard $(OBJDIR)/$(dir)/*.d))
 	@$(PERL) mergedep.pl $@ $^
 
 -include $(OBJDIR)/.deps
+
+GNUmakefile: $(OBJDIR)/architecture
+$(OBJDIR)/architecture:
+	@mkdir -p $(@D)
+	ln -s $(TOP)/kern/arch/$(ARCH) $@
 
 always:
 	@:

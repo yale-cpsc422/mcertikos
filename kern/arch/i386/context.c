@@ -12,7 +12,7 @@
 #include <kern/debug/debug.h>
 #include <kern/debug/stdio.h>
 
-#include <kern/arch/context_internal.h>
+#include <architecture/context_internal.h>
 
 
 extern kstack stacks[]; // from entry.S

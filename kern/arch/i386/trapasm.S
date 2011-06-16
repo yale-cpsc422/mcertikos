@@ -2,7 +2,7 @@
 /* See COPYRIGHT for copyright information. */
 
 #include <inc/arch/x86.h>
-#include <kern/arch/context_internal.h>
+#include <architecture/context_internal.h>
 
 /* The TRAPHANDLER macro defines a globally-visible function for handling
  * a trap.  It pushes a trap number onto the stack, then jumps to _alltraps.

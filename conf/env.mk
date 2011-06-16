@@ -18,3 +18,8 @@ V = @
 # following line and set it to the full path to QEMU.
 #
 # QEMU=
+
+#archtecthure setting: 
+# amd64, i386
+ARCH=i386
+#ARCH=amd64

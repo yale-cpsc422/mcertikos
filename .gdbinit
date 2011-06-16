@@ -19,6 +19,10 @@ define hook-stop
   set $lastcs = $cs
 end
 
+# If ARCH=amd64  in conf/env.mk
+# the architecture of the target kernel is amd64
+#set architecture i386:x86-64
+
 echo + target remote localhost:26000\n
 target remote localhost:26000
 
@@ -26,5 +30,11 @@ target remote localhost:26000
 # Look at the tools page at
 #  http://pdos.csail.mit.edu/6.828/2009/tools.html
 # for instructions on building GDB with ELF support.
+
+# If the target is the Kernel:
 echo + symbol-file obj/kern/kernel\n
 symbol-file obj/kern/kernel
+
+# If the target is the bootloader
+#echo + symbol-file obj/boot/bootblock.elf\n
+#symbol-file obj/boot/bootblock.elf

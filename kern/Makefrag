@@ -11,7 +11,10 @@ OBJDIRS += kern
 #
 # We also snatch the use of a few handy source files
 # from the lib directory, to avoid gratuitous code duplication.
-include kern/arch/Makefrag
+
+ARCHDIR := kern/arch/$(ARCH)
+
+include kern/arch/$(ARCH)/Makefrag
 include kern/debug/Makefrag
 include kern/mem/Makefrag
 include kern/pmap/Makefrag
@@ -36,6 +39,16 @@ KERN_OBJFILES := $(patsubst %.S, $(OBJDIR)/%.o, $(KERN_OBJFILES))
 KERN_BINFILES := $(patsubst %, $(OBJDIR)/%, $(KERN_BINFILES))
 
 # How to build kernel object files
+$(OBJDIR)/kern/%.o: kern/arch/$(ARCH)/%.S
+	@echo + as $<
+	@mkdir -p $(@D)
+	$(V)$(CC) -nostdinc $(KERN_CFLAGS) -c -o $@ $<
+
+$(OBJDIR)/kern/%.o: kern/arch/$(ARCH)/%.c
+	@echo + cc $<
+	@mkdir -p $(@D)
+	$(V)$(CC) -nostdinc $(KERN_CFLAGS) -c -o $@ $<
+
 $(OBJDIR)/kern/%.o: kern/%.c
 	@echo + cc $<
 	@mkdir -p $(@D)

@@ -1,0 +1,36 @@
+#
+# Makefile fragment for the kernel.
+# This is NOT a complete makefile;
+# you must run GNU make in the top-level directory
+# where the GNUmakefile is located.
+#
+
+OBJDIRS += kern/arch
+
+# entry.S must be first, so that it's the first code in the text segment!!!
+#
+# We also snatch the use of a few handy source files
+# from the lib directory, to avoid gratuitous code duplication.
+KERN_SRCFILES +=	kern/arch/$(ARCH)/entry.S
+KERN_SRCFILES +=	kern/arch/$(ARCH)/entry_helper.c
+KERN_SRCFILES +=	kern/arch/$(ARCH)/other_helper.c
+KERN_SRCFILES +=	kern/arch/$(ARCH)/spinlock.c
+#KERN_SRCFILES +=	kern/arch/cpu.c
+KERN_SRCFILES +=	kern/arch/$(ARCH)/context.c
+KERN_SRCFILES +=	kern/arch/$(ARCH)/trapasm.S
+KERN_SRCFILES +=	kern/arch/$(ARCH)/nvram.c
+KERN_SRCFILES +=	kern/arch/$(ARCH)/mem.c
+KERN_SRCFILES +=	kern/arch/$(ARCH)/pic.c
+KERN_SRCFILES +=	kern/arch/$(ARCH)/lapic.c
+KERN_SRCFILES +=	kern/arch/$(ARCH)/mp.c
+
+# How to build kernel object files
+#$(OBJDIR)/kern/arch/%.o: kern/arch/%.c
+#	@echo + cc $<
+#	@mkdir -p $(@D)
+#	$(V)$(CC) -nostdinc $(KERN_CFLAGS) -c -o $@ $<
+
+#$(OBJDIR)/kern/arch/%.o: kern/arch/%.S
+#	@echo + as $<
+#	@mkdir -p $(@D)
+#	$(V)$(CC) -nostdinc $(KERN_CFLAGS) -c -o $@ $<

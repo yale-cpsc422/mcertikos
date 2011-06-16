@@ -7,7 +7,7 @@
 
 #include <inc/arch/x86.h>
 #include <inc/arch/nvram.h>
-#include <kern/arch/nvram_internal.h>
+#include <architecture/nvram_internal.h>
 
 
 unsigned

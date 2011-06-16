@@ -10,7 +10,7 @@
 
 #include <inc/arch/mp.h>
 
-#include <kern/arch/mp_internal.h>
+#include <architecture/mp_internal.h>
 #include <inc/arch/pic.h>
 
 #include <kern/debug/debug.h>

@@ -3,7 +3,7 @@
 
 #include <inc/arch/x86.h>
 #include <inc/arch/pic.h>
-#include <kern/arch/pic_internal.h>
+#include <architecture/pic_internal.h>
 #include <kern/debug/debug.h>
 #include <kern/debug/stdio.h>
 
