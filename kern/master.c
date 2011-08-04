@@ -22,6 +22,10 @@
 #include <kern/slave.h>
 #include <kern/kernel.h>
 
+#include <inc/svm.h>
+#include <inc/vm.h>
+#include <inc/cpu.h>
+
 // Called first from entry.S on the bootstrap processor,
 // and later from boot/bootother.S on all other processors.
 // As a rule, "init" functions in PIOS are called once on EACH processor.
@@ -34,6 +38,8 @@ volatile kstack stacks[MAX_CPU];
 volatile cpu_use cpus[MAX_CPU];
 
 uint32_t time=0;
+uint32_t SVM_ENABLED=0;// 1-SVM has been enabled; 0- SVM has not been enabled;
+
 
 
 // SYSCALL handlers
@@ -189,6 +195,20 @@ uint32_t syscall(context* ctx) {
 				syscall_fail(ctx);
 			}
 			*(uint32_t*)arg2 = proc;
+			break;
+		case SYSCALL_SETUPVM:
+			cprintf("Setup a vm!;\n");			
+			if(!SVM_ENABLED) {
+				cprintf("\n++++++ Enable SVM feature on CPU\n");
+				enable_amd_svm();
+				SVM_ENABLED=1;	
+			}	
+			struct vm_info vm;
+			vm_create_simple(&vm);
+			cprintf("\n++++++ New virtual machine created. Going to GRUB for the 2nd time\n");
+			//vmcb_dump(vm.vmcb);
+			vm_boot (&vm);
+			
 			break;
 		case SYSCALL_MGMT:
 			if (!as_checkrange(as_current(), arg, 4)) {

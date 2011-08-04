@@ -19,6 +19,7 @@
 #define SYSCALL_LOAD 7
 #define SYSCALL_MGMT 8
 
+#define SYSCALL_SETUPVM 9
 // MANAGEMENT INTERFACE
 
 typedef enum mgmt_type {

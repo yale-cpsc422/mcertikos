@@ -109,3 +109,13 @@ void allocpage(uint32_t procid, uint32_t va) {
 	mgmt(&data);
 	return;
 }
+
+
+void setupvm() {
+    asm volatile("int %0" :
+            : "i" (T_SYSCALL),
+              "a" (SYSCALL_SETUPVM),
+              "b" (NULL)
+            : "cc", "memory");
+	return;
+}

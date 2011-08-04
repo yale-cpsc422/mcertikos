@@ -19,4 +19,5 @@ void cpustart(uint32_t cpu, uint32_t procid);
 void cpustop(uint32_t cpu);
 void allocpage(uint32_t procid, uint32_t va);
 
+void setupvm();
 #endif

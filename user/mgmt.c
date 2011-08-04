@@ -168,6 +168,9 @@ void performCmd(char* cmd) {
 		printf("Stopping cpu %d, process id %d.\n", cpu, procs[proc_index].pid);
 		cpustop(cpu);
 	}
+	else if (strcmp(cmd,"setupvm") == 0) {
+		setupvm();	
+	}
 	else if (strcmp(cmd,"shutdown") == 0) {
 	}
 	else if (strcmp(cmd,"help") == 0) {

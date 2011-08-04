@@ -77,7 +77,7 @@ LDFLAGS := -m elf_x86_64 -e start -nostdlib
 endif
 
 ifeq ($(ARCH), i386)
-CFLAGS += -Wall -Wno-unused -Werror -gstabs -m32
+CFLAGS += -Wall -Wno-unused -gstabs -m32 #-Werror
 LDFLAGS := -m elf_i386 -e start -nostdlib
 endif
 
