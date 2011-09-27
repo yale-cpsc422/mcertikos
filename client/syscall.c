@@ -50,4 +50,10 @@ int getcpu() {
             : "cc", "memory");
 	return t;
 }
-	
+void start_vm_client(){
+asm volatile("int %0" :
+            : "i" (T_CLIENT_SYSCALL),
+              "a" (SYSCALL_CLIENT_SETUPVM),
+              "b" (NULL)
+            : "cc", "memory");
+}

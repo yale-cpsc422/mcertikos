@@ -10,7 +10,7 @@ $(OBJDIR)/client/libclient.a: $(CLIB_OBJFILES)
 	$(V)$(AR) r $@ $(CLIB_OBJFILES)
 
 $(OBJDIR)/client/%.o: client/%.c
-	@echo + cc[CLIENT] $<
+	@echo + cc[CLIENT] $@ $<
 	@mkdir -p $(@D)
 	$(V)$(CC) -nostdinc $(USER_CFLAGS) -c -o $@ $<
 
@@ -22,6 +22,7 @@ $(OBJDIR)/client/%.o: client/%.S
 $(OBJDIR)/client/%: $(OBJDIR)/client/%.o $(OBJDIR)/client/entry.o $(OBJDIR)/client/libclient.a  
 	@echo + ld[CLIENT] $@
 	$(V)$(LD) -o $@ $(USER_LDFLAGS) $(OBJDIR)/client/entry.o $@.o \
-		-L$(OBJDIR)/client -lclient $(GCC_LIB) -b binary $(OBJDIR)/client/client1
+		-L$(OBJDIR)/client -lclient $(GCC_LIB) -b binary $(OBJDIR)/client/client1 
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym
+

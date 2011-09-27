@@ -14,5 +14,6 @@ int cpu_status(int cpu);
 void cpu_signal (void(*f)(void)); 
 
 void cpu_signalret();
+void start_vm_client();
 
 #endif
