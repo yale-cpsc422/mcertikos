@@ -1,0 +1,31 @@
+#
+# Makefile fragment for the kernel.
+# This is NOT a complete makefile;
+# you must run GNU make in the top-level directory
+# where the GNUmakefile is located.
+#
+
+OBJDIRS += kern/hvm/svm
+
+# entry.S must be first, so that it's the first code in the text segment!!!
+#
+# We also snatch the use of a few handy source files
+# from the lib directory, to avoid gratuitous code duplication.
+KERN_SRCFILES +=	kern/hvm/svm/svm.c 
+KERN_SRCFILES +=	kern/hvm/svm/vm.c 
+KERN_SRCFILES +=	kern/hvm/svm/vmcb.c 
+KERN_SRCFILES +=	kern/hvm/svm/vmexit.c 
+KERN_SRCFILES +=	kern/hvm/svm/svm_asm.S
+KERN_SRCFILES +=	kern/hvm/svm/intercept.c
+
+# How to build kernel object files
+$(OBJDIR)/kern/hvm/svm/%.o: kern/hvm/svm/%.c
+	@echo + cc $<
+	@mkdir -p $(@D)
+	$(V)$(CC) -nostdinc $(KERN_CFLAGS) -c -o $@ $<
+
+$(OBJDIR)/kern/hvm/svm/%.o: kern/hvm/svm/%.S
+	@echo + as $<
+	@mkdir -p $(@D)
+	$(V)$(CC) -nostdinc $(KERN_CFLAGS) -c -o $@ $<
+

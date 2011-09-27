@@ -15,8 +15,8 @@ OBJDIRS += kern
 ARCHDIR := kern/arch/$(ARCH)
 
 include kern/arch/$(ARCH)/Makefrag
-include kern/arch/Makefrag
-include kern/hvm/Makefrag
+#include kern/arch/Makefrag
+#include kern/hvm/Makefrag
 include kern/hvm/svm/Makefrag
 include kern/debug/Makefrag
 include kern/mem/Makefrag
@@ -76,6 +76,7 @@ $(OBJDIR)/kern/kernel.img: $(OBJDIR)/kern/kernel $(OBJDIR)/boot/bootblock
 	$(V)dd if=$(OBJDIR)/boot/bootblock of=$(OBJDIR)/kern/kernel.img~ conv=notrunc 2>/dev/null
 	$(V)dd if=$(OBJDIR)/kern/kernel of=$(OBJDIR)/kern/kernel.img~ seek=1 conv=notrunc 2>/dev/null
 	$(V)mv $(OBJDIR)/kern/kernel.img~ $(OBJDIR)/kern/kernel.img
+	$(V) sh updatecertikoshdd.sh
 
 all: $(OBJDIR)/kern/kernel.img
 
