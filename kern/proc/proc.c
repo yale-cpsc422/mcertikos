@@ -3,6 +3,8 @@
 #include <architecture/x86.h>
 #include <architecture/mmu.h>
 #include <inc/elf.h>
+#include <kern/hvm/svm/vm.h>
+#include <kern/hvm/svm/svm.h>
 #include <architecture/mem.h>
 
 #include <architecture/context.h>
@@ -57,6 +59,7 @@ procid_t proc_new(char* binary) {
 	mem_incref(pi);
 	proc* p = (proc*) mem_pi2ptr(pi);
 
+	p->type=NORMAL_PROCESS;
 	p->id = nextid++;
 	p->insignal = false;
 	p->as = as_new();
@@ -80,17 +83,72 @@ procid_t proc_new(char* binary) {
 	return p->id;
 }
 
+procid_t proc_vm_new() {
+	pageinfo* pi = mem_alloc();
+	if (!pi) {
+		cprintf("proc_new: Failed to allocate a page for proc structure");
+		return 0;
+	}
+	mem_incref(pi);
+	proc* p = (proc*) mem_pi2ptr(pi);
+
+	p->type=VM_PROCESS;
+	p->id = nextid++;
+	p->insignal = false;
+	//p->as = rcr3();
+	p->as = as_new();
+	if (!p->as) {
+		cprintf("proc_new: failed to create new address space");
+		return 0;
+	}
+//	loadelf(as_current(),binary,p);
+	cprintf("svm_launch address: %x \n", (uint32_t) svm_launch);
+    	p->ctx = context_vm_new((void(*)(void))svm_launch);
+	//as_assign(p->as, VM_STACKHI-PAGESIZE, PTE_P | PTE_U | PTE_W, mem_ptr2pi(p->ctx));
+	if (!p->ctx) {
+		cprintf("proc_new: Failed to load the code");
+		as_free(p->as);
+		return 0;
+	}
+	
+	p->next = proclist;
+	proclist = p;
+		
+	//DEBUG STUFF:
+	// proc_debug(p->id);
+	cprintf("process created: pid: %x\n",p->id);
+	return p->id;
+}
+
 void proc_start(procid_t proc) {
 	struct proc* p;
-    p = proc_find (proc);
+	p = proc_find (proc);
 	if (!p)
 		return; //assert?
 	//cprintf("proc_start: activating process %d\n", proc);
-	assert(p->as);
-	assert(p->ctx);
-	as_activate(p->as);
-	//cprintf("proc_start: address space installed\n");
-	context_start(p->ctx);
+//	cprintf("cpustacks@%x, esp:@%x\n",cpu_stacks[mycpu],read_esp())
+//	cprintf("cpustacks@803a000, esp:@%x, cr3:%x\n",ROUNDUP(read_esp(),PAGESIZE),rcr3());
+
+/*	if ( p->type == 1) 
+	{*/
+		assert(p->as);
+		assert(p->ctx);
+		as_activate(p->as);
+/*	}else {
+		assert(p->as);
+                assert(p->ctx);
+                as_activate(as_current());
+	}
+*/
+//	 proc_debug(p->id);
+//	cprintf("proc_start: address space installed\n");
+//	cprintf("cpustacks@803a000, esp:@%x, as:%x, cr3:%x\n",ROUNDUP(read_esp(),PAGESIZE),as_current(),rcr3());
+/*	if (p->type==2){
+		context_start_vm(p->ctx);	
+	}
+	else
+*/ 	
+		context_start(p->ctx);
 }
 
 void proc_setsignal(procid_t proc, signaldesc* sig) {
@@ -169,8 +227,8 @@ void proc_debug(procid_t proc) {
     p = proc_find (proc);
 	if (!p)
 		return; //assert?
-	cprintf("Process id: %d\n", proc);
-	cprintf("context located in page with perm %x\n", as_getperm(p->as, (uint32_t)(p->ctx)));
+//	cprintf("Process id: %d\n", proc);
+//	cprintf("context located in page with perm %x\n", as_getperm(p->as, (uint32_t)(p->ctx)));
 	as_activate(p->as);
 	context_debug(p->ctx);
 	as_activate(as);

@@ -39,7 +39,7 @@ pmap_new(void)
 	mem_incref(pi);
 	pde_t *pdir = mem_pi2ptr(pi);
 	assert (pdir != NULL);
-   memset(pdir,0,PAGESIZE);
+	memset(pdir,0,PAGESIZE);
 	return pdir;
 }
 
@@ -102,8 +102,8 @@ pmap_t*
 pmap_insert(pmap_t *pmap, pageinfo *pi, uint32_t va, int perm)
 {
 	assert(pmap != NULL);
-    //if (va > mem_max)
-        // cprintf("inserting address %x\n", va);
+//    if (va > mem_max &&va < 0xb000000)
+ //       cprintf("inserting address %x\n", va);
 	pte_t* pte = pmap_walk(pmap, va, 1);
 	if (pte == PTE_NULL) {
 		return NULL;

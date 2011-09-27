@@ -23,7 +23,7 @@ typedef unsigned int uint32_t;
 typedef long long int64_t;
 typedef unsigned long long uint64_t;
 
-
+/*
 //temp data types for svm 
 typedef signed char s8;
 typedef unsigned char u8;
@@ -36,7 +36,7 @@ typedef unsigned int u32;
 
 typedef signed long long s64;
 typedef unsigned long long u64;
-
+*/
 // Pointers and addresses are 32 bits long.
 // We use pointer types to represent virtual addresses,
 // and [u]intptr_t to represent the numerical values of virtual addresses.

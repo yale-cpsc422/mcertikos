@@ -109,6 +109,7 @@ typedef struct kstack {
 #define CPU_MAGIC	0x98765432	// cpu.magic should always = this
 
 static kstack* kstack_cur();
+ //kstack* kstack_cur();
 
 
 void trap(trapframe *tf) gcc_noreturn;

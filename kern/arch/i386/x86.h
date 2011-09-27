@@ -52,6 +52,14 @@
 
 #define T_IRQ0		32	// This trap corresponds to IRQ0 (once it is remapped).
 
+// We use these vectors to receive local per-CPU interrupts
+#define T_LTIMER        49      // Local APIC timer interrupt
+#define T_LERROR        50      // Local APIC error interrupt
+#define T_PERFCTR       51      // Performance counter overflow interrupt
+
+#define T_DEFAULT       500     // Unused trap vectors produce this value
+#define T_ICNT          501     // Child process instruction count expired
+
 // Hardware IRQ numbers. We receive these as (T_IRQ0 + IRQ_WHATEVER)
 #define IRQ_TIMER        0
 #define IRQ_KBD          1
@@ -59,6 +67,94 @@
 #define IRQ_SPURIOUS     7
 #define IRQ_IDE         14
 #define IRQ_ERROR       19
+
+
+/* [REF] AMD64 manual vol. 2, p. 59 */
+#define _X86_CR4_PSE 4 /* Page Size Extensions */
+#define _X86_CR4_PAE 5 /* Physical-Address Extension */
+#define _X86_CR4_PGE 7 /* Page-Global Enable */
+#ifdef __ASSEMBLY__
+#  define X86_CR4_PSE  ( 1 << _X86_CR4_PSE )
+#  define X86_CR4_PAE  ( 1 << _X86_CR4_PAE )
+#  define X86_CR4_PGE  ( 1 << _X86_CR4_PGE )
+#else /* ! __ASSEMBLY__ */
+#  define X86_CR4_PSE  ( 1UL << _X86_CR4_PSE )
+#  define X86_CR4_PAE  ( 1UL << _X86_CR4_PAE )
+#  define X86_CR4_PGE  ( 1UL << _X86_CR4_PGE )
+#endif /* __ASSEMBLY__ */
+
+/* [REF] AMD64 manual vol. 2, p. 53 */
+#define _X86_CR0_PE  0 /* Protection enabled */
+#define _X86_CR0_MP  1 /* Monitor coprocessor */
+#define _X86_CR0_ET  4 /* Extension type */
+#define _X86_CR0_NE  5 /* Numeric error */
+#define _X86_CR0_WP 16 /* Write protected */
+#define _X86_CR0_AM 18 /* Aligned mask */
+#define _X86_CR0_NW 29 /* Not Writethrough */
+#define _X86_CR0_CD 30 /* Cache Disable */
+#define _X86_CR0_PG 31 /* Paging */
+#ifdef __ASSEMBLY__
+#  define X86_CR0_PE  ( 1 << _X86_CR0_PE )
+#  define X86_CR0_MP  ( 1 << _X86_CR0_MP )
+#  define X86_CR0_ET  ( 1 << _X86_CR0_ET )
+#  define X86_CR0_NE  ( 1 << _X86_CR0_NE )
+#  define X86_CR0_WP  ( 1 << _X86_CR0_WP )
+#  define X86_CR0_AM  ( 1 << _X86_CR0_AM )
+#  define X86_CR0_NW  ( 1 << _X86_CR0_NW )
+#  define X86_CR0_CD  ( 1 << _X86_CR0_CD )
+#  define X86_CR0_PG  ( 1 << _X86_CR0_PG )
+#else /* ! __ASSEMBLY__ */
+#  define X86_CR0_PE  ( 1UL << _X86_CR0_PE )
+#  define X86_CR0_MP  ( 1UL << _X86_CR0_MP )
+#  define X86_CR0_ET  ( 1UL << _X86_CR0_ET )
+#  define X86_CR0_NE  ( 1UL << _X86_CR0_NE )
+#  define X86_CR0_WP  ( 1UL << _X86_CR0_WP )
+#  define X86_CR0_AM  ( 1UL << _X86_CR0_AM )
+#  define X86_CR0_NW  ( 1UL << _X86_CR0_NW )
+#  define X86_CR0_CD  ( 1UL << _X86_CR0_CD )
+#  define X86_CR0_PG  ( 1UL << _X86_CR0_PG )
+
+#  define X86_RFLAGS_TF         ( 1UL << 8 )
+#  define X86_DR6_BS            ( 1UL << 14 )
+#endif /* __ASSEMBLY__ */
+
+/* MSR name and MSR address (AMD64 manual vol. 2, pp. 506-509) */
+#define MSR_PAT            0x00000277 /* Page-attribute table (PAT) */
+#define MSR_K7_HWCR        0xc0010015
+#define MSR_K8_VM_HSAVE_PA 0xc0010117
+#define MSR_EFER           0xc0000080 /* Extended feature register */
+
+
+/* EFER bits (vol. 2, p. 55) */
+#define _EFER_SCE   0 /* System Call Extensions */
+#define _EFER_LME   8 /* Long mode enable */
+#define _EFER_LMA  10 /* Long mode active */
+#define _EFER_NX   11 /* No execute enable */
+#define _EFER_SVME 12 /* Secure Virtual Machine Enable */
+#ifdef __ASSEMBLY__
+#  define EFER_SCE   ( 1 << _EFER_SCE )
+#  define EFER_LME   ( 1 << _EFER_LME )
+#  define EFER_LMA   ( 1 << _EFER_LMA )
+#  define EFER_NX    ( 1 << _EFER_NX )
+#  define EFER_SVME  ( 1 << _EFER_SVME )
+#else /* ! __ASSEMBLY__ */
+#  define EFER_SCE   ( 1UL << _EFER_SCE )
+#  define EFER_LME   ( 1UL << _EFER_LME )
+#  define EFER_LMA   ( 1UL << _EFER_LMA )
+#  define EFER_NX    ( 1UL << _EFER_NX )
+#  define EFER_SVME  ( 1UL << _EFER_SVME )
+#endif /* __ASSEMBLY__ */
+
+#define rdmsr(msr,val1,val2) \
+       __asm__ __volatile__("rdmsr" \
+                            : "=a" (val1), "=d" (val2) \
+                            : "c" (msr))
+
+#define wrmsr(msr,val1,val2) \
+     __asm__ __volatile__("wrmsr" \
+                          : /* no outputs */ \
+                          : "c" (msr), "a" (val1), "d" (val2))
+
 
 #ifndef __ASSEMBLER__
 
@@ -354,6 +450,56 @@ cpuid(uint32_t info, uint32_t *eaxp, uint32_t *ebxp, uint32_t *ecxp, uint32_t *e
 		*edxp = edx;
 }
 
+static inline unsigned int
+cpuid_eax(unsigned int op)
+{
+        unsigned int eax;
+
+        __asm__("pushl %%ebx; cpuid; popl %%ebx"
+                : "=a" (eax)
+                : "0" (op)
+                : "cx", "dx");
+        return eax;
+}
+
+static inline
+unsigned int cpuid_ebx(unsigned int op)
+{
+        unsigned int eax, ebx;
+
+        //TODO: esi get clobbered?
+        __asm__("pushl %%ebx; cpuid; movl %%ebx,%%esi; popl %%ebx"
+                : "=a" (eax), "=S" (ebx)
+                : "0" (op)
+                : "cx", "dx" );
+        return ebx;
+}
+
+static inline
+unsigned int cpuid_ecx(unsigned int op)
+{
+        unsigned int eax, ecx;
+
+        __asm__("pushl %%ebx; cpuid; popl %%ebx"
+                : "=a" (eax), "=c" (ecx)
+                : "0" (op)
+                : "dx" );
+        return ecx;
+}
+
+static inline
+unsigned int cpuid_edx(unsigned int op)
+{
+        unsigned int eax, edx;
+
+        __asm__("pushl %%ebx; cpuid; popl %%ebx"
+                : "=a" (eax), "=d" (edx)
+                : "0" (op)
+                : "cx");
+        return edx;
+}
+
+
 static gcc_inline uint64_t
 rdtsc(void)
 {
@@ -453,6 +599,71 @@ typedef struct cpu_registers {
     uint32_t reg_eflags;
     fxsave fx;
 } cpu_registers;
+
+
+
+//bit operations: 
+#define ADDR (*(volatile long *) addr)
+
+/**
+ * set_bit - Atomically set a bit in memory
+ * @nr: the bit to set
+ * @addr: the address to start counting from
+ *
+ * This function is atomic and may not be reordered.  See __set_bit()
+ * if you do not require the atomic guarantees.
+ * Note that @nr may be almost arbitrarily large; this function is not
+ * restricted to acting on a single-word quantity.
+ */
+static __inline__ void set_bit(int nr, volatile void * addr)
+{
+        __asm__ __volatile__(
+                "btsl %1,%0"
+                :"+m" (ADDR)
+                :"dIr" (nr) : "memory");
+}
+
+
+/**
+ * clear_bit - Clears a bit in memory
+ * @nr: Bit to clear
+ * @addr: Address to start counting from
+ *
+ * clear_bit() is atomic and may not be reordered.  However, it does
+ * not contain a memory barrier, so if it is used for locking purposes,
+ * you should call smp_mb__before_clear_bit() and/or smp_mb__after_clear_bit()
+ * in order to ensure changes are visible on other processors.
+ */
+static __inline__ void clear_bit(int nr, volatile void * addr)
+{
+        __asm__ __volatile__(
+                "btrl %1,%0"
+                :"+m" (ADDR)
+                :"dIr" (nr));
+}
+
+static __inline__ int constant_test_bit(int nr, const volatile void * addr)
+{
+        return ((1UL << (nr & 31)) & (((const volatile unsigned int *) addr)[nr >> 5])) != 0;
+}
+
+static __inline__ int variable_test_bit(int nr, volatile const void * addr)
+{
+        int oldbit;
+
+        __asm__ __volatile__(
+                "btl %2,%1\n\tsbbl %0,%0"
+                :"=r" (oldbit)
+                :"m" (ADDR),"dIr" (nr));
+        return oldbit;
+}
+
+#define test_bit(nr,addr) \
+(__builtin_constant_p(nr) ? \
+ constant_test_bit((nr),(addr)) : \
+ variable_test_bit((nr),(addr)))
+
+#undef ADDR
 
 #endif /* !__ASSEMBLER__ */
 #endif /* !PIOS_INC_X86_H */

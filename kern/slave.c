@@ -41,6 +41,7 @@ uint32_t sl_syscall(context* ctx) {
     uint32_t arg = context_arg2(ctx);
     uint32_t arg2 = context_arg3(ctx);
     uint32_t arg3 = context_arg4(ctx);
+//	cprintf("slave system call\n");
     switch (cmd) {
         case SYSCALL_CLIENT_PUTS:
             if (usercopy((uint32_t)cbuf,arg, PAGESIZE) == 0)
@@ -68,6 +69,11 @@ uint32_t sl_syscall(context* ctx) {
 				syscall_fail(ctx);
 			*(uint32_t*)arg = mp_curcpu();
 			break;
+		case SYSCALL_CLIENT_SETUPVM:
+			 if (!as_checkrange(as_current(), arg, sizeof(uint32_t)))
+                                syscall_fail(ctx);
+			  start_vm_with_interception();
+			break;
 
     }
     return 0;
@@ -87,6 +93,7 @@ uint32_t stimer(context* ctx) {
 
 uint32_t spgflt(context* ctx) {
 	static uint32_t prevfault=0;
+	
 	uint8_t mycpu = mp_curcpu();
 	uint32_t fault = rcr2();
 	assert (cpus[mycpu].running);
@@ -113,13 +120,15 @@ return 0;
 }
 
 void wait_to_start() {
+	
 	int mycpu = mp_curcpu();
 	int i=0;
 	procid_t pid;
 	assert(cpus[mycpu].running == false);
-//	cprintf("CPU %d, waiting to start\n, addr cpu = %x", mycpu, &cpus[1]);
+	//cprintf("CPU %d, waiting to start\n, addr cpu = %x", mycpu, &cpus[1]);
 	while(cpus[mycpu].start == 0);
-//	cprintf("CPU %d, starting process %d\n", mycpu, cpus[mycpu].start);
+	cprintf("CPU %d, starting process %d\n", mycpu, cpus[mycpu].start);
+//	cprintf("cpustacks@%x, esp:@%x\n",cpu_stacks[mycpu],read_esp())
 	cpus[mycpu].running = cpus[mycpu].start;
 	cpus[mycpu].start=0;
 	proc_start(cpus[mycpu].running);
@@ -128,11 +137,13 @@ void wait_to_start() {
 void slave_kernel() {
 	int mycpu;
 	mycpu = mp_curcpu();
+	cprintf("current cpu is : %d\n",mycpu);
 	interrupts_enable(IRQ_TIMER, mycpu);
 	context_handler(T_IRQ0+IRQ_TIMER,&stimer);
 	context_handler(T_CLIENT_SYSCALL,&sl_syscall);
 	context_handler(T_PGFLT,&spgflt);
 	as_init();
-//	cprintf("I am alive on cpu number %d!!!\n", mycpu);
+       // enable_amd_svm();
+	cprintf("I am alive on cpu number %d!!!\n", mycpu);
 	wait_to_start();
 }

@@ -14,7 +14,7 @@
 #include <kern/mem/mem.h>
 #include <inc/pmem_layout.h>
 #include <inc/multiboot.h>
-#include <inc/vmm.h>
+#include <kern/hvm/svm/vm.h>
 
 // We can not rely on the bootloader stack to remain there
 // So we define a page of memory per CPU in use for stack.
@@ -44,6 +44,7 @@ void entry_init(const struct multiboot_info *mbi) {
 	// Console I/O
 	// We will ignore all prints and key queries in our reasoning
 	debug_init(); // initialize debug features
+	cprintf("Console I/O was initialized\n");
 	cprintf("Stacks are located at %x\n", stacks);
 
 /*	
@@ -67,8 +68,19 @@ void entry_init(const struct multiboot_info *mbi) {
 	// Initialize simple memory allocator
 	// Depends on NVRAM / primitive memory instructions (to get the size of memory)
 	mem_init(mbi);
-	pic_init();
+	
+	/*test svm*/
+	/*enable_amd_svm();
+	struct vm_info vm;
+	vm_create_simple (&vm);
+	cprintf("\n++++++ New virtual machine created. Going to GRUB for the 2nd time\n");
+        vmcb_dump(vm.vmcb);
+        vm_boot (&vm);
+*/
+	/*end test svm*/
 
+//start_vm();
+	pic_init();
 	// enable the system of contexts (needs to be done only once)
 	// depends on the memory subsystem.
 	context_init();
@@ -80,6 +92,7 @@ void entry_init(const struct multiboot_info *mbi) {
 	// This system (mp.c) configures the PIC devices created by the mp system
 	interrupts_init();
 
+//start_vm();
 	// At this point we begin our verified kernel.
 	init();
 }

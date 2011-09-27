@@ -6,6 +6,9 @@
 #include <kern/as/as.h>
 #include <inc/user.h>
 
+#define NORMAL_PROCESS 1;
+#define VM_PROCESS 2;
+
 typedef uint32_t procid_t;
 
 typedef struct proc {
@@ -16,11 +19,13 @@ typedef struct proc {
 	signaldesc sig_d;
 	bool insignal;
 	struct proc* next;
+	int type;
 } proc;
 
 
 void proc_init(void);
 procid_t proc_new(char* exe);
+procid_t proc_vm_new();
 bool proc_idvalid(procid_t id);
 as_t* proc_as(procid_t id);
 void proc_setctx(procid_t id, context* ctx);

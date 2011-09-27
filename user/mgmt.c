@@ -16,6 +16,9 @@
 int cpus;
 
 extern char _binary_obj_client_client1_start[];
+extern char _binary_obj_client_vmclient_start[];
+extern char _binary_obj_client_evilclient_start[];
+
 struct program {
 	char progname[MAX_PROGNAME];
 	char* prog_ptr;
@@ -24,10 +27,12 @@ struct program {
 struct program programs[] = 
 {
 	{"client1", _binary_obj_client_client1_start},
+	{"vmclient", _binary_obj_client_vmclient_start},
+	{"evilclient", _binary_obj_client_evilclient_start},
 	{"", (char*)0}
 };
 
-static int prog_num = 1;
+static int prog_num = 3;
 static int waiting_for_input;
 
 struct proc_info {
@@ -165,11 +170,38 @@ void performCmd(char* cmd) {
 			return;
 		}
 		procs[proc_index].cpu = -1;
-		printf("Stopping cpu %d, process id %d.\n", cpu, procs[proc_index].pid);
+		printf("Stopping cpu %d, process id %d.\n \n", cpu, procs[proc_index].pid);
 		cpustop(cpu);
+	}
+	else if (strcmp(cmd,"createvm") == 0) {
+		
+		// search for an empty proc entry
+		int proc_index;
+		for (proc_index=0;proc_index < MAX_PROCS; proc_index++) {
+			if (!procs[proc_index].pid) break;
+		}
+		if (proc_index == MAX_PROCS) {
+			printf("Management program can not handle any more processes (max %d)\n", MAX_PROCS);
+			return;
+		}
+		printf("\nLoading VM as a process \n");
+		createvm(&procs[proc_index].pid);	
+		if (procs[proc_index].pid) {
+		procs[proc_index].progname[0]='v';
+		procs[proc_index].progname[1]='m';
+		procs[proc_index].progname[2]='\0';
+		procs[proc_index].cpu = -1;
+			printf("VM  loaded as a process, pid %d\n", procs[proc_index].pid);
+		}
+		else {
+			printf("Failed to load the vm\n");
+		}
 	}
 	else if (strcmp(cmd,"setupvm") == 0) {
 		setupvm();	
+	}
+	else if (strcmp(cmd,"setuppios") == 0) {
+		setuppios();	
 	}
 	else if (strcmp(cmd,"shutdown") == 0) {
 	}
@@ -180,6 +212,9 @@ void performCmd(char* cmd) {
 		printf("start <pid> <cpu>\n");
 		printf("stop <cpu>\n");	
 		printf("status    - Prints out the status of the CPUs\n");
+		printf("createvm  - create vmcb for a guest os\n");
+		printf("setupvm  - notify the master kernel to start a vm guest\n");
+		printf("setuppios  - notify the master kernel to start a vm guest of PIOS\n");
 		printf("help      - Prints out this helpful information\n");
 		printf("shutdown  - Terminates the kernel and shuts down the computer\n");
 	}
@@ -207,12 +242,18 @@ void event(void) {
 		fpid = ((signal_pgflt*)&sig.data)->procid;
 		faddr = ((signal_pgflt*)&sig.data)->fault_addr;
 		proc_index = cpu_procs[fcpu];
-		printf("PGFLT on cpu %d, procid %d faulted at address %08x\n", fcpu, fpid, faddr);
-		assert (procs[proc_index].pid == fpid);
+		//printf("PGFLT on cpu %d, procid %d faulted at address %08x\n", fcpu, fpid, faddr);
+		if (procs[proc_index].pid!=fpid)
+		{
+			printf("STOP cpu: %x\n",fcpu);
+			cpustop(fcpu);		
+			break;
+		}
+	//	assert (procs[proc_index].pid == fpid);
 		allocpage(fpid, faddr & ~(0xfff));	
-		printf("Page allocated, restarting process\n");
+		//printf("Page allocated, restarting process\n");
 		cpustart(fcpu,fpid);
-		printf("Restarted\n");
+		//printf("Restarted\n");
 		break;
 
 		default:

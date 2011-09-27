@@ -110,11 +110,37 @@ void allocpage(uint32_t procid, uint32_t va) {
 	return;
 }
 
+/*void createvm() {
+    asm volatile("int %0" :
+            : "i" (T_SYSCALL),
+              "a" (SYSCALL_CREATEVM),
+              "b" (NULL)
+            : "cc", "memory");
+	return;
+}*/
+
+
+void createvm( uint32_t* procid) {
+    asm volatile("int %0" :
+            : "i" (T_SYSCALL),
+              "a" (SYSCALL_CREATEVM),
+			  "b" (procid)
+            : "cc", "memory");
+	return;
+}
 
 void setupvm() {
     asm volatile("int %0" :
             : "i" (T_SYSCALL),
               "a" (SYSCALL_SETUPVM),
+              "b" (NULL)
+            : "cc", "memory");
+	return;
+}
+void setuppios() {
+    asm volatile("int %0" :
+            : "i" (T_SYSCALL),
+              "a" (SYSCALL_SETUPPIOS),
               "b" (NULL)
             : "cc", "memory");
 	return;

@@ -1,7 +1,7 @@
 #ifndef __PMEM_LAYOUT_H__
 #define __PMEM_LAYOUT_H__
 
-#include "e820.h"
+#include <kern/mem/e820.h>
 
 struct pmem_layout {
 	unsigned long max_page;		// the page of the max address in the available region of phsyical memory

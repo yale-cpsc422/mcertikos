@@ -9,5 +9,7 @@ void pic_init(void);
 void pic_setmask(uint16_t mask);
 void pic_enable(int irq);
 void pic_eoi(void);
+void pic_reset(void);
+void pic_disable(void);
 
 #endif // !PIOS_DEV_PIC_H

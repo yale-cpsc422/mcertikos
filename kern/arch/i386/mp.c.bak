@@ -7,7 +7,10 @@
 #include <architecture/mem.h>
 #include <architecture/x86.h>
 #include <architecture/mmu.h>
+
 #include <architecture/mp.h>
+#include <architecture/timer.h>
+
 #include <architecture/mp_internal.h>
 #include <architecture/pic.h>
 
@@ -323,8 +326,13 @@ lapic_startcpu(uint8_t apicid, uint32_t addr)
 void interrupts_init() {
 	assert(mp_inited);
 	if (ismp) {
+	//cprintf("IS mp\n");	
+	//outb(IO_PIC1+1, 0xFF);
+	//outb(IO_PIC2+1, 0xFF);
+	//	pic_disable();
 		ioapic_init();
 		lapic_init();
+//		lapic_init2();
 	}
 	else {
 		pic_init();
@@ -456,6 +464,74 @@ lapic_init()
 	lapicw(TPR, 0);
 }
 
+
+void
+lapic_init2()
+{
+        if (!lapic)
+                return;
+
+        // Enable local APIC; set spurious interrupt vector.
+        lapicw(SVR, ENABLE | (T_IRQ0 + IRQ_SPURIOUS));
+
+        // The timer repeatedly counts down at bus frequency
+        // from lapic[TICR] and then issues an interrupt.  
+        lapicw(TDCR, X1);
+        lapicw(TIMER, PERIODIC | T_LTIMER);
+
+        // First initialize TICR to the maximum value for calibration.
+        lapicw(TICR, ~(uint32_t)0);
+
+        // Use the 8253 Programmable Interval Timer (PIT),
+        // which has a standard clock frequency,
+        // to determine this processor's exact bus frequency.
+        uint64_t tb = timer_read() + 1;
+        while (timer_read() < tb);      // wait until start of a PIT tick
+        uint32_t lb = lapic[TCCR];      // read base count from lapic
+        while (timer_read() < tb+(TIMER_FREQ+HZ/2)/HZ); // wait 1/HZ sec
+        uint32_t le = lapic[TCCR];      // read final count from lapic
+        assert(le < lb);
+        uint32_t ltot = lb - le;        // total # lapic ticks per 1/HZ tick
+
+        long long lhz = ltot * HZ;
+       // cprintf("CPU%d: %llu.%09lluHz\n", cpu_cur()->id,
+        //        lhz / 1000000000, lhz % 1000000000);
+        lapicw(TICR, ltot);
+
+        // Disable logical interrupt lines.
+        lapicw(LINT0, MASKED);
+        lapicw(LINT1, MASKED);
+
+        // Disable performance counter overflow interrupts
+        // on machines that provide that interrupt entry.
+        if (((lapic[VER]>>16) & 0xFF) >= 4)
+                lapicw(PCINT, MASKED);
+
+        // Map other interrupts to appropriate vectors.
+        lapicw(ERROR, T_LERROR);
+        lapicw(PCINT, T_PERFCTR);
+
+        // Set up to lowest-priority, "anycast" interrupts
+        lapicw(LDR, 0xff << 24);        // Accept all interrupts
+        lapicw(DFR, 0xf << 28);         // Flat model
+        lapicw(TPR, 0x00);              // Task priority 0, no intrs masked
+
+        // Clear error status register (requires back-to-back writes).
+        lapicw(ESR, 0);
+        lapicw(ESR, 0);
+
+        // Ack any outstanding interrupts.
+        lapicw(EOI, 0);
+
+        // Send an Init Level De-Assert to synchronise arbitration ID's.
+        lapicw(ICRHI, 0);
+        lapicw(ICRLO, BCAST | INIT | LEVEL);
+        while(lapic[ICRLO] & DELIVS)
+                ;
+
+        // Enable interrupts on the APIC (but not on the processor).
+        lapicw(TPR, 0);
+}
 
 // Acknowledge interrupt.
 void

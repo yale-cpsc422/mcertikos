@@ -35,7 +35,7 @@ as_init(void)
 	lcr4(cr4);
 
 	pmap_install(as);
-
+	
 	as_active[mp_curcpu()] = as;
 
 	uint32_t cr0 = rcr0();
@@ -80,6 +80,30 @@ as_t* as_new(void)
 }
 
 //
+// Allocate a new page directory for vm
+// Returns the new pdir with a reference count of 1.
+//
+as_t* as_new_vm(void)
+{
+    pmap_t* pmap = pmap_new();
+    if (pmap == NULL) return NULL;
+    uint32_t i;
+    for (i = 0; i < 0x100000; i += PAGESIZE) {
+     if (!pmap_insert(pmap, mem_phys2pi(i), i, PTE_W | PTE_G|PTE_U)) {
+        pmap_free(pmap);
+        return NULL;
+     }
+    }
+	// map the 32-bit memory hole directly
+/*    for (i = 0xf0000000; i != 0; i += PAGESIZE) {
+     if (!pmap_insert(pmap, mem_phys2pi(i), i, PTE_W | PTE_G|PTE_U)) {
+        pmap_free(pmap);
+        return NULL;
+     }
+    }*/
+    return pmap;
+}
+//
 // Free a page directory, and all page tables and mappings it may contain.
 //
 void
@@ -119,7 +143,9 @@ as_t* as_reserve(as_t* as, uint32_t uva, int perm) {
 		  if (page == NULL) {
 					 return NULL;
 		  }
-		  mem_incref(page);
+		 mem_incref(page);
+		 memset(mem_pi2phys(page),0,PAGESIZE); 
+			
 		  return pmap_insert(as, page, uva, perm);
 }
 

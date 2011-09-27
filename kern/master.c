@@ -22,9 +22,9 @@
 #include <kern/slave.h>
 #include <kern/kernel.h>
 
-#include <inc/svm.h>
-#include <inc/vm.h>
-#include <inc/cpu.h>
+#include <kern/hvm/svm/svm.h>
+#include <kern/hvm/svm/vm.h>
+#include <architecture/cpu.h>
 
 // Called first from entry.S on the bootstrap processor,
 // and later from boot/bootother.S on all other processors.
@@ -39,14 +39,14 @@ volatile cpu_use cpus[MAX_CPU];
 
 uint32_t time=0;
 uint32_t SVM_ENABLED=0;// 1-SVM has been enabled; 0- SVM has not been enabled;
-
+static struct vm_info * vm_running;
 
 
 // SYSCALL handlers
 uint32_t pgflt(context* ctx) {
     static uint32_t prevfault=0;
 		  uint32_t fault = rcr2();
-		  cprintf("Page Fault at %x, reserving new page\n", fault);
+		//  cprintf("Page Fault at %x, reserving new page\n", fault);
 		  proc_debug(mgmt);
 		  // ONLY MGMT APP SHOULD EVER PF
 		  assert (mgmt);
@@ -79,6 +79,43 @@ uint32_t gpf(context* ctx) {
     return 0;
 }
 
+
+char msgbuffer[PAGESIZE];
+signal timer_sig = {SIGNAL_TIMER, ""};
+
+uint32_t timer(context* ctx) {
+//      cprintf("Timer fired!");
+        size_t sz;
+        time ++;
+        static int counter=0;
+        interrupts_eoi();
+        counter ++;
+        if (counter == 100) {
+                counter = 0;
+                //cprintf("adding msg:%s\n", timer_sig);
+                msgqueue_add((char*)&timer_sig, sizeof(timer_sig));
+        }
+
+/*      cprintf("vm_running:@%x\n",vm_running);
+        if(vm_running)  
+        {
+
+        run_vm_once(vm_running);
+        
+        }
+*/
+        if (!proc_insignal(mgmt)) { // Is management task ready for events
+                sz = msgqueue_get(msgbuffer, PAGESIZE);
+                if (sz) { // we have a message to send
+                        //cprintf("removed msg:%s\n",msgbuffer);
+                        proc_sendsignal(mgmt,msgbuffer,sz);
+                }
+        }
+
+        return 0;
+}
+
+
 static char sysbuf[PAGESIZE];
 
 
@@ -110,8 +147,9 @@ uint32_t do_mgmt_start(context* ctx, mgmt_start* param) {
 		cprintf("CPUSTART: processor %d is already busy\n", param->cpu);
 		syscall_fail(ctx);
 	}
-	//cprintf("SYSCALL: setting cpu %d to start %d, cpus=%x\n", arg, arg2, &cpus[1]);
-	//proc_debug(arg2);
+	//cprintf("SYSCALL: setting cpu %d to start %d, cpus=%x\n", param->cpu, param->procid, &cpus[1]);
+	proc_debug(param->procid);
+	//cprintf("SYSCALL: setting cpu %d to start %d, cpus=%x\n", param->cpu, param->procid, &cpus[1]);
 	cpus[param->cpu].start = param->procid;
 	return 0;
 }
@@ -133,6 +171,7 @@ uint32_t do_mgmt_allocpage(context* ctx, mgmt_allocpage* param) {
 	if (!(param->va >= mem_max && param->va < 0xf0000000)) {
 		cprintf("MGMT_ALLOCPAGE: invalid request for addr %08x\n", param->va);
 		syscall_fail(ctx);
+		return -1;
 	}
 	as_reserve(proc_as(param->procid), param->va, PTE_P | PTE_U | PTE_W); 
 	return 0;
@@ -196,8 +235,30 @@ uint32_t syscall(context* ctx) {
 			}
 			*(uint32_t*)arg2 = proc;
 			break;
+		/*case SYSCALL_CREATEVM://
+		//	procid_t proc_vm;
+;
+			uint32_t proc_vm_1 = proc_vm_new();
+			if (!proc_vm_1) {
+                                cprintf("Creating VM failed\n");
+                                syscall_fail(ctx);
+                        }
+			*(uint32_t*)arg = proc_vm_1;
+			cprintf("creat vm test\n");
+			break;*/
+		case SYSCALL_CREATEVM://
+		//	procid_t proc_vm;
+;
+			uint32_t proc_vm_1 = proc_vm_new();
+			if (!proc_vm_1) {
+                                cprintf("Creating VM failed\n");
+                                syscall_fail(ctx);
+                        }
+			*(uint32_t*)arg = proc_vm_1;
+			//cprintf("creat vm test\n");
+			break;
 		case SYSCALL_SETUPVM:
-			cprintf("Setup a vm!;\n");			
+		/*	cprintf("Setup a vm!;\n");			
 			if(!SVM_ENABLED) {
 				cprintf("\n++++++ Enable SVM feature on CPU\n");
 				enable_amd_svm();
@@ -208,7 +269,31 @@ uint32_t syscall(context* ctx) {
 			cprintf("\n++++++ New virtual machine created. Going to GRUB for the 2nd time\n");
 			//vmcb_dump(vm.vmcb);
 			vm_boot (&vm);
-			
+		*/
+	//		vm_running= create_vm();	
+	//		run_vm_once(vm_running);
+		start_vm();
+			//interrupts_enable(IRQ_TIMER,0);
+        //context_handler(T_GPFLT,&gpf);
+        //context_handler(T_PGFLT,&pgflt);
+        //context_handler(T_SYSCALL,&syscall);
+        //context_handler(T_IRQ0+IRQ_TIMER,&timer);
+cprintf("come back from vm\n");
+			break;
+		case SYSCALL_SETUPPIOS:
+			cprintf("Setup PIOS as a vm!;\n");			
+			//TODO fill
+		/*	if(!SVM_ENABLED) {
+				cprintf("\n++++++ Enable SVM feature on CPU\n");
+				enable_amd_svm();
+				SVM_ENABLED=1;	
+			}	
+			struct vm_info vm1;
+			vm_create_guest_pios(&vm1);
+			cprintf("\n++++++ New virtual machine created. Going to GRUB for the 2nd time\n");
+			//vmcb_dump(vm.vmcb);
+			vm_boot (&vm1);
+			*/
 			break;
 		case SYSCALL_MGMT:
 			if (!as_checkrange(as_current(), arg, 4)) {
@@ -230,7 +315,7 @@ uint32_t syscall(context* ctx) {
 				case MGMT_ALLOCPAGE:
 					if (!as_checkrange(as_current(), data->command, sizeof(mgmt_allocpage)))
 						syscall_fail(ctx);
-					do_mgmt_allocpage(ctx, (mgmt_allocpage*)(&data->params));
+					uint32_t result=do_mgmt_allocpage(ctx, (mgmt_allocpage*)(&data->params));
 					break;
 				default:
 					cprintf("Unknown MGMT syscall\n"); 
@@ -240,12 +325,12 @@ uint32_t syscall(context* ctx) {
     return 0;
 }
 
-
+/*
 char msgbuffer[PAGESIZE];
 signal timer_sig = {SIGNAL_TIMER, ""};
 
 uint32_t timer(context* ctx) {
-	//cprintf("Timer fired!");
+//	cprintf("Timer fired!");
 	size_t sz;
 	time ++;
 	static int counter=0;
@@ -253,29 +338,40 @@ uint32_t timer(context* ctx) {
 	counter ++;
 	if (counter == 100) {
 		counter = 0;
-		//cprintf("adding msg\n");
+		//cprintf("adding msg:%s\n", timer_sig);
 		msgqueue_add((char*)&timer_sig, sizeof(timer_sig));
 	}
 
+//	cprintf("vm_running:@%x\n",vm_running);
+	if(vm_running)	
+	{
+
+	run_vm_once(vm_running);
+	
+	}
+//
 	if (!proc_insignal(mgmt)) { // Is management task ready for events
 		sz = msgqueue_get(msgbuffer, PAGESIZE);
 		if (sz) { // we have a message to send
-			//cprintf("removed msg\n");
+			//cprintf("removed msg:%s\n",msgbuffer);
 			proc_sendsignal(mgmt,msgbuffer,sz);
 		}
 	}
+	
 	return 0;
 }
-
+*/
 
 void
 init(void)
 {
 	int i;
-	cprintf("Let's try to start those other cpus\n");
+	cprintf("Let's try to start those other cpus ... \n");
+//	uint32_t vmcb=create_vm_vmcb();
+//		mp_boot_vm(1,vm_launch(vmcb),(uint32_t)&stacks[1]);
 	for (i=1; i<mp_ncpu(); i++)
 		mp_boot(i,slave_kernel,(uint32_t)&stacks[i]);
-	cprintf("And I am back!\n");
+	cprintf("Done!\n");
 
 	msgqueue_init();
 
@@ -285,20 +381,19 @@ init(void)
 	context_handler(T_SYSCALL,&syscall);
 	context_handler(T_IRQ0+IRQ_TIMER,&timer);
 	cprintf("Verified Kernel booting\n");
-    cprintf("Loading Address spaces....");
+    	cprintf("Loading Address spaces....");
 	as_init();
 	if (!as_current())
 		panic("Could not initialize address space!\n");
-	cprintf("ok\n");
 
 
 	cpus[0].running = true;
 	for (i=1; i<MAX_CPU; i++)
 		cpus[i].running = false;
-	
 
 	mgmt = proc_new(ROOTEXE_START);
 	cprintf("Jumping to user mode\n");
+	
     proc_start(mgmt);
 	cprintf("UHOH!\n");
 }

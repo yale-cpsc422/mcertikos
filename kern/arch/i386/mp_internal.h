@@ -5,11 +5,17 @@
 #ifndef PIOS_KERN_MP_INTERNAL_H
 #define PIOS_KERN_MP_INTERNAL_H
 
+#define HZ 	25
+
 // Local APIC registers, divided by 4 for use as uint32_t[] indices.
 #define ID      (0x0020/4)   // ID
 #define VER     (0x0030/4)   // Version
 #define TPR     (0x0080/4)   // Task Priority
-#define EOI     (0x00B0/4)   // EOI
+#define APR     (0x0090/4)      // Arbitration Priority
+#define PPR     (0x00A0/4)      // Processor Priority
+#define EOI     (0x00B0/4)      // EOI
+#define LDR     (0x00D0/4)      // Logical Destination
+#define DFR     (0x000E0/4)     // Destination Format
 #define SVR     (0x00F0/4)   // Spurious Interrupt Vector
   #define ENABLE     0x00000100   // Unit Enable
 #define ESR     (0x0280/4)   // Error Status
@@ -125,6 +131,8 @@ void ioapic_enable(int irq, int apicid);
 
 // Initialize current CPU's local APIC
 void lapic_init(void);
+// Initialize current CPU's local APIC
+void lapic_init2(void);
 
 // Acknowledge interrupt
 void lapic_eoi(void);

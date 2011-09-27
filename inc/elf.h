@@ -50,6 +50,21 @@ typedef struct sechdr {
 	uint32_t sh_entsize;
 } sechdr;
 
+enum segment_type {
+        PT_LOAD = 1     /* loadable segment */
+};              
+        
+enum segment_flag {
+        PF_X = 0x1,     /* Executable */
+        PF_W = 0x2,     /* Writable */
+        PF_R = 0x4,     /* Readable */
+};              
+        
+enum { 
+        EI_NIDENT = 16
+};
+
+
 // Values for proghdr::p_type
 #define ELF_PROG_LOAD		1
 

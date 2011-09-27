@@ -4,7 +4,6 @@
 #define PIOS_KERN_MEM_H
 
 #include <architecture/types.h>
-#include <inc/e820.h>
 #include <inc/pmem_layout.h>
 
 
@@ -16,10 +15,17 @@
 
 
 //some consts for svm
-#define START_PMEM_VMM 0x100000
+#define START_PMEM_VMM 0x8000000
+#define HOST_PMEM_SIZE 0xF000000
 #define GUEST_PMEM_SIZE 0x4000000
+#define GUEST_FIXED_PMEM_BYTES 0x4000000
+#define PIOS_PMEM_START 0x100000
 #define PAGE_SHIFT 12
 #define PAGE_SIZE 4096
+
+#define STACK_SIZE	(1 << 16) /* 64 KB */
+#define	DEFAULT_VMM_PMEM_SIZE (1 << 24) /* 16 MB */
+#define	DEFAULT_VMM_PMEM_START  0x100000// (1 << 20) /* 1 MB */
 
 #define PAGE_SHIFT_4MB 22
 #define PAGE_SIZE_4MB  ( 1 << PAGE_SHIFT_4MB )
@@ -56,10 +62,10 @@ enum pg_table_level {
 
 /*Anh - For 4MB page translation, PAE disabled, vol2 p124  */
 struct pd4M_entry {
-        u16 flags:      13; /* Bit 0-12 */
-        u32 basehigh:   8;      /* Bit 13-20 of the entry => bit 32-39 of base */
-        u8  rsvr:               1;      /* Bit 21 */
-        u16 baselow:    10;     /* Bit 22-31 of the entry => bit 22-31 of base */
+        uint16_t flags:      13; /* Bit 0-12 */
+        uint32_t basehigh:   8;      /* Bit 13-20 of the entry => bit 32-39 of base */
+        uint8_t  rsvr:               1;      /* Bit 21 */
+        uint16_t baselow:    10;     /* Bit 22-31 of the entry => bit 22-31 of base */
 } __attribute__ ((packed)) pd4M_entry;
 
 /*haind - For 4KB page translation, PAE disabled*/
@@ -67,14 +73,14 @@ union pgt_entry_4kb
 {
 
         struct pde {
-                u32 flags: 12; /* Bit 0-11  */
-                u32 base:  20; /* Bit 12-31 */
+                uint32_t flags: 12; /* Bit 0-11  */
+                uint32_t base:  20; /* Bit 12-31 */
 
         } __attribute__ ((packed)) pde;
 
         struct pte {
-                        u32 flags: 12; /* Bit 0-11  */
-                        u32 base:  20; /* Bit 12-31 */
+                        uint32_t flags: 12; /* Bit 0-11  */
+                        uint32_t base:  20; /* Bit 12-31 */
 
         } __attribute__ ((packed)) pte;
 };
@@ -157,37 +163,23 @@ union pgt_entry_2mb
 {
         /* 2-Mbyte PML4E and PDPE */
         struct non_term {
-                u16 flags: 12; /* Bit 0-11  */
-                u64 base:  40; /* Bit 12-51 */
-                u16 avail: 11; /* Bit 52-62 */
-                u16 nx:    1;  /* Bit 63    */
+                uint16_t flags: 12; /* Bit 0-11  */
+                uint64_t base:  40; /* Bit 12-51 */
+                uint16_t avail: 11; /* Bit 52-62 */
+                uint16_t nx:    1;  /* Bit 63    */
         } __attribute__ ((packed)) non_term;
 
         /* 2-Mbyte PDE */
         struct term {
-                u32 flags: 21; /* Bit 0-20  */
-                u32 base:  31; /* Bit 21-51 */
-                u16 avail: 11; /* Bit 52-62 */
-                u16 nx:    1;  /* Bit 63    */
+                uint32_t flags: 21; /* Bit 0-20  */
+                uint32_t base:  31; /* Bit 21-51 */
+                uint16_t avail: 11; /* Bit 52-62 */
+                uint16_t nx:    1;  /* Bit 63    */
         } __attribute__ ((packed)) term;
 };
 
-unsigned long pml4_table_alloc ( void );
-unsigned long pg_table_alloc ( void );
-
-extern void mmap_pml4 ( unsigned long pml4_table_base_vaddr, unsigned long vaddr, unsigned long paddr, int is_user );
-extern void mmap_4mb ( unsigned long pg_table_base_vaddr, unsigned long vaddr, unsigned long paddr,     int is_user );
-
-//TODO: use u64, u32.. instead of long long / prepare for 64 bit guest
-extern u64 linear_2_physical(u64 cr0, u64 cr3, u64 cr4, u64 guest_linear);
-extern long long linear2physical_legacy4kb ( unsigned long pg_table_base_vaddr, unsigned long vaddr);
-extern long long linear2physical_legacy4mb ( unsigned long pg_table_base_vaddr, unsigned long vaddr);
-extern unsigned long linear2physical_legacy2mb ( unsigned long pml4_table_base_vaddr, unsigned long vaddr );
-
-extern void print_pml4_2MB_pg_table ( unsigned long pml4_table_base_vaddr );
-extern void print_4MB_pg_table ( unsigned long pg_table_base_vaddr);
 
 extern pageinfo * mem_alloc_contiguous( unsigned long n_pages);
 extern unsigned long mem_alloc_one_page();
-extern pageinfo * find_contiguous_pages(unsigned long n_pages);
+extern unsigned long alloc_host_pages ( unsigned long nr_pfns, unsigned long pfn_align );
 #endif /* !PIOS_KERN_MEM_H */
