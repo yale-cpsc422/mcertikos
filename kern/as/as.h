@@ -13,6 +13,7 @@ as_t* as_init(void);
 as_t* as_current();
 void as_activate(as_t* as);
 as_t* as_new(void);
+as_t* as_new_vm(void);
 void as_free(as_t* as);
 // as_t* as_clone(as_t* as);
 as_t* as_reserve(as_t* as, uint32_t uva, int perm);

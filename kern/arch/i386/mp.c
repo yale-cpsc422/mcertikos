@@ -204,18 +204,6 @@ uint8_t mp_curcpu()
 	}
 	assert (1 == 0);
 }
-uint8_t mp_curcpu_vm()
-{
-	int i;
-	for(i=0;i<ncpu;i++) {
-
-	cprintf("cpustack:%d @%x, esp:@%x\n",i,&cpu_stacks[i],read_esp());
-	cprintf("cpustack:%d @%x, esp:@%x\n",i,cpu_stacks[i],ROUNDUP(read_esp(),PAGESIZE));
-		if (cpu_stacks[i] == ROUNDUP(read_esp(),PAGESIZE))
-			return i;
-	}
-	assert (1 == 0);
-}
 
 // pointer to the C-part of the secondary bootloader
 // e.g. other_helper.c

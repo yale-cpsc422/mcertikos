@@ -12,7 +12,7 @@
 #include "svm.h"
 #include <architecture/cpufeature.h>
 #include <kern/debug/string.h>
-#include <kern/debug/debug.h>
+#include <kern/debug/stdio.h>
 #include <kern/mem/mem.h>
 #include <architecture/types.h>
 #include <architecture/x86.h>

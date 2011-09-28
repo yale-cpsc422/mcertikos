@@ -62,7 +62,7 @@ mem_init(const struct multiboot_info *mbi)
         setup_memory_region (&(pml.e820), mbi);
         pml.total_pages  = get_nr_pages ( &(pml.e820) );
         pml.max_page     = get_max_pfn ( &(pml.e820) );
-	pml.vmm_pmem_end=end;
+	pml.vmm_pmem_end= (unsigned long )end;
         pml.vmm_pmem_start = DEFAULT_VMM_PMEM_START;
 
 	// Memory detection in PIOS
@@ -198,13 +198,14 @@ next_n_page_in_freelist(pageinfo *pi, unsigned long n){
 	return t_pi;
 }
 
-// return: &mem_freelist, no prior, pi is the head of the list
+// return: &mem_freelist, 
+//	   no prior, pi is the head of the list
 //	   NULL, pi is not in the free list	
 //	   others, pageinfo index
 pageinfo * find_prior_pi_in_freelist(pageinfo * pi){
 	pageinfo *tpi=mem_freelist;
 	cprintf("pi:%x, tpi:%x\n",pi,tpi);
-	if (pi==tpi) return &mem_freelist; //pi is the first iterm in the list, has no prior pi;
+	if (pi==mem_freelist) return mem_freelist; //pi is the first iterm in the list, has no prior pi;
 	else{
 	while (tpi->free_next!=NULL){
 		cprintf("pi:%x, tpi:%x,tpi->next:%x\n",pi,tpi,tpi->free_next);
@@ -240,7 +241,8 @@ pageinfo * find_contiguous_pages(unsigned long n_pages){
 			cprintf("Find contiguous region:%x, of %d pages, TPIis:%x\n",&mem_pageinfo[i+begin],n_pages,tpi);
 			pageinfo * prior=find_prior_pi_in_freelist(tpi);
 			pageinfo * next=next_n_page_in_freelist(tpi,n_pages-1);
-			prior->free_next=next;
+			if (prior == mem_freelist)  mem_freelist=next;
+			else  prior->free_next=next;
 			
 			for (j=0;j<n_pages;j++){
 			mem_incref(&mem_pageinfo[j+i+begin]);
@@ -251,7 +253,7 @@ pageinfo * find_contiguous_pages(unsigned long n_pages){
 			return &mem_pageinfo[i+begin];	
 		}	
 }	
-	
+	return NULL;	//error, find no contigous pages
 }
 
 unsigned long alloc_host_pages ( unsigned long nr_pfns, unsigned long pfn_align )

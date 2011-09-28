@@ -5,6 +5,7 @@
 #include "svm.h"
 #include "vm.h"
 #include <kern/debug/string.h>
+#include <kern/debug/stdio.h>
 #include <kern/as/as.h>
 #include <kern/mem/mem.h>
 #include <architecture/mmu.h>

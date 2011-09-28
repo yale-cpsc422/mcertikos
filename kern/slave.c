@@ -21,6 +21,8 @@
 #include <inc/client.h>
 #include <inc/user.h>
 
+#include <kern/hvm/svm/vm.h>
+
 #define T_SYSCALL 48
 
 extern volatile cpu_use cpus[];
@@ -72,7 +74,7 @@ uint32_t sl_syscall(context* ctx) {
 		case SYSCALL_CLIENT_SETUPVM:
 			 if (!as_checkrange(as_current(), arg, sizeof(uint32_t)))
                                 syscall_fail(ctx);
-			  start_vm_with_interception();
+			  	start_vm_with_interception();
 			break;
 
     }

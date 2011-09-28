@@ -249,12 +249,6 @@ uint32_t syscall(context* ctx) {
 		case SYSCALL_CREATEVM://
 		//	procid_t proc_vm;
 ;
-			uint32_t proc_vm_1 = proc_vm_new();
-			if (!proc_vm_1) {
-                                cprintf("Creating VM failed\n");
-                                syscall_fail(ctx);
-                        }
-			*(uint32_t*)arg = proc_vm_1;
 			//cprintf("creat vm test\n");
 			break;
 		case SYSCALL_SETUPVM:

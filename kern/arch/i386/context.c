@@ -8,6 +8,7 @@
 #include <architecture/mem.h>
 
 #include <kern/mem/mem.h>
+#include <kern/hvm/svm/vm.h>
 
 #include <kern/debug/debug.h>
 #include <kern/debug/stdio.h>
@@ -235,42 +236,6 @@ context* context_new(void (*f)(void), uint32_t expected_va) {
 	return (context*)mem_pi2ptr(pi);
 
 }
-//create context for vms
-// The context header is created with a EIP set to f
-// The expected va is the virtual address location where this 
-// stack is expected to be placed. 
-context* context_vm_new(void (*f)(void)) {
-	pageinfo* pi = mem_alloc();
-	if (!pi)
-		return NULL;
-	mem_incref(pi);
-	trapframe* tf = (trapframe*)(mem_pi2ptr(pi)+PAGESIZE-sizeof(trapframe));
-
-	// set all segments to ring 3.
-    tf->tf_es = CPU_GDT_KCODE;
-    tf->tf_ds = CPU_GDT_KDATA;
-    tf->tf_cs = CPU_GDT_KCODE;
-    tf->tf_ss = CPU_GDT_KDATA;
-
-	// EIP to the entrypoint of f (most likely a virtual address)
-    tf->tf_eip = (uint32_t)f;
-cprintf("%x is the process entry\n", f);
-	
-	// we expect the stack to be used with the virtual address
-    tf->tf_esp = (uint32_t)(mem_pi2ptr(pi)+PAGESIZE-sizeof(trapframe));
-
-	// make sure that the stack chain is interrupted
-    tf->tf_regs.reg_ebp = 0;
-
-
-    tf->tf_regs.reg_eax = create_vm_vmcb();
-
-	// must handle timer before enabling interrupts
-    tf->tf_eflags = FL_IF;
-
-	return (context*)mem_pi2ptr(pi);
-
-}
 
 void context_destroy(context* ctx)
 {
@@ -361,24 +326,6 @@ void gcc_noreturn context_start (context *ctx)
     trap_return(&ctx->tf);
 }
 
-void gcc_noreturn context_start_vm (context *ctx)
-{
-	// A few sanity checks on the trap
-	assert (ctx->tf.tf_eflags & FL_IF);
-
-	cprintf("esp:@%x\n",read_esp());
-	cur[mp_curcpu_vm()] = ctx;
-
-	// TODO: this does not quite work - if the stack is multipage
-	// assert (translate(ROUNDDOWN(ctx->tf.tf_esp,PAGESIZE)) == (uint32_t)ctx); 
-	
-   cprintf("About to jump to %x\n", ((trapframe*)ctx)->tf_eip);
-   cprintf("the ctx is %x\n", ((trapframe*)ctx)->tf_eip);
-
-	// If everything is OK, execute the assembly code to activate context via IRET
-	assert(ctx->tf.tf_eip < 0x50000000);
-    trap_return(&ctx->tf);
-}
 
 uint32_t context_errno (context *ctx) {
 	return ctx->tf.tf_err;

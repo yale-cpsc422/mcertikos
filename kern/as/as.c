@@ -144,7 +144,7 @@ as_t* as_reserve(as_t* as, uint32_t uva, int perm) {
 					 return NULL;
 		  }
 		 mem_incref(page);
-		 memset(mem_pi2phys(page),0,PAGESIZE); 
+		 memset((void *)mem_pi2phys(page),0,PAGESIZE); 
 			
 		  return pmap_insert(as, page, uva, perm);
 }

@@ -83,42 +83,6 @@ procid_t proc_new(char* binary) {
 	return p->id;
 }
 
-procid_t proc_vm_new() {
-	pageinfo* pi = mem_alloc();
-	if (!pi) {
-		cprintf("proc_new: Failed to allocate a page for proc structure");
-		return 0;
-	}
-	mem_incref(pi);
-	proc* p = (proc*) mem_pi2ptr(pi);
-
-	p->type=VM_PROCESS;
-	p->id = nextid++;
-	p->insignal = false;
-	//p->as = rcr3();
-	p->as = as_new();
-	if (!p->as) {
-		cprintf("proc_new: failed to create new address space");
-		return 0;
-	}
-//	loadelf(as_current(),binary,p);
-	cprintf("svm_launch address: %x \n", (uint32_t) svm_launch);
-    	p->ctx = context_vm_new((void(*)(void))svm_launch);
-	//as_assign(p->as, VM_STACKHI-PAGESIZE, PTE_P | PTE_U | PTE_W, mem_ptr2pi(p->ctx));
-	if (!p->ctx) {
-		cprintf("proc_new: Failed to load the code");
-		as_free(p->as);
-		return 0;
-	}
-	
-	p->next = proclist;
-	proclist = p;
-		
-	//DEBUG STUFF:
-	// proc_debug(p->id);
-	cprintf("process created: pid: %x\n",p->id);
-	return p->id;
-}
 
 void proc_start(procid_t proc) {
 	struct proc* p;

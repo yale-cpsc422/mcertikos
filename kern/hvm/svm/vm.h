@@ -4,7 +4,6 @@
 #include <inc/multiboot.h>
 #include "vmcb.h"
 #include <kern/mem/e820.h>
-//#include "page.h"
 
 #define	GUEST_PADDR_MBI	0x2d0e0UL
 
@@ -46,18 +45,6 @@ struct vm_info
 extern void vm_enable_intercept(struct vm_info * vm, int flags);
 extern void vm_disable_intercept(struct vm_info *vm, int flags);
 
-extern int vm_is_process_tracked(struct vm_info *vm, char * pname);
-extern void vm_remove_tracked_process(struct vm_info *vm, char * pname);
-extern void vm_add_tracked_process(struct vm_info *vm, char * pname);
-
-extern void vm_add_waiting_thread(struct vm_info *vm, int tid, struct syscall_info * info);
-extern void vm_remove_waiting_thread(struct vm_info *vm, int tid);
-extern struct syscall_info * vm_get_waiting_syscall(struct vm_info *vm, int tid);
-
-extern void vm_add_fileid2name_map(struct vm_info * vm, int id, char * name);
-extern void vm_remove_fileid2name_map(struct vm_info * vm, int id);
-extern char * vm_get_fname_from_id(struct vm_info * vm, int id);
-
 extern void vm_create ( struct vm_info *vm, unsigned long vmm_pmem_start,
 		unsigned long vmm_pmem_size, struct e820_map *e820);
 extern void vm_create_simple(struct vm_info *vm);
@@ -69,6 +56,7 @@ extern void print_page_errorcode(uint64_t errcode);
 
 extern void start_vm_1( struct vmcb *vmcb1 );
 extern void start_vm();
+extern void start_vm_with_interception();
 extern void  run_vm_once(struct vm_info *vm );
 extern uint32_t create_vm();
 #endif /* __VM_H__ */

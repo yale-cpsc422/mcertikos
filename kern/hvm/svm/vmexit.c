@@ -7,7 +7,7 @@
 *********************************************************************************/
  
 #include "vmexit.h"
-#include <kern/debug/debug.h>
+#include <kern/debug/stdio.h>
 
 void print_vmexit_exitcode (struct vmcb * vmcb)
 {

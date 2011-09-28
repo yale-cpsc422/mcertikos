@@ -10,11 +10,15 @@
 #include "vm.h"
 #include <architecture/cpufeature.h>
 #include <kern/debug/string.h>
-#include <kern/debug/debug.h>
+#include <kern/debug/stdio.h>
 #include <kern/mem/mem.h>
+#include <kern/as/as.h>
 #include <architecture/types.h>
+#include <architecture/pic.h>
+#include <architecture/mp.h>
 #include <architecture/mmu.h>
 #include <architecture/x86.h>
+#include <architecture/mem.h>
 #include "vmexit.h"
 #include "intercept.h"
 
@@ -92,7 +96,7 @@ static unsigned long create_4kb_nested_pagetable ( )
 	//const unsigned long cr3  = pg_table_alloc();
 //	const unsigned long cr3  = as_new();
 
-	const  unsigned long pmap=as_new_vm();
+	as_t *  pmap=as_new_vm();
 
 	//const unsigned long vm_pmem_pfn = PFN_DOWN_2MB ( PHYS ( vm_pmem_start ) );
 	int i;
@@ -108,7 +112,7 @@ static unsigned long create_4kb_nested_pagetable ( )
 
 //	print_4MB_pg_table(cr3);
 
-	return pmap;
+	return (unsigned long) pmap;
 }
 
 /********************************************************************************************/
@@ -684,6 +688,7 @@ start_vm_with_interception(){
         vm_boot (&vm);
 //	run_vm_once(&vm);
 }
+/*
 uint32_t   
 create_vm(){
 	cprintf("Setup the vmcb for VM!;\n");
@@ -701,10 +706,10 @@ create_vm_vmcb(){
         vm_create_simple(&vm);
         cprintf("\n++++++ New virtual machine created\n");
 	//pic_reset();
-return &(vm.vmcb);
+return (uint32_t) &(vm.vmcb);
 }
 
-
+*/
 void  run_vm_once(struct vm_info *vm){
 
 	//pic_reset();

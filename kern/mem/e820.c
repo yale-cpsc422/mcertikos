@@ -127,7 +127,7 @@ void hide_memory ( struct multiboot_info * mbi, unsigned long hidestart, unsigne
 {
 	unsigned long map_base = (unsigned long ) mbi->mmap_addr;
 	unsigned long hideend = hidestart + length - 1;
-	uint64_t replace_start, replace_size = 0;
+	uint64_t replace_start=0, replace_size = 0;
 
 	cprintf("Hiding the host - start: %x, length: %x\n", hidestart, length);
 
@@ -188,7 +188,7 @@ void hide_memory ( struct multiboot_info * mbi, unsigned long hidestart, unsigne
 
 		//Case 2: hiding region covers or overlaps e820 region => don't have to split
 		char b_interleave = 0;
-		uint64_t newstart, newend;
+		uint64_t newstart=0, newend=0;
 
 		if ( (start >= hidestart) && (start <= hideend) )
 		{
