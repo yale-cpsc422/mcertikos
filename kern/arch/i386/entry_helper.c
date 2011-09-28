@@ -12,7 +12,7 @@
 #include <kern/debug/stdio.h>
 
 #include <kern/mem/mem.h>
-#include <inc/pmem_layout.h>
+#include <kern/mem/pmem_layout.h>
 #include <inc/multiboot.h>
 #include <kern/hvm/svm/vm.h>
 

@@ -4,7 +4,7 @@
 #define PIOS_KERN_MEM_H
 
 #include <architecture/types.h>
-#include <inc/pmem_layout.h>
+#include "pmem_layout.h"
 #include "pages.h"
 
 // At physical address MEM_IO (640K) there is a 384K hole for I/O.

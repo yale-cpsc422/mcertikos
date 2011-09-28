@@ -7,7 +7,7 @@
 */
 
 #include "svm.h"
-#include  "vm.h"
+#include "vm.h"
 #include <architecture/cpufeature.h>
 #include <kern/debug/string.h>
 #include <kern/debug/debug.h>
