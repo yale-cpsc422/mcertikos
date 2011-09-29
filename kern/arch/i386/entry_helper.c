@@ -45,7 +45,7 @@ void entry_init(const struct multiboot_info *mbi) {
 	// We will ignore all prints and key queries in our reasoning
 	debug_init(); // initialize debug features
 	cprintf("Console I/O was initialized\n");
-	cprintf("Stacks are located at %x\n", stacks);
+	cprintf("Stacks are located at 0x%x\n", stacks);
 
 /*	
 	//Parse the command line that user pass to GRUB
@@ -62,7 +62,7 @@ void entry_init(const struct multiboot_info *mbi) {
 	// initialize multi_processor interface
 	// Required for interrupt subsystem
 	mp_init();
-	cprintf("MP initialized, %d cpus detected\n", mp_ncpu());
+	cprintf("MP initialized, :%d cpus detected\n", mp_ncpu());
 	
 	
 	// Initialize simple memory allocator

@@ -145,6 +145,7 @@ mem_init(const struct multiboot_info *mbi)
 		}
 	}
 	*freetail = NULL;	// null-terminate the freelist
+	cprintf("finish memory\n");
 	// Check to make sure the page allocator seems to work correctly.
 	mem_check();
 }
