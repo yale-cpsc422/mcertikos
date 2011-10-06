@@ -24,6 +24,8 @@ KERN_SRCFILES +=	kern/arch/$(ARCH)/pic.c
 KERN_SRCFILES +=	kern/arch/$(ARCH)/lapic.c
 KERN_SRCFILES +=	kern/arch/$(ARCH)/mp.c
 KERN_SRCFILES +=	kern/arch/$(ARCH)/timer.c
+KERN_SRCFILES +=	kern/arch/${ARCH}/acpi.c
+KERN_SRCFILES +=	kern/arch/${ARCH}/support.S
 
 # How to build kernel object files
 #$(OBJDIR)/kern/arch/%.o: kern/arch/%.c

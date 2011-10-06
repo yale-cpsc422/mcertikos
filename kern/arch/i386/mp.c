@@ -9,6 +9,7 @@
 #include <architecture/mmu.h>
 #include <architecture/mp.h>
 #include <architecture/mp_internal.h>
+#include <architecture/acpi.h>
 #include <architecture/pic.h>
 
 #include <kern/debug/debug.h>
@@ -111,9 +112,8 @@ mpconfig(struct mp **pmp) {
 		   _binary_obj_boot_bootother_size[];
 
 
-// mp_init needs to execute only once. 
-bool
-mp_init(void)
+static bool
+mp_init_fallback(void)
 {
 	uint8_t          *p, *e;
 	struct mp      *mp;
@@ -133,7 +133,7 @@ mp_init(void)
 	if ((conf = mpconfig(&mp)) == 0) {
 		// Not a multiprocessor machine - just use boot CPU.
 		// configure the MP system for single PIC
-		return false; 	
+		return false;
 	}
 	ismp = 1;
 	lapic = (uint32_t *) conf->lapicaddr;
@@ -177,12 +177,141 @@ mp_init(void)
 		outb(0x23, inb(0x23) | 1);	// Mask external interrupts.
 	}
 
-	// Set up page 1 with secondary bootstrap code 
+	// Set up page 1 with secondary bootstrap code
 	// It would be nice to do this with linker voodoo
 	uint8_t *boot2 = (uint8_t*)0x1000;
 	memmove(boot2, _binary_obj_boot_bootother_start,
 			(uint32_t)_binary_obj_boot_bootother_size);
 	return true;
+}
+
+bool detect_cpuid(void);
+
+static uint8_t
+get_bsp_apic_id(void)
+{
+	if (detect_cpuid() == false) {
+		cprintf("CPUID is not supported. Assume local APIC ID of BSD is 0x0.\n");
+		return 0x0;
+	}
+
+	uint32_t cpuinfo[4];
+	cpuid(0x1, &cpuinfo[0], &cpuinfo[1], &cpuinfo[2], &cpuinfo[3]);
+	cprintf("lapic id of current processor is %08x.\n", cpuinfo[1] >> 24);
+	return (cpuinfo[1] >> 24);
+}
+
+// mp_init needs to execute only once.
+bool
+mp_init(void)
+{
+	uint8_t *p, *e;
+	acpi_rsdp * rsdp;
+	acpi_rsdt * rsdt;
+	acpi_xsdt * xsdt;
+	acpi_madt * madt;
+	uint8_t bsp_apic_id;
+
+	// mark MP subsystem as inited
+	assert(!mp_inited);
+	mp_inited = true;
+
+	// set the primary stack marker to the current stack
+	cpu_stacks[0] = ROUNDUP(read_esp(), PAGESIZE);
+
+	ismp = 1;
+
+	if ((rsdp = acpi_probe_rsdp()) == NULL) {
+		cprintf("Not found RSDP.\n");
+		goto fallback;
+	}
+
+	xsdt = NULL;
+	if ((rsdt = acpi_probe_rsdt(rsdp)) == NULL &&
+	    (xsdt = acpi_probe_xsdt(rsdp)) == NULL) {
+		cprintf("Not found either RSDT or XSDT.\n");
+		goto fallback;
+	}
+
+	if ((madt = (xsdt == NULL) ?
+	     (acpi_madt *)acpi_probe_rsdt_ent(rsdt, ACPI_MADT_SIG) :
+	     (acpi_madt *)acpi_probe_xsdt_ent(xsdt, ACPI_MADT_SIG)) == NULL) {
+		cprintf("Not found MADT.\n");
+		goto fallback;
+	}
+
+	lapic = (uint32_t *) (madt->lapic_addr);
+	cprintf("Local APIC: addr = %08x.\n", lapic);
+
+	ncpu = 0;
+	bsp_apic_id = get_bsp_apic_id();
+	p = (uint8_t *)madt->ent;
+	e = (uint8_t *)madt + madt->length;
+	while (p < e) {
+		acpi_madt_apic_hdr * hdr = (acpi_madt_apic_hdr *)p;
+		switch (hdr->type) {
+		case ACPI_MADT_APIC_LAPIC:
+			;
+			acpi_madt_lapic *lapic_ent = (acpi_madt_lapic *)hdr;
+
+			cprintf("Local APIC: acip id = %08x, lapic id = %08x, flags = %08x\n", lapic_ent->acip_proc_id, lapic_ent->lapic_id, lapic_ent->flags);
+
+			if (!(lapic_ent->flags & ACPI_APIC_ENABLED)) {
+				cprintf(" disabled.\n");
+				continue;
+			}
+
+			if (lapic_ent->lapic_id == bsp_apic_id)
+				cpu_ids[0] = lapic_ent->lapic_id;
+			else
+				cpu_ids[ncpu++] = lapic_ent->lapic_id;
+
+			break;
+
+		case ACPI_MADT_APIC_IOAPIC:
+			;
+			acpi_madt_ioapic *ioapic_ent = (acpi_madt_ioapic *)hdr;
+
+			cprintf("IO APIC: ioapic id = %08x, ioapic addr = %08x, gsi = %08x\n", ioapic_ent->ioapic_id, ioapic_ent->ioapic_addr, ioapic_ent->gsi);
+
+			ioapicid = ioapic_ent->ioapic_id;
+			ioapic = (struct ioapic *) (ioapic_ent->ioapic_addr);
+
+			break;
+
+		default:
+			break;
+		}
+		p += hdr->length;
+	}
+	ncpu++;
+
+	/*
+	 * Force NMI and 8259 signals to APIC when PIC mode
+	 * is not implemented.
+	 *
+	 * TODO: check whether the code is correct
+	 */
+	if ((madt->flags & APIC_MADT_PCAT_COMPAT) == 0) {
+		cprintf("PIC mode is not implemented. Force NMI and 8259 signals to APIC.\n");
+		outb(0x22, 0x70);		// Select IMCR
+		outb(0x23, inb(0x23) | 1);	// Mask external interrupts.
+	}
+
+	// Set up page 1 with secondary bootstrap code
+	// It would be nice to do this with linker voodoo
+	uint8_t *boot2 = (uint8_t*)0x1000;
+	memmove(boot2, _binary_obj_boot_bootother_start,
+			(uint32_t)_binary_obj_boot_bootother_size);
+	return true;
+
+ fallback:
+	if (mp_init_fallback() == false) {
+		cprintf("Fallback mp_init failed. Assume it's a non-smp system.\n");
+		ismp = 0;
+		return false;
+	} else
+		return true;
 }
 
 
@@ -387,7 +516,7 @@ ioapic_enable(int irq, int apicid)
 	ioapic_write(REG_TABLE+2*irq+1, apicid << 24);
 }
 
-	
+
 static void
 lapicw(int index, int value)
 {
@@ -399,7 +528,7 @@ void
 lapic_init()
 {
 	if (!lapic) {
-	   panic("NO LAPIC");	
+	   panic("NO LAPIC");
 		return;
 	}
 //	cprintf("Using LAPIC at %x\n", lapic);
@@ -408,12 +537,12 @@ lapic_init()
 	lapicw(SVR, ENABLE | (T_IRQ0 + IRQ_SPURIOUS));
 
 	// The timer repeatedly counts down at bus frequency
-	// from lapic[TICR] and then issues an interrupt.  
+	// from lapic[TICR] and then issues an interrupt.
 	// If we cared more about precise timekeeping,
 	// TICR would be calibrated using an external time source.
 	lapicw(TDCR, X1);
 	lapicw(TIMER, PERIODIC | (T_IRQ0 + IRQ_TIMER));
-	lapicw(TICR, 10000000); 
+	lapicw(TICR, 10000000);
 
 	// Disable logical interrupt lines.
 	lapicw(LINT0, MASKED);
@@ -459,6 +588,3 @@ void
 microdelay(int us)
 {
 }
-
-
-
