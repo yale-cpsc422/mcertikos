@@ -20,6 +20,25 @@ debug_init()
 		  cons_init();
 }
 
+void debug_info(const char *fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+	vcprintf(fmt, ap);
+	va_end(ap);
+}
+
+void debug_normal(const char *file, int line, const char *fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+	cprintf("[D] %s:%d: ", file, line);
+	vcprintf(fmt, ap);
+	va_end(ap);
+}
+
 // Panic is called on unresolvable fatal errors.
 // It prints "panic: mesg", and then enters the kernel monitor.
 void
@@ -37,7 +56,7 @@ debug_panic(const char *file, int line, const char *fmt,...)
 
 	// First print the requested message
 	va_start(ap, fmt);
-	cprintf("kernel panic at %s:%d: ", file, line);
+	cprintf("[P] %s:%d: ", file, line);
 	vcprintf(fmt, ap);
 	cprintf("\n");
 	va_end(ap);
@@ -59,7 +78,7 @@ debug_warn(const char *file, int line, const char *fmt,...)
 	va_list ap;
 
 	va_start(ap, fmt);
-	cprintf("kernel warning at %s:%d: ", file, line);
+	cprintf("[W] %s:%d: ", file, line);
 	vcprintf(fmt, ap);
 	cprintf("\n");
 	va_end(ap);
@@ -112,4 +131,3 @@ debug_check(void)
 
 	cprintf("debug_check() succeeded!\n");
 }
-

@@ -47,23 +47,23 @@ mem_init(const struct multiboot_info *mbi)
 	// Do mem_init only once
 	assert(!mem_inited);
 	mem_inited = true;
-        
+
 	spinlock_init(&memlock);
 
 	//Parse the command line that user pass to GRUB
-        if ( ( mbi->flags & MBI_CMDLINE ) && ( mbi->cmdline != 0 ) )
-        {
-                char *cmdline = (char*)(unsigned long)mbi->cmdline;
-                cprintf ("Command line passed to CertiKOS: %s\n", cmdline );
-                cprintf ("Memory map size is %x\n", mbi->mmap_length );
-        }
+	if ( ( mbi->flags & MBI_CMDLINE ) && ( mbi->cmdline != 0 ) )
+	{
+		char *cmdline = (char*)(unsigned long)mbi->cmdline;
+		cprintf ("Command line passed to CertiKOS: %s\n", cmdline );
+		cprintf ("Memory map size is %x\n", mbi->mmap_length );
+	}
 
 	//Set up memory layout and store the layout info in pml
-        setup_memory_region (&(pml.e820), mbi);
-        pml.total_pages  = get_nr_pages ( &(pml.e820) );
-        pml.max_page     = get_max_pfn ( &(pml.e820) );
+	setup_memory_region (&(pml.e820), mbi);
+	pml.total_pages  = get_nr_pages ( &(pml.e820) );
+	pml.max_page     = get_max_pfn ( &(pml.e820) );
 	pml.vmm_pmem_end= (unsigned long )end;
-        pml.vmm_pmem_start = DEFAULT_VMM_PMEM_START;
+	pml.vmm_pmem_start = DEFAULT_VMM_PMEM_START;
 
 	// Memory detection in PIOS
 	// Determine how much base (<640K) and extended (>1MB) memory
@@ -75,19 +75,19 @@ mem_init(const struct multiboot_info *mbi)
 
 	/*size_t basemem = mem_base();
 	size_t extmem = mem_ext();
-	
+
 
 	// The maximum physical address is the top of extended memory.
 	//mem_max = MEM_EXT + extmem;
 	*/
-	
+
 	cprintf("pml.vmm_pmem_start: %x\n",pml.vmm_pmem_start);
 	cprintf("pml.max_page: %x\n",pml.max_page);
-	
+
 	// Compute the total number of physical pages (including I/O holes)
 	mem_max = pml.max_page*PAGESIZE;
 	mem_npage = pml.max_page;
-	
+
 	// Now that we know the size of physical memory,
 	// reserve enough space for the pageinfo array
 	// just past our statically-assigned program code/data/bss,
@@ -111,13 +111,13 @@ mem_init(const struct multiboot_info *mbi)
 	pml.host_heap_pmem_space.size=mem_npage-pml.vmm_heap_start+1;
 	pml.host_heap_pmem_space.type=E820_RESERVED;
 	pml.rest_pmem4guest_start_page=mem_npage+1;
-*/	
+*/
 
 	cprintf("\n++++++ CertiKOS physical memory map\n");
 	cprintf("CertiKOS start at: %x\n", pml.vmm_pmem_start);
 	cprintf("CertiKOS heap start at: %x\n", pml.vmm_heap_start*PAGESIZE);
 	cprintf("CertiKOS Image end at: %x\n", pml.vmm_pmem_end);
-	
+
 	pageinfo **freetail = &mem_freelist;
 	int i;
 	int count=0;
@@ -157,11 +157,11 @@ mem_init(const struct multiboot_info *mbi)
 // Does NOT set the contents of the physical page to zero -
 // the caller must do that if necessary.
 //
-// RETURNS 
+// RETURNS
 //   - a pointer to the page's pageinfo struct if successful
 //   - NULL if no available physical pages.
 //
-// Hint: pi->refs should not be incremented 
+// Hint: pi->refs should not be incremented
 // Hint: be sure to use proper mutual exclusion for multiprocessor operation.
 pageinfo *
 mem_alloc(void)
@@ -178,20 +178,20 @@ mem_alloc(void)
 
 	spinlock_release(&memlock);
 
-	//update the alloc bitmap for vmm of certikos	
+	//update the alloc bitmap for vmm of certikos
 //	map_alloc_record(pi);
 	return pi;	// Return pageinfo pointer or NULL
 
 }
 
-//get the n th	page after the pi in the freelist 
-pageinfo * 
+//get the n th	page after the pi in the freelist
+pageinfo *
 next_n_page_in_freelist(pageinfo *pi, unsigned long n){
 	unsigned long i;
 	pageinfo *t_pi=pi;
 	for (i=0;i<=n;i++){
 		if (t_pi!=NULL){
-		t_pi=t_pi->free_next;	
+		t_pi=t_pi->free_next;
 		}else{
 		return NULL;
 		}
@@ -199,9 +199,9 @@ next_n_page_in_freelist(pageinfo *pi, unsigned long n){
 	return t_pi;
 }
 
-// return: &mem_freelist, 
+// return: &mem_freelist,
 //	   no prior, pi is the head of the list
-//	   NULL, pi is not in the free list	
+//	   NULL, pi is not in the free list
 //	   others, pageinfo index
 pageinfo * find_prior_pi_in_freelist(pageinfo * pi){
 	pageinfo *tpi=mem_freelist;
@@ -212,7 +212,7 @@ pageinfo * find_prior_pi_in_freelist(pageinfo * pi){
 		cprintf("pi:%x, tpi:%x,tpi->next:%x\n",pi,tpi,tpi->free_next);
 		if (tpi->free_next==pi) return tpi;
 		tpi=tpi->free_next;
-		}	
+		}
 	return NULL;
 	}
 }
@@ -225,9 +225,9 @@ bool is_free_contiguous_pages(pageinfo * pi, unsigned long n_pages){
 			return false;
 			}
 		if ((tpi->free_next-tpi)!=0x1) {
-			return false;	
+			return false;
 			}
-		tpi=tpi+0x1;	
+		tpi=tpi+0x1;
 	}
 	return true;
 }
@@ -244,28 +244,28 @@ pageinfo * find_contiguous_pages(unsigned long n_pages){
 			pageinfo * next=next_n_page_in_freelist(tpi,n_pages-1);
 			if (prior == mem_freelist)  mem_freelist=next;
 			else  prior->free_next=next;
-			
+
 			for (j=0;j<n_pages;j++){
 			mem_incref(&mem_pageinfo[j+i+begin]);
 			mem_pageinfo[j+i+begin].refcount=1;
-			} 
+			}
 			cprintf("prior:0x%x, next:0x%x\n",prior,next);
 			//TODO:update the reference count of all theste allocate pages
-			return &mem_pageinfo[i+begin];	
-		}	
-}	
+			return &mem_pageinfo[i+begin];
+		}
+}
 	return NULL;	//error, find no contigous pages
 }
 
 unsigned long alloc_host_pages ( unsigned long nr_pfns, unsigned long pfn_align )
 {
-//      pageinfo * returnedpage=mem_alloc_contiguous(nr_pfns);  
-        pageinfo * returnedpage=find_contiguous_pages(nr_pfns);
-        if(returnedpage==NULL) return 0;
-        return (returnedpage-mem_pageinfo);
+//      pageinfo * returnedpage=mem_alloc_contiguous(nr_pfns);
+	pageinfo * returnedpage=find_contiguous_pages(nr_pfns);
+	if(returnedpage==NULL) return 0;
+	return (returnedpage-mem_pageinfo);
 }
 
-		
+
 unsigned long mem_alloc_one_page(){
 	pageinfo *pi=mem_alloc();
 	if (pi==NULL) {
@@ -273,7 +273,7 @@ unsigned long mem_alloc_one_page(){
 	return 0;
 	}
 	cprintf("alloc page: %x\n",(pi-mem_pageinfo));
-	return  (pi-mem_pageinfo);	
+	return  (pi-mem_pageinfo);
 }
 
 //
@@ -334,9 +334,9 @@ mem_check()
 	pageinfo *fl;
 	int i;
 
-        // if there's a page that shouldn't be on
-        // the free list, try to make sure it
-        // eventually causes trouble.
+	// if there's a page that shouldn't be on
+	// the free list, try to make sure it
+	// eventually causes trouble.
 	int freepages = 0;
 	for (pp = mem_freelist; pp != 0; pp = pp->free_next) {
 		memset(mem_pi2ptr(pp), 0x97, 128);
@@ -355,9 +355,9 @@ mem_check()
 	assert(pp0);
 	assert(pp1 && pp1 != pp0);
 	assert(pp2 && pp2 != pp1 && pp2 != pp0);
-        assert(mem_pi2phys(pp0) < mem_npage*PAGESIZE);
-        assert(mem_pi2phys(pp1) < mem_npage*PAGESIZE);
-        assert(mem_pi2phys(pp2) < mem_npage*PAGESIZE);
+	assert(mem_pi2phys(pp0) < mem_npage*PAGESIZE);
+	assert(mem_pi2phys(pp1) < mem_npage*PAGESIZE);
+	assert(mem_pi2phys(pp2) < mem_npage*PAGESIZE);
 
 	// temporarily steal the rest of the free pages
 	fl = mem_freelist;
@@ -366,10 +366,10 @@ mem_check()
 	// should be no free memory
 	assert(mem_alloc() == 0);
 
-        // free and re-allocate?
-        mem_free(pp0);
-        mem_free(pp1);
-        mem_free(pp2);
+	// free and re-allocate?
+	mem_free(pp0);
+	mem_free(pp1);
+	mem_free(pp2);
 	pp0 = pp1 = pp2 = 0;
 	pp0 = mem_alloc(); assert(pp0 != 0);
 	pp1 = mem_alloc(); assert(pp1 != 0);

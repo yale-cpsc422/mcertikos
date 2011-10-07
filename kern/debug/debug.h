@@ -11,9 +11,13 @@
 #define DEBUG_TRACEFRAMES	10
 
 void debug_init();
+void debug_info(const char *, ...);
+void debug_normal(const char *, int, const char *, ...);
 void debug_warn(const char*, int, const char*, ...);
 void debug_panic(const char*, int, const char*, ...) gcc_noreturn;
 
+#define info(...)	debug_info(__VA_ARGS__)
+#define debug(...)	debug_normal(__FILE__, __LINE__, __VA_ARGS__)
 #define warn(...)	debug_warn(__FILE__, __LINE__, __VA_ARGS__)
 #define panic(...)	debug_panic(__FILE__, __LINE__, __VA_ARGS__)
 

@@ -12,10 +12,11 @@
 #include <kern/mem/e820.h>
 #include <kern/debug/string.h>
 #include <kern/debug/stdio.h>
+#include <kern/debug/debug.h>
 #include <kern/mem/mem.h>
 
 
-static void 
+static void
 add_memory_region ( struct e820_map *e820, uint64_t start, uint64_t size, enum e820_type type )
 {
 	if ( e820->nr_map >= E820_MAX_ENTRIES ) {
@@ -31,7 +32,7 @@ add_memory_region ( struct e820_map *e820, uint64_t start, uint64_t size, enum e
 	e820->nr_map++;
 }
 
-void 
+void
 e820_print_map ( const struct e820_map *e820 )
 {
 	int i;
@@ -41,13 +42,13 @@ e820_print_map ( const struct e820_map *e820 )
 	for ( i = 0; i < e820->nr_map; i++ ) {
 		const struct e820_entry *p = &e820->map [ i ];
 
-		cprintf(" %x -", (unsigned long long) p->addr);
-		cprintf(" %x ", (unsigned long long) ( p->addr + p->size ));
+		cprintf(" %llx -", (unsigned long long) p->addr);
+		cprintf(" %llx ", (unsigned long long) ( p->addr + p->size ));
 		switch ( p->type ) {
 		case E820_RAM:			cprintf ( "(usable)\n" ); break;
-		case E820_RESERVED: 	cprintf ( "(reserved)\n" ); break;
+		case E820_RESERVED:	cprintf ( "(reserved)\n" ); break;
 		case E820_ACPI:			cprintf ( "(ACPI data)\n" ); break;
-		case E820_NVS:  		cprintf ( "(ACPI NVS)\n" ); break;
+		case E820_NVS:			cprintf ( "(ACPI NVS)\n" ); break;
 		default:				cprintf ( "type %x\n", p->type ); break;
 		}
 	}
@@ -112,10 +113,15 @@ unsigned long  get_max_pfn ( const struct e820_map *e820 )
 
 		if ( p->type != E820_RAM ) continue;
 
-		const unsigned long start = PFN_UP ( p->addr );
-		const unsigned long end = PFN_DOWN ( p->addr + p->size );
+		const unsigned long long start = PFN_UP ( p->addr );
+		const unsigned long long end = PFN_DOWN ( p->addr + p->size );
 
-		if (( start < end ) && ( end > n )) n = end;
+		debug("end = %llx\n", end);
+
+		/* NOTE: address above 4G boundary is ignored */
+		if (( start < end ) && ( end > n ) &&
+		    (end < 0x100000000ULL>>PAGE_SHIFT))
+			n = end;
 	}
 
 	return n;

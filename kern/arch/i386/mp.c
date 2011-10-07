@@ -191,13 +191,13 @@ static uint8_t
 get_bsp_apic_id(void)
 {
 	if (detect_cpuid() == false) {
-		cprintf("CPUID is not supported. Assume local APIC ID of BSD is 0x0.\n");
+		// debug("CPUID is not supported. Assume local APIC ID of BSD is 0x0.\n");
 		return 0x0;
 	}
 
 	uint32_t cpuinfo[4];
 	cpuid(0x1, &cpuinfo[0], &cpuinfo[1], &cpuinfo[2], &cpuinfo[3]);
-	cprintf("lapic id of current processor is %08x.\n", cpuinfo[1] >> 24);
+	// debug("lapic id of current processor is %08x.\n", cpuinfo[1] >> 24);
 	return (cpuinfo[1] >> 24);
 }
 
@@ -222,26 +222,26 @@ mp_init(void)
 	ismp = 1;
 
 	if ((rsdp = acpi_probe_rsdp()) == NULL) {
-		cprintf("Not found RSDP.\n");
+		// debug("Not found RSDP.\n");
 		goto fallback;
 	}
 
 	xsdt = NULL;
 	if ((rsdt = acpi_probe_rsdt(rsdp)) == NULL &&
 	    (xsdt = acpi_probe_xsdt(rsdp)) == NULL) {
-		cprintf("Not found either RSDT or XSDT.\n");
+		// debug("Not found either RSDT or XSDT.\n");
 		goto fallback;
 	}
 
 	if ((madt = (xsdt == NULL) ?
 	     (acpi_madt *)acpi_probe_rsdt_ent(rsdt, ACPI_MADT_SIG) :
 	     (acpi_madt *)acpi_probe_xsdt_ent(xsdt, ACPI_MADT_SIG)) == NULL) {
-		cprintf("Not found MADT.\n");
+		// debug("Not found MADT.\n");
 		goto fallback;
 	}
 
 	lapic = (uint32_t *) (madt->lapic_addr);
-	cprintf("Local APIC: addr = %08x.\n", lapic);
+	// debug("Local APIC: addr = %08x.\n", lapic);
 
 	ncpu = 0;
 	bsp_apic_id = get_bsp_apic_id();
@@ -254,12 +254,14 @@ mp_init(void)
 			;
 			acpi_madt_lapic *lapic_ent = (acpi_madt_lapic *)hdr;
 
-			cprintf("Local APIC: acip id = %08x, lapic id = %08x, flags = %08x\n", lapic_ent->acip_proc_id, lapic_ent->lapic_id, lapic_ent->flags);
+			// debug("Local APIC: acip id = %08x, lapic id = %08x, flags = ", lapic_ent->acip_proc_id, lapic_ent->lapic_id);
 
 			if (!(lapic_ent->flags & ACPI_APIC_ENABLED)) {
-				cprintf(" disabled.\n");
+				// debug("disabled.\n");
 				continue;
-			}
+			} else
+				// debug("enabled.\n");
+				;
 
 			if (lapic_ent->lapic_id == bsp_apic_id)
 				cpu_ids[0] = lapic_ent->lapic_id;
@@ -272,7 +274,7 @@ mp_init(void)
 			;
 			acpi_madt_ioapic *ioapic_ent = (acpi_madt_ioapic *)hdr;
 
-			cprintf("IO APIC: ioapic id = %08x, ioapic addr = %08x, gsi = %08x\n", ioapic_ent->ioapic_id, ioapic_ent->ioapic_addr, ioapic_ent->gsi);
+			// debug("IO APIC: ioapic id = %08x, ioapic addr = %08x, gsi = %08x\n", ioapic_ent->ioapic_id, ioapic_ent->ioapic_addr, ioapic_ent->gsi);
 
 			ioapicid = ioapic_ent->ioapic_id;
 			ioapic = (struct ioapic *) (ioapic_ent->ioapic_addr);
@@ -293,7 +295,7 @@ mp_init(void)
 	 * TODO: check whether the code is correct
 	 */
 	if ((madt->flags & APIC_MADT_PCAT_COMPAT) == 0) {
-		cprintf("PIC mode is not implemented. Force NMI and 8259 signals to APIC.\n");
+		// debug("PIC mode is not implemented. Force NMI and 8259 signals to APIC.\n");
 		outb(0x22, 0x70);		// Select IMCR
 		outb(0x23, inb(0x23) | 1);	// Mask external interrupts.
 	}
@@ -307,7 +309,7 @@ mp_init(void)
 
  fallback:
 	if (mp_init_fallback() == false) {
-		cprintf("Fallback mp_init failed. Assume it's a non-smp system.\n");
+		// debug("Fallback mp_init failed. Assume it's a non-smp system.\n");
 		ismp = 0;
 		return false;
 	} else

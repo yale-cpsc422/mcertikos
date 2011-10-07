@@ -9,9 +9,9 @@
 #	3. no prefix	ONLY if the system default GCC supports elf32-i386
 #
 
-if pios-objdump -i 2>&1 | grep '^elf32-i386$' >/dev/null 2>&1; then
-	echo 'pios-'
-elif i386-elf-objdump -i 2>&1 | grep '^elf32-i386$' >/dev/null 2>&1; then
+# if pios-objdump -i 2>&1 | grep '^elf32-i386$' >/dev/null 2>&1; then
+#	echo 'pios-'
+if i386-elf-objdump -i 2>&1 | grep '^elf32-i386$' >/dev/null 2>&1; then
 	echo 'i386-elf-'
 elif objdump -i 2>&1 | grep 'elf32-i386' >/dev/null 2>&1; then
 	echo ''
@@ -26,4 +26,3 @@ else
 	echo "***" 1>&2
 	exit 1
 fi
-
