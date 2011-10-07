@@ -45,12 +45,12 @@ uint32_t sl_syscall(context* ctx) {
     uint32_t arg3 = context_arg4(ctx);
 //	cprintf("slave system call\n");
     switch (cmd) {
-        case SYSCALL_CLIENT_PUTS:
-            if (usercopy((uint32_t)cbuf,arg, PAGESIZE) == 0)
+	case SYSCALL_CLIENT_PUTS:
+	    if (usercopy((uint32_t)cbuf,arg, PAGESIZE) == 0)
 				syscall_fail(ctx);
-            cbuf[PAGESIZE-1] = 0;
-            cprintf("%s", cbuf);
-            break;
+	    cbuf[PAGESIZE-1] = 0;
+	    cprintf("%s", cbuf);
+	    break;
 		case SYSCALL_CLIENT_GETC:
 			if (!as_checkrange(as_current(), arg, sizeof(uint32_t)))
 				syscall_fail(ctx);
@@ -73,8 +73,8 @@ uint32_t sl_syscall(context* ctx) {
 			break;
 		case SYSCALL_CLIENT_SETUPVM:
 			 if (!as_checkrange(as_current(), arg, sizeof(uint32_t)))
-                                syscall_fail(ctx);
-			  	start_vm_with_interception();
+				syscall_fail(ctx);
+				start_vm_with_interception();
 			break;
 
     }
@@ -95,7 +95,7 @@ uint32_t stimer(context* ctx) {
 
 uint32_t spgflt(context* ctx) {
 	static uint32_t prevfault=0;
-	
+
 	uint8_t mycpu = mp_curcpu();
 	uint32_t fault = rcr2();
 	assert (cpus[mycpu].running);
@@ -111,7 +111,7 @@ uint32_t spgflt(context* ctx) {
 	cpus[mycpu].stop = 0;
 	wait_to_start();
 
-	
+
 //	cprintf("Slave Page Fault at %x, cpu %d, reserving new page\n", fault, mp_curcpu());
 //	if (as_reserve(as_current(), PGADDR(fault), PTE_W | PTE_U | PTE_P) == NULL) {
 //		 cprintf("New page can not be reserved\n");
@@ -122,12 +122,13 @@ return 0;
 }
 
 void wait_to_start() {
-	
+
 	int mycpu = mp_curcpu();
 	int i=0;
 	procid_t pid;
 	assert(cpus[mycpu].running == false);
-	//cprintf("CPU %d, waiting to start\n, addr cpu = %x", mycpu, &cpus[1]);
+	cprintf("CPU %d, waiting to start\n, addr cpu = %x",
+		mycpu, &cpus[mycpu]);
 	while(cpus[mycpu].start == 0);
 	cprintf("CPU %d, starting process %d\n", mycpu, cpus[mycpu].start);
 //	cprintf("cpustacks@%x, esp:@%x\n",cpu_stacks[mycpu],read_esp())

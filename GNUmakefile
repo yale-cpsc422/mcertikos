@@ -42,6 +42,8 @@ QEMU := qemu
 endif
 endif
 
+BOCHS := ~/usr/bin/bochs
+
 # try to generate unique GDB and network port numbers
 GDBPORT	:= $(shell expr `id -u` % 5000 + 25000)
 NETPORT := $(shell expr `id -u` % 5000 + 30000)
@@ -68,7 +70,7 @@ PERL	:= perl
 # Compiler and linker flags
 # -fno-builtin is required to avoid refs to undefined functions in the kernel.
 # Only optimize to -O1 to discourage inlining, which complicates backtraces.
-CFLAGS := $(CFLAGS) $(DEFS) $(LABDEFS) -O1 -fno-builtin -I$(TOP) -MD -I$(TOP)/inc -I$(TOP)/$(OBJDIR)	 
+CFLAGS := $(CFLAGS) $(DEFS) $(LABDEFS) -O1 -fno-builtin -I$(TOP) -MD -I$(TOP)/inc -I$(TOP)/$(OBJDIR)
 
 
 ifeq ($(ARCH), amd64)
@@ -97,7 +99,7 @@ GCC_LIB := $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 OBJDIRS :=
 
 # Make sure that 'all' is the first target
-all: 
+all:
 
 # Eliminate default suffix rules
 .SUFFIXES:
@@ -204,4 +206,3 @@ always:
 
 .PHONY: all always \
 	handin tarball clean realclean clean-labsetup distclean grade labsetup
-

@@ -54,9 +54,9 @@ uint32_t pgflt(context* ctx) {
 		  if (as_reserve(as_current(), PGADDR(fault), PTE_W | PTE_U | PTE_P) == NULL) {
 					 cprintf("New page can not be reserved\n");
 		  }
-          // if PF occurs twice on the same address, spin
-          if (fault == prevfault) while(1);
-          prevfault = fault;
+	  // if PF occurs twice on the same address, spin
+	  if (fault == prevfault) while(1);
+	  prevfault = fault;
 		  return 0;
 }
 
@@ -64,18 +64,18 @@ uint32_t gpf(context* ctx) {
 	uint32_t error = context_errno(ctx);
     static int gpfp = 0;
     if (!gpfp) {
-        context_debug(ctx);
-        gpfp = 1;
+	context_debug(ctx);
+	gpfp = 1;
     }
     return 0;
     cprintf("General Protection Fault: ");
     if (error & PFE_U) cprintf("(user) ");
     if (error & PFE_PR)
-        cprintf("Protection violation");
+	cprintf("Protection violation");
     if (error & PFE_WR)
-        cprintf(" (write)\n");
+	cprintf(" (write)\n");
     else
-        cprintf("\n");
+	cprintf("\n");
     return 0;
 }
 
@@ -85,34 +85,34 @@ signal timer_sig = {SIGNAL_TIMER, ""};
 
 uint32_t timer(context* ctx) {
 //      cprintf("Timer fired!");
-        size_t sz;
-        time ++;
-        static int counter=0;
-        interrupts_eoi();
-        counter ++;
-        if (counter == 100) {
-                counter = 0;
-                //cprintf("adding msg:%s\n", timer_sig);
-                msgqueue_add((char*)&timer_sig, sizeof(timer_sig));
-        }
+	size_t sz;
+	time ++;
+	static int counter=0;
+	interrupts_eoi();
+	counter ++;
+	if (counter == 100) {
+		counter = 0;
+		//cprintf("adding msg:%s\n", timer_sig);
+		msgqueue_add((char*)&timer_sig, sizeof(timer_sig));
+	}
 
 /*      cprintf("vm_running:@%x\n",vm_running);
-        if(vm_running)  
-        {
+	if(vm_running)
+	{
 
-        run_vm_once(vm_running);
-        
-        }
+	run_vm_once(vm_running);
+
+	}
 */
-        if (!proc_insignal(mgmt)) { // Is management task ready for events
-                sz = msgqueue_get(msgbuffer, PAGESIZE);
-                if (sz) { // we have a message to send
-                        //cprintf("removed msg:%s\n",msgbuffer);
-                        proc_sendsignal(mgmt,msgbuffer,sz);
-                }
-        }
+	if (!proc_insignal(mgmt)) { // Is management task ready for events
+		sz = msgqueue_get(msgbuffer, PAGESIZE);
+		if (sz) { // we have a message to send
+			//cprintf("removed msg:%s\n",msgbuffer);
+			proc_sendsignal(mgmt,msgbuffer,sz);
+		}
+	}
 
-        return 0;
+	return 0;
 }
 
 
@@ -121,8 +121,8 @@ static char sysbuf[PAGESIZE];
 
 uint32_t usercopy(uint32_t dest, uint32_t src, size_t size)
 {
-    if (!as_checkrange (as_current(), src, size)) 
-        return 0;
+    if (!as_checkrange (as_current(), src, size))
+	return 0;
 
     memmove((void*)dest, (void*)src, size);
     return size;
@@ -173,7 +173,7 @@ uint32_t do_mgmt_allocpage(context* ctx, mgmt_allocpage* param) {
 		syscall_fail(ctx);
 		return -1;
 	}
-	as_reserve(proc_as(param->procid), param->va, PTE_P | PTE_U | PTE_W); 
+	as_reserve(proc_as(param->procid), param->va, PTE_P | PTE_U | PTE_W);
 	return 0;
 }
 
@@ -184,12 +184,12 @@ uint32_t syscall(context* ctx) {
     uint32_t arg2 = context_arg3(ctx);
     uint32_t arg3 = context_arg4(ctx);
     switch (cmd) {
-        case SYSCALL_PUTS:
-            if (usercopy((uint32_t)sysbuf,arg, PAGESIZE) == 0)
+	case SYSCALL_PUTS:
+	    if (usercopy((uint32_t)sysbuf,arg, PAGESIZE) == 0)
 				syscall_fail(ctx);
-            sysbuf[PAGESIZE-1] = 0;
-            cprintf("%s", sysbuf);
-            break;
+	    sysbuf[PAGESIZE-1] = 0;
+	    cprintf("%s", sysbuf);
+	    break;
 		case SYSCALL_GETC:
 			if (!as_checkrange(as_current(), arg, sizeof(uint32_t)))
 				syscall_fail(ctx);
@@ -224,7 +224,7 @@ uint32_t syscall(context* ctx) {
 			// create and activate new address space
 			// load the code
 			// return a process id: handle to the address space + context
-			
+
 			// arg = string, arg2 = resulting procid
 			if(!as_checkrange(as_current(), arg2, sizeof(uint32_t)))
 				syscall_fail(ctx);
@@ -240,9 +240,9 @@ uint32_t syscall(context* ctx) {
 ;
 			uint32_t proc_vm_1 = proc_vm_new();
 			if (!proc_vm_1) {
-                                cprintf("Creating VM failed\n");
-                                syscall_fail(ctx);
-                        }
+				cprintf("Creating VM failed\n");
+				syscall_fail(ctx);
+			}
 			*(uint32_t*)arg = proc_vm_1;
 			cprintf("creat vm test\n");
 			break;*/
@@ -252,36 +252,36 @@ uint32_t syscall(context* ctx) {
 			//cprintf("creat vm test\n");
 			break;
 		case SYSCALL_SETUPVM:
-		/*	cprintf("Setup a vm!;\n");			
+		/*	cprintf("Setup a vm!;\n");
 			if(!SVM_ENABLED) {
 				cprintf("\n++++++ Enable SVM feature on CPU\n");
 				enable_amd_svm();
-				SVM_ENABLED=1;	
-			}	
+				SVM_ENABLED=1;
+			}
 			struct vm_info vm;
 			vm_create_simple(&vm);
 			cprintf("\n++++++ New virtual machine created. Going to GRUB for the 2nd time\n");
 			//vmcb_dump(vm.vmcb);
 			vm_boot (&vm);
 		*/
-	//		vm_running= create_vm();	
+	//		vm_running= create_vm();
 	//		run_vm_once(vm_running);
 		start_vm();
 			//interrupts_enable(IRQ_TIMER,0);
-        //context_handler(T_GPFLT,&gpf);
-        //context_handler(T_PGFLT,&pgflt);
-        //context_handler(T_SYSCALL,&syscall);
-        //context_handler(T_IRQ0+IRQ_TIMER,&timer);
+	//context_handler(T_GPFLT,&gpf);
+	//context_handler(T_PGFLT,&pgflt);
+	//context_handler(T_SYSCALL,&syscall);
+	//context_handler(T_IRQ0+IRQ_TIMER,&timer);
 cprintf("come back from vm\n");
 			break;
 		case SYSCALL_SETUPPIOS:
-			cprintf("Setup PIOS as a vm!;\n");			
+			cprintf("Setup PIOS as a vm!;\n");
 			//TODO fill
 		/*	if(!SVM_ENABLED) {
 				cprintf("\n++++++ Enable SVM feature on CPU\n");
 				enable_amd_svm();
-				SVM_ENABLED=1;	
-			}	
+				SVM_ENABLED=1;
+			}
 			struct vm_info vm1;
 			vm_create_guest_pios(&vm1);
 			cprintf("\n++++++ New virtual machine created. Going to GRUB for the 2nd time\n");
@@ -312,7 +312,7 @@ cprintf("come back from vm\n");
 					uint32_t result=do_mgmt_allocpage(ctx, (mgmt_allocpage*)(&data->params));
 					break;
 				default:
-					cprintf("Unknown MGMT syscall\n"); 
+					cprintf("Unknown MGMT syscall\n");
 					break;
 			}
     }
@@ -337,11 +337,11 @@ uint32_t timer(context* ctx) {
 	}
 
 //	cprintf("vm_running:@%x\n",vm_running);
-	if(vm_running)	
+	if(vm_running)
 	{
 
 	run_vm_once(vm_running);
-	
+
 	}
 //
 	if (!proc_insignal(mgmt)) { // Is management task ready for events
@@ -351,7 +351,7 @@ uint32_t timer(context* ctx) {
 			proc_sendsignal(mgmt,msgbuffer,sz);
 		}
 	}
-	
+
 	return 0;
 }
 */
@@ -363,8 +363,9 @@ init(void)
 	cprintf("Let's try to start those other cpus ... \n");
 //	uint32_t vmcb=create_vm_vmcb();
 //		mp_boot_vm(1,vm_launch(vmcb),(uint32_t)&stacks[1]);
-	for (i=1; i<mp_ncpu(); i++)
+	for (i=1; i<mp_ncpu(); i++) {
 		mp_boot(i,slave_kernel,(uint32_t)&stacks[i]);
+	}
 	cprintf("Done!\n");
 
 	msgqueue_init();
@@ -375,7 +376,7 @@ init(void)
 	context_handler(T_SYSCALL,&syscall);
 	context_handler(T_IRQ0+IRQ_TIMER,&timer);
 	cprintf("Verified Kernel booting\n");
-    	cprintf("Loading Address spaces....");
+	cprintf("Loading Address spaces....");
 	as_init();
 	if (!as_current())
 		panic("Could not initialize address space!\n");
@@ -387,8 +388,7 @@ init(void)
 
 	mgmt = proc_new(ROOTEXE_START);
 	cprintf("Jumping to user mode\n");
-	
+
     proc_start(mgmt);
 	cprintf("UHOH!\n");
 }
-

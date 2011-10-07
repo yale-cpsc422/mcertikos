@@ -266,7 +266,7 @@ mp_init(void)
 			if (lapic_ent->lapic_id == bsp_apic_id)
 				cpu_ids[0] = lapic_ent->lapic_id;
 			else
-				cpu_ids[ncpu++] = lapic_ent->lapic_id;
+				cpu_ids[++ncpu] = lapic_ent->lapic_id;
 
 			break;
 
@@ -286,7 +286,6 @@ mp_init(void)
 		}
 		p += hdr->length;
 	}
-	ncpu++;
 
 	/*
 	 * Force NMI and 8259 signals to APIC when PIC mode
@@ -349,6 +348,9 @@ static volatile bool booting;
 
 void mp_boot(int cpu, void(*f)(void), uint32_t kstack_loc)
 {
+	debug("Boot CPu%d: apic id = %08x, stack addr = %x\n",
+	      cpu, cpu_ids[cpu], kstack_loc);
+
 	//assert(!mp_booted(cpu));
 	assert(!booting);
 	booting=true;
