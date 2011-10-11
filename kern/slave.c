@@ -140,13 +140,13 @@ void wait_to_start() {
 void slave_kernel() {
 	int mycpu;
 	mycpu = mp_curcpu();
-	cprintf("current cpu is : %d\n",mycpu);
+	cprintf("* current cpu is : %d\n",mycpu);
 	interrupts_enable(IRQ_TIMER, mycpu);
 	context_handler(T_IRQ0+IRQ_TIMER,&stimer);
 	context_handler(T_CLIENT_SYSCALL,&sl_syscall);
 	context_handler(T_PGFLT,&spgflt);
 	as_init();
-       // enable_amd_svm();
+	// enable_amd_svm();
 	cprintf("I am alive on cpu number %d!!!\n", mycpu);
 	wait_to_start();
 }

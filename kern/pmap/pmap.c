@@ -87,11 +87,11 @@ pmap_walk(pde_t *pdir, uint32_t va, bool writing)
 //   - pi->refcount should be incremented if the insertion succeeds.
 //   - The TLB must be invalidated if a page was formerly present at 'va'.
 //
-// Corner-case hint: Make sure to consider what happens when the same 
+// Corner-case hint: Make sure to consider what happens when the same
 // pi is re-inserted at the same virtual address in the same pdir.
 // What if this is the only reference to that page?
 //
-// RETURNS: 
+// RETURNS:
 //   a pointer to the inserted PTE on success (same as pmap_walk)
 //   NULL, if page table couldn't be allocated
 //
@@ -109,8 +109,8 @@ pmap_insert(pmap_t *pmap, pageinfo *pi, uint32_t va, int perm)
 		return NULL;
 	}
     if ((*pte & PTE_P)) {
-        cprintf("already allocated page at %x, pte %x\n", va, *pte);
-        return NULL; //should be an assert I think
+	cprintf("already allocated page at %x, pte %x\n", va, *pte);
+	return NULL; //should be an assert I think
     }
 	*pte = mem_pi2phys(pi) | perm | PTE_P;
 	if (va > mem_max) {

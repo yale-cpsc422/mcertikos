@@ -389,6 +389,6 @@ init(void)
 	mgmt = proc_new(ROOTEXE_START);
 	cprintf("Jumping to user mode\n");
 
-    proc_start(mgmt);
+	proc_start(mgmt);
 	cprintf("UHOH!\n");
 }

@@ -20,16 +20,15 @@ static struct {
 	uint32_t wpos;
 } cons;
 
-
 void cons_intr(int (*proc)(void))
 {
     int c;
     while ((c = (*proc)()) != -1) {
-        if (c == 0)
-            continue;
-        cons.buf[cons.wpos++] = c;
-        if (cons.wpos == CONSBUFSIZE)
-            cons.wpos = 0;
+	if (c == 0)
+	    continue;
+	cons.buf[cons.wpos++] = c;
+	if (cons.wpos == CONSBUFSIZE)
+	    cons.wpos = 0;
     }
 }
 
@@ -41,10 +40,10 @@ cons_getc(void)
     kbd_intr();
 
     if (cons.rpos != cons.wpos) {
-        c = cons.buf[cons.rpos++];
-        if (cons.rpos == CONSBUFSIZE)
-            cons.rpos = 0;
-        return c;
+	c = cons.buf[cons.rpos++];
+	if (cons.rpos == CONSBUFSIZE)
+	    cons.rpos = 0;
+	return c;
     }
     return 0;
 }
@@ -65,7 +64,7 @@ cons_init(void)
 //		return;
 
 	video_init();
-    kbd_init();
+	kbd_init();
 }
 
 // `High'-level console I/O.  Used by readline and cprintf.
@@ -76,4 +75,3 @@ cputs(const char *str)
 	while (*str)
 		cons_putc(*str++);
 }
-

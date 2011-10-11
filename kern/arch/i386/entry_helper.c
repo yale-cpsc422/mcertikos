@@ -32,14 +32,14 @@ void entry_init(const struct multiboot_info *mbi) {
 	// Clear all uninitialized global data (BSS) in our program,
 	// ensuring that all static/global variables start out zero.
 
-	//memset(edata, 0, end - edata); 
+	//memset(edata, 0, end - edata);
 	//
 	// Can not use the line above because it will clear the current stack
-	
+
 	// clear all bss kernel data, except the stack we are currently on.
 	// I would like to move this out of BSS - not sure how.
-	memset(edata, 0, stacks - edata); 
-	memset(stacks+PAGESIZE*4, 0, end - stacks-PAGESIZE*4); 
+	memset(edata, 0, stacks - edata);
+	memset(stacks+PAGESIZE, 0, end - stacks-PAGESIZE);
 
 	// Console I/O
 	// We will ignore all prints and key queries in our reasoning
@@ -47,35 +47,35 @@ void entry_init(const struct multiboot_info *mbi) {
 	cprintf("Console I/O was initialized\n");
 	cprintf("Stacks are located at 0x%x\n", stacks);
 
-/*	
+/*
 	//Parse the command line that user pass to GRUB
-         struct cmdline_option opt = parse_cmdline ( mbi );
+	 struct cmdline_option opt = parse_cmdline ( mbi );
 
-        //Set up memory layout and store the layout in pml
-        struct pmem_layout pml;
+	//Set up memory layout and store the layout in pml
+	struct pmem_layout pml;
 	cprintf("pml is at:%x\n",&pml);
-	pml.vmm_pmem_end=end+START_PMEM_VMM;	
+	pml.vmm_pmem_end=end+START_PMEM_VMM;
 	cprintf("vmm_pmem_end are located at %x\n", pml.vmm_pmem_end);
-        setup_memory(mbi, &opt, &pml);
+	setup_memory(mbi, &opt, &pml);
 */
 
 	// initialize multi_processor interface
 	// Required for interrupt subsystem
 	mp_init();
-	cprintf("MP initialized, :%d cpus detected\n", mp_ncpu());
-	
-	
+	cprintf("MP initialized: %d cpus detected\n", mp_ncpu());
+
+
 	// Initialize simple memory allocator
 	// Depends on NVRAM / primitive memory instructions (to get the size of memory)
 	mem_init(mbi);
-	
+
 	/*test svm*/
 	/*enable_amd_svm();
 	struct vm_info vm;
 	vm_create_simple (&vm);
 	cprintf("\n++++++ New virtual machine created. Going to GRUB for the 2nd time\n");
-        vmcb_dump(vm.vmcb);
-        vm_boot (&vm);
+	vmcb_dump(vm.vmcb);
+	vm_boot (&vm);
 */
 	/*end test svm*/
 

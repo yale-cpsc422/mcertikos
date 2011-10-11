@@ -28,7 +28,7 @@ int ncpu;
 uint8_t cpu_ids[MAX_CPU];
 
 // table of stacks of current processors
-uint32_t cpu_stacks[MAX_CPU];
+volatile uint32_t cpu_stacks[MAX_CPU];
 
 // ID of an APIC controller
 uint8_t ioapicid;
@@ -191,13 +191,13 @@ static uint8_t
 get_bsp_apic_id(void)
 {
 	if (detect_cpuid() == false) {
-		// debug("CPUID is not supported. Assume local APIC ID of BSD is 0x0.\n");
+		// cprintf("CPUID is not supported. Assume local APIC ID of BSD is 0x0.\n");
 		return 0x0;
 	}
 
 	uint32_t cpuinfo[4];
 	cpuid(0x1, &cpuinfo[0], &cpuinfo[1], &cpuinfo[2], &cpuinfo[3]);
-	// debug("lapic id of current processor is %08x.\n", cpuinfo[1] >> 24);
+	// cprintf("lapic id of current processor is %08x.\n", cpuinfo[1] >> 24);
 	return (cpuinfo[1] >> 24);
 }
 
@@ -211,6 +211,7 @@ mp_init(void)
 	acpi_xsdt * xsdt;
 	acpi_madt * madt;
 	uint8_t bsp_apic_id;
+	uint32_t nextproc = 0;
 
 	// mark MP subsystem as inited
 	assert(!mp_inited);
@@ -222,26 +223,26 @@ mp_init(void)
 	ismp = 1;
 
 	if ((rsdp = acpi_probe_rsdp()) == NULL) {
-		// debug("Not found RSDP.\n");
+		// cprintf("Not found RSDP.\n");
 		goto fallback;
 	}
 
 	xsdt = NULL;
 	if ((rsdt = acpi_probe_rsdt(rsdp)) == NULL &&
 	    (xsdt = acpi_probe_xsdt(rsdp)) == NULL) {
-		// debug("Not found either RSDT or XSDT.\n");
+		// cprintf("Not found either RSDT or XSDT.\n");
 		goto fallback;
 	}
 
 	if ((madt = (xsdt == NULL) ?
 	     (acpi_madt *)acpi_probe_rsdt_ent(rsdt, ACPI_MADT_SIG) :
 	     (acpi_madt *)acpi_probe_xsdt_ent(xsdt, ACPI_MADT_SIG)) == NULL) {
-		// debug("Not found MADT.\n");
+		// cprintf("Not found MADT.\n");
 		goto fallback;
 	}
 
 	lapic = (uint32_t *) (madt->lapic_addr);
-	// debug("Local APIC: addr = %08x.\n", lapic);
+	// cprintf("Local APIC: addr = %08x.\n", lapic);
 
 	ncpu = 0;
 	bsp_apic_id = get_bsp_apic_id();
@@ -254,19 +255,21 @@ mp_init(void)
 			;
 			acpi_madt_lapic *lapic_ent = (acpi_madt_lapic *)hdr;
 
-			// debug("Local APIC: acip id = %08x, lapic id = %08x, flags = ", lapic_ent->acip_proc_id, lapic_ent->lapic_id);
+			// cprintf("Local APIC: acip id = %08x, lapic id = %08x, flags = ", lapic_ent->acip_proc_id, lapic_ent->lapic_id);
 
 			if (!(lapic_ent->flags & ACPI_APIC_ENABLED)) {
-				// debug("disabled.\n");
-				continue;
+				// cprintf("disabled.\n");
+				break;
 			} else
-				// debug("enabled.\n");
+				// cprintf("enabled.\n");
 				;
 
 			if (lapic_ent->lapic_id == bsp_apic_id)
 				cpu_ids[0] = lapic_ent->lapic_id;
 			else
-				cpu_ids[++ncpu] = lapic_ent->lapic_id;
+				cpu_ids[++nextproc] = lapic_ent->lapic_id;
+
+			ncpu++;
 
 			break;
 
@@ -274,7 +277,7 @@ mp_init(void)
 			;
 			acpi_madt_ioapic *ioapic_ent = (acpi_madt_ioapic *)hdr;
 
-			// debug("IO APIC: ioapic id = %08x, ioapic addr = %08x, gsi = %08x\n", ioapic_ent->ioapic_id, ioapic_ent->ioapic_addr, ioapic_ent->gsi);
+			// cprintf("IO APIC: ioapic id = %08x, ioapic addr = %08x, gsi = %08x\n", ioapic_ent->ioapic_id, ioapic_ent->ioapic_addr, ioapic_ent->gsi);
 
 			ioapicid = ioapic_ent->ioapic_id;
 			ioapic = (struct ioapic *) (ioapic_ent->ioapic_addr);
@@ -294,7 +297,7 @@ mp_init(void)
 	 * TODO: check whether the code is correct
 	 */
 	if ((madt->flags & APIC_MADT_PCAT_COMPAT) == 0) {
-		// debug("PIC mode is not implemented. Force NMI and 8259 signals to APIC.\n");
+		// cprintf("PIC mode is not implemented. Force NMI and 8259 signals to APIC.\n");
 		outb(0x22, 0x70);		// Select IMCR
 		outb(0x23, inb(0x23) | 1);	// Mask external interrupts.
 	}
@@ -308,7 +311,7 @@ mp_init(void)
 
  fallback:
 	if (mp_init_fallback() == false) {
-		// debug("Fallback mp_init failed. Assume it's a non-smp system.\n");
+		// cprintf("Fallback mp_init failed. Assume it's a non-smp system.\n");
 		ismp = 0;
 		return false;
 	} else
@@ -328,7 +331,7 @@ uint8_t mp_curcpu()
 	int i;
 	for(i=0;i<ncpu;i++) {
 
-//	cprintf("cpustack:%d @%x, esp:@%x\n",i,&cpu_stacks[i],read_esp());
+	/* cprintf("cpustack:%d @%x, esp:@%x\n",i,&cpu_stacks[i],read_esp()); */
 		if (cpu_stacks[i] == ROUNDUP(read_esp(),PAGESIZE))
 			return i;
 	}
@@ -348,7 +351,7 @@ static volatile bool booting;
 
 void mp_boot(int cpu, void(*f)(void), uint32_t kstack_loc)
 {
-	debug("Boot CPu%d: apic id = %08x, stack addr = %x\n",
+	cprintf("Boot CPU%d: apic id = %08x, stack addr = %x\n",
 	      cpu, cpu_ids[cpu], kstack_loc);
 
 	//assert(!mp_booted(cpu));

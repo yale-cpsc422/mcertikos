@@ -2,7 +2,7 @@
 // based on printfmt() and cputs().
 //
 // cprintf is a debugging facility, not a generic output facility.
-// It is very important that it always go to the console, especially when 
+// It is very important that it always go to the console, especially when
 // debugging file descriptor code!
 
 #include <architecture/types.h>
@@ -56,9 +56,10 @@ cprintf(const char *fmt, ...)
 {
 	va_list ap;
 	int cnt;
-	static volatile int printing=0;
 
-	while(printing);
+	static volatile int printing = 0;
+
+	while (printing);
 	printing = ~0;
 	va_start(ap, fmt);
 	cnt = vcprintf(fmt, ap);
@@ -67,4 +68,3 @@ cprintf(const char *fmt, ...)
 
 	return cnt;
 }
-

@@ -4,8 +4,8 @@ cpuid: mmx=1, sep=1, sse=sse4_2, aes=1, movbe=1, xsave=1, pcid=1, avx=1, apic=xa
 megs: 1024
 vgaromimage: file=$BXSHARE/VGABIOS-lgpl-latest
 ata0: enabled=1, ioaddr1=0x1f0, ioaddr2=0x3f0, irq=14
-ata0-master: type=disk, mode=flat, path="./obj/kern/kernel.img", cylinders=100, heads=10, spt=10
-boot: disk
+ata0-master: type=cdrom, path="./obj/iso/certikos.iso", status=inserted
+boot: cdrom
 clock: sync=realtime, time0=local
 floppy_bootsig_check: disabled=0
 log: bochs.log

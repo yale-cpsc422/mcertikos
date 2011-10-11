@@ -38,7 +38,7 @@ ifeq ($(ARCH), amd64)
 QEMU := qemu-system-x86_64
 endif
 ifeq ($(ARCH), i386)
-QEMU := qemu
+QEMU := qemu-system-x86_64
 endif
 endif
 
@@ -121,7 +121,7 @@ include user/Makefrag
 include client/Makefrag
 
 IMAGES = $(OBJDIR)/kern/kernel.img
-QEMUOPTS = -smp 8 -hda $(OBJDIR)/kern/kernel.img -serial mon:stdio
+QEMUOPTS = -smp 8 -cdrom ${OBJDIR}/iso/certikos.iso -serial mon:stdio
 #QEMUNET = -net socket,mcast=230.0.0.1:$(NETPORT) -net nic,model=i82559er
 #QEMUNET1 = -net nic,model=i82559er,macaddr=52:54:00:12:34:01 \
 		-net socket,connect=:$(NETPORT) -net dump,file=node1.dump
@@ -131,19 +131,19 @@ QEMUOPTS = -smp 8 -hda $(OBJDIR)/kern/kernel.img -serial mon:stdio
 .gdbinit: .gdbinit.tmpl
 	sed "s/localhost:1234/localhost:$(GDBPORT)/" < $^ > $@
 
-qemu: $(IMAGES)
+qemu: iso
 	$(QEMU) $(QEMUOPTS)
 
-qemu-nox: $(IMAGES)
+qemu-nox: iso
 	echo "*** Use Ctrl-a x to exit"
 	$(QEMU) -nographic $(QEMUOPTS)
 
-qemu-gdb: $(IMAGES) .gdbinit
+qemu-gdb: iso .gdbinit
 	@echo "*** Now run 'gdb'." 1>&2
 	$(QEMU) $(QEMUOPTS) -S $(QEMUPORT)
 
 
-qemu-gdb-nox: $(IMAGES) .gdbinit
+qemu-gdb-nox: iso .gdbinit
 	@echo "*** Now run 'gdb'." 1>&2
 	$(QEMU) -nographic $(QEMUOPTS) -S $(QEMUPORT)
 
