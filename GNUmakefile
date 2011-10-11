@@ -121,7 +121,7 @@ include user/Makefrag
 include client/Makefrag
 
 IMAGES = $(OBJDIR)/kern/kernel.img
-QEMUOPTS = -smp 8 -cdrom ${OBJDIR}/iso/certikos.iso -serial mon:stdio
+QEMUOPTS = -smp 8 -cdrom ${OBJDIR}/iso/certikos.iso -serial mon:stdio -m 1026
 #QEMUNET = -net socket,mcast=230.0.0.1:$(NETPORT) -net nic,model=i82559er
 #QEMUNET1 = -net nic,model=i82559er,macaddr=52:54:00:12:34:01 \
 		-net socket,connect=:$(NETPORT) -net dump,file=node1.dump

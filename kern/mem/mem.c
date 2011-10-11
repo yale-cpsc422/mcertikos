@@ -85,8 +85,9 @@ mem_init(const struct multiboot_info *mbi)
 	cprintf("pml.max_page: %x\n",pml.max_page);
 
 	// Compute the total number of physical pages (including I/O holes)
-	mem_max = pml.max_page*PAGESIZE;
-	mem_npage = pml.max_page;
+	mem_npage = pml.max_page > (0x10000000>>PAGE_SHIFT) ?
+		(0x10000000>>PAGE_SHIFT) : pml.max_page;
+	mem_max = mem_npage*PAGESIZE;
 
 	// Now that we know the size of physical memory,
 	// reserve enough space for the pageinfo array
