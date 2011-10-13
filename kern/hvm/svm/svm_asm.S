@@ -1,6 +1,6 @@
 /********************************************************************************
 * Derived from  XEN and MAVMM
-* Adapted for CertiKOS by Liang Gu and Yale University
+* Adapted for CertiKOS 
 *
 *********************************************************************************/
 

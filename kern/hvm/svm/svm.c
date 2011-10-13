@@ -1,6 +1,6 @@
 /****************************************************************
 * Derived from  XEN and MAVMM
-* Adapted for CertiKOS by Liang Gu and Yale University
+* Adapted for CertiKOS 
 *
 * This module provides the basic functions for AMD SVM support
 * according to AMD64 mannual Vol. 2
@@ -181,18 +181,12 @@ static void __init_amd (struct cpuinfo_x86 *cpuinfo)
 //      unsigned int n_asids = cpuid_edx (0x80000000);
 //      outf ( "The number of address space IDs: %x\n", n_asids );
 
-        //TODO: Need fix
-        // Anh : this is totally wrong
-        // func 0x80000000 is used to get manufacture ID, not feature flags
         unsigned int np = cpuid_ebx(0x80000000) & 1;
         if (!np) cprintf ("Nested paging is not supported.\n");
 }
 
 static void init_amd (struct cpuinfo_x86 *cpuinfo)
 {
-        //TODO: uncomment - check why it does not work on HP tx2500
-//      if (cpuinfo->x86 != 0xf) fatal_failure("Failed in init_amd\n");
-
         /* Bit 31 in normal CPUID used for nonstandard 3DNow ID;
            3DNow is IDd by bit 31 in extended CPUID (1*32+31) anyway */
         clear_bit (0*32+31, &cpuinfo->x86_capability);
@@ -205,10 +199,7 @@ static void init_amd (struct cpuinfo_x86 *cpuinfo)
         /* Enable workaround for FXSAVE leak */
         set_bit (X86_FEATURE_FXSAVE_LEAK, &cpuinfo->x86_capability);
 
-//      int r = get_model_name ( c );
-//      if ( ! r ) {
-                __init_amd (cpuinfo);
-//      }
+        __init_amd (cpuinfo);
 
         display_cacheinfo (cpuinfo);
 

@@ -1,5 +1,11 @@
+/*************************************************************************
+*
+* This file was adapted from XEN and MAVMM
+*
+* VMCB module provides the Virtual Machine Control Block and relted operations
+*
+*/
 
-//#include "user.h"
 #include "intercept.h"
 #include "vmexit.h"
 #include "svm.h"
@@ -12,12 +18,6 @@
 
 
 /*****************************************************************************************/
-/************************ MISCELANEOUS FUNCTIONS ***************************************/
-
-
-
-
-/*****************************************************************************************/
 /************************ HANDLE NESTED PAGE FAULT ********************************/
 
 void __handle_vm_npf (struct vm_info *vm)
@@ -26,19 +26,9 @@ void __handle_vm_npf (struct vm_info *vm)
 	uint64_t errcode = vm->vmcb->exitinfo1;
 	print_page_errorcode(errcode);
 
-	//TODO: execute requested access on flash memory (usb drive)
-//	cprintf("Nested page fault!");
-
-//	mmap_4mb(vm->n_cr3, vm->vmcb->exitinfo2, vm->vmcb->exitinfo2, 1);
-//	cprintf("mapping %lx on demand %lx \n",  vm->vmcb->exitinfo2,vm->vmcb->exitinfo2);
-
 	// bit 1 of rflags must be set
 	vm->vmcb->rflags |= 2;
 
-	//uint32_t  va= PGADDR(vm->vmcb->exitinfo2); 
-//	uint32_t va=PGADDR((uint32_t)* (&(vm->vmcb->exitinfo2))); 
-	//pageinfo * pi=mem_alloc();
-//	cprintf("n_cr3 is : %x, va is :  %x\n", vm->vmcb->n_cr3, va);// PGADDR((unsigned long)vm->vmcb->exitinfo2));
 	as_reserve((as_t *)vm->vmcb->n_cr3,(uint32_t) vm->vmcb->exitinfo2, PTE_W|PTE_U|PTE_G); 
 }
 
@@ -143,10 +133,7 @@ void __handle_cr3_write (struct vm_info *vm) {
 
 }
 
-/***************************************************/
 
-
-/***************************************************/
 void __handle_task_switch (struct vm_info *vm) {
 	cprintf("Task switch\n");
 }

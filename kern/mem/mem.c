@@ -108,11 +108,6 @@ mem_init(const struct multiboot_info *mbi)
 	// Update the physical memory layout record
 	//allocate the CertiKOS heap space: from pml->vmm_heap_start to lower 128+64M
 	pml.vmm_heap_start=mem_phys(freemem)/PAGESIZE;
-/*	//pml.host_heap_pmem_space.addr=pml.vmm_heap_start;
-	pml.host_heap_pmem_space.size=mem_npage-pml.vmm_heap_start+1;
-	pml.host_heap_pmem_space.type=E820_RESERVED;
-	pml.rest_pmem4guest_start_page=mem_npage+1;
-*/
 
 	cprintf("\n++++++ CertiKOS physical memory map\n");
 	cprintf("CertiKOS start at: %x\n", pml.vmm_pmem_start);

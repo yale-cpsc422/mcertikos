@@ -1,7 +1,6 @@
 #ifndef __VMCB_H__
 #define __VMCB_H__
 
-//#include "types.h"
 #include <architecture/types.h>
 
 #define MSR_SYSENTER_CS		0x174

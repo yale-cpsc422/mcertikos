@@ -89,29 +89,10 @@ void proc_start(procid_t proc) {
 	p = proc_find (proc);
 	if (!p)
 		return; //assert?
-	//cprintf("proc_start: activating process %d\n", proc);
-//	cprintf("cpustacks@%x, esp:@%x\n",cpu_stacks[mycpu],read_esp())
-//	cprintf("cpustacks@803a000, esp:@%x, cr3:%x\n",ROUNDUP(read_esp(),PAGESIZE),rcr3());
 
-/*	if ( p->type == 1) 
-	{*/
 		assert(p->as);
 		assert(p->ctx);
 		as_activate(p->as);
-/*	}else {
-		assert(p->as);
-                assert(p->ctx);
-                as_activate(as_current());
-	}
-*/
-//	 proc_debug(p->id);
-//	cprintf("proc_start: address space installed\n");
-//	cprintf("cpustacks@803a000, esp:@%x, as:%x, cr3:%x\n",ROUNDUP(read_esp(),PAGESIZE),as_current(),rcr3());
-/*	if (p->type==2){
-		context_start_vm(p->ctx);	
-	}
-	else
-*/ 	
 		context_start(p->ctx);
 }
 
