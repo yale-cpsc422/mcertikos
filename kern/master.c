@@ -360,11 +360,12 @@ void
 init(void)
 {
 	int i;
-	cprintf("Let's try to start those other cpus ... \n");
+	cprintf("Let's try to start those other cpus ... ");
 //	uint32_t vmcb=create_vm_vmcb();
 //		mp_boot_vm(1,vm_launch(vmcb),(uint32_t)&stacks[1]);
 	for (i=1; i<mp_ncpu(); i++) {
 		mp_boot(i,slave_kernel,(uint32_t)&stacks[i]);
+		cprintf("AP%d..", i);
 	}
 	cprintf("Done!\n");
 

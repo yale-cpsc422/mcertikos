@@ -351,8 +351,7 @@ static volatile bool booting;
 
 void mp_boot(int cpu, void(*f)(void), uint32_t kstack_loc)
 {
-	cprintf("Boot CPU%d: apic id = %08x, stack addr = %x\n",
-	      cpu, cpu_ids[cpu], kstack_loc);
+	/* debug("Boot CPU%d: apic id = %08x, stack addr = %x\n", cpu, cpu_ids[cpu], kstack_loc); */
 
 	//assert(!mp_booted(cpu));
 	assert(!booting);

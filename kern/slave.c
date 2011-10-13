@@ -127,8 +127,8 @@ void wait_to_start() {
 	int i=0;
 	procid_t pid;
 	assert(cpus[mycpu].running == false);
-	cprintf("CPU %d, waiting to start\n, addr cpu = %x",
-		mycpu, &cpus[mycpu]);
+	/* cprintf("CPU %d, waiting to start\n, addr cpu = %x", */
+	/*	mycpu, &cpus[mycpu]); */
 	while(cpus[mycpu].start == 0);
 	cprintf("CPU %d, starting process %d\n", mycpu, cpus[mycpu].start);
 //	cprintf("cpustacks@%x, esp:@%x\n",cpu_stacks[mycpu],read_esp())
@@ -140,7 +140,7 @@ void wait_to_start() {
 void slave_kernel() {
 	int mycpu;
 	mycpu = mp_curcpu();
-	cprintf("* current cpu is : %d\n",mycpu);
+	/* cprintf("* current cpu is : %d\n",mycpu); */
 	interrupts_enable(IRQ_TIMER, mycpu);
 	context_handler(T_IRQ0+IRQ_TIMER,&stimer);
 	context_handler(T_CLIENT_SYSCALL,&sl_syscall);

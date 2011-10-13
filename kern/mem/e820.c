@@ -116,8 +116,6 @@ unsigned long  get_max_pfn ( const struct e820_map *e820 )
 		const unsigned long long start = PFN_UP ( p->addr );
 		const unsigned long long end = PFN_DOWN ( p->addr + p->size );
 
-		debug("end = %llx\n", end);
-
 		/* NOTE: address above 4G boundary is ignored */
 		if (( start < end ) && ( end > n ) &&
 		    (end < 0x100000000ULL>>PAGE_SHIFT))

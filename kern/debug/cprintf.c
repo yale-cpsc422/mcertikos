@@ -6,6 +6,7 @@
 // debugging file descriptor code!
 
 #include <architecture/types.h>
+#include <architecture/spinlock.h>
 #include <inc/stdarg.h>
 
 #include <kern/debug/console.h>
@@ -51,20 +52,24 @@ vcprintf(const char *fmt, va_list ap)
 	return b.cnt;
 }
 
+volatile spinlock print_lock = 0;
+
 int
 cprintf(const char *fmt, ...)
 {
 	va_list ap;
 	int cnt;
 
-	static volatile int printing = 0;
+	/* static volatile int printing = 0; */
 
-	while (printing);
-	printing = ~0;
+	/* while (printing); */
+	/* printing = ~0; */
+	spinlock_acquire(&print_lock);
 	va_start(ap, fmt);
 	cnt = vcprintf(fmt, ap);
 	va_end(ap);
-	printing = 0;
+	spinlock_release(&print_lock);
+	/* printing = 0; */
 
 	return cnt;
 }

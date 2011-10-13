@@ -24,7 +24,7 @@ struct program {
 	char* prog_ptr;
 };
 
-struct program programs[] = 
+struct program programs[] =
 {
 	{"client1", _binary_obj_client_client1_start},
 	{"vmclient", _binary_obj_client_vmclient_start},
@@ -174,7 +174,7 @@ void performCmd(char* cmd) {
 		cpustop(cpu);
 	}
 	else if (strcmp(cmd,"createvm") == 0) {
-		
+
 		// search for an empty proc entry
 		int proc_index;
 		for (proc_index=0;proc_index < MAX_PROCS; proc_index++) {
@@ -185,7 +185,7 @@ void performCmd(char* cmd) {
 			return;
 		}
 		printf("\nLoading VM as a process \n");
-		createvm(&procs[proc_index].pid);	
+		createvm(&procs[proc_index].pid);
 		if (procs[proc_index].pid) {
 		procs[proc_index].progname[0]='v';
 		procs[proc_index].progname[1]='m';
@@ -198,10 +198,10 @@ void performCmd(char* cmd) {
 		}
 	}
 	else if (strcmp(cmd,"setupvm") == 0) {
-		setupvm();	
+		setupvm();
 	}
 	else if (strcmp(cmd,"setuppios") == 0) {
-		setuppios();	
+		setuppios();
 	}
 	else if (strcmp(cmd,"shutdown") == 0) {
 	}
@@ -210,7 +210,7 @@ void performCmd(char* cmd) {
 		printf("list      - Prints out the programs available for loading\n");
 		printf("load <num>- loads a program\n");
 		printf("start <pid> <cpu>\n");
-		printf("stop <cpu>\n");	
+		printf("stop <cpu>\n");
 		printf("status    - Prints out the status of the CPUs\n");
 		printf("createvm  - create vmcb for a guest os\n");
 		printf("setupvm  - notify the master kernel to start a vm guest\n");
@@ -220,7 +220,7 @@ void performCmd(char* cmd) {
 	}
 	else {
 		printf ("Unknown command \"%s\". For a list of commands type help\n", cmd);
-	} 
+	}
 }
 
 char buf[MAX_BUF];
@@ -233,7 +233,7 @@ void event(void) {
 	uint32_t proc_index;
 	//printf("event\n");
 	switch (sig.type) {
-		case SIGNAL_TIMER: 
+		case SIGNAL_TIMER:
 		//printf("Timer event received\n");
 		break;
 
@@ -246,11 +246,11 @@ void event(void) {
 		if (procs[proc_index].pid!=fpid)
 		{
 			printf("STOP cpu: %x\n",fcpu);
-			cpustop(fcpu);		
+			cpustop(fcpu);
 			break;
 		}
 	//	assert (procs[proc_index].pid == fpid);
-		allocpage(fpid, faddr & ~(0xfff));	
+		allocpage(fpid, faddr & ~(0xfff));
 		//printf("Page allocated, restarting process\n");
 		cpustart(fcpu,fpid);
 		//printf("Restarted\n");
@@ -261,7 +261,7 @@ void event(void) {
 	}
 	cpu_signalret();
 }
-	
+
 
 int main ()
 {
