@@ -1,0 +1,5 @@
+bochs.log
+cscope.*
+*~
+obj
+obj/*
