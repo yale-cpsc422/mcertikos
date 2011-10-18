@@ -1,7 +1,7 @@
 /********************************************************************************************
 *
 * Derived from  XEN and MAVMM
-* Adapted for CertiKOS by Liang Gu and Yale University
+* Adapted for CertiKOS 
 *
 * This  module provides opreations for Hardware-based Virtual Machine
 */
@@ -82,9 +82,6 @@ static void set_control_params (struct vmcb *vmcb)
 	//allocating a region for msr intercept table, and fill it with 0x00
 	vmcb->msrpm_base_pa = create_intercept_table ( 8 << 10 );  /* 8 Kbytes */
 
-	/********** WHAT TO INTERCEPT *********/
-	//Note: start without any interception. Specific interception will be enabled
-	// by user program when appropriate.
 
 //	vmcb->general1_intercepts |= INTRCPT_INTN;
 }
@@ -93,12 +90,8 @@ static void set_control_params (struct vmcb *vmcb)
 
 static unsigned long create_4kb_nested_pagetable ( )
 {
-	//const unsigned long cr3  = pg_table_alloc();
-//	const unsigned long cr3  = as_new();
-
 	as_t *  pmap=as_new_vm();
 
-	//const unsigned long vm_pmem_pfn = PFN_DOWN_2MB ( PHYS ( vm_pmem_start ) );
 	int i;
 	cprintf("as_new:%x\n",pmap);
 
@@ -109,8 +102,6 @@ static unsigned long create_4kb_nested_pagetable ( )
 	}	
 
 	cprintf( "Nested page table created.\n" );
-
-//	print_4MB_pg_table(cr3);
 
 	return (unsigned long) pmap;
 }
@@ -202,21 +193,6 @@ void vm_disable_intercept(struct vm_info *vm, int flags)
 		// **************** int 80h **************************
 		vm->vmcb->general1_intercepts &= ~INTRCPT_INTN;
 
-		// **************** sysenter **************************
-//		vm->vmcb->general1_intercepts &= ~INTRCPT_MSR;
-//
-//		// Disable R/W interception for sysenter_cs, sysenter_esp and sysenter_eip
-//		// each register <=> 2 bits
-//		// flags for 3 consecutive registers = 1111 1100 b = 0xFC
-//		uint8_t * sysenter_msrs = vm->vmcb->msrpm_base_pa + MSR_SYSENTER_CS / 4;
-//		*sysenter_msrs &= ~0x3;
-//
-//		vm->vmcb->sysenter_cs = vm->org_sysenter_cs;
-////		vm->vmcb->sysenter_esp = vm->org_sysenter_esp;
-////		vm->vmcb->sysenter_eip = vm->org_sysenter_eip;
-//
-//		//Disable interception of that fault
-//		vm->vmcb->exception_intercepts &= ~INTRCPT_GP;
 	}
 
 	// disable single stepping
@@ -243,8 +219,6 @@ void vm_enable_intercept(struct vm_info * vm, int flags)
 //		cprintf("Enable taskswitch interception\n");
 		vm->vmcb->cr_intercepts |= INTRCPT_WRITE_CR3;
 
-		//vm->vmcb->general1_intercepts |= INTRCPT_TASKSWITCH; <== does not work
-		//vm->vmcb->general1_intercepts |= INTRCPT_READTR; <== does not work
 	}
 
 	//enable software interrupt interception
@@ -265,30 +239,6 @@ void vm_enable_intercept(struct vm_info * vm, int flags)
 		// **************** int 80h ***************************
 		vm->vmcb->general1_intercepts |= INTRCPT_INTN;
 
-		// **************** sysenter ***************************
-//		vm->vmcb->general1_intercepts |= INTRCPT_MSR;
-//
-//		// Intercept R/W to sysenter_cs, sysenter_esp and sysenter_eip
-//		// each register <=> 2 bits
-//		// flags for 3 consecutive registers = 1111 1100 b = 0xFC
-//		uint8_t * sysenter_msrs = vm->vmcb->msrpm_base_pa + MSR_SYSENTER_CS / 4;
-//		*sysenter_msrs |= 0x3;
-//
-//		vm->org_sysenter_cs = vm->vmcb->sysenter_cs;
-////		vm->org_sysenter_esp = vm->vmcb->sysenter_esp;
-////		vm->org_sysenter_eip = vm->vmcb->sysenter_eip;
-//
-//		// Set vmcb's msr values so that syscall will create fault
-//		vm->vmcb->sysenter_cs = SYSENTER_CS_FAULT;
-////		vm->vmcb->sysenter_esp = SYSENTER_ESP_FAULT;
-////		vm->vmcb->sysenter_eip = SYSENTER_EIP_FAULT;
-//
-//		//Enable interception of that fault
-//		vm->vmcb->exception_intercepts |= INTRCPT_GP;	//general protection
-//
-//		//HeeDong - Set the bit in MSR Permission Map to intercept R/W to STAR MSR
-////		u64 * star_msr_set_addr = vmcb->msrpm_base_pa + 0x820;
-////		*star_msr_set_addr = *star_msr_set_addr | 0x04;
 	}
 
 	// enable single stepping
@@ -456,56 +406,15 @@ void set_vm_to_mbr_start_state(struct vmcb* vmcb)
 
 	vmcb->cpl = 0; /* must be equal to SS.DPL - TODO */
 
-	/*Anh - Setup PAT, vol2 p193
-	 * Each page table entry use 3 flags: PAT PCD PWT to specify index of the
-	 * corresponding PAT entry, which then specify the type of memory access for that page
-		PA0 = 110	- Writeback
-		PA1 = 100	- Writethrough
-		PA2 = 111	- UC-
-		PA3 = 000	- Unchachable
-		PA4 = 110	- Writeback
-		PA5 = 100	- Writethrough
-		PA6 = 111	- UC-
-		PA7 = 000	- Unchachable
-	 This is also the default PAT */
 	vmcb->g_pat = 0x7040600070406UL;
-//	cprintf("TEST:vmcb->rip : %x\n",vmcb->rip);
 
-	/******* GUEST INITIAL OPERATING MODE  ***************/
-	/******* pick one ******/
 
-	/* Legacy real mode*/
-//	vmcb->cr0 = X86_CR0_ET;
-//	vmcb->cr4 = 0;
-/*	*/
-
-/*	 Legacy protected mode, paging disabled 
-	vmcb->cr0 = X86_CR0_PE | X86_CR0_ET;
-	vmcb->cr3 = 0;
-	vmcb->cr4 = 0;
-	*/
-	
-
-	/* Legacy protected mode, paging enabled (4MB pages)*/
-//	vmcb->cr0 = X86_CR0_PE | X86_CR0_ET | X86_CR0_PG;
-//	vmcb->cr3 = 0x07000000; //Anh -vmcb->cr3 must be aligned by page size (4MB)???
-//	vmcb->cr4 = X86_CR4_PSE; //Anh - enable 4MB pages
-/*	*/
-
-	/*//Anh - Long mode
-	vmcb->cr0 = X86_CR0_PE | X86_CR0_MP | X86_CR0_ET | X86_CR0_NE | X86_CR0_PG;
-	vmcb->cr4 = X86_CR4_PAE;
-	vmcb->cr3 = 0x07000000; // dummy
-	vmcb->efer |= EFER_LME | EFER_LMA;
-	*/
 }
 
 
 
 /******************************************************************************************/
 
-//void vm_create ( struct vm_info *vm, unsigned long vmm_pmem_start,
-//		unsigned long vmm_pmem_size, struct e820_map *e820)
 void vm_create_simple (struct vm_info *vm )
 {
 	cprintf("\n++++++ Creating guest VM....\n");
@@ -535,21 +444,6 @@ void vm_create_simple (struct vm_info *vm )
 	// Guest VM start at MBR code, which is GRUB stage 1
 	// vmcb->rip = 0x7c00; address of loaded MBR
 	set_vm_to_mbr_start_state(vmcb);
-//	set_vm_to_powerup_state(vmcb);
-//	cprintf("vmcdafter:%x\n",vmcb);
-//	vmcb_dump(vmcb);
-
-//	initialize_fid2name_map(vm);
-//	initialize_syscallmap(vm);
-//	initialize_ptracked_list(vm);
-
-//	vm->waitingRetSysCall = 0;
-//	vm_enable_intercept(vm, 0x4);
-//	vmcb->general1_intercepts |= INTRCPT_SHUTDOWN;
-//vmcb->general1_intercepts |= INTRCPT_HLT;
-//vmcb->general1_intercepts |= INTRCPT_INTR	;	
-//	vmcb->general1_intercepts |= IUSER_ITC_SWINT		;
-//	NTRCPT_INTR	;	
 }
 
 void vm_create_simple_with_interception (struct vm_info *vm )
@@ -564,12 +458,8 @@ void vm_create_simple_with_interception (struct vm_info *vm )
 	vm->vmcb = vmcb;
 	cprintf("VMCB location: %x\n", vmcb);
 
-	/* Allocate new pages for physical memory of the guest OS.  */
-	//const unsigned long vm_pmem_start = alloc_vm_pmem ( vm_pmem_size );
-	//const unsigned long vm_pmem_start = 0x0; // guest is preallocated
 
 	/* Set Host-level CR3 to use for nested paging.  */
-	//vm->n_cr3 = create_4mb_nested_pagetable_simple(pml);
 	vm->n_cr3 = create_4kb_nested_pagetable();
 	vmcb->n_cr3 = vm->n_cr3;
 
@@ -578,21 +468,7 @@ void vm_create_simple_with_interception (struct vm_info *vm )
 	set_control_params(vmcb);
 
 	// Set VM initial state
-	// Guest VM start at MBR code, which is GRUB stage 1
-	// vmcb->rip = 0x7c00; address of loaded MBR
 	set_vm_to_mbr_start_state(vmcb);
-//	set_vm_to_powerup_state(vmcb);
-//	cprintf("vmcdafter:%x\n",vmcb);
-//	vmcb_dump(vmcb);
-
-//	initialize_fid2name_map(vm);
-//	initialize_syscallmap(vm);
-//	vm_enable_intercept(vm, 0x4);
-//	vmcb->general1_intercepts |= INTRCPT_SHUTDOWN;
-//vmcb->general1_intercepts |= INTRCPT_HLT;
-//vmcb->general1_intercepts |= INTRCPT_INTR	;	
-//	vmcb->general1_intercepts |= IUSER_ITC_SWINT		;
-
 }
 
 
@@ -626,7 +502,8 @@ static void switch_to_guest_os ( struct vm_info *vm )
 
 /*****************************************************/
 
-void vm_boot (struct vm_info *vm)
+void 
+vm_boot (struct vm_info *vm)
 {
 	//print_pg_table(vm->vmcb->n_cr3);
 	int i=0;
@@ -641,12 +518,10 @@ void vm_boot (struct vm_info *vm)
 //		cprintf("\n<<< %x >>> Guest state in VMCB:\n", i);
 //		show_vmcb_state (vm); // Anh - print guest state in VMCB
 
-//	pic_reset();
 		switch_to_guest_os (vm);
 
 	//	cprintf("\n<<< #%x >>> Guest state at VMEXIT:\n", i);
 
-//	pic_init();
 		handle_vmexit (vm);
 
 //		cprintf("\nTesting address translation function...\n");
@@ -659,7 +534,8 @@ void vm_boot (struct vm_info *vm)
 //		breakpoint("End of round...\n\n");
 	}
 }
-void clear_screen(){
+void 
+clear_screen(){
 	cprintf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
 }
 
@@ -673,7 +549,6 @@ start_vm(){
         cprintf("\n++++++ New virtual machine created. Going to GRUB for the 2nd time\n");
 	pic_reset();
         vm_boot (&vm);
-//	run_vm_once(&vm);
 }
 
 void 
@@ -686,40 +561,14 @@ start_vm_with_interception(){
         cprintf("\n++++++ New virtual machine created. Going to GRUB for the 2nd time\n");
 	pic_reset();
         vm_boot (&vm);
-//	run_vm_once(&vm);
-}
-/*
-uint32_t   
-create_vm(){
-	cprintf("Setup the vmcb for VM!;\n");
-        struct vm_info vm;
-        vm_create_simple(&vm);
-        cprintf("\n++++++ New virtual machine created\n");
-	//pic_reset();
-return &vm;
 }
 
-uint32_t   
-create_vm_vmcb(){
-	cprintf("Setup the vmcb for VM!;\n");
-        struct vm_info vm;
-        vm_create_simple(&vm);
-        cprintf("\n++++++ New virtual machine created\n");
-	//pic_reset();
-return (uint32_t) &(vm.vmcb);
-}
+void  
+run_vm_once(struct vm_info *vm){
 
-*/
-void  run_vm_once(struct vm_info *vm){
-
-	//pic_reset();
 	cprintf(" VM@%x is going to run...\n",vm);
-		switch_to_guest_os (vm);
-		cprintf("\n<<< #%x >>> Guest state at VMEXIT:\n");
-
-	pic_init();
-		handle_vmexit(vm);
-
+	switch_to_guest_os (vm);
+	cprintf("\n<<< #%x >>> Guest state at VMEXIT:\n");
+	handle_vmexit(vm);
         interrupts_eoi();
-//		cprintf("\nTesting address translation function...\n");
 }

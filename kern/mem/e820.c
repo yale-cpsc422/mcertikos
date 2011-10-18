@@ -1,6 +1,6 @@
 /********************************************************************************
 * Derived from  XEN and MAVMM
-* Adapted for CertiKOS by Liang Gu and Yale University
+* Adapted for CertiKOS 
 *
 * This  module provides opreations for Hardware-based Virtual Machine
 *
@@ -81,8 +81,6 @@ void  setup_memory_region ( struct e820_map *e820, const struct multiboot_info *
 		p += mmap->size + sizeof (mmap->size);
 	}
 
-	// DEBUG
-//	e820_print_map(e820);
 }
 
 // get the number of memory pages usable as RAM (has E820_RAM type)
