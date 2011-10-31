@@ -270,7 +270,27 @@ However, in future, if CertiKOS needs to share PCI devices between the host and 
 
 We are now testing the codes and setting for PCI simulation for the Guest. 
 
-\subsection{Ongoing Tasks }
+\subsection{Working problem}
+
+\subsubsection{Virtualzing Interrupt  based on PIC}
+
+How to virtualize the interrupts based on VPIC  for the guest OS? I am still trying to confirm and  check my understanding by  examining the QEMU-KVM and test cases on CertiKOS. 
+  \begin{figure}[!ht]
+ \centerline{
+ \includegraphics[width=0.6\textwidth]{interrupt_injection}}
+ \caption{PIC Interrupt virtualizing for guest OS} \label{fig:interruptinjection}
+\end{figure}
+
+When a physical device interrupt happens, like keyboard,  CertiKOS checks whether this is for the guest (By checking the interrupt pending status of the guest). If it is, then CertiKOS will inject Interrupt into guest by setting VMCB of the guest os.   Whether my understanding about virtualizing interrupts correct? 
+
+Where is the right place for the IRQ injection in CertiKOS? The CertiKOS interrupt handler?  In another word, How can CertiKOS separates external interrupt events for its own and guest OS? 
+
+In AMD SVM specification, it introduces a kind of interception for Virtual Interrupts in Guest OS.   I am still not sure whether this type of virtual interrupt is what we want to implement (interrupt virtualization),  or  it is refers to the guest OS  interrupts of protected mode virtual interrupt. If it is for interrupt virtualization, how can we leverage it to help the PIC related interrupt simulation?  
+
+\subsubsection{Test and Debug CertiKOS on Physical Platform}
+
+
+\subsection{Target for Current Stage}
 We are now mostly working on finish following tasks : 
 \begin{itemize}
 \item boot ttyLinux as guest OS with CertiKOS on Physical Platform
