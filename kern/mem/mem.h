@@ -23,6 +23,8 @@
 #define	DEFAULT_VMM_PMEM_SIZE (1 << 24) /* 16 MB */
 #define	DEFAULT_VMM_PMEM_START  0x100000// (1 << 20) /* 1 MB */
 
+#define VMMSTACK_LO DEFAULT_VMM_PMEM_START+0x4000000 //assume the kernel image is less than 0x3F00000  
+#define VMMSTACK_SIZE 0x4000000
 
 // Given a physical address,
 // return a C pointer the kernel can use to access it.
@@ -79,4 +81,6 @@ struct pmem_layout * get_pmem_layout();
 extern pageinfo * mem_alloc_contiguous( unsigned long n_pages);
 extern unsigned long mem_alloc_one_page();
 extern unsigned long alloc_host_pages ( unsigned long nr_pfns, unsigned long pfn_align );
+
 #endif /* !PIOS_KERN_MEM_H */
+

@@ -5,24 +5,20 @@
 # where the GNUmakefile is located.
 #
 
-OBJDIRS += kern/mem
+OBJDIRS += kern/hvm/
 
-# entry.S must be first, so that it's the first code in the text segment!!!
-#
 # We also snatch the use of a few handy source files
 # from the lib directory, to avoid gratuitous code duplication.
-KERN_SRCFILES +=	kern/mem/mem.c 
-KERN_SRCFILES +=	kern/mem/e820.c 
-KERN_SRCFILES +=	kern/mem/malloc.c 
-KERN_SRCFILES +=	kern/mem/mman.c 
+#KERN_SRCFILES +=	kern/hvm/dev/irq.c 
+KERN_SRCFILES +=	kern/hvm/ioport.c 
 
 # How to build kernel object files
-$(OBJDIR)/kern/mem/%.o: kern/mem/%.c
+$(OBJDIR)/kern/hvm/%.o: kern/hvm/%.c
 	@echo + cc $<
 	@mkdir -p $(@D)
 	$(V)$(CC) -nostdinc $(KERN_CFLAGS) -c -o $@ $<
 
-$(OBJDIR)/kern/mem/%.o: kern/mem/%.S
+$(OBJDIR)/kern/hvm/%.o: kern/hvm/%.S
 	@echo + as $<
 	@mkdir -p $(@D)
 	$(V)$(CC) -nostdinc $(KERN_CFLAGS) -c -o $@ $<

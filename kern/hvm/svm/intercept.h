@@ -7,6 +7,9 @@ and perform actions based it */
 #include "vm.h"
 
 extern void handle_vmexit (struct vm_info *vm);
+void* get_io_data_address(struct vm_info *vm);
+#define INTRCPT_ENABLED 1
+#define INTRCPT_DISABLED 0
 
 /* [REF] AMD64 manual Vol. 2, Appendix B */
 
@@ -24,6 +27,7 @@ extern void handle_vmexit (struct vm_info *vm);
 
 //Flags for FIRST general intercept word - VMCB + 0Ch
 #define INTRCPT_INTR		(1 << 0)
+#define INTRCPT_VINTR		(1 << 4)
 #define INTRCPT_READTR		(1 << 9)
 #define INTRCPT_IRET		(1 << 20)
 #define INTRCPT_POPF		(1 << 17)
@@ -52,5 +56,25 @@ extern void handle_vmexit (struct vm_info *vm);
 #define         USER_ITC_ALL                    0xFF
 
 #define         USER_TEST_SWITCHMODE    1
+
+//Debug related VMCB settings
+#define	DB_SINGLESTEP 1<<14 
+
+//IOIO Intercept Exitinfo1 masks
+#define IOIO_TYPE_MASK   1
+#define IOIO_STR_MASK    1<<2
+#define IOIO_REP_MASK    1<<3
+#define IOIO_PORT_MASK   0xFFFF0000
+#define IOIO_SIZE_SHIFT	4
+#define IOIO_SIZE_MASK	7<<IOIO_SIZE_SHIFT
+
+#define IOIOTYPE(x) ((x)&IOIO_TYPE_MASK)
+#define IOIOSIZE(x) ((x)&IOIO_SIZE_MASK)>>IOIO_SIZE_SHIFT
+#define IOIOPORT(x) ((x)>>16)
+
+#define SVM_IOIO_IN 0
+#define SVM_IOIO_OUT 1
+
+#define SVM_EXIT_VECTOR_MASK 0xFF
 
 #endif

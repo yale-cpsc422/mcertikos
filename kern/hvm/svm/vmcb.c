@@ -20,20 +20,49 @@
 void print_vmcb_state (struct vmcb *vmcb)
 {
 	cprintf ( "*******  VMCB STATE  *********\n" );
-	cprintf ( "cs:ip = %x:%x\n", vmcb->cs.sel, vmcb->rip );
-	cprintf ( "ss:sp = %x:%x\n", vmcb->ss.sel, vmcb->rsp );
+	cprintf ( "cs:ip = %x:%x,", vmcb->cs.sel, vmcb->rip );
+	cprintf ( "ss:sp = %x:%x, ", vmcb->ss.sel, vmcb->rsp );
 	cprintf ( "ds:bp = %x:%x\n", vmcb->ds.sel, g_ebp);
 
-	cprintf ( "eax = %x, ebx = %x, ecx = %x, edx = %x\n", vmcb->rax, g_ebx, g_ecx, g_edx);
-	cprintf ( "esi = %x, edi = %x", g_esi, g_edi);
+	cprintf ( "eax = %x, ebx = %x, ecx = %x, edx = %x", vmcb->rax, g_ebx, g_ecx, g_edx);
+	cprintf ( "esi = %x, edi = %x\n", g_esi, g_edi);
 
-	cprintf ( "cpl=%x\n", vmcb->cpl );
-	cprintf ( "cr0=%x, cr3=%x, cr4=%x\n", vmcb->cr0, vmcb->cr3, vmcb->cr4 );
+	cprintf ( "cpl=%x,", vmcb->cpl );
+	cprintf ( "cr0=%x, cr3=%x, cr4=%x,", vmcb->cr0, vmcb->cr3, vmcb->cr4 );
 	cprintf ( "rflags=%x, efer=%x\n", vmcb->rflags, vmcb->efer );
+	cprintf("RSP = %x, ",(unsigned long long) vmcb->rsp);
+	cprintf("RIP = %x\n",(unsigned long long) vmcb->rip);
 
 //	cprintf ( "cs.attrs=%x, ds.attrs=%x\n", vmcb->cs.attrs.bytes, vmcb->ds.attrs.bytes );
 //	cprintf ( "cs.base=%x, ds.base=%x\n", vmcb->cs.base, vmcb->ds.base );
 //	cprintf ( "cs.limit=%x, ds.limit=%x\n", vmcb->cs.limit, vmcb->ds.limit);
+}
+
+void print_vmcb_intr_state(struct vmcb *vmcb) { 
+
+
+	cprintf("Vector: %x||", vmcb->exitintinfo.fields.vector);
+	cprintf("Type: %x||", vmcb->exitintinfo.fields.type);
+	cprintf("Ev: %x||", vmcb->exitintinfo.fields.ev);
+	cprintf("Rsvd1: %x||", vmcb->exitintinfo.fields.resvd1);
+	cprintf("V: %x||", vmcb->exitintinfo.fields.v);
+	cprintf("Errorcode: %x||", vmcb->exitintinfo.fields.errorcode);
+//	int vector =vmcb->exitintinfo.fields.vector;
+//	cprintf("vector: %x",vector);
+}
+
+void print_vmcb_vintr_state (struct vmcb *vmcb)
+{
+	cprintf ( "*******  VMCB vintr  *********\n" );
+//	cprintf ( "vintr = %x:", (uint64_t) vmcb->vintr.fields  );
+	cprintf ( "tpr = %x:", vmcb->vintr.fields.tpr );
+	cprintf ( "riq = %x:", vmcb->vintr.fields.irq );
+	cprintf ( "rsvd0 = %x:", vmcb->vintr.fields.rsvd0 );
+	cprintf ( "prio = %x:", vmcb->vintr.fields.prio );
+	cprintf ( "vector = %x:", vmcb->vintr.fields.vector );
+	cprintf ( "intr_masking = %x:", vmcb->vintr.fields.intr_masking );
+	cprintf ( "rsvd2 = %x:", vmcb->vintr.fields.rsvd2 );
+	cprintf ( "rsvd3 = %x:", vmcb->vintr.fields.rsvd3 );
 }
 
 #define BIT_MASK(n)  ( ~ ( ~0UL << (n) ) )

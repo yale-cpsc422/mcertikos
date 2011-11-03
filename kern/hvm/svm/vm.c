@@ -6,8 +6,6 @@
 * This  module provides opreations for Hardware-based Virtual Machine
 */
 
-#include "svm.h"
-#include "vm.h"
 #include <architecture/cpufeature.h>
 #include <kern/debug/string.h>
 #include <kern/debug/stdio.h>
@@ -21,6 +19,10 @@
 #include <architecture/mem.h>
 #include "vmexit.h"
 #include "intercept.h"
+#include <kern/hvm/dev/irq.h>
+#include <kern/hvm/ioport.h>
+#include "svm.h"
+#include "vm.h"
 
 
 static struct vmcb * alloc_vmcb ( void )
@@ -49,6 +51,75 @@ static unsigned long create_intercept_table ( unsigned long size )
 	return pfn << PAGE_SHIFT;
 }
 
+void certikos_handle_io(uint16_t port, void *data, int direction, int size,uint32_t count)
+{
+    int i;
+    uint8_t *ptr = data;
+
+    for (i = 0; i < count; i++) {
+        if (direction == SVM_IOIO_IN) {
+            switch (size) {
+            case 1:
+		*(uint8_t *) ptr=cpu_inb(port);
+                //stb_p(ptr, cpu_inb(port));
+                break;
+            case 2:
+		*(uint16_t *) ptr=cpu_inw(port);
+               // stw_p(ptr, cpu_inw(port));
+                break;
+            case 4:
+		*(uint32_t *) ptr=cpu_inl(port);
+                //stl_p(ptr, cpu_inl(port));
+                break;
+            }
+        } else {
+            switch (size) {
+            case 1:
+                //cpu_outb(port, ldub_p(ptr));
+                cpu_outb(port, *(uint8_t * )ptr);
+                break;
+            case 2:
+                //cpu_outw(port, lduw_p(ptr));
+                cpu_outw(port, *(uint16_t * )ptr);
+                break;
+            case 4:
+                //cpu_outl(port, ldl_p(ptr));
+                cpu_outl(port, *(uint32_t * )ptr);
+                break;
+            }
+        }
+
+        ptr += size;
+    }
+}
+
+
+void
+enable_intercept_pic(struct vmcb *vmcb)
+{
+        set_iopm_intercept(&vmcb->iopm_base_pa,0x20,1);
+        set_iopm_intercept(&vmcb->iopm_base_pa,0xA0,1);
+}
+
+void
+disable_intercept_pic(struct vmcb *vmcb)
+{
+        set_iopm_intercept(&vmcb->iopm_base_pa,0x20,0);
+        set_iopm_intercept(&vmcb->iopm_base_pa,0xA0,0);
+}
+
+void enable_intercept_all_ioport(struct vmcb *vmcb){
+	int port;
+	//for (port=0;port<(0x4000+0x3);port++)
+	for (port=0;port<(0x4003);port++)
+	set_iopm_intercept(&vmcb->iopm_base_pa,port,1);
+}
+void disable_intercept_all_ioport(struct vmcb *vmcb){
+	int port;
+	for (port=0;port<(0x400*64+0x3);port++)
+	set_iopm_intercept(&vmcb->iopm_base_pa,port,0);
+}
+
 static void set_control_params (struct vmcb *vmcb)
 {
 	//Note: anything not set will be 0 (since vmcb was filled with 0)
@@ -61,7 +132,7 @@ static void set_control_params (struct vmcb *vmcb)
 
 	// set this to 1 will make VMRUN to flush all TBL entries, regardless of ASID
 	// and global / non global property of pages
-    vmcb->tlb_control = 0;
+    	vmcb->tlb_control = 0;
 
     //time stamp counter offset, to be added to guest RDTSC and RDTSCP instructions
 	/* To be added in RDTSC and RDTSCP */
@@ -78,10 +149,25 @@ static void set_control_params (struct vmcb *vmcb)
 	//allocating a region for IOPM (permission map)
 	//and fill it with 0x00 (not intercepting anything)
 	vmcb->iopm_base_pa  = create_intercept_table ( 12 << 10 ); /* 12 Kbytes */
+	//memset ( vmcb->iopm_base_pa  , 0xff, 0x3*PAGE_SIZE );
 
 	//allocating a region for msr intercept table, and fill it with 0x00
 	vmcb->msrpm_base_pa = create_intercept_table ( 8 << 10 );  /* 8 Kbytes */
 
+//	vmcb->general1_intercepts |= INTRCPT_IO;
+	vmcb->general1_intercepts |= INTRCPT_INTR;
+//	vmcb->general1_intercepts |= INTRCPT_INTN;
+//	vmcb->general1_intercepts |= INTRCPT_VINTR;
+ /* 	set_iopm_intercept(&vmcb->iopm_base_pa,0x20,1);
+	set_iopm_intercept(&vmcb->iopm_base_pa,0x21,1);
+        set_iopm_intercept(&vmcb->iopm_base_pa,0xa0,1);
+        set_iopm_intercept(&vmcb->iopm_base_pa,0xa1,1);
+  */     
+	// set_iopm_intercept(&vmcb->iopm_base_pa,0x3f8,1);
+	cprintf("iopmbase:%x\n",&vmcb->iopm_base_pa);
+	//enable_intercept_all_ioport(vmcb);
+  
+//	enable_intercept_pic(vmcb);
 
 //	vmcb->general1_intercepts |= INTRCPT_INTN;
 }
@@ -173,16 +259,16 @@ void vm_disable_intercept(struct vm_info *vm, int flags)
 	}
 
 	//disable taskswitch interception
-	if (flags & USER_ITC_TASKSWITCH) {
+	/*if (flags & USER_ITC_TASKSWITCH) {
 //		cprintf("Disable taskswitch interception\n");
 		vm->vmcb->cr_intercepts &= ~INTRCPT_WRITE_CR3;
-	}
-
+	}*/
+/*
 	if (flags & USER_ITC_SWINT) {
 //		cprintf("Disable software interrupt interception\n");
 		vm->vmcb->general1_intercepts &= ~INTRCPT_INTN;
 	}
-
+*/
 	if (flags & USER_ITC_IRET) {
 //		cprintf("Enable software interrupt interception\n");
 		vm->vmcb->general1_intercepts &= ~INTRCPT_IRET;
@@ -201,6 +287,10 @@ void vm_disable_intercept(struct vm_info *vm, int flags)
 		vm->vmcb->rflags &= ~X86_RFLAGS_TF;
 		vm->vmcb->exception_intercepts &= ~INTRCPT_DB;
 	}
+	
+	if (flags & INTRCPT_INTR) {
+		vm->vmcb->general1_intercepts &= ~INTRCPT_INTR;
+	}
 }
 
 void vm_enable_intercept(struct vm_info * vm, int flags)
@@ -215,18 +305,18 @@ void vm_enable_intercept(struct vm_info * vm, int flags)
 	}
 
 	//enable taskswitch interception
-	if (flags & USER_ITC_TASKSWITCH) {
+/*	if (flags & USER_ITC_TASKSWITCH) {
 //		cprintf("Enable taskswitch interception\n");
 		vm->vmcb->cr_intercepts |= INTRCPT_WRITE_CR3;
 
 	}
-
+*/
 	//enable software interrupt interception
-	if (flags & USER_ITC_SWINT) {
+	/*if (flags & USER_ITC_SWINT) {
 //		cprintf("Enable software interrupt interception\n");
 		vm->vmcb->general1_intercepts |= INTRCPT_INTN;
 	}
-
+*/
 	if (flags & USER_ITC_IRET) {
 //		cprintf("Enable software interrupt interception\n");
 		vm->vmcb->general1_intercepts |= INTRCPT_IRET;
@@ -246,6 +336,10 @@ void vm_enable_intercept(struct vm_info * vm, int flags)
 //		cprintf("Enable single stepping\n");
 		vm->vmcb->rflags |= X86_RFLAGS_TF;
 		vm->vmcb->exception_intercepts |= INTRCPT_DB;
+	}
+
+	if (flags & INTRCPT_INTR) {
+		vm->vmcb->general1_intercepts |= INTRCPT_INTR;
 	}
 }
 
@@ -430,6 +524,9 @@ void vm_create_simple (struct vm_info *vm )
 	/* Allocate new pages for physical memory of the guest OS.  */
 	//const unsigned long vm_pmem_start = alloc_vm_pmem ( vm_pmem_size );
 	//const unsigned long vm_pmem_start = 0x0; // guest is preallocated
+	
+	//inital setting for single step interception
+	vm->itc_skip_flag=0;
 
 	/* Set Host-level CR3 to use for nested paging.  */
 	//vm->n_cr3 = create_4mb_nested_pagetable_simple(pml);
@@ -444,6 +541,8 @@ void vm_create_simple (struct vm_info *vm )
 	// Guest VM start at MBR code, which is GRUB stage 1
 	// vmcb->rip = 0x7c00; address of loaded MBR
 	set_vm_to_mbr_start_state(vmcb);
+
+	vm->i8259=i8259_init(NULL);
 }
 
 void vm_create_simple_with_interception (struct vm_info *vm )
@@ -536,7 +635,7 @@ vm_boot (struct vm_info *vm)
 }
 void 
 clear_screen(){
-	cprintf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+	cprintf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
 }
 
 void 
@@ -547,7 +646,7 @@ start_vm(){
         vm_create_simple(&vm);
 	clear_screen();
         cprintf("\n++++++ New virtual machine created. Going to GRUB for the 2nd time\n");
-	pic_reset();
+	//pic_reset();
         vm_boot (&vm);
 }
 
@@ -559,7 +658,7 @@ start_vm_with_interception(){
         vm_create_simple_with_interception(&vm);
 	clear_screen();
         cprintf("\n++++++ New virtual machine created. Going to GRUB for the 2nd time\n");
-	pic_reset();
+//	pic_reset();
         vm_boot (&vm);
 }
 

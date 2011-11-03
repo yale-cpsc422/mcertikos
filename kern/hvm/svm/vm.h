@@ -4,6 +4,7 @@
 #include <inc/multiboot.h>
 #include "vmcb.h"
 #include <kern/mem/e820.h>
+#include <kern/hvm/dev/irq.h>
 
 #define	GUEST_PADDR_MBI	0x2d0e0UL
 
@@ -40,6 +41,8 @@ struct vm_info
 	int nTrackedProcess;
 	char * ptracked;
 	uint8_t btrackcurrent;	//whether the current process is being tracked or not
+
+	qemu_irq *i8259;	
 };
 
 extern void vm_enable_intercept(struct vm_info * vm, int flags);
@@ -59,4 +62,7 @@ extern void start_vm();
 extern void start_vm_with_interception();
 extern void  run_vm_once(struct vm_info *vm );
 extern uint32_t create_vm();
+
+void enable_intercept_all_ioport(struct vmcb *vmcb);
+void certikos_handle_io(uint16_t port, void *data, int direction, int size, uint32_t count);
 #endif /* __VM_H__ */

@@ -151,5 +151,4 @@ enum vmexit_exitcode {
 
 
 extern void print_vmexit_exitcode ( struct vmcb * );
-
 #endif /* __VMEXIT_H__ */

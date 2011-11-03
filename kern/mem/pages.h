@@ -1,4 +1,6 @@
 
+#ifndef PIOS_KERN_PAGE_H
+#define PIOS_KERN_PAGE_H
 
 
 #define PAGE_SHIFT 12
@@ -102,3 +104,4 @@ union pgt_entry_2mb
 #define PTTEF_PAGE_SIZE  (1 << _PTTEF_PAGE_SIZE)
 #define PTTEF_GLOBAL     (1 << _PTTEF_GLOBAL)
 
+#endif
