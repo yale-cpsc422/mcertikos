@@ -42,7 +42,7 @@ QEMU := qemu-system-x86_64
 endif
 endif
 
-BOCHS := ~/usr/bin/bochs
+BOCHS := bochs
 
 # try to generate unique GDB and network port numbers
 GDBPORT	:= $(shell expr `id -u` % 5000 + 25000)
@@ -53,7 +53,7 @@ NETPORT := $(shell expr `id -u` % 5000 + 30000)
 #QEMUPORT := -s -p $(GDBPORT)
 QEMUPORT := -gdb tcp::$(GDBPORT)
 
-CC	:= $(GCCPREFIX)gcc -pipe
+CC	:= $(GCCPREFIX)gcc-4.4 -pipe
 AS	:= $(GCCPREFIX)as
 AR	:= $(GCCPREFIX)ar
 LD	:= $(GCCPREFIX)ld

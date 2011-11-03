@@ -10,12 +10,14 @@
 #include "vmexit.h"
 #include "svm.h"
 #include "vm.h"
+#include <kern/debug/debug.h>
 #include <kern/debug/string.h>
 #include <kern/debug/stdio.h>
 #include <kern/as/as.h>
 #include <kern/mem/mem.h>
 #include <architecture/mmu.h>
-
+#include <architecture/cpuid.h>
+#include <architecture/x86.h>
 
 /*****************************************************************************************/
 /************************ HANDLE NESTED PAGE FAULT ********************************/
@@ -24,12 +26,12 @@ void __handle_vm_npf (struct vm_info *vm)
 {
 	// Note for NPF: p410 - 15.24.6 Nested versus Guest Page Faults, Fault Ordering
 	uint64_t errcode = vm->vmcb->exitinfo1;
-	print_page_errorcode(errcode);
+	/* print_page_errorcode(errcode); */
 
 	// bit 1 of rflags must be set
 	vm->vmcb->rflags |= 2;
 
-	as_reserve((as_t *)vm->vmcb->n_cr3,(uint32_t) vm->vmcb->exitinfo2, PTE_W|PTE_U|PTE_G); 
+	as_reserve((as_t *)vm->vmcb->n_cr3,(uint32_t) vm->vmcb->exitinfo2, PTE_W|PTE_U|PTE_G);
 }
 
 /*****************************************************************************************/
@@ -52,6 +54,7 @@ void __handle_vm_iret (struct vm_info *vm)
 
 void __handle_vm_exception (struct vm_info *vm)
 {
+	debug("__handle_vm_exception\n");
 	//Special handling for GP (syscall)
 	switch (vm->vmcb->exitcode)
 	{
@@ -103,7 +106,7 @@ void __handle_vm_exception (struct vm_info *vm)
 
 			return;
 		}
-		else print_page_errorcode(vm->vmcb->exitinfo1);
+		else /* print_page_errorcode(vm->vmcb->exitinfo1) */;
 
 		//else => page fault caused by normal guest activity => inject exception
 		vm->vmcb->cr2 = vm->vmcb->exitinfo2;
@@ -140,13 +143,127 @@ void __handle_task_switch (struct vm_info *vm) {
 
 /**********************************************************/
 
-void __handle_vm_interupt (struct vm_info *vm)
+void __handle_vm_interrupt (struct vm_info *vm)
 {
 	// See AMD manual vol2, page 392
-	cprintf("vm_interrupt\n");
+	debug("vm_interrupt\n");
+	debug(">> error code = %x, error valid = %d\n",
+	      vm->vmcb->exitintinfo.fields.errorcode,
+	      vm->vmcb->exitintinfo.fields.ev);
+	debug(">> vector = %x, valid = %d\n",
+	      vm->vmcb->exitintinfo.fields.vector,
+	      vm->vmcb->exitintinfo.fields.v);
+	debug(">> type = %x\n", vm->vmcb->exitintinfo.fields.type);
 
+	vm->vmcb->vintr.fields.irq = 0;
 
 }
+
+void __handle_vm_cpuid (struct vm_info *vm)
+{
+	debug("__handle_vm_cpuid\n");
+	debug("cpuid %x\n", vm->vmcb->rax);
+
+	uint32_t eax, ebx, ecx, edx;
+	switch (vm->vmcb->rax) {
+	/* case CPUID_CPU_VID: */
+	/*	cpuid(CPUID_CPU_VENDOR, &eax, &ebx, &ecx, &edx); */
+	/*	vm->vmcb->rip += 2; */
+	/*	g_ebx = INTEL_VENDOR_EBX; */
+	/*	g_ecx = INTEL_VENDOR_ECX; */
+	/*	g_edx = INTEL_VENDOR_EDX; */
+	/*	break; */
+	case CPUID_CPU_INFO:
+		cpuid(CPUID_CPU_VID, &eax, &ebx, &ecx, &edx);;
+		if (ebx == CPUID_VID_AMD_EBX &&
+		    ecx == CPUID_VID_AMD_ECX &&
+		    edx == CPUID_VID_AMD_EDX) {
+			debug("CPU Vendor: AuthenticAMD\n");
+			cpuid(CPUID_CPU_INFO, &eax, &ebx, &ecx, &edx);
+			vm->vmcb->rax =
+				(CPUID_TYPE_OEM << 12) ||
+				(/* CPUID_FAMILY_EXTENDED */CPUID_FAMILY_686 << 8) ||
+				(CPUID_MODEL_ATHLON64 <<4) ||
+				(0x8);
+			vm->vmcb->rip += 2;
+			g_ebx = ebx;
+			g_ecx = ecx;
+			g_edx = edx;
+		} else if (ebx == CPUID_VID_INTEL_EBX &&
+			   ecx == CPUID_VID_INTEL_ECX &&
+			   edx == CPUID_VID_INTEL_EDX){
+			debug("CPU Vendor: GenuineIntel\n");
+			cpuid(CPUID_CPU_INFO, &eax, &ebx, &ecx, &edx);
+			vm->vmcb->rax = eax;
+			vm->vmcb->rip += 2;
+			g_ebx = ebx;
+			g_ecx = ecx;
+			g_edx = edx;
+		} else {
+			debug("CPU Vendor: %x %x %x\n", ebx, ecx, edx);
+			cpuid(CPUID_CPU_INFO, &eax, &ebx, &ecx, &edx);
+			vm->vmcb->rax = eax;
+			vm->vmcb->rip += 2;
+			g_ebx = ebx;
+			g_ecx = ecx;
+			g_edx = edx;
+		}
+		break;
+
+	default:
+		cpuid(vm->vmcb->rax, &eax, &ebx, &ecx, &edx);
+		debug(">> eax=%x, ebx=%x, ecx=%x, edx=%x\n", eax, ebx, ecx, edx);
+		vm->vmcb->rax = eax;
+		vm->vmcb->rip += 2;
+		g_ebx = ebx;
+		g_ecx = ecx;
+		g_edx = edx;
+		break;
+	}
+}
+
+void __handle_vm_rdmsr (struct vm_info *vm)
+{
+	debug("__handle_vm_rdmsr]n");
+
+	uint32_t edx, eax;
+
+	switch (g_ecx) {
+	case MSR_INTR_PENDING:
+		debug("rdmsr MSR_INTR_PENDING, ip=%x\n", vm->vmcb->rip);
+
+		/* uint32_t hi, lo; */
+		/* rdmsr(MSR_INTR_PENDING, hi, lo); */
+		/* debug("MSR_INTR_PEND_DIS=%d\n", lo & MSR_INTR_PEND_DIS); */
+		/* g_edx = hi; */
+		/* vm->vmcb->rax = lo; */
+		/* vm->vmcb->rip += 2; */
+
+		g_edx = 0;
+		vm->vmcb->rax = 1<<MSR_INTR_PND_MSG_DIS;
+		vm->vmcb->rip += 2;
+		break;
+
+	default:
+		/* TODO: Manipulate GP#, may inject GP to guest? */
+		debug("rdmsr %x, ip=%x\n", g_ecx, vm->vmcb->rip);
+		rdmsr(g_ecx, edx, eax);
+		g_edx = edx;
+		vm->vmcb->rax = eax;
+		vm->vmcb->rip += 2;
+		break;
+	}
+}
+
+void __handle_vm_hlt (struct vm_info *vm)
+{
+	debug("hlt ip=%x\n", vm->vmcb->rip);
+
+	vm->vmcb->rip += 1;
+
+	halt();
+}
+
 /*****************************************************************************************/
 /********************************** MAIN FUNCTION ****************************************/
 /*****************************************************************************************/
@@ -164,25 +281,57 @@ void handle_vmexit (struct vm_info *vm)
 
 	switch (vm->vmcb->exitcode)
 	{
-		case VMEXIT_MSR:
-			if (vm->vmcb->exitinfo1 == 1) ;//__handle_vm_wrmsr (vm);
-			break;
-		case VMEXIT_EXCEPTION_DE ... VMEXIT_EXCEPTION_XF:
-			__handle_vm_exception(vm); break;
+	case VMEXIT_CPUID:
+		__handle_vm_cpuid(vm);
+		break;
 
-		//software interrupt (int n)
-		case VMEXIT_SWINT: __handle_vm_swint(vm); break;
-		//nested page fault
-		case VMEXIT_NPF: __handle_vm_npf (vm); break;
-		//vmmcall
-		case VMEXIT_VMMCALL: ; break;//
-		//iret
-		case VMEXIT_IRET: __handle_vm_iret(vm); break;
-		//write to cr3
-		case VMEXIT_CR3_WRITE: __handle_cr3_write(vm);break;
-    		case VMEXIT_INTR: /*cprintf("N");*/break;
+	case VMEXIT_MSR:
+		if (vm->vmcb->exitinfo1 == 1)
+			;//__handle_vm_wrmsr (vm);
+		else
+			__handle_vm_rdmsr(vm);
+		break;
+
+	case VMEXIT_HLT:
+		__handle_vm_hlt(vm);
+		break;
+
+	case VMEXIT_EXCEPTION_DE ... VMEXIT_EXCEPTION_XF:
+		__handle_vm_exception(vm);
+		break;
+
+	//software interrupt (int n)
+	case VMEXIT_SWINT:
+		__handle_vm_swint(vm);
+		break;
+
+	//nested page fault
+	case VMEXIT_NPF:
+		__handle_vm_npf (vm);
+		break;
+
+	//vmmcall
+	case VMEXIT_VMMCALL:
+		;
+		break;//
+
+	//iret
+	case VMEXIT_IRET:
+		__handle_vm_iret(vm);
+		break;
+
+	//write to cr3
+	case VMEXIT_CR3_WRITE:
+		__handle_cr3_write(vm);
+		break;
+
+	case VMEXIT_INTR:
+		__handle_vm_interrupt(vm);
+		break;
+
 //		case VMEXIT_TASK_SWITCH: __handle_task_switch(vm); break;
 	}
 //	cprintf("**** ");
 //	cprintf("**** #VMEXIT - exit code: %x\n", (uint32_t) vm->vmcb->exitcode);
+	/* debug("handle_vmexit done\n"); */
 }

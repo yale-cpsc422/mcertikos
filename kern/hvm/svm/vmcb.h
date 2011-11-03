@@ -26,10 +26,10 @@ union seg_attrs
 } __attribute__ ((packed));
 
 struct seg_selector {
-	uint16_t        	sel;
+	uint16_t		sel;
 	union seg_attrs	attrs;
-	uint32_t        	limit;
-	uint64_t        	base;
+	uint32_t		limit;
+	uint64_t		base;
 } __attribute__ ((packed));
 
 union eventinj {
@@ -56,16 +56,16 @@ union vintr
 {
 	uint64_t bytes;
 	struct {
-        uint64_t tpr:          8;
-        uint64_t irq:          1;
-        uint64_t rsvd0:        7;
-        uint64_t prio:         4;
-        uint64_t ign_tpr:      1;
-        uint64_t rsvd1:        3;
-        uint64_t intr_masking: 1;
-        uint64_t rsvd2:        7;
-        uint64_t vector:       8;
-        uint64_t rsvd3:       24;
+	uint64_t tpr:          8;
+	uint64_t irq:          1;
+	uint64_t rsvd0:        7;
+	uint64_t prio:         4;
+	uint64_t ign_tpr:      1;
+	uint64_t rsvd1:        3;
+	uint64_t intr_masking: 1;
+	uint64_t rsvd2:        7;
+	uint64_t vector:       8;
+	uint64_t rsvd3:       24;
     } fields;
 } __attribute__ ((packed));
 
@@ -107,9 +107,9 @@ struct vmcb
 	uint8_t res11[3];
 	uint8_t cpl;
 	uint32_t res12;
-	uint64_t efer;               	/* offset 1024 + 0xD0 */
+	uint64_t efer;			/* offset 1024 + 0xD0 */
 	uint64_t res13[14];
-	uint64_t cr4;                  	/* loffset 1024 + 0x148 */
+	uint64_t cr4;			/* loffset 1024 + 0x148 */
 	uint64_t cr3;
 	uint64_t cr0;
 	uint64_t dr7;
@@ -138,6 +138,18 @@ struct vmcb
 	uint64_t res17[128];
 	uint64_t res18[128];
 } __attribute__ ((packed));
+
+#define MSRPM_OFFSET1	0x0
+#define MSRPM_OFFSET2	0x800
+#define MSRPM_OFFSET3	0x1000
+#define MSRPM_OFFSET4	0x1800
+
+#define MSR_ADDR1_MIN	0x0
+#define MSR_ADDR1_MAX	0x1FFF
+#define MSR_ADDR2_MIN	0xC0000000
+#define MSR_ADDR2_MAX	0xC0001FFF
+#define MSR_ADDR3_MIN	0xC0010000
+#define MSR_ADDR3_MAX	0xC0011FFF
 
 extern void vmcb_check_consistency ( struct vmcb *vmcb );
 extern void vmcb_dump( struct vmcb *vmcb);

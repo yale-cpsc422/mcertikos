@@ -93,6 +93,10 @@ iso: ${OBJDIR}/kern/kernel
 	$(V)echo "}" >> ${OBJDIR}/iso/raw/boot/grub/grub.cfg
 	$(V)grub-mkrescue --output=${OBJDIR}/iso/certikos.iso ${OBJDIR}/iso/raw/
 
+simnow: $(OBJDIR)/kern/kernel
+	@echo + update disk image
+	./updatecertikoshdd.sh
+
 bochs: iso
 	@echo + start bochs
 	$(V)$(BOCHS) -q

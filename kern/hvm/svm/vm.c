@@ -1,7 +1,7 @@
 /********************************************************************************************
 *
 * Derived from  XEN and MAVMM
-* Adapted for CertiKOS 
+* Adapted for CertiKOS
 *
 * This  module provides opreations for Hardware-based Virtual Machine
 */
@@ -9,6 +9,7 @@
 #include "svm.h"
 #include "vm.h"
 #include <architecture/cpufeature.h>
+#include <kern/debug/debug.h>
 #include <kern/debug/string.h>
 #include <kern/debug/stdio.h>
 #include <kern/mem/mem.h>
@@ -28,7 +29,7 @@ static struct vmcb * alloc_vmcb ( void )
 	struct vmcb *vmcb;
 
 //	const unsigned long pfn = alloc_host_pages (1, 1);
-	const unsigned long pfn  = mem_alloc_one_page(); 
+	const unsigned long pfn  = mem_alloc_one_page();
 	//cprintf("Free page for vmcb: %x\n", pfn);
 	vmcb = (struct vmcb *) (pfn << PAGE_SHIFT);
 	memset (( char *) vmcb, 0, sizeof (struct vmcb));
@@ -47,6 +48,37 @@ static unsigned long create_intercept_table ( unsigned long size )
 	memset ( p, 0x00, size );
 
 	return pfn << PAGE_SHIFT;
+}
+
+static void set_msrpm(uint32_t msrpm, uint32_t msr, bool write)
+{
+	assert(msrpm != 0);
+	assert((msr >= MSR_ADDR1_MIN && msr <= MSR_ADDR1_MAX) ||
+	       (msr >= MSR_ADDR2_MIN && msr <= MSR_ADDR2_MAX) ||
+	       (msr >= MSR_ADDR3_MIN && msr <= MSR_ADDR3_MAX));
+
+	uint32_t base = msrpm, offset, nr;
+
+	if (msr >= MSR_ADDR1_MIN && msr <= MSR_ADDR1_MAX) {
+		base += MSRPM_OFFSET1;
+		offset = msr - MSR_ADDR1_MIN;
+	} else if (msr >= MSR_ADDR2_MIN && msr <= MSR_ADDR2_MAX) {
+		base += MSRPM_OFFSET2;
+		offset = msr - MSR_ADDR2_MIN;
+	} else if (msr >= MSR_ADDR3_MIN && msr <= MSR_ADDR3_MAX) {
+		base += MSRPM_OFFSET3;
+		offset = msr - MSR_ADDR3_MIN;
+	} else {
+		warn("Unrecognized MSR.\n");
+		return;
+	}
+
+	nr = (offset % (sizeof(uint8_t) << 3)) << 1 + write;
+	offset = (offset / (sizeof(uint8_t) << 3)) << 1;
+
+	set_bit(nr, base+offset);
+	/* debug("set_bit nr=%x base=%x offset=%x\n", nr, base-msrpm, offset); */
+	/* asm volatile("hlt"); */
 }
 
 static void set_control_params (struct vmcb *vmcb)
@@ -73,6 +105,7 @@ static void set_control_params (struct vmcb *vmcb)
 
 	/* Intercept the VMRUN and VMMCALL instructions */
 	//must intercept VMRUN at least vol2 373
+	/* vmcb->general1_intercepts = (INTRCPT_CPUID | INTRCPT_MSR); */
 	vmcb->general2_intercepts = (INTRCPT_VMRUN | INTRCPT_VMMCALL);
 
 	//allocating a region for IOPM (permission map)
@@ -81,9 +114,9 @@ static void set_control_params (struct vmcb *vmcb)
 
 	//allocating a region for msr intercept table, and fill it with 0x00
 	vmcb->msrpm_base_pa = create_intercept_table ( 8 << 10 );  /* 8 Kbytes */
+	set_msrpm(vmcb->msrpm_base_pa, MSR_INTR_PENDING, MSR_READ);
 
-
-//	vmcb->general1_intercepts |= INTRCPT_INTN;
+	vmcb->general1_intercepts |= INTRCPT_INTR;
 }
 
 /********************************************************************************************/
@@ -97,9 +130,9 @@ static unsigned long create_4kb_nested_pagetable ( )
 
 
 	for(i=0x100000;i<(GUEST_FIXED_PMEM_BYTES+0x100000);i=i+PAGE_SIZE){
-		
+
 		as_reserve(pmap,i,PTE_W|PTE_U|PTE_G);
-	}	
+	}
 
 	cprintf( "Nested page table created.\n" );
 
@@ -342,7 +375,7 @@ void set_vm_to_pios_state(struct vmcb * vmcb)
 	vmcb->tr.limit = 0xFFFF;
 
 //This is also the default PAT */
-        vmcb->g_pat = 0x7040600070406UL;
+	vmcb->g_pat = 0x7040600070406UL;
 	vmcb->cpl = 0;
 }
 
@@ -495,14 +528,14 @@ static void switch_to_guest_os ( struct vm_info *vm )
 	__asm__("push %%eax; mov %0, %%eax" :: "r" (vmcb1));
 
 	svm_launch ();
-	
+
 	__asm__("pop %eax");
 }
 
 
 /*****************************************************/
 
-void 
+void
 vm_boot (struct vm_info *vm)
 {
 	//print_pg_table(vm->vmcb->n_cr3);
@@ -534,41 +567,41 @@ vm_boot (struct vm_info *vm)
 //		breakpoint("End of round...\n\n");
 	}
 }
-void 
+void
 clear_screen(){
 	cprintf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
 }
 
-void 
+void
 start_vm(){
 	cprintf("Setup a vm!;\n");
-        enable_amd_svm();
-        struct vm_info vm;
-        vm_create_simple(&vm);
+	enable_amd_svm();
+	struct vm_info vm;
+	vm_create_simple(&vm);
 	clear_screen();
-        cprintf("\n++++++ New virtual machine created. Going to GRUB for the 2nd time\n");
+	cprintf("\n++++++ New virtual machine created. Going to GRUB for the 2nd time\n");
 	pic_reset();
-        vm_boot (&vm);
+	vm_boot (&vm);
 }
 
-void 
+void
 start_vm_with_interception(){
 	cprintf("Setup a vm!;\n");
-        enable_amd_svm();
-        struct vm_info vm;
-        vm_create_simple_with_interception(&vm);
+	enable_amd_svm();
+	struct vm_info vm;
+	vm_create_simple_with_interception(&vm);
 	clear_screen();
-        cprintf("\n++++++ New virtual machine created. Going to GRUB for the 2nd time\n");
+	cprintf("\n++++++ New virtual machine created. Going to GRUB for the 2nd time\n");
 	pic_reset();
-        vm_boot (&vm);
+	vm_boot (&vm);
 }
 
-void  
+void
 run_vm_once(struct vm_info *vm){
 
 	cprintf(" VM@%x is going to run...\n",vm);
 	switch_to_guest_os (vm);
 	cprintf("\n<<< #%x >>> Guest state at VMEXIT:\n");
 	handle_vmexit(vm);
-        interrupts_eoi();
+	interrupts_eoi();
 }

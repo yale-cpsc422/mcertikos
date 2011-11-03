@@ -12,7 +12,7 @@ extern void handle_vmexit (struct vm_info *vm);
 
 //Flags for CRn access interception
 #define _INTRCPT_WRITE_CR0_OFFSET	16
-#define INTRCPT_WRITE_CR3 			(1 << (_INTRCPT_WRITE_CR0_OFFSET + 3))
+#define INTRCPT_WRITE_CR3			(1 << (_INTRCPT_WRITE_CR0_OFFSET + 3))
 
 //Flags for exception intercept word
 // 1 << vector associated with the exception - VMCB + 8h
@@ -20,17 +20,18 @@ extern void handle_vmexit (struct vm_info *vm);
 #define INTRCPT_TS			(1 << 10)	//Invalid TSS
 #define INTRCPT_NP			(1 << 11)	//Segment-Not-Present Exception
 #define INTRCPT_GP			(1 << 13)	//General protection
-#define INTRCPT_PF			(1 << 14) 	//Pagefault exception
+#define INTRCPT_PF			(1 << 14)	//Pagefault exception
 
 //Flags for FIRST general intercept word - VMCB + 0Ch
 #define INTRCPT_INTR		(1 << 0)
 #define INTRCPT_READTR		(1 << 9)
 #define INTRCPT_IRET		(1 << 20)
 #define INTRCPT_POPF		(1 << 17)
+#define INTRCPT_CPUID		(1 << 18)
 #define INTRCPT_INTN		(1 << 21)
 #define INTRCPT_HLT		(1 << 24)
-#define INTRCPT_IO     		(1 << 27)
-#define INTRCPT_MSR   		(1 << 28)
+#define INTRCPT_IO		(1 << 27)
+#define INTRCPT_MSR		(1 << 28)
 #define INTRCPT_TASKSWITCH	(1 << 29)
 #define INTRCPT_SHUTDOWN	(1 << 31)
 
@@ -38,7 +39,7 @@ extern void handle_vmexit (struct vm_info *vm);
 #define INTRCPT_VMRUN     (1 << 0)
 #define INTRCPT_VMMCALL   (1 << 1)
 
-// Interception request 
+// Interception request
 #define         USER_CMD_ENABLE                 0
 #define         USER_CMD_DISABLE                1
 #define         USER_CMD_TEST                   9
