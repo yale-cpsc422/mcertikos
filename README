@@ -8,15 +8,15 @@ SETUP for Development
 3. Configure scripts
 	devenv.h: directory information for development environment
 
-4. make disk image certikos.hdd
-cd $CERTIKOS_DIR/install
-source mkcertikos.sh
-
 4. make 
 cd $CERTIKOS_DIR
 make
 
-4. Configure certikos.bsd
+5. make disk image certikos.hdd
+cd $CERTIKOS_DIR/install
+./mkcertikos.sh
+
+6. Configure certikos.bsd
 cd $CERTIKOS_DIR
 source start.sh
 open menu in simnow: File->Set IDE Primary Master Image, choose the generated certikos.hdd, then File->Save BSD as certikos.bsd
