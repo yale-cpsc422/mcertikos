@@ -352,7 +352,7 @@ void vm_enable_intercept(struct vm_info * vm, int flags)
 void set_vm_to_powerup_state(struct vmcb * vmcb)
 {
 	// vol 2 p350
-	memset(vmcb, 0, sizeof(vmcb));
+	//memset(vmcb, 0, sizeof(vmcb));
 
 	vmcb->cr0 = 0x0000000060000010;
 	vmcb->cr2 = 0;
@@ -646,7 +646,7 @@ start_vm(){
         vm_create_simple(&vm);
 	clear_screen();
         cprintf("\n++++++ New virtual machine created. Going to GRUB for the 2nd time\n");
-	//pic_reset();
+	pic_reset();
         vm_boot (&vm);
 }
 

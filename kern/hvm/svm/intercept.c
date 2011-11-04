@@ -457,10 +457,11 @@ void _handle_intr(struct vm_info* vm){
 	struct vmcb* vmcb=vm->vmcb;
 
 	uint8_t vector=vm->vmcb->exitintinfo.fields.vector; //& SVM_EXIT_VECTOR_MASK;
-	cprintf("Exitintinfo: %lx,", &vm->vmcb->exitintinfo);
+	cprintf("Exitintinfo: %lx,", vm->vmcb->exitintinfo);
 	print_vmcb_intr_state(&vm->vmcb);
 
-	cprintf("Vector: %x||", vmcb->exitintinfo.fields.vector);
+	cprintf("Vector: %lx||", vmcb->exitintinfo.fields.vector);
+	cprintf("Vector: %d||", vmcb->exitintinfo.fields.vector);
 	cprintf("Vector: %x||", vm->vmcb->exitintinfo.fields.vector);
 
 	//if (vector==(T_IRQ0+IRQ_KBD)){ 
