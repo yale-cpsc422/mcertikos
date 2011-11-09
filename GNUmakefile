@@ -67,6 +67,8 @@ NCC	:= gcc $(CC_VER) -pipe
 TAR	:= gtar
 PERL	:= perl
 
+CSCOPE	:= cscope
+
 # Compiler and linker flags
 # -fno-builtin is required to avoid refs to undefined functions in the kernel.
 # Only optimize to -O1 to discourage inlining, which complicates backtraces.
@@ -185,6 +187,13 @@ xrun-%:
 	$(V)rm -f $(OBJDIR)/kern/init.o $(IMAGES)
 	$(V)$(MAKE) "DEFS=-DTEST=_binary_obj_user_$*_start -DTESTSIZE=_binary_obj_user_$*_size" $(IMAGES)
 	$(QEMU) $(QEMUOPTS)
+
+# build index db for cscope
+cscope:
+	@echo + build cscope index
+	$(V)rm -f cscope.*
+	$(V)find . -name "*.[chsS]" > cscope.files
+	$(V)$(CSCOPE) -bkq -i cscope.files
 
 # This magic automatically generates makefile dependencies
 # for header files included from C source files we compile,
