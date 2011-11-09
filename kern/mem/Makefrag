@@ -13,6 +13,8 @@ OBJDIRS += kern/mem
 # from the lib directory, to avoid gratuitous code duplication.
 KERN_SRCFILES +=	kern/mem/mem.c 
 KERN_SRCFILES +=	kern/mem/e820.c 
+KERN_SRCFILES +=	kern/mem/malloc.c 
+KERN_SRCFILES +=	kern/mem/mman.c 
 
 # How to build kernel object files
 $(OBJDIR)/kern/mem/%.o: kern/mem/%.c

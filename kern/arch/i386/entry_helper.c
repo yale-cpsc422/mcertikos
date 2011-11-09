@@ -5,6 +5,7 @@
 #include <architecture/mp.h>
 #include <architecture/mem.h>
 #include <architecture/pic.h>
+#include <architecture/timer.h>
 
 #include <architecture/context.h>
 
@@ -61,6 +62,7 @@ void entry_init(const struct multiboot_info *mbi) {
 	pic_init();
 	// enable the system of contexts (needs to be done only once)
 	// depends on the memory subsystem.
+	timer_init();
 	context_init();
 	// Enable the more advanced kernel stack (GDT)
 	kstack_init();

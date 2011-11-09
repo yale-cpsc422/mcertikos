@@ -129,7 +129,7 @@ mem_init(const struct multiboot_info *mbi)
 		// The IO hole and the kernel abut.
 
 		// The memory past the kernel is free.
-		if (i >= mem_phys(freemem) / PAGESIZE)
+		if (i >= mem_phys(freemem) / PAGESIZE &&( (i<VMMSTACK_LO/PAGESIZE)||(i>(VMMSTACK_LO+VMMSTACK_SIZE)/PAGESIZE)))
 			inuse = 0;
 
 		mem_pageinfo[i].refcount = inuse;

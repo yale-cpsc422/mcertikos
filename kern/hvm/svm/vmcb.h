@@ -154,5 +154,7 @@ struct vmcb
 extern void vmcb_check_consistency ( struct vmcb *vmcb );
 extern void vmcb_dump( struct vmcb *vmcb);
 extern void print_vmcb_state (struct vmcb *vmcb);
+void print_vmcb_vintr_state (struct vmcb *vmcb);
+void print_vmcb_intr_state (struct vmcb *vmcb);
 
 #endif /* __VMCB_H__ */
