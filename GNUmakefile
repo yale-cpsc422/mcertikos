@@ -53,7 +53,7 @@ NETPORT := $(shell expr `id -u` % 5000 + 30000)
 #QEMUPORT := -s -p $(GDBPORT)
 QEMUPORT := -gdb tcp::$(GDBPORT)
 
-CC	:= $(GCCPREFIX)gcc-4.4 -pipe
+CC	:= $(GCCPREFIX)gcc -pipe
 AS	:= $(GCCPREFIX)as
 AR	:= $(GCCPREFIX)ar
 LD	:= $(GCCPREFIX)ld
@@ -160,7 +160,7 @@ gdb-boot: $(IMAGS)
 
 # For deleting the build
 clean:
-	rm -rf $(OBJDIR)/* $(OBJDIR)/.deps
+	rm -rf $(OBJDIR)/* $(OBJDIR)/.deps $(OBJDIR)
 
 realclean: clean
 	rm -rf lab$(LAB).tar.gz grade-log

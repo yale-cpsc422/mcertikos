@@ -40,7 +40,7 @@ void loader(uint32_t dev, uint32_t start_sect_idx, bios_smap_t *smap)
 	ext2_fs_init(dev, start_sect_idx);
 
 	cprintf("Load kernel ...\n");
-	uint32_t kern_addr = load_kernel("/boot/kernel");
+	uint32_t kern_addr = load_kernel("/boot/certikos");
 
 	cprintf("Start kernel (%x) ...\n", kern_addr);
 	exec_kernel(kern_addr, &mboot_info);

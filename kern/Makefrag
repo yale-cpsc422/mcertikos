@@ -71,35 +71,7 @@ $(OBJDIR)/kern/kernel: $(KERN_OBJFILES) $(KERN_BINFILES)
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym
 
-# How to build the kernel disk image
-$(OBJDIR)/kern/kernel.img: $(OBJDIR)/kern/kernel $(OBJDIR)/boot/bootblock
-	@echo + mk $@
-	$(V)dd if=/dev/zero of=$(OBJDIR)/kern/kernel.img~ count=10000 2>/dev/null
-	$(V)dd if=$(OBJDIR)/boot/bootblock of=$(OBJDIR)/kern/kernel.img~ conv=notrunc 2>/dev/null
-	$(V)dd if=$(OBJDIR)/kern/kernel of=$(OBJDIR)/kern/kernel.img~ seek=1 conv=notrunc 2>/dev/null
-	$(V)mv $(OBJDIR)/kern/kernel.img~ $(OBJDIR)/kern/kernel.img
-
-all: $(OBJDIR)/kern/kernel.img
-
-iso: ${OBJDIR}/kern/kernel
-	@echo + mk certikos.iso
-	$(V)mkdir -p ${OBJDIR}/iso/raw/boot/grub
-	$(V)cp $^ ${OBJDIR}/iso/raw/boot/
-	$(V)echo "set default=0" > ${OBJDIR}/iso/raw/boot/grub/grub.cfg
-	$(V)echo "set timeout=0" >> ${OBJDIR}/iso/raw/boot/grub/grub.cfg
-	$(V)echo "menuentry \"Certikos\" {" >> ${OBJDIR}/iso/raw/boot/grub/grub.cfg
-	$(V)echo "    set root='(hd96)'" >> ${OBJDIR}/iso/raw/boot/grub/grub.cfg
-	$(V)echo "    multiboot /boot/kernel" >> ${OBJDIR}/iso/raw/boot/grub/grub.cfg
-	$(V)echo "}" >> ${OBJDIR}/iso/raw/boot/grub/grub.cfg
-	$(V)grub-mkrescue --output=${OBJDIR}/iso/certikos.iso ${OBJDIR}/iso/raw/
-
-simnow: $(OBJDIR)/kern/kernel
-	@echo + update disk image
-	./updatecertikoshdd.sh
-
-bochs: iso
-	@echo + start bochs
-	$(V)$(BOCHS) -q
+all: bootloader $(OBJDIR)/kern/kernel
 
 grub: $(OBJDIR)/pios-grub
 

@@ -7,7 +7,7 @@ $(OBJDIR)/boot/boot0: $(BOOT0_OBJFILES)
 	$(V)$(LD) $(BOOT_LDFLAGS) -N -e start -Ttext 0x600 -o $@.elf $^
 	$(V)$(OBJDUMP) -S $@.elf > $@.asm
 	$(V)$(OBJCOPY) -S -O binary $@.elf $@
-	$(V)$(PERL) $(UTILSDIR)/check_size.pl 446 $@
+	$(V)$(PERL) boot/check_size.pl 446 $@
 
 $(OBJDIR)/boot/%.o: boot/boot0/%.c
 	@echo + cc $<

@@ -6,10 +6,9 @@ OBJCOPY		:= objcopy
 DD		:= dd
 
 BOOT_CFLAGS	+= -Wall -Werror -pipe -fno-builtin
+GCC_LIB32 	:= $(shell $(CC) $(BOOT_CFLAGS) -m32 -print-libgcc-file-name)
 BOOT_CFLAGS	+= $(CFLAGS) -Os -m32 -I. -Iboot/include -Iboot/lib
-BOOT_LDFLAGS	:= $(LDFLAGS) -m elf_i386
-
-GCC_LIB32 := $(shell $(CC) $(BOOT_CFLAGS) -m32 -print-libgcc-file-name)
+BOOT_LDFLAGS	:= -m elf_i386
 
 BOOT_DEBUG 	:= " "
 BOOT_CONSOLE 	:= " "
@@ -22,7 +21,7 @@ ifdef BOOT_CONSOLE
 BOOT_COMPILE_DEF += -DBOOT_CONSOLE
 endif
 
-BOOT_CFLAGS += $(BOOT_COMPILE_DEF)
+BOOT_CFLAGS 	+= $(BOOT_COMPILE_DEF)
 
 BOOT_OBJFILES += $(OBJDIR)/boot/boot0
 BOOT_OBJFILES += $(OBJDIR)/boot/boot1
