@@ -120,6 +120,20 @@ void disable_intercept_all_ioport(struct vmcb *vmcb){
 	set_iopm_intercept(&vmcb->iopm_base_pa,port,0);
 }
 
+void enable_vpic(struct vmcb *vmcb){ 
+
+	vmcb->general1_intercepts |= INTRCPT_IO;
+	//vmcb->general1_intercepts |= INTRCPT_INTR;
+	//vmcb->general1_intercepts |= INTRCPT_CPUID;
+ 	set_iopm_intercept(&vmcb->iopm_base_pa,0x20,1);
+	set_iopm_intercept(&vmcb->iopm_base_pa,0x21,1);
+        set_iopm_intercept(&vmcb->iopm_base_pa,0xa0,1);
+        set_iopm_intercept(&vmcb->iopm_base_pa,0xa1,1);
+        set_iopm_intercept(&vmcb->iopm_base_pa,0x4d0,1);
+        set_iopm_intercept(&vmcb->iopm_base_pa,0x4d1,1);
+       
+}
+
 static void set_control_params (struct vmcb *vmcb)
 {
 	//Note: anything not set will be 0 (since vmcb was filled with 0)
@@ -154,15 +168,9 @@ static void set_control_params (struct vmcb *vmcb)
 	//allocating a region for msr intercept table, and fill it with 0x00
 	vmcb->msrpm_base_pa = create_intercept_table ( 8 << 10 );  /* 8 Kbytes */
 
-//	vmcb->general1_intercepts |= INTRCPT_IO;
-	vmcb->general1_intercepts |= INTRCPT_INTR;
-//	vmcb->general1_intercepts |= INTRCPT_INTN;
-//	vmcb->general1_intercepts |= INTRCPT_VINTR;
- /* 	set_iopm_intercept(&vmcb->iopm_base_pa,0x20,1);
-	set_iopm_intercept(&vmcb->iopm_base_pa,0x21,1);
-        set_iopm_intercept(&vmcb->iopm_base_pa,0xa0,1);
-        set_iopm_intercept(&vmcb->iopm_base_pa,0xa1,1);
-  */     
+//	vmcb->general1_intercepts |= INTRCPT_INTR;
+//      	enable_vpic(vmcb); 
+
 	// set_iopm_intercept(&vmcb->iopm_base_pa,0x3f8,1);
 	cprintf("iopmbase:%x\n",&vmcb->iopm_base_pa);
 	//enable_intercept_all_ioport(vmcb);
@@ -541,7 +549,10 @@ void vm_create_simple (struct vm_info *vm )
 	// Guest VM start at MBR code, which is GRUB stage 1
 	// vmcb->rip = 0x7c00; address of loaded MBR
 	set_vm_to_mbr_start_state(vmcb);
+	//set_vm_to_powerup_state(vmcb);
+//	vm->cpu_irq=qemu_alloc_irqs(pic_irq_request, NULL, 1);
 
+	//vm->i8259=i8259_init(vm->cpu_irq);
 	vm->i8259=i8259_init(NULL);
 }
 
@@ -647,6 +658,7 @@ start_vm(){
 	clear_screen();
         cprintf("\n++++++ New virtual machine created. Going to GRUB for the 2nd time\n");
 	pic_reset();
+	//pic_enable(IRQ_KBD);
         vm_boot (&vm);
 }
 

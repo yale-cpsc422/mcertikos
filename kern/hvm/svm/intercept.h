@@ -31,6 +31,7 @@ void* get_io_data_address(struct vm_info *vm);
 #define INTRCPT_READTR		(1 << 9)
 #define INTRCPT_IRET		(1 << 20)
 #define INTRCPT_POPF		(1 << 17)
+#define INTRCPT_CPUID		(1 << 18)
 #define INTRCPT_INTN		(1 << 21)
 #define INTRCPT_HLT		(1 << 24)
 #define INTRCPT_IO     		(1 << 27)

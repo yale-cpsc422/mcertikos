@@ -20,11 +20,13 @@ FDISK=/sbin/fdisk
 LOSETUP=/sbin/losetup
 MOUNT=/bin/mount
 UMOUNT=/bin/umount
+#GRUB=/home/lgu/bin/sbin/grub
 GRUB=grub
 MKFS=/sbin/mkfs.ext2
 
 
 GRUB_LIB=grub
+#GRUB_LIB=/home/lgu/bin/lib/grub/x86_64-unknown
 echo "using $GRUB_LIB for grub stage files location"
 
 # here's the info for the disk image size and configuration

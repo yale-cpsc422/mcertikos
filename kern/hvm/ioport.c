@@ -26,6 +26,7 @@
  */
 
 #include "ioport.h"
+#include <kern/debug/stdio.h>
 //#include "trace.h"
 
 /***********************************************************/
@@ -39,6 +40,7 @@
 #else
 #  define LOG_UNUSED_IOPORT(fmt, ...) do{ } while (0)
 #endif
+
 
 #ifdef DEBUG_IOPORT
 #  define LOG_IOPORT(...) qemu_log_mask(CPU_LOG_IOPORT, ## __VA_ARGS__)
@@ -269,6 +271,7 @@ bool isa_is_ioport_assigned(pio_addr_t start)
 void cpu_outb(pio_addr_t addr, uint8_t val)
 {
     LOG_IOPORT("outb: %04"FMT_pioaddr" %02"PRIx8"\n", addr, val);
+   // cprintf("outb: %x:  %x; \n", addr, val);
     //trace_cpu_out(addr, val);
     ioport_write(0, addr, val);
 }
@@ -293,6 +296,7 @@ uint8_t cpu_inb(pio_addr_t addr)
     val = ioport_read(0, addr);
     //trace_cpu_in(addr, val);
     LOG_IOPORT("inb : %04"FMT_pioaddr" %02"PRIx8"\n", addr, val);
+    //cprintf("inb : %x: %x ; \n", addr, val);
     return val;
 }
 

@@ -42,6 +42,7 @@ struct vm_info
 	char * ptracked;
 	uint8_t btrackcurrent;	//whether the current process is being tracked or not
 
+	qemu_irq *cpu_irq;
 	qemu_irq *i8259;	
 };
 
@@ -65,4 +66,5 @@ extern uint32_t create_vm();
 
 void enable_intercept_all_ioport(struct vmcb *vmcb);
 void certikos_handle_io(uint16_t port, void *data, int direction, int size, uint32_t count);
+void enable_vpic(struct vmcb *vmcb);
 #endif /* __VM_H__ */

@@ -230,12 +230,12 @@ uint32_t syscall(context* ctx) {
 			cprintf("creat vm test\n");
 			break;
 		case SYSCALL_SETUPVM:
-			cprintf("This it the service for booting a vm!;\n");
+			cprintf("This is the service for booting a vm!;\n");
 			start_vm();
 			cprintf("come back from vm\n");
 			break;
 		case SYSCALL_SETUPPIOS:
-			cprintf("This it the service for booting PIOS as a vm!;\n");
+			cprintf("This is the service for booting PIOS as a vm!;\n");
 			//TODO fill
 			break;
 		case SYSCALL_MGMT:
@@ -268,6 +268,13 @@ uint32_t syscall(context* ctx) {
     return 0;
 }
 
+uint32_t
+keyboard_handler(context* ctx){
+	cprintf("keyboard pressed\n");
+	kbd_intr();
+	return 0;
+}
+
 void
 init(void)
 {
@@ -282,10 +289,12 @@ init(void)
 	msgqueue_init();
 
 	interrupts_enable(IRQ_TIMER,0);
+	interrupts_enable(IRQ_KBD,0);
 	context_handler(T_GPFLT,&gpf);
 	context_handler(T_PGFLT,&pgflt);
 	context_handler(T_SYSCALL,&syscall);
 	context_handler(T_IRQ0+IRQ_TIMER,&timer);
+	context_handler(T_IRQ0+IRQ_KBD,&keyboard_handler);
 	cprintf("Verified Kernel booting\n");
 	cprintf("Loading Address spaces....");
 	as_init();

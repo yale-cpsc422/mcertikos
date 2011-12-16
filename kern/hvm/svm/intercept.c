@@ -8,6 +8,7 @@
 #include <kern/as/as.h>
 #include <kern/mem/mem.h>
 #include <architecture/mmu.h>
+#include <architecture/mp.h>
 
 
 /*****************************************************************************************/
@@ -103,10 +104,21 @@ void __handle_vm_npf (struct vm_info *vm)
 	// bit 1 of rflags must be set
 	vm->vmcb->rflags |= 2;
 
-	//uint32_t  va= PGADDR(vm->vmcb->exitinfo2); 
-//	uint32_t va=PGADDR((uint32_t)* (&(vm->vmcb->exitinfo2))); 
+	uint32_t  va= PGADDR(vm->vmcb->exitinfo2); 
+	//uint32_t va=PGADDR((uint32_t)* (&(vm->vmcb->exitinfo2))); 
 	//pageinfo * pi=mem_alloc();
-//	cprintf("n_cr3 is : %x, va is :  %x\n", vm->vmcb->n_cr3, va);// PGADDR((unsigned long)vm->vmcb->exitinfo2));
+	//if (vm->vmcb->n_cr3>0xf0000000)	
+/*
+	{
+	cprintf("n_cr3 is : %x, ", vm->vmcb->n_cr3);
+	cprintf("va is : %x\n", va);
+	}
+	
+	if (va<0x100000){
+		if(!pmap_insert((as_t *)vm->vmcb->n_cr3, mem_phys2pi(va), va, PTE_W | PTE_G|PTE_U))
+		pmap_free((as_t *)vm->vmcb->n_cr3);
+	}else {
+*/
 	as_reserve((as_t *)vm->vmcb->n_cr3,(uint32_t) vm->vmcb->exitinfo2, PTE_W|PTE_U|PTE_G); 
 }
 
@@ -142,12 +154,12 @@ void __handle_vm_exception (struct vm_info *vm)
 	switch (vm->vmcb->exitcode)
 	{
 	case VMEXIT_EXCEPTION_TS:
-		print_vmcb_state(vm->vmcb);
+		//print_vmcb_state(vm->vmcb);
 		cprintf("TSS invalid!");
 		break;
 
 	case VMEXIT_EXCEPTION_GP:
-		print_vmcb_state(vm->vmcb);
+		//print_vmcb_state(vm->vmcb);
 
 		//switch to system call handling code
 		vm->vmcb->cs.sel = vm->org_sysenter_cs;
@@ -169,7 +181,7 @@ void __handle_vm_exception (struct vm_info *vm)
 		// if yes => handle #DB transparently
 		if ((vm->vmcb->dr6 & X86_DR6_BS) && (vm->itc_flag & USER_SINGLE_STEPPING)) {
 			//TODO: check if program is unpacked?
-			print_vmcb_state(vm->vmcb);
+			//print_vmcb_state(vm->vmcb);
 		}
 
 		if (vm->itc_skip_flag) {
@@ -272,6 +284,7 @@ void
 _handle_io (struct vm_info *vm)
 {
 	test_all_port(vm);
+//	wait_kbd();
 
 }
 
@@ -307,15 +320,15 @@ void print_io(struct vm_info *vm){
 	}
 	cprintf("@0x%x\n",data);
 }
-
 void test_all_port(struct vm_info *vm){
 	
 	uint16_t port=	IOIOPORT(vm->vmcb->exitinfo1);
 	int size = IOIOSIZE(vm->vmcb->exitinfo1);
 	int type = IOIOTYPE(vm->vmcb->exitinfo1);
 	void* data=&vm->vmcb->rax;
-	print_io(vm);	
-	if((port==0x20||port==0xa0||port==0x21||port==0xa1)){
+	//print_io(vm);
+			
+	if((port==0x20||port==0xa0||port==0x21||port==0xa1||port==0x4d1||port==0x4d0)){
 		certikos_handle_io(port,data,type,size,1);
 		skip_emulated_instruction(vm);
 	}else{
@@ -453,24 +466,61 @@ void _handle_INTR_1(struct vm_info*vm){
 
 }
 
+void intr_inject(struct vm_info* vm, int r_irq){
+
+	switch (r_irq){
+	case T_IRQ0+IRQ_KBD:
+		qemu_irq_raise(vm->i8259[1]);
+	}
+	
+	int intno=pic_read_irq(isa_pic);
+	cprintf("guest IF:0x%x\n",vm->vmcb->rflags);
+	vm->vmcb->eventinj.fields.vector=intno;	
+	vm->vmcb->eventinj.fields.v=1;	
+//	vm->vmcb->eventinj.fields.v=1;	
+}
+
 void _handle_intr(struct vm_info* vm){
 	struct vmcb* vmcb=vm->vmcb;
 
 	uint8_t vector=vm->vmcb->exitintinfo.fields.vector; //& SVM_EXIT_VECTOR_MASK;
-	cprintf("Exitintinfo: %lx,", vm->vmcb->exitintinfo);
-	print_vmcb_intr_state(&vm->vmcb);
+	
+//	cprintf("CertiKOS intercepted! ");
+	int r_irq= get_IRR_lapic();
+	cprintf("Requesting IRQ:%d", r_irq);
+	int s_irq= get_ISR_lapic();
+	cprintf("Serving IRQ:%d", s_irq);
+
+	if (r_irq==-1) return;
+	intr_inject(vm, r_irq);
+/*	
+	switch (r_irq){
+	case T_IRQ0+IRQ_KBD:
+		qemu_irq_raise(vm->i8259[1]);
+	}
+	
+	int intno=pic_read_irq(isa_pic);
+	cprintf("guest IF:0x%x\n",vmcb->rflags);
+	vm->vmcb->eventinj.fields.vector=intno;	
+	vm->vmcb->eventinj.fields.v=1;	
+*/
+//	vm->vmcb->eventinj.fields.v=1;	
+	
+	//Exitintinfo: %lx,", &vm->vmcb->exitintinfo);
+/*	print_vmcb_intr_state(vm->vmcb);
 
 	cprintf("Vector: %lx||", vmcb->exitintinfo.fields.vector);
 	cprintf("Vector: %d||", vmcb->exitintinfo.fields.vector);
 	cprintf("Vector: %x||", vm->vmcb->exitintinfo.fields.vector);
-
+*/
 	//if (vector==(T_IRQ0+IRQ_KBD)){ 
-	if (vector==(0xfa)){ 
+	/*if (vector==(0xfa)){ 
 	cprintf("INTR exitintinfo: %lx,", vm->vmcb->exitintinfo);
 	cprintf("vector:%lx,", vector);
 	cprintf("rip:%lx\n", vm->vmcb->rip);
 	}
-
+*/
+	
 	skip_intercpt_cur_instr(vm,INTRCPT_INTR);
 }
 
@@ -489,6 +539,11 @@ void _handle_hlt(struct vm_info * vm){
 	
 }
 
+void _handle_cpuid(struct vm_info* vm){
+
+	cprintf("cpuid intercepted! \n");	
+}
+
 /*****************************************************************************************/
 /********************************** MAIN FUNCTION ****************************************/
 /*****************************************************************************************/
@@ -497,12 +552,12 @@ void handle_vmexit (struct vm_info *vm)
 {
 	//cprintf("**** #VMEXIT - exit code: %x\n", (uint32_t) vm->vmcb->exitcode);
 //print_vmexit_exitcode (vm->vmcb);
-/*	cprintf("**** ");
+	/*cprintf("**** ");
 	cprintf("**** #VMEXIT - exit code: %x\n", (uint32_t) vm->vmcb->exitcode);
-	print_vmcb_state(vm);
+	print_vmcb_state(vm->vmcb);
 	print_vmexit_exitcode (vm->vmcb);
 */
-
+	//cprintf("vmcb->rip:%x;",vm->vmcb->rip);
 	//print_vmcb_state(vm);
 	//print_vmcb_vintr_state(vm);
 //	if (vm->vmcb->exitintinfo.fields.type == EVENT_TYPE_EXCEPTION)
@@ -530,6 +585,7 @@ void handle_vmexit (struct vm_info *vm)
 		case VMEXIT_IOIO: _handle_io(vm); break;            
 		case VMEXIT_HLT: _handle_hlt(vm); break;            
 		case VMEXIT_VINTR: _handle_vintr(vm); break;            
+		case VMEXIT_CPUID: _handle_cpuid(vm); break;
 //		case VMEXIT_TASK_SWITCH: __handle_task_switch(vm); break;
 	}
 //	cprintf("**** ");

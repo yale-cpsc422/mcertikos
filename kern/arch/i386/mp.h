@@ -18,4 +18,6 @@ void interrupts_init(void);
 void interrupts_enable(int irq, int cpunum);
 void interrupts_eoi(void);
 
+int get_IRR_lapic();
+int get_ISR_lapic();
 #endif /* !PIOS_KERN_MP_H */

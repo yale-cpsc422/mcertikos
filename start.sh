@@ -8,5 +8,5 @@ cd $SIMNOW_DIR
 pwd
 #./simnow -f $CERTIKOS_DIR/certikos.bsd
 #./simnow -f $CERTIKOS_BSD -i $CERTIKOS_HDD 
-./simnow -f $CERTIKOS_BSD -e simnow_commands
+./simnow -f $CERTIKOS_BSD -e $CERTIKOS_DIR/simnow_commands
 cd $CERTIKOS_DIR

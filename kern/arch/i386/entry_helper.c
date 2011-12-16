@@ -67,11 +67,15 @@ void entry_init(const struct multiboot_info *mbi) {
 	// Enable the more advanced kernel stack (GDT)
 	kstack_init();
 	// Now we can do context switches, and TSS is active, pointing to the current kernel stack
+	
+	//start_vm();
 
 	// We can now initialize the hardware interrupts.
 	// This system (mp.c) configures the PIC devices created by the mp system
 	interrupts_init();
 
+	
+	kbd_intenable();
 	// At this point we begin our verified kernel.
 	init();
 }

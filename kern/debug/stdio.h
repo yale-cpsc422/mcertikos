@@ -10,6 +10,7 @@
 
 // kern/debug/console
 int cons_getc(void);
+int wait_kbd();
 
 #define putchar(c)	fputc(c, stdout)
 #define putc(c,fh)	fputc(c, fh)

@@ -175,16 +175,14 @@ kbd_init(void)
 {
 }
 
-#if LAB >= 4
 void
 kbd_intenable(void)
 {
 	// Enable interrupt delivery via the PIC/APIC
 	pic_enable(IRQ_KBD);
-	ioapic_enable(IRQ_KBD, 0);
+	ioapic_enable(IRQ_KBD+T_IRQ0, 0);
 
 	// Drain the kbd buffer so that the hardware generates interrupts.
 	kbd_intr();
 }
-#endif
 
