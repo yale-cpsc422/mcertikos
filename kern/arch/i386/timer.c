@@ -37,11 +37,7 @@ timer_init(void)
 	outb(TIMER_MODE, TIMER_SEL0 | TIMER_RATEGEN | TIMER_16BIT);
 	outb(IO_TIMER1, 0xff);
 	outb(IO_TIMER1, 0xff);
-#if LAB >= 99
 
-	//cprintf("	Setup timer interrupts via 8259A\n");
-	//pic_enable(IRQ_TIMER);
-#endif
 }
 
 // Read and returns the number of 1.193182MHz ticks since kernel boot.

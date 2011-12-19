@@ -31,7 +31,7 @@ start:
 	# so that once we get into debugging C code,
 	# stack backtraces will be terminated properly.
 	movl	$0x0,%ebp			# nuke frame pointer
-	movl	$(stacks+4096),%esp # use the first four reserved page for stack
+	movl	$(stacks+4096),%esp # use the first reserved page for stack
 
 	push	multiboot_ptr;
 	# now to C code
