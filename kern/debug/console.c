@@ -75,3 +75,10 @@ cputs(const char *str)
 	while (*str)
 		cons_putc(*str++);
 }
+
+int	
+wait_kbd(){
+	int c;
+	while (!(c=cons_getc()));
+	return c;
+}

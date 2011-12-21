@@ -94,13 +94,15 @@ as_t* as_new_vm(void)
         return NULL;
      }
     }
+
 	// map the 32-bit memory hole directly
 /*    for (i = 0xf0000000; i != 0; i += PAGESIZE) {
      if (!pmap_insert(pmap, mem_phys2pi(i), i, PTE_W | PTE_G|PTE_U)) {
         pmap_free(pmap);
         return NULL;
      }
-    }*/
+    }
+*/
     return pmap;
 }
 //

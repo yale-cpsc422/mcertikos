@@ -24,13 +24,13 @@ if [ $# -gt 0 ]; then
 #/dev/sdb1 should be changed to the /dev path of usb
    	#sudo ./mkusb.sh $DEV_USB obj/kern/kernel
    	#sudo ./mkusb.sh /dev/sdb1 ../obj/kern/kernel
-   	sudo ./mkusb.sh $DEV_USB obj/kern/kernel
+   	sudo ./mkusb.sh $DEV_USB $CERTIKOS_DIR/obj/kern/kernel
     	exit 0
   fi
 else
   	#sudo ./mkdisk.sh $CERTIKOS_HDD obj/kern/kernel
   	#sudo ./mkdisk.sh ../certikos_new.hdd ../obj/kern/kernel
-  	sudo ./mkdisk.sh $CERTIKOS_HDD ../obj/kern/kernel
+  	sudo ./mkdisk.sh $CERTIKOS_HDD $CERTIKOS_DIR/obj/kern/kernel
 fi
 
 if [ $? -ne 0 ]; then

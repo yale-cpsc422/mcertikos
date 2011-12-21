@@ -18,6 +18,8 @@
 #define DFR     (0x000E0/4)     // Destination Format
 #define SVR     (0x00F0/4)   // Spurious Interrupt Vector
   #define ENABLE     0x00000100   // Unit Enable
+#define ISR (0x0100/4)  //ISR
+#define IRR (0x0200/4) //IRR
 #define ESR     (0x0280/4)   // Error Status
 #define ICRLO   (0x0300/4)   // Interrupt Command
   #define INIT       0x00000500   // INIT/RESET

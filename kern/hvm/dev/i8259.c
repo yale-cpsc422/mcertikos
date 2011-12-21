@@ -34,7 +34,7 @@
 #include <kern/mem/malloc.h>
 
 /* debug PIC */
-#define DEBUG_PIC
+//#define DEBUG_PIC
 
 #ifdef DEBUG_PIC
 #define DPRINTF(fmt, ...)                                       \
@@ -546,5 +546,75 @@ qemu_irq *i8259_init(qemu_irq parent_irq)
     s->pics[0].pics_state = s;
     s->pics[1].pics_state = s;
     isa_pic = s;
-    return qemu_allocate_irqs(i8259_set_irq, s, 16);
+   pic_init_certikos(s);
+	//pic_info();
+//	pic_enable_certikos(s);
+	//pic_info();
+    //pic_init_certikos(s);
+    qemu_irq * pic_irq= qemu_allocate_irqs(i8259_set_irq, s, 16);
+    pic_info();
+	return pic_irq;
+}
+
+#define IRQ_SLAVE 2
+int IO_PIC1=0x20;
+int IO_PIC2=0xa0;
+int IRQ_TIMER=0;
+int IRQ_KBD=1;
+
+static uint16_t vpic_irqmask = 0xFFFF & ~(1<<IRQ_SLAVE);
+
+/*
+* set the pic state according to the pic_init in certikos
+*
+*/
+void pic_init_certikos(PicState2 *s){
+	
+	void * pic1 = &s->pics[0];
+	void * pic2 = &s->pics[1];
+
+	pic_ioport_write(pic1,IO_PIC1+1, 0x00);	
+	pic_ioport_write(pic2,IO_PIC2+1, 0x00);	
+
+	
+	pic_ioport_write(pic1,IO_PIC1, 0x11);	
+	pic_ioport_write(pic1,IO_PIC1+1, 0x08);	
+	
+	pic_ioport_write(pic1,IO_PIC1+1, 1<<IRQ_SLAVE);	
+	pic_ioport_write(pic1,IO_PIC1+1, 0x03);	
+	
+	pic_ioport_write(pic2,IO_PIC2, 0x11);	
+	pic_ioport_write(pic2,IO_PIC2+1, 0x70);	
+	
+	pic_ioport_write(pic2,IO_PIC2+1, IRQ_SLAVE);	
+	pic_ioport_write(pic2,IO_PIC2+1, 0x01);	
+	
+	
+	pic_ioport_write(pic1,IO_PIC1, 0x68);	
+	pic_ioport_write(pic1,IO_PIC1, 0x0a);	
+	
+	pic_ioport_write(pic2,IO_PIC2, 0x68);	
+	pic_ioport_write(pic2,IO_PIC2, 0x0a);	
+}
+
+void vpic_setmask(uint16_t mask){
+	vpic_irqmask=mask;
+	void * pic1 = &isa_pic->pics[0];
+	void * pic2 = &isa_pic->pics[1];
+	pic_ioport_write(pic1,IO_PIC1+1, (char)mask);	
+	pic_ioport_write(pic2,IO_PIC2+1, (char)(mask>>8));	
+}
+
+
+void vpic_enable(int irq){
+	vpic_setmask(vpic_irqmask& ~(1<<irq));
+}
+
+void pic_enable_certikos(PicState2 *s){
+	
+	void * pic1 = &s->pics[0];
+	void * pic2 = &s->pics[1];
+
+	vpic_enable(IRQ_TIMER);
+	vpic_enable(IRQ_KBD);
 }

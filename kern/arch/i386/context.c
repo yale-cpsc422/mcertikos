@@ -283,7 +283,15 @@ void gcc_noreturn trap(trapframe *tf)
 
 	// When this function is called, the trapped frame is on the kstack
 	// This is not a convenient location - we move the data into its proper place
-
+/*	
+	if(tf->tf_trapno!=0x30){
+	cprintf("TrapNo.:%x;",tf->tf_trapno);
+	}
+	switch (tf->tf_trapno){
+	case T_IRQ0+ IRQ_KBD:
+		cprintf("keyboard pressed!");
+	}
+*/
 	// grab the pointer to the appropriate callback functions    
 	callback f = kstack_cur()->registered_callbacks[tf->tf_trapno];
 

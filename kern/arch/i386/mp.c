@@ -137,7 +137,7 @@ mp_init_fallback(void)
 	}
 	ismp = 1;
 	lapic = (uint32_t *) conf->lapicaddr;
-//	cprintf ("LAPIC set to %x\n", lapic);
+	cprintf ("LAPIC set to %x\n", lapic);
 //	Search for devices connected to LAPIC
 	for (p = (uint8_t *) (conf + 1), e = (uint8_t *) conf + conf->length;
 			p < e;) {
@@ -242,7 +242,7 @@ mp_init(void)
 	}
 
 	lapic = (uint32_t *) (madt->lapic_addr);
-	// cprintf("Local APIC: addr = %08x.\n", lapic);
+	cprintf("Local APIC: addr = %08x.\n", lapic);
 
 	ncpu = 0;
 	bsp_apic_id = get_bsp_apic_id();
@@ -522,6 +522,11 @@ ioapic_enable(int irq, int apicid)
 	ioapic_write(REG_TABLE+2*irq+1, apicid << 24);
 }
 
+static uint32_t
+lapicr(int index)
+{
+	return lapic[index];
+}
 
 static void
 lapicw(int index, int value)
@@ -594,3 +599,46 @@ void
 microdelay(int us)
 {
 }
+
+int get_IRR_lapic(){
+	int i;
+		
+		//cprintf("get_IRQ_lapic");
+	for (i=0;i<8;i++){
+		uint32_t flag=lapicr(IRR+i*4);	
+		//cprintf(" i:%x:flag:0x%x, ",i,flag);
+		if (flag==0) continue;
+		else {
+			int j=0;
+			while (flag!=0){
+			flag=flag>> 1;	
+			//cprintf(" j:%x:flag:0x%x, ",j,flag);
+			j++;
+			}
+		return i*32+j;
+		}
+	}	
+	return -1; //-1 means no irq reqeusted
+}
+
+int get_ISR_lapic(){
+	int i;
+		
+		//cprintf("get_IRQ_lapic");
+	for (i=0;i<8;i++){
+		uint32_t flag=lapicr(ISR+i*4);	
+		//cprintf(" i:%x:flag:0x%x, ",i,flag);
+		if (flag==0) continue;
+		else {
+			int j=0;
+			while (flag!=0){
+			flag=flag>> 1;	
+			//cprintf(" j:%x:flag:0x%x, ",j,flag);
+			j++;
+			}
+		return i*32+j;
+		}
+	}	
+	return -1; //-1 means no irq reqeusted
+}
+
