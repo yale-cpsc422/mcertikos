@@ -16,8 +16,10 @@
 #include <architecture/intr.h>
 #include <kern/hvm/dev/i8259.h>
 
+void set_iopm_intercept(uint64_t *, uint16_t, bool);
 void print_io(struct vm_info *vm);
 void print_intercepted_io(struct vm_info *vm);
+void test_all_port(struct vm_info *vm);
 void test_handle_io3( struct vm_info * vm);
 void test_handle_io( struct vm_info * vm);
 
@@ -129,7 +131,8 @@ void __handle_vm_npf (struct vm_info *vm)
 		pmap_free((as_t *)vm->vmcb->n_cr3);
 	}else {
 */
-	as_reserve((as_t *)vm->vmcb->n_cr3,(uint32_t) vm->vmcb->exitinfo2, PTE_W|PTE_U|PTE_G);
+	as_reserve((as_t *)(uint32_t) vm->vmcb->n_cr3,
+		   (uint32_t) vm->vmcb->exitinfo2, PTE_W|PTE_U|PTE_G);
 }
 
 /*****************************************************************************************/
@@ -609,9 +612,9 @@ void _handle_intr(struct vm_info* vm){
 	uint8_t vector=vm->vmcb->exitintinfo.fields.vector; //& SVM_EXIT_VECTOR_MASK;
 
 //	cprintf("CertiKOS intercepted! ");
-	int r_irq= get_IRR_lapic();
+	int r_irq = lapic_get_irr();
 	cprintf("Requesting IRQ:%d", r_irq);
-	int s_irq= get_ISR_lapic();
+	int s_irq = lapic_get_isr();
 	cprintf("Serving IRQ:%d", s_irq);
 
 	if (r_irq==-1) return;

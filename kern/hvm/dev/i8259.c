@@ -83,6 +83,8 @@ static uint64_t irq_count[16];
 #endif
 PicState2 *isa_pic;
 
+void pic_init_certikos(PicState2 *s);
+
 /* set irq level. If an edge is detected, then the IRR is set to 1 */
 static inline void pic_set_irq1(PicState *s, int irq, int level)
 {
@@ -569,40 +571,40 @@ static uint16_t vpic_irqmask = 0xFFFF & ~(1<<IRQ_SLAVE);
 *
 */
 void pic_init_certikos(PicState2 *s){
-	
+
 	void * pic1 = &s->pics[0];
 	void * pic2 = &s->pics[1];
 
-	pic_ioport_write(pic1,IO_PIC1+1, 0x00);	
-	pic_ioport_write(pic2,IO_PIC2+1, 0x00);	
+	pic_ioport_write(pic1,IO_PIC1+1, 0x00);
+	pic_ioport_write(pic2,IO_PIC2+1, 0x00);
 
-	
-	pic_ioport_write(pic1,IO_PIC1, 0x11);	
-	pic_ioport_write(pic1,IO_PIC1+1, 0x08);	
-	
-	pic_ioport_write(pic1,IO_PIC1+1, 1<<IRQ_SLAVE);	
-	pic_ioport_write(pic1,IO_PIC1+1, 0x03);	
-	
-	pic_ioport_write(pic2,IO_PIC2, 0x11);	
-	pic_ioport_write(pic2,IO_PIC2+1, 0x70);	
-	
-	pic_ioport_write(pic2,IO_PIC2+1, IRQ_SLAVE);	
-	pic_ioport_write(pic2,IO_PIC2+1, 0x01);	
-	
-	
-	pic_ioport_write(pic1,IO_PIC1, 0x68);	
-	pic_ioport_write(pic1,IO_PIC1, 0x0a);	
-	
-	pic_ioport_write(pic2,IO_PIC2, 0x68);	
-	pic_ioport_write(pic2,IO_PIC2, 0x0a);	
+
+	pic_ioport_write(pic1,IO_PIC1, 0x11);
+	pic_ioport_write(pic1,IO_PIC1+1, 0x08);
+
+	pic_ioport_write(pic1,IO_PIC1+1, 1<<IRQ_SLAVE);
+	pic_ioport_write(pic1,IO_PIC1+1, 0x03);
+
+	pic_ioport_write(pic2,IO_PIC2, 0x11);
+	pic_ioport_write(pic2,IO_PIC2+1, 0x70);
+
+	pic_ioport_write(pic2,IO_PIC2+1, IRQ_SLAVE);
+	pic_ioport_write(pic2,IO_PIC2+1, 0x01);
+
+
+	pic_ioport_write(pic1,IO_PIC1, 0x68);
+	pic_ioport_write(pic1,IO_PIC1, 0x0a);
+
+	pic_ioport_write(pic2,IO_PIC2, 0x68);
+	pic_ioport_write(pic2,IO_PIC2, 0x0a);
 }
 
 void vpic_setmask(uint16_t mask){
 	vpic_irqmask=mask;
 	void * pic1 = &isa_pic->pics[0];
 	void * pic2 = &isa_pic->pics[1];
-	pic_ioport_write(pic1,IO_PIC1+1, (char)mask);	
-	pic_ioport_write(pic2,IO_PIC2+1, (char)(mask>>8));	
+	pic_ioport_write(pic1,IO_PIC1+1, (char)mask);
+	pic_ioport_write(pic2,IO_PIC2+1, (char)(mask>>8));
 }
 
 
@@ -611,7 +613,7 @@ void vpic_enable(int irq){
 }
 
 void pic_enable_certikos(PicState2 *s){
-	
+
 	void * pic1 = &s->pics[0];
 	void * pic2 = &s->pics[1];
 
