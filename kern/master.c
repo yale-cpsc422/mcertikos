@@ -26,6 +26,10 @@
 #include <kern/hvm/svm/vm.h>
 #include <architecture/cpu.h>
 
+#include <kern/debug/kbd.h>
+
+#include <architecture/intr.h>
+
 // Called first from entry.S on the bootstrap processor,
 // and later from boot/bootother.S on all other processors.
 // As a rule, "init" functions in PIOS are called once on EACH processor.
@@ -44,39 +48,39 @@ static struct vm_info * vm_running;
 
 // SYSCALL handlers
 uint32_t pgflt(context* ctx) {
-    static uint32_t prevfault=0;
-		  uint32_t fault = rcr2();
-		//  cprintf("Page Fault at %x, reserving new page\n", fault);
-		  proc_debug(mgmt);
-		  // ONLY MGMT APP SHOULD EVER PF
-		  assert (mgmt);
-		  assert(as_current() == proc_as(mgmt));
-		  if (as_reserve(as_current(), PGADDR(fault), PTE_W | PTE_U | PTE_P) == NULL) {
-					 cprintf("New page can not be reserved\n");
-		  }
-	  // if PF occurs twice on the same address, spin
-	  if (fault == prevfault) while(1);
-	  prevfault = fault;
-		  return 0;
+	static uint32_t prevfault=0;
+	uint32_t fault = rcr2();
+	//  cprintf("Page Fault at %x, reserving new page\n", fault);
+	proc_debug(mgmt);
+	// ONLY MGMT APP SHOULD EVER PF
+	assert (mgmt);
+	assert(as_current() == proc_as(mgmt));
+	if (as_reserve(as_current(), PGADDR(fault), PTE_W | PTE_U | PTE_P) == NULL) {
+		cprintf("New page can not be reserved\n");
+	}
+	// if PF occurs twice on the same address, spin
+	if (fault == prevfault) while(1);
+	prevfault = fault;
+	return 0;
 }
 
 uint32_t gpf(context* ctx) {
 	uint32_t error = context_errno(ctx);
-    static int gpfp = 0;
-    if (!gpfp) {
-	context_debug(ctx);
-	gpfp = 1;
-    }
-    return 0;
-    cprintf("General Protection Fault: ");
-    if (error & PFE_U) cprintf("(user) ");
-    if (error & PFE_PR)
-	cprintf("Protection violation");
-    if (error & PFE_WR)
-	cprintf(" (write)\n");
-    else
-	cprintf("\n");
-    return 0;
+	static int gpfp = 0;
+	if (!gpfp) {
+		context_debug(ctx);
+		gpfp = 1;
+	}
+	return 0;
+	cprintf("General Protection Fault: ");
+	if (error & PFE_U) cprintf("(user) ");
+	if (error & PFE_PR)
+		cprintf("Protection violation");
+	if (error & PFE_WR)
+		cprintf(" (write)\n");
+	else
+		cprintf("\n");
+	return 0;
 }
 
 
@@ -87,7 +91,7 @@ uint32_t timer(context* ctx) {
 	size_t sz;
 	time ++;
 	static int counter=0;
-	interrupts_eoi();
+	intr_eoi();
 	counter ++;
 	if (counter == 100) {
 		counter = 0;
@@ -112,11 +116,11 @@ static char sysbuf[PAGESIZE];
 
 uint32_t usercopy(uint32_t dest, uint32_t src, size_t size)
 {
-    if (!as_checkrange (as_current(), src, size))
-	return 0;
+	if (!as_checkrange (as_current(), src, size))
+		return 0;
 
-    memmove((void*)dest, (void*)src, size);
-    return size;
+	memmove((void*)dest, (void*)src, size);
+	return size;
 }
 
 
@@ -170,108 +174,109 @@ uint32_t do_mgmt_allocpage(context* ctx, mgmt_allocpage* param) {
 
 uint32_t syscall(context* ctx) {
 	uint32_t error = context_errno(ctx);
-    uint32_t cmd = context_arg1(ctx);
-    uint32_t arg = context_arg2(ctx);
-    uint32_t arg2 = context_arg3(ctx);
-    uint32_t arg3 = context_arg4(ctx);
-    switch (cmd) {
+	uint32_t cmd = context_arg1(ctx);
+	uint32_t arg = context_arg2(ctx);
+	uint32_t arg2 = context_arg3(ctx);
+	uint32_t arg3 = context_arg4(ctx);
+	switch (cmd) {
 	case SYSCALL_PUTS:
-	    if (usercopy((uint32_t)sysbuf,arg, PAGESIZE) == 0)
-				syscall_fail(ctx);
-	    sysbuf[PAGESIZE-1] = 0;
-	    cprintf("%s", sysbuf);
-	    break;
-		case SYSCALL_GETC:
-			if (!as_checkrange(as_current(), arg, sizeof(uint32_t)))
-				syscall_fail(ctx);
-			*(uint32_t*)arg = getchar();
-			break;
-		case SYSCALL_NCPU:
-			if (!as_checkrange(as_current(), arg, sizeof(uint32_t)))
-				syscall_fail(ctx);
-			*(uint32_t*)arg = mp_ncpu();
-			break;
-		case SYSCALL_CPUSTATUS:
-			if (!as_checkrange(as_current(), arg, sizeof(uint32_t)))
-				syscall_fail(ctx);
-			int cpu = *(uint32_t*)arg;
-			// cprintf("CPUSTATUS %d\n", cpu);
-			if (!(0 <= cpu && cpu < mp_ncpu()))
-				syscall_fail(ctx);
-			*(uint32_t*)arg = cpus[cpu].running;
-			break;
-		case SYSCALL_SIGNAL:
-			if (!as_checkrange(as_current(), arg, sizeof(signaldesc)))
-				syscall_fail(ctx);
-			proc_setsignal(mgmt,(signaldesc*)arg);
-			break;
-		case SYSCALL_SIGNALRET:
-			if (!proc_insignal(mgmt))
-				syscall_fail(ctx);
-			proc_signalret(mgmt);
-			break;
-		case SYSCALL_LOAD:
-			// copy the binary into kernel space
-			// create and activate new address space
-			// load the code
-			// return a process id: handle to the address space + context
+		if (usercopy((uint32_t)sysbuf,arg, PAGESIZE) == 0)
+			syscall_fail(ctx);
+		sysbuf[PAGESIZE-1] = 0;
+		cprintf("%s", sysbuf);
+		break;
+	case SYSCALL_GETC:
+		if (!as_checkrange(as_current(), arg, sizeof(uint32_t)))
+			syscall_fail(ctx);
+		*(uint32_t*)arg = getchar();
+		break;
+	case SYSCALL_NCPU:
+		if (!as_checkrange(as_current(), arg, sizeof(uint32_t)))
+			syscall_fail(ctx);
+		*(uint32_t*)arg = mp_ncpu();
+		break;
+	case SYSCALL_CPUSTATUS:
+		if (!as_checkrange(as_current(), arg, sizeof(uint32_t)))
+			syscall_fail(ctx);
+		int cpu = *(uint32_t*)arg;
+		// cprintf("CPUSTATUS %d\n", cpu);
+		if (!(0 <= cpu && cpu < mp_ncpu()))
+			syscall_fail(ctx);
+		*(uint32_t*)arg = cpus[cpu].running;
+		break;
+	case SYSCALL_SIGNAL:
+		if (!as_checkrange(as_current(), arg, sizeof(signaldesc)))
+			syscall_fail(ctx);
+		proc_setsignal(mgmt,(signaldesc*)arg);
+		break;
+	case SYSCALL_SIGNALRET:
+		if (!proc_insignal(mgmt))
+			syscall_fail(ctx);
+		proc_signalret(mgmt);
+		break;
+	case SYSCALL_LOAD:
+		// copy the binary into kernel space
+		// create and activate new address space
+		// load the code
+		// return a process id: handle to the address space + context
 
-			// arg = string, arg2 = resulting procid
-			if(!as_checkrange(as_current(), arg2, sizeof(uint32_t)))
+		// arg = string, arg2 = resulting procid
+		if(!as_checkrange(as_current(), arg2, sizeof(uint32_t)))
+			syscall_fail(ctx);
+		procid_t proc = proc_new((char*)arg);
+		if (!proc) {
+			cprintf("Process loading failed\n");
+			syscall_fail(ctx);
+		}
+		*(uint32_t*)arg2 = proc;
+		break;
+	case SYSCALL_CREATEVM://
+		cprintf("creat vm test\n");
+		break;
+	case SYSCALL_SETUPVM:
+		cprintf("This is the service for booting a vm!;\n");
+		start_vm();
+		cprintf("come back from vm\n");
+		break;
+	case SYSCALL_SETUPPIOS:
+		cprintf("This is the service for booting PIOS as a vm!;\n");
+		//TODO fill
+		break;
+	case SYSCALL_MGMT:
+		if (!as_checkrange(as_current(), arg, 4)) {
+			syscall_fail(ctx);
+		}
+		mgmt_data* data = (mgmt_data*) arg;
+		switch (data->command) {
+		case MGMT_START:
+			if (!as_checkrange(as_current(), data->command, sizeof(mgmt_start)))
 				syscall_fail(ctx);
-			procid_t proc = proc_new((char*)arg);
-			if (!proc) {
-				cprintf("Process loading failed\n");
-				syscall_fail(ctx);
-			}
-			*(uint32_t*)arg2 = proc;
+			do_mgmt_start(ctx, (mgmt_start*)(&data->params));
 			break;
-		case SYSCALL_CREATEVM://
-			cprintf("creat vm test\n");
-			break;
-		case SYSCALL_SETUPVM:
-			cprintf("This is the service for booting a vm!;\n");
-			start_vm();
-			cprintf("come back from vm\n");
-			break;
-		case SYSCALL_SETUPPIOS:
-			cprintf("This is the service for booting PIOS as a vm!;\n");
-			//TODO fill
-			break;
-		case SYSCALL_MGMT:
-			if (!as_checkrange(as_current(), arg, 4)) {
-				syscall_fail(ctx);
-			}
-			mgmt_data* data = (mgmt_data*) arg;
-			switch (data->command) {
-				case MGMT_START:
-					if (!as_checkrange(as_current(), data->command, sizeof(mgmt_start)))
-						syscall_fail(ctx);
-					do_mgmt_start(ctx, (mgmt_start*)(&data->params));
-					break;
 
-				case MGMT_STOP:
-					if (!as_checkrange(as_current(), data->command, sizeof(mgmt_stop)))
-						syscall_fail(ctx);
-					do_mgmt_stop(ctx, (mgmt_stop*)(&data->params));
-					break;
-				case MGMT_ALLOCPAGE:
-					if (!as_checkrange(as_current(), data->command, sizeof(mgmt_allocpage)))
-						syscall_fail(ctx);
-					uint32_t result=do_mgmt_allocpage(ctx, (mgmt_allocpage*)(&data->params));
-					break;
-				default:
-					cprintf("Unknown MGMT syscall\n");
-					break;
-			}
-    }
-    return 0;
+		case MGMT_STOP:
+			if (!as_checkrange(as_current(), data->command, sizeof(mgmt_stop)))
+				syscall_fail(ctx);
+			do_mgmt_stop(ctx, (mgmt_stop*)(&data->params));
+			break;
+		case MGMT_ALLOCPAGE:
+			if (!as_checkrange(as_current(), data->command, sizeof(mgmt_allocpage)))
+				syscall_fail(ctx);
+			uint32_t result=do_mgmt_allocpage(ctx, (mgmt_allocpage*)(&data->params));
+			break;
+		default:
+			cprintf("Unknown MGMT syscall\n");
+			break;
+		}
+	}
+	return 0;
 }
 
 uint32_t
 keyboard_handler(context* ctx){
 	cprintf("keyboard pressed\n");
 	kbd_intr();
+	intr_eoi();
 	return 0;
 }
 
@@ -288,19 +293,21 @@ init(void)
 
 	msgqueue_init();
 
-	interrupts_enable(IRQ_TIMER,0);
-	interrupts_enable(IRQ_KBD,0);
-	context_handler(T_GPFLT,&gpf);
-	context_handler(T_PGFLT,&pgflt);
-	context_handler(T_SYSCALL,&syscall);
-	context_handler(T_IRQ0+IRQ_TIMER,&timer);
-	context_handler(T_IRQ0+IRQ_KBD,&keyboard_handler);
+	intr_enable(IRQ_TIMER,0);
+	intr_enable(IRQ_KBD,0);
+
+	context_handler(T_GPFLT, gpf);
+	context_handler(T_PGFLT, pgflt);
+	context_handler(T_SYSCALL, syscall);
+	context_handler(T_IRQ0+IRQ_TIMER, timer);
+	context_handler(T_IRQ0+IRQ_KBD, keyboard_handler);
+
 	cprintf("Verified Kernel booting\n");
 	cprintf("Loading Address spaces....");
+
 	as_init();
 	if (!as_current())
 		panic("Could not initialize address space!\n");
-
 
 	cpus[0].running = true;
 	for (i=1; i<MAX_CPU; i++)

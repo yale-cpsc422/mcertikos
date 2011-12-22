@@ -105,7 +105,7 @@ pmap_insert(pmap_t *pmap, pageinfo *pi, uint32_t va, int perm)
 //    if (va > mem_max &&va < 0xb000000)
  //       cprintf("inserting address %x\n", va);
 	pte_t* pte = pmap_walk(pmap, va, 1);
-	if (pte == PTE_NULL) {
+	if (pte == NULL) {
 		return NULL;
 	}
     if ((*pte & PTE_P)) {
@@ -154,7 +154,7 @@ pmap_remove(pde_t *pdir, uint32_t va, size_t size)
 		bool wholeptab = (PTX(va) == 0 && vahi-va >= PTSIZE);
 
 		pte_t *pte = pmap_walk(pdir, va, 1);	// find PTE
-		assert(pte != PTE_NULL);	// PTE must exist since ptable is present
+		assert(pte != NULL);	// PTE must exist since ptable is present
 
 		// Remove page mappings up to end of region or page table
 		do {

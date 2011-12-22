@@ -23,6 +23,8 @@
 
 #include <kern/hvm/svm/vm.h>
 
+#include <architecture/intr.h>
+
 #define T_SYSCALL 48
 
 extern volatile cpu_use cpus[];
@@ -82,7 +84,7 @@ uint32_t sl_syscall(context* ctx) {
 }
 
 uint32_t stimer(context* ctx) {
-	interrupts_eoi();
+	intr_eoi();
 	int mycpu = mp_curcpu();
 	if (cpus[mycpu].running && cpus[mycpu].stop) {
 		cpus[mycpu].running = 0;
@@ -141,7 +143,7 @@ void slave_kernel() {
 	int mycpu;
 	mycpu = mp_curcpu();
 	/* cprintf("* current cpu is : %d\n",mycpu); */
-	interrupts_enable(IRQ_TIMER, mycpu);
+	intr_enable(IRQ_TIMER, mycpu);
 	context_handler(T_IRQ0+IRQ_TIMER,&stimer);
 	context_handler(T_CLIENT_SYSCALL,&sl_syscall);
 	context_handler(T_PGFLT,&spgflt);

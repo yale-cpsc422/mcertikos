@@ -16,9 +16,11 @@ static bool pic_inited=false;
 void
 pic_init(void)
 {
-	assert(!pic_inited);
+	if (pic_inited)
+		return;
+
 	pic_inited = true;
-	
+
 	// mask all interrupts
 	outb(IO_PIC1+1, 0xFF);
 	outb(IO_PIC2+1, 0xFF);
@@ -61,16 +63,17 @@ pic_init(void)
 	//   ef:  0x = NOP, 10 = clear specific mask, 11 = set specific mask
 	//    p:  0 = no polling, 1 = polling mode
 	//   rs:  0x = NOP, 10 = read IRR, 11 = read ISR
-	
+
 	outb(IO_PIC1, 0x68);             /* clear specific mask */
 	outb(IO_PIC1, 0x0a);             /* read IRR by default */
 
 	outb(IO_PIC2, 0x68);               /* OCW3 */
 	outb(IO_PIC2, 0x0a);               /* OCW3 */
 
-//	irqmask=0x0;	
-	if (irqmask != 0xFFFF)
-		pic_setmask(irqmask);
+//	irqmask=0x0;
+	/* if (irqmask != 0xFFFF) */
+	/*	pic_setmask(irqmask); */
+	pic_setmask(0xFFFF);
 }
 
 
@@ -79,7 +82,7 @@ void
 pic_reset(void)
 {
 	pic_inited = true;
-	
+
 	// mask all interrupts
 	outb(IO_PIC1+1, 0x00);
 	outb(IO_PIC2+1, 0x00);
@@ -122,14 +125,14 @@ pic_reset(void)
 	//   ef:  0x = NOP, 10 = clear specific mask, 11 = set specific mask
 	//    p:  0 = no polling, 1 = polling mode
 	//   rs:  0x = NOP, 10 = read IRR, 11 = read ISR
-	
+
 	outb(IO_PIC1, 0x68);             /* clear specific mask */
 	outb(IO_PIC1, 0x0a);             /* read IRR by default */
 
 	outb(IO_PIC2, 0x68);               /* OCW3 */
 	outb(IO_PIC2, 0x0a);               /* OCW3 */
 
-//	irqmask=0x0;	
+//	irqmask=0x0;
 //	if (irqmask != 0xFFFF)
 //		pic_setmask(irqmask);
 }
@@ -140,7 +143,7 @@ pic_setmask(uint16_t mask)
 	irqmask = mask;
 	outb(IO_PIC1+1, (char)mask);
 	outb(IO_PIC2+1, (char)(mask >> 8));
-	
+
 /*	int i;
 	cprintf("enabled interrupts:");
 	for (i = 0; i < 16; i++)
@@ -148,7 +151,7 @@ pic_setmask(uint16_t mask)
 			cprintf(" %d", i);
 	cprintf("\n");
 */
-	
+
 }
 
 void

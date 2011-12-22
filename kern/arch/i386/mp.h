@@ -5,6 +5,8 @@
 #ifndef PIOS_KERN_MP_H
 #define PIOS_KERN_MP_H
 
+#include <architecture/apic.h>
+
 #define MAX_CPU 64
 
 bool mp_init(void);
@@ -13,11 +15,7 @@ uint8_t mp_curcpu(void);
 //bool mp_booted(int cpu);
 void mp_boot(int cpu, void(*f)(void), uint32_t kstack_loc);
 void mp_donebooting(void);
+bool mp_ismp(void);
+lapicid_t mp_cpuid(int);
 
-void interrupts_init(void);
-void interrupts_enable(int irq, int cpunum);
-void interrupts_eoi(void);
-
-int get_IRR_lapic();
-int get_ISR_lapic();
 #endif /* !PIOS_KERN_MP_H */

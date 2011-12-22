@@ -11,6 +11,15 @@
 #include <architecture/mmu.h>
 #include <architecture/mp.h>
 #include <architecture/cpuid.h>
+#include <architecture/pic.h>
+#include <architecture/apic.h>
+#include <architecture/intr.h>
+#include <kern/hvm/dev/i8259.h>
+
+void print_io(struct vm_info *vm);
+void print_intercepted_io(struct vm_info *vm);
+void test_handle_io3( struct vm_info * vm);
+void test_handle_io( struct vm_info * vm);
 
 /*****************************************************************************************/
 /************************ MISCELANEOUS FUNCTIONS ***************************************/

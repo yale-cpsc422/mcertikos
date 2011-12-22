@@ -7,7 +7,7 @@
 #include <architecture/types.h>
 
 // Mutual exclusion lock.
-typedef uint32_t spinlock; // spinlock is just a number
+typedef volatile uint32_t spinlock; // spinlock is just a number
 
 
 /*

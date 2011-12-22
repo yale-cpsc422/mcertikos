@@ -11,6 +11,8 @@
 #include <architecture/mp_internal.h>
 #include <architecture/acpi.h>
 #include <architecture/pic.h>
+#include <architecture/intr.h>
+#include <architecture/apic.h>
 
 #include <kern/debug/debug.h>
 #include <kern/debug/stdio.h>
@@ -25,17 +27,10 @@ bool ismp;
 int ncpu;
 
 // a table of CPU apicids
-uint8_t cpu_ids[MAX_CPU];
+lapicid_t cpu_ids[MAX_CPU];
 
 // table of stacks of current processors
 volatile uint32_t cpu_stacks[MAX_CPU];
-
-// ID of an APIC controller
-uint8_t ioapicid;
-
-// Pointers to MMIO area of PICs
-volatile struct ioapic *ioapic;
-volatile uint32_t* lapic;
 
 static uint8_t
 sum(uint8_t * addr, int len)
@@ -158,8 +153,7 @@ mp_init_fallback(void)
 		case MPIOAPIC:
 			mpio = (struct mpioapic *) p;
 			p += sizeof(struct mpioapic);
-			ioapicid = mpio->apicno;
-			ioapic = (struct ioapic *) mpio->addr;
+			ioapic_register((uintptr_t) mpio->addr, mpio->apicno, 0);
 			continue;
 		case MPBUS:
 		case MPIOINTR:
@@ -208,7 +202,9 @@ mp_init(void)
 	uint8_t *p, *e;
 	acpi_rsdp * rsdp;
 	acpi_rsdt * rsdt;
+#ifdef ARCH_AMD64
 	acpi_xsdt * xsdt;
+#endif /* ARCH_AMD64 */
 	acpi_madt * madt;
 	uint8_t bsp_apic_id;
 	uint32_t nextproc = 0;
@@ -227,16 +223,24 @@ mp_init(void)
 		goto fallback;
 	}
 
+#ifdef ARCH_AMD64
 	xsdt = NULL;
-	if ((rsdt = acpi_probe_rsdt(rsdp)) == NULL &&
-	    (xsdt = acpi_probe_xsdt(rsdp)) == NULL) {
+#endif /* ARCH_AMD64 */
+	if ((rsdt = acpi_probe_rsdt(rsdp)) == NULL
+#ifdef ARCH_AMD64
+	    && (xsdt = acpi_probe_xsdt(rsdp)) == NULL
+#endif /* ARCH_AMD64 */
+	    ) {
 		// cprintf("Not found either RSDT or XSDT.\n");
 		goto fallback;
 	}
 
-	if ((madt = (xsdt == NULL) ?
-	     (acpi_madt *)acpi_probe_rsdt_ent(rsdt, ACPI_MADT_SIG) :
-	     (acpi_madt *)acpi_probe_xsdt_ent(xsdt, ACPI_MADT_SIG)) == NULL) {
+	if ((madt =
+#ifdef ARCH_AMD64
+	    (xsdt != NULL) ?
+	     (acpi_madt *)acpi_probe_xsdt_ent(xsdt, ACPI_MADT_SIG) :
+#endif /* ARCH_AMD64 */
+	     (acpi_madt *)acpi_probe_rsdt_ent(rsdt, ACPI_MADT_SIG)) == NULL) {
 		// cprintf("Not found MADT.\n");
 		goto fallback;
 	}
@@ -277,10 +281,14 @@ mp_init(void)
 			;
 			acpi_madt_ioapic *ioapic_ent = (acpi_madt_ioapic *)hdr;
 
-			// cprintf("IO APIC: ioapic id = %08x, ioapic addr = %08x, gsi = %08x\n", ioapic_ent->ioapic_id, ioapic_ent->ioapic_addr, ioapic_ent->gsi);
+			cprintf("IO APIC: ioapic id = %08x, ioapic addr = %08x, gsi = %08x\n",
+				ioapic_ent->ioapic_id,
+				ioapic_ent->ioapic_addr,
+				ioapic_ent->gsi);
 
-			ioapicid = ioapic_ent->ioapic_id;
-			ioapic = (struct ioapic *) (ioapic_ent->ioapic_addr);
+			ioapic_register(ioapic_ent->ioapic_addr,
+					ioapic_ent->ioapic_id,
+					ioapic_ent->gsi);
 
 			break;
 
@@ -394,251 +402,19 @@ void mp_donebooting() {
 	booting=false;
 }
 
-#define IO_RTC  0x70
-
-// Start additional processor running bootstrap code at addr.
-// See Appendix B of MultiProcessor Specification.
-void
-lapic_startcpu(uint8_t apicid, uint32_t addr)
+bool
+mp_ismp()
 {
-	int i;
-	uint16_t *wrv;
-
-	// "The BSP must initialize CMOS shutdown code to 0AH
-	// and the warm reset vector (DWORD based at 40:67) to point at
-	// the AP startup code prior to the [universal startup algorithm]."
-	outb(IO_RTC, 0xF);  // offset 0xF is shutdown code
-	outb(IO_RTC+1, 0x0A);
-	wrv = (uint16_t*)(0x40<<4 | 0x67);  // Warm reset vector
-	wrv[0] = 0;
-	wrv[1] = addr >> 4;
-
-	// "Universal startup algorithm."
-	// Send INIT (level-triggered) interrupt to reset other CPU.
-	lapicw(ICRHI, apicid<<24);
-	lapicw(ICRLO, INIT | LEVEL | ASSERT);
-	microdelay(200);
-	lapicw(ICRLO, INIT | LEVEL);
-	microdelay(100);    // should be 10ms, but too slow in Bochs!
-
-	// Send startup IPI (twice!) to enter bootstrap code.
-	// Regular hardware is supposed to only accept a STARTUP
-	// when it is in the halted state due to an INIT.  So the second
-	// should be ignored, but it is part of the official Intel algorithm.
-	// Bochs complains about the second one.  Too bad for Bochs.
-	for(i = 0; i < 2; i++){
-		lapicw(ICRHI, apicid<<24);
-		lapicw(ICRLO, STARTUP | (addr>>12));
-		microdelay(200);
-	}
-}
-
-
-
-
-// Interrupt Related code here
-
-
-// This function sets up an interrupt subsystem
-// By default activates the timer interrupt
-// This initialization needs to happen on each processor
-// ????
-void interrupts_init() {
 	assert(mp_inited);
-	if (ismp) {
-		ioapic_init();
-		lapic_init();
-	}
-	else {
-		pic_init();
-	}
+
+	return ismp;
 }
 
-
-void interrupts_enable(int irq, int cpunum) {
-	assert (0 <= irq && irq < 16);
-	assert (0 <= cpunum && cpunum < ncpu);
-	pic_enable(irq);
-	if (ismp) {
-		ioapic_enable(irq, cpu_ids[cpunum]);
-	}
-}
-
-void interrupts_eoi() {
-	ismp ? lapic_eoi() : pic_eoi();
-}
-
-
-
-// PIC control code here
-
-
-static uint32_t
-ioapic_read(int reg)
+lapicid_t
+mp_cpuid(int cpunum)
 {
-	ioapic->reg = reg;
-	return ioapic->data;
+	assert(mp_inited);
+	assert(0 <= cpunum && cpunum < ncpu);
+
+	return cpu_ids[cpunum];
 }
-
-static void
-ioapic_write(int reg, uint32_t data)
-{
-	ioapic->reg = reg;
-	ioapic->data = data;
-}
-
-void
-ioapic_init(void)
-{
-	int i, id, maxintr;
-
-	assert(ioapic != NULL);
-
-	maxintr = (ioapic_read(REG_VER) >> 16) & 0xFF;
-	id = ioapic_read(REG_ID) >> 24;
-	if (id == 0) {
-		// I/O APIC ID not initialized yet - have to do it ourselves.
-		ioapic_write(REG_ID, ioapicid << 24);
-		id = ioapicid;
-	}
-	if (id != ioapicid)
-		warn("ioapicinit: id %d != ioapicid %d\n", id, ioapicid);
-
-	// Mark all interrupts edge-triggered, active high, disabled,
-	// and not routed to any CPUs.
-	for (i = 0; i <= maxintr; i++){
-		ioapic_write(REG_TABLE+2*i, INT_DISABLED | (T_IRQ0 + i));
-		ioapic_write(REG_TABLE+2*i+1, 0);
-	}
-}
-
-void
-ioapic_enable(int irq, int apicid)
-{
-	assert(ismp);
-	// Mark interrupt edge-triggered, active high,
-	// enabled, and routed to the given APIC ID,
-	ioapic_write(REG_TABLE+2*irq, T_IRQ0 + irq);
-	ioapic_write(REG_TABLE+2*irq+1, apicid << 24);
-}
-
-static uint32_t
-lapicr(int index)
-{
-	return lapic[index];
-}
-
-static void
-lapicw(int index, int value)
-{
-	lapic[index] = value;
-	lapic[ID];  // wait for write to finish, by reading
-}
-
-void
-lapic_init()
-{
-	if (!lapic) {
-	   panic("NO LAPIC");
-		return;
-	}
-//	cprintf("Using LAPIC at %x\n", lapic);
-
-	// Enable local APIC; set spurious interrupt vector.
-	lapicw(SVR, ENABLE | (T_IRQ0 + IRQ_SPURIOUS));
-
-	// The timer repeatedly counts down at bus frequency
-	// from lapic[TICR] and then issues an interrupt.
-	// If we cared more about precise timekeeping,
-	// TICR would be calibrated using an external time source.
-	lapicw(TDCR, X1);
-	lapicw(TIMER, PERIODIC | (T_IRQ0 + IRQ_TIMER));
-	lapicw(TICR, 10000000);
-
-	// Disable logical interrupt lines.
-	lapicw(LINT0, MASKED);
-	lapicw(LINT1, MASKED);
-
-	// Disable performance counter overflow interrupts
-	// on machines that provide that interrupt entry.
-	if (((lapic[VER]>>16) & 0xFF) >= 4)
-		lapicw(PCINT, MASKED);
-
-	// Map error interrupt to IRQ_ERROR.
-	lapicw(ERROR, T_IRQ0 + IRQ_ERROR);
-
-	// Clear error status register (requires back-to-back writes).
-	lapicw(ESR, 0);
-	lapicw(ESR, 0);
-
-	// Ack any outstanding interrupts.
-	lapicw(EOI, 0);
-
-	// Send an Init Level De-Assert to synchronise arbitration ID's.
-	lapicw(ICRHI, 0);
-	lapicw(ICRLO, BCAST | INIT | LEVEL);
-	while(lapic[ICRLO] & DELIVS)
-		;
-
-	// Enable interrupts on the APIC (but not on the processor).
-	lapicw(TPR, 0);
-}
-
-
-// Acknowledge interrupt.
-void
-lapic_eoi(void)
-{
-	if (lapic)
-		lapicw(EOI, 0);
-}
-
-// Spin for a given number of microseconds.
-// On real hardware would want to tune this dynamically.
-void
-microdelay(int us)
-{
-}
-
-int get_IRR_lapic(){
-	int i;
-		
-		//cprintf("get_IRQ_lapic");
-	for (i=0;i<8;i++){
-		uint32_t flag=lapicr(IRR+i*4);	
-		//cprintf(" i:%x:flag:0x%x, ",i,flag);
-		if (flag==0) continue;
-		else {
-			int j=0;
-			while (flag!=0){
-			flag=flag>> 1;	
-			//cprintf(" j:%x:flag:0x%x, ",j,flag);
-			j++;
-			}
-		return i*32+j;
-		}
-	}	
-	return -1; //-1 means no irq reqeusted
-}
-
-int get_ISR_lapic(){
-	int i;
-		
-		//cprintf("get_IRQ_lapic");
-	for (i=0;i<8;i++){
-		uint32_t flag=lapicr(ISR+i*4);	
-		//cprintf(" i:%x:flag:0x%x, ",i,flag);
-		if (flag==0) continue;
-		else {
-			int j=0;
-			while (flag!=0){
-			flag=flag>> 1;	
-			//cprintf(" j:%x:flag:0x%x, ",j,flag);
-			j++;
-			}
-		return i*32+j;
-		}
-	}	
-	return -1; //-1 means no irq reqeusted
-}
-

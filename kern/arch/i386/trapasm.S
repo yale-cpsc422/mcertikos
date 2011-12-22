@@ -7,7 +7,7 @@
 /* The TRAPHANDLER macro defines a globally-visible function for handling
  * a trap.  It pushes a trap number onto the stack, then jumps to _alltraps.
  * Use TRAPHANDLER for traps where the CPU automatically pushes an error code.
- */ 
+ */
 #define TRAPHANDLER(name, num)						\
 	.globl name;		/* define global symbol for 'name' */	\
 	.type name, @function;	/* symbol type is function */		\
@@ -79,6 +79,8 @@ TRAPHANDLER     (Xdefault, 500)
 .type	_alltraps,@function
 .p2align 4, 0x90		/* 16-byte alignment, nop filled */
 _alltraps:
+	cli
+
 	pushl %ds		# build context
 	pushl %es
 	pushal
@@ -89,7 +91,7 @@ _alltraps:
 
 	xorl %ebp,%ebp		# don't let debug_trace() walk into user space
 
-	pushl %esp		# pass pointer to this trapframe 
+	pushl %esp		# pass pointer to this trapframe
 	call trap		# and call trap (does not return)
 
 1:	jmp 1b			# should never get here; just spin...
@@ -97,7 +99,7 @@ _alltraps:
 //
 // Trap return code.
 // C code in the kernel will call this function to return from a trap,
-// providing the 
+// providing the
 // Restore the CPU state from a given trapframe struct
 // and return from the trap using the processor's 'iret' instruction.
 // This function does not return to the caller,
@@ -113,4 +115,7 @@ trap_return:
 	popl	%es		// restore data segment registers
 	popl	%ds
 	addl	$8,%esp		// skip tf_trapno and tf_errcode
+
+	sti
+
 	iret			// return from trap handler

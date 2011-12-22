@@ -1,3 +1,4 @@
+# -*-Makefile-*-
 #
 # Makefile fragment for the kernel.
 # This is NOT a complete makefile;
@@ -26,6 +27,8 @@ KERN_SRCFILES +=	kern/arch/$(ARCH)/mp.c
 KERN_SRCFILES +=	kern/arch/$(ARCH)/timer.c
 KERN_SRCFILES +=	kern/arch/${ARCH}/acpi.c
 KERN_SRCFILES +=	kern/arch/${ARCH}/support.S
+KERN_SRCFILES +=	kern/arch/$(ARCH)/ioapic.c
+KERN_SRCFILES +=	kern/arch/$(ARCH)/intr.c
 
 # How to build kernel object files
 #$(OBJDIR)/kern/arch/%.o: kern/arch/%.c

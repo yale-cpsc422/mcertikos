@@ -99,6 +99,8 @@ acpi_probe_rsdt_ent(acpi_rsdt *rsdt, const uint32_t sig)
 	return NULL;
 }
 
+#ifdef ARCH_AMD64
+
 acpi_xsdt *
 acpi_probe_xsdt(acpi_rsdp *rsdp)
 {
@@ -150,3 +152,5 @@ acpi_probe_xsdt_ent(acpi_xsdt *xsdt, const uint32_t sig)
 
 	return NULL;
 }
+
+#endif /* ARCH_AMD64 */

@@ -4,8 +4,8 @@
 #include <architecture/mmu.h>
 #include <architecture/mp.h>
 #include <architecture/mem.h>
-#include <architecture/pic.h>
 #include <architecture/timer.h>
+#include <architecture/intr.h>
 
 #include <architecture/context.h>
 
@@ -59,23 +59,21 @@ void entry_init(const struct multiboot_info *mbi) {
 	// Parse GRUB info to init mem
 	mem_init(mbi);
 
-	pic_init();
+	// initialize i8253 timer
+	timer_init();
+
+	// initialize interrupt system
+	intr_init();
+
 	// enable the system of contexts (needs to be done only once)
 	// depends on the memory subsystem.
-	timer_init();
 	context_init();
+
 	// Enable the more advanced kernel stack (GDT)
 	kstack_init();
+
 	// Now we can do context switches, and TSS is active, pointing to the current kernel stack
-	
-	//start_vm();
 
-	// We can now initialize the hardware interrupts.
-	// This system (mp.c) configures the PIC devices created by the mp system
-	interrupts_init();
-
-	
-	kbd_intenable();
 	// At this point we begin our verified kernel.
 	init();
 }

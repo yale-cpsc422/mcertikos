@@ -18,20 +18,20 @@
 
 extern kstack stacks[]; // from entry.S
 extern char
-		Xdivide,Xdebug,Xnmi,Xbrkpt,Xoflow,Xbound,
-		Xillop,Xdevice,Xdblflt,Xtss,Xsegnp,Xstack,
-		Xgpflt,Xpgflt,Xfperr,Xalign,Xmchk,Xdefault,Xsyscall;
+Xdivide,Xdebug,Xnmi,Xbrkpt,Xoflow,Xbound,
+	Xillop,Xdevice,Xdblflt,Xtss,Xsegnp,Xstack,
+	Xgpflt,Xpgflt,Xfperr,Xalign,Xmchk,Xdefault,Xsyscall;
 extern char
-		Xirq0,Xirq1,Xirq2,Xirq3,Xirq4,Xirq5,
-		Xirq6,Xirq7,Xirq8,Xirq9,Xirq10,Xirq11,
-		Xirq12,Xirq13,Xirq14,Xirq15;
+Xirq0,Xirq1,Xirq2,Xirq3,Xirq4,Xirq5,
+	Xirq6,Xirq7,Xirq8,Xirq9,Xirq10,Xirq11,
+	Xirq12,Xirq13,Xirq14,Xirq15;
 
-	// Interrupt descriptor table.  Must be built at run time because
-	// shifted function addresses can't be represented in relocation records.
-	struct gatedesc idt[256];
-	struct pseudodesc idt_pd = {
-		sizeof(idt) - 1, (uint32_t) idt
-	};
+// Interrupt descriptor table.  Must be built at run time because
+// shifted function addresses can't be represented in relocation records.
+struct gatedesc idt[256];
+struct pseudodesc idt_pd = {
+	sizeof(idt) - 1, (uint32_t) idt
+};
 
 
 // TODO: THIS FUNCTION SHOULD BE REPLACED BY A STATIC PAGE
@@ -104,11 +104,11 @@ context* cur[MAX_CPU];
 void context_init()
 {
 	int i;
-	
+
 	assert(!context_inited);
 	context_inited = true;
 
-	// prepare a basic IDT table  
+	// prepare a basic IDT table
 	context_init_idt();
 
 }
@@ -118,30 +118,30 @@ void kstack_init()
 	assert(context_inited);
 	// set up current CPU's GDT
 	// Replace a primitive stack with a KSTACK
-//	context_init_gdt(kstack_cur());
+	//	context_init_gdt(kstack_cur());
 
 	kstack *c = kstack_cur();
-//	cprintf("cpu_activate on processor %d\n", 
-//			(((uint32_t)c-(uint32_t)stacks) / PAGESIZE));
-	
+	//	cprintf("cpu_activate on processor %d\n",
+	//			(((uint32_t)c-(uint32_t)stacks) / PAGESIZE));
+
 	c->gdt[0] = SEGDESC_NULL;
 	// 0x08 - kernel code segment
 	c->gdt[CPU_GDT_KCODE >> 3] = SEGDESC32(STA_X | STA_R, 0x0,
-					0xffffffff, 0);
-		// 0x10 - kernel data segment
+					       0xffffffff, 0);
+	// 0x10 - kernel data segment
 	c->gdt[CPU_GDT_KDATA >> 3] = SEGDESC32(STA_W, 0x0,
-					0xffffffff, 0);
-		// 0x18 - user code segment
+					       0xffffffff, 0);
+	// 0x18 - user code segment
 	c->gdt[CPU_GDT_UCODE >> 3] = SEGDESC32(STA_X | STA_R,
-					0x00000000, 0xffffffff, 3);
-		// 0x20 - user code segment
+					       0x00000000, 0xffffffff, 3);
+	// 0x20 - user code segment
 	c->gdt[CPU_GDT_UDATA >> 3] = SEGDESC32(STA_W,
-					0x00000000, 0xffffffff, 3);
-		// 0x28 - tss
+					       0x00000000, 0xffffffff, 3);
+	// 0x28 - tss
 	c->gdt[CPU_GDT_TSS >> 3] = SEGDESC16(STS_T32A, (uint32_t) (&c->tss),
-					sizeof(taskstate)-1, 0);
+					     sizeof(taskstate)-1, 0);
 	c->gdt[CPU_GDT_TSS >> 3].sd_s = 0;
-	
+
 	// we do not know the ID yet
 	c->id = 0;
 
@@ -172,13 +172,13 @@ void kstack_init()
 	asm volatile("lldt %%ax" :: "a" (0));
 	// Load the TSS (from the GDT)
 	ltr(CPU_GDT_TSS);
-	
+
 	// This "pseudo-descriptor" is needed only by the LIDT instruction,
 	// to specify both the size and address of th IDT at once.
 	// Load the IDT into this processor's IDT register.
 	asm volatile("lidt %0" : : "m" (idt_pd));
 	// Mark CPU as activated
-	
+
 	// Create a new zeroed page which is used to keep the callback table per processor
 	pageinfo* pi = mem_alloc();
 	assert(pi);
@@ -188,7 +188,7 @@ void kstack_init()
 
 
 	c->booted = true;
-//	cprintf("Cpu %d (id %d) booted\n", cpu_number(c), c->id);
+	//	cprintf("Cpu %d (id %d) booted\n", cpu_number(c), c->id);
 }
 
 // int cpu_number() {
@@ -198,16 +198,16 @@ void kstack_init()
 // Find the CPU struct representing the current CPU.
 // It always resides at the bottom of the page containing the CPU's stack.
 static kstack* kstack_cur() {
-// kstack* kstack_cur() {
+	// kstack* kstack_cur() {
 	kstack *c = (kstack*)ROUNDDOWN(read_esp(), PAGESIZE);
-//	assert(c->magic == CPU_MAGIC);
+	//	assert(c->magic == CPU_MAGIC);
 	return c;
 }
 
 // creates a user stack page with a context header on the top.
 // The context header is created with a EIP set to f
-// The expected va is the virtual address location where this 
-// stack is expected to be placed. 
+// The expected va is the virtual address location where this
+// stack is expected to be placed.
 context* context_new(void (*f)(void), uint32_t expected_va) {
 	pageinfo* pi = mem_alloc();
 	if (!pi)
@@ -216,22 +216,22 @@ context* context_new(void (*f)(void), uint32_t expected_va) {
 	trapframe* tf = (trapframe*)(mem_pi2ptr(pi)+PAGESIZE-sizeof(trapframe));
 
 	// set all segments to ring 3.
-    tf->tf_es = CPU_GDT_UDATA | 3;
-    tf->tf_ds = CPU_GDT_UDATA | 3;
-    tf->tf_cs = CPU_GDT_UCODE | 3;
-    tf->tf_ss = CPU_GDT_UDATA | 3;
+	tf->tf_es = CPU_GDT_UDATA | 3;
+	tf->tf_ds = CPU_GDT_UDATA | 3;
+	tf->tf_cs = CPU_GDT_UCODE | 3;
+	tf->tf_ss = CPU_GDT_UDATA | 3;
 
 	// EIP to the entrypoint of f (most likely a virtual address)
-    tf->tf_eip = (uint32_t)f;
+	tf->tf_eip = (uint32_t)f;
 
 	// we expect the stack to be used with the virtual address
-    tf->tf_esp = (uint32_t)expected_va+PAGESIZE-sizeof(trapframe);
+	tf->tf_esp = (uint32_t)expected_va+PAGESIZE-sizeof(trapframe);
 
 	// make sure that the stack chain is interrupted
-    tf->tf_regs.reg_ebp = 0;
+	tf->tf_regs.reg_ebp = 0;
 
 	// must handle timer before enabling interrupts
-    tf->tf_eflags = FL_IF;
+	tf->tf_eflags = FL_IF;
 
 	return (context*)mem_pi2ptr(pi);
 
@@ -243,23 +243,23 @@ void context_destroy(context* ctx)
 }
 
 /*
-void
-trap_clone (context* dest, context* src, void (*f)(void))
-{
-	memmove (dest, src, sizeof(trapframe));
-	if (f != NULL) {
-		((trapframe*)dest)->trap.tf_eip = (uint32_t)f;
-		((trapframe*)dest)->trap.tf_eflags |= FL_IF; //not needed?
-	}
-	((trapframe*)dest)->trap.tf_eflags |= FL_IF; //not needed?
-	return;
-}
+  void
+  trap_clone (context* dest, context* src, void (*f)(void))
+  {
+  memmove (dest, src, sizeof(trapframe));
+  if (f != NULL) {
+  ((trapframe*)dest)->trap.tf_eip = (uint32_t)f;
+  ((trapframe*)dest)->trap.tf_eflags |= FL_IF; //not needed?
+  }
+  ((trapframe*)dest)->trap.tf_eflags |= FL_IF; //not needed?
+  return;
+  }
 */
 
 // context_handler: registers an interrupt handler on the current CPU
 void context_handler(int trapno, callback func)
 {
-//	assert(0 <= cpu && cpu < MAX_CPU);
+	//	assert(0 <= cpu && cpu < MAX_CPU);
 	assert(0 <= trapno && trapno < 256);
 	//cprintf("Registered trap %d for callback %x\n", trapno, (uint32_t)func);
 	kstack_cur()->registered_callbacks[trapno] = func;
@@ -283,37 +283,37 @@ void gcc_noreturn trap(trapframe *tf)
 
 	// When this function is called, the trapped frame is on the kstack
 	// This is not a convenient location - we move the data into its proper place
-/*	
-	if(tf->tf_trapno!=0x30){
-	cprintf("TrapNo.:%x;",tf->tf_trapno);
-	}
-	switch (tf->tf_trapno){
-	case T_IRQ0+ IRQ_KBD:
+	/*
+		if(tf->tf_trapno!=0x30){
+		cprintf("TrapNo.:%x;",tf->tf_trapno);
+		}
+		switch (tf->tf_trapno){
+		case T_IRQ0+ IRQ_KBD:
 		cprintf("keyboard pressed!");
-	}
-*/
-	// grab the pointer to the appropriate callback functions    
+		}
+	*/
+	// grab the pointer to the appropriate callback functions
 	callback f = kstack_cur()->registered_callbacks[tf->tf_trapno];
 
-//	if (cpu_cur() == &stacks[1]) {
-//		cprintf("In trap number %d, cb %x, sl_syscall %x\n", tf->trap.tf_trapno, (uint32_t)f, (uint32_t)&stimer);
-//	}
-//    cprintf("In trap number %d, cpu %d, cb %x\n", tf->trap.tf_trapno, cpu_number(), (uint32_t)f);
-//
+	//	if (cpu_cur() == &stacks[1]) {
+	//		cprintf("In trap number %d, cb %x, sl_syscall %x\n", tf->trap.tf_trapno, (uint32_t)f, (uint32_t)&stimer);
+	//	}
+	//    cprintf("In trap number %d, cpu %d, cb %x\n", tf->trap.tf_trapno, cpu_number(), (uint32_t)f);
+	//
 
 	// If the callback is registered, then execute it.
 	// We pass it the pointer to the trapped context
 	uint32_t result = 0;
 	if (f) {
-        //cprintf("Running callback %x\n", f);
+		//cprintf("Running callback %x\n", f);
 		result = f(ctx);
-    } else
+	} else
 		cprintf("Unregistered interrupt fired (maybe %d)\n", ctx->tf.tf_trapno);
 
 	// A returning callback means that we should restart the context
 	assert(ctx->tf.tf_eip < 0x50000000);
 	assert(ctx->tf.tf_eip);
-    context_start(ctx);
+	context_start(ctx);
 }
 
 void gcc_noreturn context_start (context *ctx)
@@ -325,13 +325,13 @@ void gcc_noreturn context_start (context *ctx)
 	cur[mp_curcpu()] = ctx;
 
 	// TODO: this does not quite work - if the stack is multipage
-	// assert (translate(ROUNDDOWN(ctx->tf.tf_esp,PAGESIZE)) == (uint32_t)ctx); 
-	
-   //cprintf("About to jump to %x\n", ((trapframe*)ctx)->tf_eip);
+	// assert (translate(ROUNDDOWN(ctx->tf.tf_esp,PAGESIZE)) == (uint32_t)ctx);
+
+	//cprintf("About to jump to %x\n", ((trapframe*)ctx)->tf_eip);
 
 	// If everything is OK, execute the assembly code to activate context via IRET
 	assert(ctx->tf.tf_eip < 0x50000000);
-    trap_return(&ctx->tf);
+	trap_return(&ctx->tf);
 }
 
 
@@ -340,19 +340,19 @@ uint32_t context_errno (context *ctx) {
 }
 
 uint32_t context_arg1 (context *ctx) {
-    return ctx->tf.tf_regs.reg_eax;
+	return ctx->tf.tf_regs.reg_eax;
 }
 
 uint32_t context_arg2 (context *ctx) {
-    return ctx->tf.tf_regs.reg_ebx;
+	return ctx->tf.tf_regs.reg_ebx;
 }
 
 uint32_t context_arg3 (context *ctx) {
-    return ctx->tf.tf_regs.reg_ecx;
+	return ctx->tf.tf_regs.reg_ecx;
 }
 
 uint32_t context_arg4 (context *ctx) {
-    return ctx->tf.tf_regs.reg_edx;
+	return ctx->tf.tf_regs.reg_edx;
 }
 
 
@@ -362,7 +362,7 @@ void
 trap_print(trapframe* tf)
 {
 	cprintf("TRAP frame at %p\n", tf);
-//        trap_print_regs(&tf->tf_regs);
+	//        trap_print_regs(&tf->tf_regs);
 	cprintf("  es   0x----%04x\n", tf->tf_es);
 	cprintf("  ds   0x----%04x\n", tf->tf_ds);
 	cprintf("  trap 0x%08x\n", tf->tf_trapno); // trap_name(tf->tf_trapno));
@@ -376,8 +376,8 @@ trap_print(trapframe* tf)
 
 void context_debug(context *ctx)
 {
-    trapframe* tf = &ctx->tf;
-//    trap_print(tf);
-//    cprintf("trap no %d at (%x)\n", tf->trap.tf_trapno, tf->trap.tf_eip);
-//    cprintf("cs\t%x\n", tf->trap.tf_cs);
+	trapframe* tf = &ctx->tf;
+	//    trap_print(tf);
+	//    cprintf("trap no %d at (%x)\n", tf->trap.tf_trapno, tf->trap.tf_eip);
+	//    cprintf("cs\t%x\n", tf->trap.tf_cs);
 }

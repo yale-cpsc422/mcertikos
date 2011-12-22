@@ -25,6 +25,7 @@
 #include <kern/hvm/ioport.h>
 #include "svm.h"
 #include "vm.h"
+#include <architecture/intr.h>
 
 extern void
 set_iopm_intercept(uint64_t * iopmtable, uint16_t ioport, bool enable);
@@ -719,5 +720,5 @@ run_vm_once(struct vm_info *vm){
 	switch_to_guest_os (vm);
 	cprintf("\n<<< #%x >>> Guest state at VMEXIT:\n");
 	handle_vmexit(vm);
-	interrupts_eoi();
+	intr_eoi();
 }

@@ -13,11 +13,13 @@
 
 #include <kern/mem/mem.h>
 
+#include <architecture/intr.h>
+
 // this function initializes the system on secondary processors.
 
 void other_init(void(*f)(void)) {
 	mp_donebooting();
 	kstack_init();
-	interrupts_init();
+	intr_init();
 	f();
 }

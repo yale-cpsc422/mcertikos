@@ -51,6 +51,8 @@ typedef struct acpi_rsdt {
 	uint32_t ent[1];	/* entries to other description table */
 } acpi_rsdt;
 
+#ifdef ARCH_AMD64
+
 /* data structure for ACPI eXtended System Description Table */
 typedef struct acpi_xsdt {
 	uint32_t sig;		/* signature */
@@ -64,6 +66,8 @@ typedef struct acpi_xsdt {
 	uint32_t creator_rev;	/* revision of the vendor */
 	uint64_t ent[1];	/* entries to other description table */
 } acpi_xsdt;
+
+#endif /* ARCH_AMD64 */
 
 /* data structure for ACPI Fixed ACPI Description Table */
 typedef struct acpi_fadt {
@@ -140,7 +144,9 @@ typedef struct acpi_madt_ioapic {
 acpi_rsdp *acpi_probe_rsdp(void);
 acpi_rsdt *acpi_probe_rsdt(acpi_rsdp *);
 acpi_sdt_hdr *acpi_probe_rsdt_ent(acpi_rsdt *, const uint32_t sig);
+#ifdef ARCH_AMD64
 acpi_xsdt *acpi_probe_xsdt(acpi_rsdp *);
 acpi_sdt_hdr *acpi_probe_xsdt_ent(acpi_xsdt *, const uint32_t sig);
+#endif /* ARCH_AMD64 */
 
 #endif /* !_H_KERN_ACPI_ */
