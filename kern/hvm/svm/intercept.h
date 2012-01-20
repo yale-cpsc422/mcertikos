@@ -73,8 +73,8 @@ void* get_io_data_address(struct vm_info *vm);
 #define IOIOSIZE(x) ((x)&IOIO_SIZE_MASK)>>IOIO_SIZE_SHIFT
 #define IOIOPORT(x) ((x)>>16)
 
-#define SVM_IOIO_IN 0
-#define SVM_IOIO_OUT 1
+#define SVM_IOIO_IN 1
+#define SVM_IOIO_OUT 0
 
 #define SVM_EXIT_VECTOR_MASK 0xFF
 
