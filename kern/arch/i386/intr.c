@@ -15,8 +15,6 @@ intr_init(void)
 		ioapic_init();
 		lapic_init();
 	}
-
-	sti();
 }
 
 void

@@ -1,3 +1,5 @@
+# -*-Makefile-*-
+
 #
 # Makefile fragment for the kernel.
 # This is NOT a complete makefile;
@@ -18,6 +20,7 @@ KERN_SRCFILES +=	kern/debug/console.c
 KERN_SRCFILES +=	kern/debug/cprintf.c
 KERN_SRCFILES +=	kern/debug/printfmt.c
 KERN_SRCFILES +=	kern/debug/debug.c
+KERN_SRCFILES +=	kern/debug/serial.c
 
 # How to build kernel object files
 $(OBJDIR)/kern/debug/%.o: kern/debug/%.c
@@ -29,4 +32,3 @@ $(OBJDIR)/kern/debug/%.o: kern/debug/%.S
 	@echo + as $<
 	@mkdir -p $(@D)
 	$(V)$(CC) -nostdinc $(KERN_CFLAGS) -c -o $@ $<
-

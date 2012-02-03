@@ -7,6 +7,7 @@
 #include <kern/debug/video.h>
 #include <kern/debug/kbd.h>
 #include <kern/debug/console.h>
+#include <kern/debug/serial.h>
 
 /***** General device-independent console code *****/
 // Here we manage the console input buffer,
@@ -37,6 +38,7 @@ cons_getc(void)
 {
     int c;
 
+    serial_intr();
     kbd_intr();
 
     if (cons.rpos != cons.wpos) {
@@ -52,7 +54,7 @@ cons_getc(void)
 static void
 cons_putc(int c)
 {
-//	serial_putc(c);
+	serial_putc(c);
 	video_putc(c);
 }
 
@@ -63,6 +65,7 @@ cons_init(void)
 //	if (!cpu_onboot())	// only do once, on the boot CPU
 //		return;
 
+	serial_init();
 	video_init();
 	kbd_init();
 }
@@ -76,7 +79,7 @@ cputs(const char *str)
 		cons_putc(*str++);
 }
 
-int	
+int
 wait_kbd(){
 	int c;
 	while (!(c=cons_getc()));
