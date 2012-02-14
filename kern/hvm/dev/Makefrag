@@ -9,9 +9,9 @@ OBJDIRS += kern/hvm/dev
 
 # We also snatch the use of a few handy source files
 # from the lib directory, to avoid gratuitous code duplication.
-#KERN_SRCFILES +=	kern/hvm/dev/irq.c 
-KERN_SRCFILES +=	kern/hvm/dev/i8259.c 
-KERN_SRCFILES +=	kern/hvm/dev/irq.c 
+KERN_SRCFILES +=	kern/hvm/dev/i8259.c
+KERN_SRCFILES +=	kern/hvm/dev/irq.c
+KERN_SRCFILES +=	kern/hvm/dev/pci.c
 
 # How to build kernel object files
 $(OBJDIR)/kern/hvm/dev/%.o: kern/hvm/dev/%.c
@@ -23,4 +23,3 @@ $(OBJDIR)/kern/hvm/dev/%.o: kern/hvm/dev/%.S
 	@echo + as $<
 	@mkdir -p $(@D)
 	$(V)$(CC) -nostdinc $(KERN_CFLAGS) -c -o $@ $<
-

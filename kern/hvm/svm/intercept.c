@@ -101,38 +101,41 @@ void skip_intercpt_cur_instr(struct vm_info *vm, int flag){
 /*****************************************************************************************/
 /************************ HANDLE NESTED PAGE FAULT ********************************/
 
-void __handle_vm_npf (struct vm_info *vm)
+void
+__handle_vm_npf(struct vm_info *vm)
 {
-	// Note for NPF: p410 - 15.24.6 Nested versus Guest Page Faults, Fault Ordering
-	uint64_t errcode = vm->vmcb->exitinfo1;
-	//print_page_errorcode(errcode);
+	assert(vm != NULL);
 
-	//TODO: execute requested access on flash memory (usb drive)
-//	cprintf("Nested page fault!");
+	struct vmcb *vmcb = vm->vmcb;
+	assert(vmcb != NULL);
 
-//	mmap_4mb(vm->n_cr3, vm->vmcb->exitinfo2, vm->vmcb->exitinfo2, 1);
-//	cprintf("mapping %lx on demand %lx \n",  vm->vmcb->exitinfo2,vm->vmcb->exitinfo2);
+	uint64_t errcode = vmcb->exitinfo1;
+	uintptr_t fault_addr = PGADDR(vmcb->exitinfo2);
 
-	// bit 1 of rflags must be set
-	vm->vmcb->rflags |= 2;
+	debug("NPF: va=%x, errcode=%llx.\n", fault_addr, errcode);
 
-	uint32_t  va= PGADDR(vm->vmcb->exitinfo2);
-	//uint32_t va=PGADDR((uint32_t)* (&(vm->vmcb->exitinfo2)));
-	//pageinfo * pi=mem_alloc();
-	//if (vm->vmcb->n_cr3>0xf0000000)
-/*
-	{
-	cprintf("n_cr3 is : %x, ", vm->vmcb->n_cr3);
-	cprintf("va is : %x\n", va);
-	}
+	if (as_reserve((as_t *)(uintptr_t) vmcb->n_cr3, fault_addr,
+		       PTE_W | PTE_U | PTE_P) == NULL)
+		panic("Failed to reserve memory for guest address %x.\n",
+		      fault_addr);
 
-	if (va<0x100000){
-		if(!pmap_insert((as_t *)vm->vmcb->n_cr3, mem_phys2pi(va), va, PTE_W | PTE_G|PTE_U))
-		pmap_free((as_t *)vm->vmcb->n_cr3);
-	}else {
-*/
-	as_reserve((as_t *)(uint32_t) vm->vmcb->n_cr3,
-		   (uint32_t) vm->vmcb->exitinfo2, PTE_W|PTE_U|PTE_G);
+	if (fault_addr >= GUEST_FIXED_PMEM_BYTES && fault_addr < 0xf0000000)
+		warn("Guest memory address %x is out of range %x.\n",
+		     fault_addr, GUEST_FIXED_PMEM_BYTES);
+
+	/*
+	 * XXX: this implementation should be buggy. It should use IOMMU or
+	 *      other emulation methods to passthrough or emulate the accesses
+	 *      to the memory-mapped device address.
+	 *
+	 * XXX: it seems this implementation is "enough" to boot SeaBIOS and
+	 *      then load the linux kernel, if we disable PCI for the guest.
+	 *
+	 * TODO: alter to IOMMU
+	 */
+	if (fault_addr >= 0xf0000000)
+		as_copy((as_t *)(uintptr_t)vmcb->n_cr3, fault_addr,
+			kern_as, fault_addr, PAGESIZE);
 }
 
 /*****************************************************************************************/
@@ -280,60 +283,39 @@ void __handle_vm_cpuid (struct vm_info *vm)
 
 	uint32_t eax, ebx, ecx, edx;
 	switch (vm->vmcb->rax) {
-	/* case CPUID_CPU_VID: */
-	/*	cpuid(CPUID_CPU_VENDOR, &eax, &ebx, &ecx, &edx); */
-	/*	vm->vmcb->rip += 2; */
-	/*	g_ebx = INTEL_VENDOR_EBX; */
-	/*	g_ecx = INTEL_VENDOR_ECX; */
-	/*	g_edx = INTEL_VENDOR_EDX; */
-	/*	break; */
-	case CPUID_CPU_INFO:
-		cpuid(CPUID_CPU_VID, &eax, &ebx, &ecx, &edx);;
-		if (ebx == CPUID_VID_AMD_EBX &&
-		    ecx == CPUID_VID_AMD_ECX &&
-		    edx == CPUID_VID_AMD_EDX) {
-			debug("CPU Vendor: AuthenticAMD\n");
-			cpuid(CPUID_CPU_INFO, &eax, &ebx, &ecx, &edx);
-			vm->vmcb->rax =
-				(CPUID_TYPE_OEM << 12) ||
-				(/* CPUID_FAMILY_EXTENDED */CPUID_FAMILY_686 << 8) ||
-				(CPUID_MODEL_ATHLON64 <<4) ||
-				(0x8);
-			vm->vmcb->rip += 2;
-			g_ebx = ebx;
-			g_ecx = ecx;
-			g_edx = edx;
-		} else if (ebx == CPUID_VID_INTEL_EBX &&
-			   ecx == CPUID_VID_INTEL_ECX &&
-			   edx == CPUID_VID_INTEL_EDX){
-			debug("CPU Vendor: GenuineIntel\n");
-			cpuid(CPUID_CPU_INFO, &eax, &ebx, &ecx, &edx);
-			vm->vmcb->rax = eax;
-			vm->vmcb->rip += 2;
-			g_ebx = ebx;
-			g_ecx = ecx;
-			g_edx = edx;
-		} else {
-			debug("CPU Vendor: %x %x %x\n", ebx, ecx, edx);
-			cpuid(CPUID_CPU_INFO, &eax, &ebx, &ecx, &edx);
-			vm->vmcb->rax = eax;
-			vm->vmcb->rip += 2;
-			g_ebx = ebx;
-			g_ecx = ecx;
-			g_edx = edx;
-		}
+	case 0x40000000:
+		/* 0x40000000 ~ 0x400000ff are reserved for the hypervisor. */
+		g_ebx = 0x74726543;	/* "treC" */
+		g_ecx = 0x534f4b69;	/* "SOKi" */
+		break;
+
+	case 0x00000001:
+		cpuid(vm->vmcb->rax, &eax, &ebx, &ecx, &edx);
+		vm->vmcb->rax = eax;
+		g_ebx = ebx;
+		g_ecx = ecx;
+		g_edx = edx & ~(uint64_t) CPUID_FEATURE_APIC;
+		break;
+
+	case 0x80000001:
+		cpuid(vm->vmcb->rax, &eax, &ebx, &ecx, &edx);
+		vm->vmcb->rax = eax;
+		g_ebx = ebx;
+		g_ecx = ecx;
+		g_edx = edx & ~(uint64_t) CPUID_FEATURE_APIC;
 		break;
 
 	default:
 		cpuid(vm->vmcb->rax, &eax, &ebx, &ecx, &edx);
 		debug(">> eax=%x, ebx=%x, ecx=%x, edx=%x\n", eax, ebx, ecx, edx);
 		vm->vmcb->rax = eax;
-		vm->vmcb->rip += 2;
 		g_ebx = ebx;
 		g_ecx = ecx;
 		g_edx = edx;
 		break;
 	}
+
+	vm->vmcb->rip += 2;
 }
 
 void __handle_vm_rdmsr (struct vm_info *vm)
@@ -454,7 +436,9 @@ void test_all_port(struct vm_info *vm){
 	void* data=&vm->vmcb->rax;
 	//print_io(vm);
 
-	if((port==0x20||port==0xa0||port==0x21||port==0xa1||port==0x4d1||port==0x4d0)){
+	if((port == 0x20 || port == 0xa0 || port == 0x21 || port == 0xa1) ||
+	   (port == 0x4d1 || port == 0x4d0) ||
+	   (port == 0xcf8 || port == 0xcfc)) {
 		certikos_handle_io(port,data,type,size,1);
 		skip_emulated_instruction(vm);
 	}else{
@@ -709,7 +693,7 @@ void handle_vmexit (struct vm_info *vm)
 		case VMEXIT_IOIO: _handle_io(vm); break;
 		case VMEXIT_HLT: _handle_hlt(vm); break;
 		case VMEXIT_VINTR: _handle_vintr(vm); break;
-		case VMEXIT_CPUID: _handle_cpuid(vm); break;
+		case VMEXIT_CPUID: __handle_vm_cpuid(vm); break;
 //		case VMEXIT_TASK_SWITCH: __handle_task_switch(vm); break;
 	}
 //	cprintf("**** ");

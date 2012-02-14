@@ -12,6 +12,7 @@
 #include <kern/debug/stdio.h>
 #include <kern/mem/mem.h>
 #include <kern/as/as.h>
+#include <kern/pmap/pmap.h>
 #include <architecture/types.h>
 #include <architecture/pic.h>
 #include <architecture/mp.h>
@@ -26,6 +27,7 @@
 #include "svm.h"
 #include "vm.h"
 #include <architecture/intr.h>
+#include <kern/hvm/dev/pci.h>
 
 extern void
 set_iopm_intercept(uint64_t * iopmtable, uint16_t ioport, bool enable);
@@ -171,72 +173,91 @@ void enable_vpic(struct vmcb *vmcb){
 
 }
 
-static void set_control_params (struct vmcb *vmcb)
+static void
+set_intercept_ioio(struct vmcb *vmcb, uint32_t port, bool enable)
 {
-	//Note: anything not set will be 0 (since vmcb was filled with 0)
+	assert(vmcb != NULL);
 
-	/****************************** SVM CONFIGURATION *****************************/
-	/******************************************************************************/
-	/* Enable/disable nested paging (See AMD64 manual Vol. 2, p. 409) */
+	uint32_t *iopm = (uint32_t *)(uintptr_t) vmcb->iopm_base_pa;
+
+	int entry = port / 32;
+	int bit = port - entry * 32;
+
+	if (enable)
+		iopm[entry] |= (1 << bit);
+	else
+		iopm[entry] &= ~(1 << bit);
+}
+
+static void
+set_control_params(struct vmcb *vmcb)
+{
 	vmcb->np_enable = 1;
-	cprintf ("Nested paging enabled.\n");
-
-	// set this to 1 will make VMRUN to flush all TBL entries, regardless of ASID
-	// and global / non global property of pages
-	vmcb->tlb_control = 0;
-
-    //time stamp counter offset, to be added to guest RDTSC and RDTSCP instructions
-	/* To be added in RDTSC and RDTSCP */
+	vmcb->tlb_control = 1;
 	vmcb->tsc_offset = 0;
-
-	//Guest address space identifier (ASID), must <> 0 - vol2 373
 	vmcb->guest_asid = 1;
-	cprintf("vmcb->guset_asid@%x =%x\n",&vmcb->guest_asid,vmcb->guest_asid);
 
-	/* Intercept the VMRUN and VMMCALL instructions */
-	//must intercept VMRUN at least vol2 373
-	/* vmcb->general1_intercepts = (INTRCPT_CPUID | INTRCPT_MSR); */
-	vmcb->general2_intercepts = (INTRCPT_VMRUN | INTRCPT_VMMCALL);
+	/* clean intercept flags */
+	vmcb->general1_intercepts = 0;
+	vmcb->general2_intercepts = 0;
 
-	//allocating a region for IOPM (permission map)
-	//and fill it with 0x00 (not intercepting anything)
-	vmcb->iopm_base_pa  = create_intercept_table ( 12 << 10 ); /* 12 Kbytes */
-	//memset ( vmcb->iopm_base_pa  , 0xff, 0x3*PAGE_SIZE );
+	/* Sec 15.21.1, APM Vol2 r3.19 */
+	vmcb->vintr.fields.intr_masking = 1;
 
-	//allocating a region for msr intercept table, and fill it with 0x00
-	vmcb->msrpm_base_pa = create_intercept_table ( 8 << 10 );  /* 8 Kbytes */
-	set_msrpm(vmcb->msrpm_base_pa, MSR_INTR_PENDING, MSR_READ);
+	/* setup IOIO intercept */
+	vmcb->general1_intercepts |= INTRCPT_IO;
+	vmcb->iopm_base_pa = create_intercept_table(12 << 10);
+	set_intercept_ioio(vmcb, 0x20, 1); /* master PIC cmd */
+	set_intercept_ioio(vmcb, 0x21, 1); /* master PIC data */
+	set_intercept_ioio(vmcb, 0xa0, 1); /* slave PIC cmd */
+	set_intercept_ioio(vmcb, 0xa1, 1); /* slave PIC data */
+	set_intercept_ioio(vmcb, 0x4d0, 1); /* ELCR for master */
+	set_intercept_ioio(vmcb, 0x4d1, 1); /* ELCR for slave */
+	set_intercept_ioio(vmcb, 0xcf8, 1); /* PCI cmd */
+	set_intercept_ioio(vmcb, 0xcfc, 1); /* PCI data */
 
-//	vmcb->general1_intercepts |= INTRCPT_INTR;
-//		enable_vpic(vmcb);
+	/* setup MSR intercept */
+#if 0
+	vmcb->general1_intercepts |= INTRCPT_MSR;
+#endif
+	vmcb->msrpm_base_pa = create_intercept_table(8 << 10);
 
-	// set_iopm_intercept(&vmcb->iopm_base_pa,0x3f8,1);
-	cprintf("iopmbase:%x\n",&vmcb->iopm_base_pa);
-	//enable_intercept_all_ioport(vmcb);
-
-//	enable_intercept_pic(vmcb);
-
-//	vmcb->general1_intercepts |= INTRCPT_INTN;
+	/* setup instruction intercept */
+	vmcb->general2_intercepts |= INTRCPT_VMRUN;
+	vmcb->general2_intercepts |= INTRCPT_VMMCALL;
+	vmcb->general1_intercepts |= INTRCPT_CPUID;
 }
 
 /********************************************************************************************/
 
-static unsigned long create_4kb_nested_pagetable ( )
+/*
+ * Create the nested page table.
+ *
+ * XXX: in order to reduce the amount of nested page faults, we add all entries
+ *      for the whole guest memory.
+ */
+static as_t *
+create_4kb_nested_pagetable(void)
 {
-	as_t *  pmap=as_new_vm();
+	uintptr_t addr;
+	pmap_t *pmap = pmap_new();
 
-	int i;
-	cprintf("as_new:%x\n",pmap);
-
-
-	for(i=0x100000;i<(GUEST_FIXED_PMEM_BYTES+0x100000);i=i+PAGE_SIZE){
-
-		as_reserve(pmap,i,PTE_W|PTE_U|PTE_G);
+	if (pmap == NULL) {
+		debug("Failed to allocate memory for nested page table.\n");
+		return NULL;
 	}
 
-	cprintf( "Nested page table created.\n" );
+	for (addr = 0x0; addr < GUEST_FIXED_PMEM_BYTES; addr += PAGESIZE) {
+		if (as_reserve((as_t *) pmap, addr,
+			       PTE_G | PTE_W | PTE_U) == NULL) {
+			debug("Failed to map guest memory page at %x.\n",
+			      addr);
+			pmap_free(pmap);
+			return NULL;
+		}
+	}
 
-	return (unsigned long) pmap;
+	return (as_t *) pmap;
 }
 
 /********************************************************************************************/
@@ -395,49 +416,62 @@ void vm_enable_intercept(struct vm_info * vm, int flags)
 /********************************* INITIALIZE VM STATE *************************************/
 /********************************************************************************************/
 
-//- Test, to set initial state of VM to state of machine right after power up
-void set_vm_to_powerup_state(struct vmcb * vmcb)
+/*
+ * Setup segment register in VMCB.
+ */
+static void
+set_segment(struct seg_selector *seg,
+	    uint16_t sel, uint64_t base, uint32_t lim, uint16_t attr)
 {
-	// vol 2 p350
-	//memset(vmcb, 0, sizeof(vmcb));
+	assert(seg != NULL);
 
-	vmcb->cr0 = 0x0000000060000010;
-	vmcb->cr2 = 0;
-	vmcb->cr3 = 0;
-	vmcb->cr4 = 0;
-	vmcb->rflags = 0x2;
-	vmcb->efer = EFER_SVME; // exception
+	seg->sel = sel;
+	seg->base = base;
+	seg->limit = lim;
+	seg->attrs.bytes = attr;
+}
 
-	vmcb->rip = 0xFFF0;
-	vmcb->cs.sel = 0xF000;
-	vmcb->cs.base = 0xFFFF0000;
-	vmcb->cs.limit = 0xFFFF;
+/*
+ * Setup VM to the powerup state. (Sec 14.1.3, APM Vol2 r3.19)
+ */
+void
+set_vm_to_powerup_state(struct vmcb *vmcb)
+{
+	assert(vmcb != NULL);
 
-	vmcb->ds.sel = 0;
-	vmcb->ds.limit = 0xFFFF;
-	vmcb->es.sel = 0;
-	vmcb->es.limit = 0xFFFF;
-	vmcb->fs.sel = 0;
-	vmcb->fs.limit = 0xFFFF;
-	vmcb->gs.sel = 0;
-	vmcb->gs.limit = 0xFFFF;
-	vmcb->ss.sel = 0;
-	vmcb->ss.limit = 0xFFFF;
+	vmcb->cr0 = 0x60000010;
+	vmcb->cr2 = vmcb->cr3 = vmcb->cr4 = 0;
+	vmcb->rflags = 0x00000002;
+	vmcb->efer = EFER_SVME;
+	vmcb->rip = 0x0000fff0;
+	set_segment(&vmcb->cs, 0xf000, 0xffff0000, 0xffff,
+		    SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_CODE);
+	set_segment(&vmcb->ds, 0x0000, 0x0, 0xffff,
+		    SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_DATA);
+	set_segment(&vmcb->es, 0x0000, 0x0, 0xffff,
+		    SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_DATA);
+	set_segment(&vmcb->fs, 0x0000, 0x0, 0xffff,
+		    SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_DATA);
+	set_segment(&vmcb->gs, 0x0000, 0x0, 0xffff,
+		    SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_DATA);
+	set_segment(&vmcb->ss, 0x0000, 0x0, 0xffff,
+		    SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_DATA);
+	set_segment(&vmcb->gdtr, 0, 0x0, 0xffff, 0);
+	set_segment(&vmcb->idtr, 0, 0x0, 0xffff, 0);
+	set_segment(&vmcb->ldtr, 0, 0x0, 0xffff, SEG_ATTR_P | SEG_TYPE_LDT);
+	set_segment(&vmcb->tr, 0, 0x0, 0xffff, SEG_ATTR_P | SEG_TYPE_TSS_BUSY);
+	vmcb->rax = 0x0;
+	vmcb->dr6 = 0xffff0ff0;
+	vmcb->dr7 = 0x00000400;
+	vmcb->g_pat = 0x7040600070406UL;
 
-	vmcb->gdtr.base = 0;
-	vmcb->gdtr.limit = 0xFFFF;
-	vmcb->idtr.base = 0;
-	vmcb->idtr.limit = 0xFFFF;
-
-	vmcb->ldtr.sel = 0;
-	vmcb->ldtr.base = 0;
-	vmcb->ldtr.limit = 0xFFFF;
-	vmcb->tr.sel = 0;
-	vmcb->tr.base = 0;
-	vmcb->tr.limit = 0xFFFF;
-
-//	vmcb->rdx = model info;
-//	vmcb->cr8 = 0;
+	g_ebx = g_ecx = g_esi = g_edi = g_ebp = 0x0;
+	/*
+	 * the bootable disk number.
+	 * XXX: this maybe not necessary, since BIOS will search for the first
+	 *      bootable device and set edx.
+	 */
+	g_edx = 0x80;
 }
 
 void set_vm_to_pios_state(struct vmcb * vmcb)
@@ -556,43 +590,30 @@ void set_vm_to_mbr_start_state(struct vmcb* vmcb)
 
 /******************************************************************************************/
 
-void vm_create_simple (struct vm_info *vm )
+void
+vm_create_simple(struct vm_info *vm)
 {
+	assert(vm != NULL);
+
 	cprintf("\n++++++ Creating guest VM....\n");
 
+	/* prepare VMCB */
+	vm->vmcb = alloc_vmcb();
+	cprintf("VMCB location: %x\n", vm->vmcb);
 
-	struct pmem_layout * pml= get_pmem_layout();
-	// Allocate a new page inside host memory for storing VMCB.
-	struct vmcb *vmcb;
-	vmcb = alloc_vmcb();
-	vm->vmcb = vmcb;
-	cprintf("VMCB location: %x\n", vmcb);
-
-	/* Allocate new pages for physical memory of the guest OS.  */
-	//const unsigned long vm_pmem_start = alloc_vm_pmem ( vm_pmem_size );
-	//const unsigned long vm_pmem_start = 0x0; // guest is preallocated
-
-	//inital setting for single step interception
 	vm->itc_skip_flag=0;
 
-	/* Set Host-level CR3 to use for nested paging.  */
-	//vm->n_cr3 = create_4mb_nested_pagetable_simple(pml);
-	vm->n_cr3 = create_4kb_nested_pagetable();
-	vmcb->n_cr3 = vm->n_cr3;
+	/* prepare the nested page table */
+	vm->n_cr3 = vm->vmcb->n_cr3 = (uint32_t) create_4kb_nested_pagetable();
 
-	//Set control params for this VM
-	//such as whether to enable nested paging, what to intercept...
-	set_control_params(vmcb);
+	/* setup VM to the powerup state */
+	set_vm_to_powerup_state(vm->vmcb);
 
-	// Set VM initial state
-	// Guest VM start at MBR code, which is GRUB stage 1
-	// vmcb->rip = 0x7c00; address of loaded MBR
-	set_vm_to_mbr_start_state(vmcb);
-	//set_vm_to_powerup_state(vmcb);
-//	vm->cpu_irq=qemu_alloc_irqs(pic_irq_request, NULL, 1);
+	/* setup VMCB control area */
+	set_control_params(vm->vmcb);
 
-	//vm->i8259=i8259_init(vm->cpu_irq);
-	vm->i8259=i8259_init(NULL);
+	/* setup virtual 8259A chips */
+	vm->i8259 = i8259_init(NULL);
 }
 
 void vm_create_simple_with_interception (struct vm_info *vm )
@@ -609,7 +630,7 @@ void vm_create_simple_with_interception (struct vm_info *vm )
 
 
 	/* Set Host-level CR3 to use for nested paging.  */
-	vm->n_cr3 = create_4kb_nested_pagetable();
+	vm->n_cr3 = (uint32_t) create_4kb_nested_pagetable();
 	vmcb->n_cr3 = vm->n_cr3;
 
 	//Set control params for this VM
@@ -654,38 +675,38 @@ static void switch_to_guest_os ( struct vm_info *vm )
 void
 vm_boot (struct vm_info *vm)
 {
-	//print_pg_table(vm->vmcb->n_cr3);
-	int i=0;
-
-	for(;;)
-	{
-//		vmcb_check_consistency ( vm->vmcb );
-//		cprintf("\n=============================================\n");
-
-		/* setup registers for boot  */
-//		vm->vmcb->exitcode = 0;
-//		cprintf("\n<<< %x >>> Guest state in VMCB:\n", i);
-//		show_vmcb_state (vm); // Anh - print guest state in VMCB
-
-		switch_to_guest_os (vm);
-
-	//	cprintf("\n<<< #%x >>> Guest state at VMEXIT:\n", i);
-
-		handle_vmexit (vm);
-
-//		cprintf("\nTesting address translation function...\n");
-//		unsigned long gphysic = glogic_2_gphysic(vm);
-//		cprintf("Glogical %x:%x <=> Gphysical ", vm->vmcb->cs.sel, vm->vmcb->rip);
-//		cprintf("%x\n", gphysic);
-//		cprintf("=============================================\n");
-		i++;
-
-//		breakpoint("End of round...\n\n");
+	while (1) {
+		/* debug("Switch to VM (%llx)\n", vm->vmcb->rip); */
+		switch_to_guest_os(vm);
+		/* debug("VMEXIT (%llx)\n", vm->vmcb->rip); */
+		handle_vmexit(vm);
 	}
 }
 void
 clear_screen(){
 	cprintf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+}
+
+static void
+load_bios(uintptr_t ncr3)
+{
+	extern uint8_t _binary_misc_bios_bin_start[],
+		_binary_misc_bios_bin_size[];
+	extern uint8_t _binary_misc_vgabios_bin_start[],
+		_binary_misc_vgabios_bin_size[];
+
+	assert((size_t) _binary_misc_bios_bin_size % 0x10000 == 0);
+	assert((size_t) _binary_misc_vgabios_bin_size <= 0x8000);
+
+	uintptr_t bios_addr = 0x100000 - (size_t) _binary_misc_bios_bin_size;
+
+	as_copy((as_t *) ncr3, bios_addr,
+		kern_as, (uintptr_t) _binary_misc_bios_bin_start,
+		(size_t) _binary_misc_bios_bin_size);
+
+	as_copy((as_t *) ncr3, 0xc0000,
+		kern_as, (uintptr_t) _binary_misc_vgabios_bin_start,
+		(size_t) _binary_misc_vgabios_bin_size);
 }
 
 void
@@ -696,7 +717,9 @@ start_vm(){
 	vm_create_simple(&vm);
 	clear_screen();
 	cprintf("\n++++++ New virtual machine created. Going to GRUB for the 2nd time\n");
+	vpci_init();
 	pic_reset();
+	load_bios(vm.vmcb->n_cr3);
 	//pic_enable(IRQ_KBD);
 	vm_boot (&vm);
 }

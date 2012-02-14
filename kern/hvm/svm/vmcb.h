@@ -7,6 +7,21 @@
 #define MSR_SYSENTER_ESP	0x175
 #define MSR_SYSENTER_EIP	0x176
 
+#define SEG_ATTR_G		(1 << 11)
+#define SEG_ATTR_D		(1 << 10)
+#define SEG_ATTR_B		(1 << 10)
+#define SEG_ATTR_L		(1 << 9)
+#define SEG_ATTR_AVL		(1 << 8)
+#define SEG_ATTR_P		(1 << 7)
+#define SEG_ATTR_DPL_SHIFT	5
+#define SEG_ATTR_S		(1 << 4)
+
+#define SEG_TYPE_CODE		0xa
+#define SEG_TYPE_DATA		0x2
+#define SEG_TYPE_LDT		0x2
+#define SEG_TYPE_TSS_BUSY	0x3
+#define SEG_TYPE_TSS		0xb
+
 /*
  * Attribute for segment selector. This is a copy of bit 40:47 & 52:55 of the
  * segment descriptor. */

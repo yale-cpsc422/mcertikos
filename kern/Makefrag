@@ -42,6 +42,8 @@ KERN_OBJFILES := $(patsubst %.c, $(OBJDIR)/%.o, $(KERN_SRCFILES))
 KERN_OBJFILES := $(patsubst %.S, $(OBJDIR)/%.o, $(KERN_OBJFILES))
 
 KERN_BINFILES := $(patsubst %, $(OBJDIR)/%, $(KERN_BINFILES))
+KERN_BINFILES += misc/bios.bin
+KERN_BINFILES += misc/vgabios.bin
 
 # How to build kernel object files
 $(OBJDIR)/kern/%.o: kern/arch/$(ARCH)/%.S

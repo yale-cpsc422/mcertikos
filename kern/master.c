@@ -274,7 +274,6 @@ uint32_t syscall(context* ctx) {
 
 uint32_t
 keyboard_handler(context* ctx){
-	cprintf("keyboard pressed\n");
 	kbd_intr();
 	intr_eoi();
 	return 0;
