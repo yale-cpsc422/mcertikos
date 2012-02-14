@@ -278,7 +278,6 @@ void __handle_vm_interrupt (struct vm_info *vm)
 
 void __handle_vm_cpuid (struct vm_info *vm)
 {
-	debug("__handle_vm_cpuid\n");
 	debug("cpuid %x\n", vm->vmcb->rax);
 
 	uint32_t eax, ebx, ecx, edx;
@@ -307,7 +306,6 @@ void __handle_vm_cpuid (struct vm_info *vm)
 
 	default:
 		cpuid(vm->vmcb->rax, &eax, &ebx, &ecx, &edx);
-		debug(">> eax=%x, ebx=%x, ecx=%x, edx=%x\n", eax, ebx, ecx, edx);
 		vm->vmcb->rax = eax;
 		g_ebx = ebx;
 		g_ecx = ecx;

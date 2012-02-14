@@ -248,7 +248,11 @@ create_4kb_nested_pagetable(void)
 	}
 
 	for (addr = 0x0; addr < GUEST_FIXED_PMEM_BYTES; addr += PAGESIZE) {
-		if (as_reserve((as_t *) pmap, addr,
+		if (addr >= 0xa0000 && addr <= 0xbffff) {
+			/* identically map VGA display memory to the host */
+			as_assign((as_t *) pmap, addr, PTE_G | PTE_W | PTE_U,
+				  mem_phys2pi(addr));
+		} else if (as_reserve((as_t *) pmap, addr,
 			       PTE_G | PTE_W | PTE_U) == NULL) {
 			debug("Failed to map guest memory page at %x.\n",
 			      addr);
