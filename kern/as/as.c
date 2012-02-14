@@ -30,12 +30,14 @@ as_init(void)
 	as_t* as = as_new();
 	if (!as) return NULL;
 
+	kern_as = as;
+
 	uint32_t cr4 = rcr4();
 	cr4 |= CR4_PSE | CR4_PGE;
 	lcr4(cr4);
 
 	pmap_install(as);
-	
+
 	as_active[mp_curcpu()] = as;
 
 	uint32_t cr0 = rcr0();
@@ -135,7 +137,7 @@ as_t* as_disconnect(as_t *as, uint32_t va, size_t size) {
   assert(PGOFF(size) == 0); // must be page-aligned
   uint32_t vahi = va + size;
   assert (vahi > va); // whole range must be within valid addresses
-  
+
   pmap_remove(as,va,size);
   return as;
 }
@@ -146,8 +148,8 @@ as_t* as_reserve(as_t* as, uint32_t uva, int perm) {
 					 return NULL;
 		  }
 		 mem_incref(page);
-		 memset((void *)mem_pi2phys(page),0,PAGESIZE); 
-			
+		 memset((void *)mem_pi2phys(page),0,PAGESIZE);
+
 		  return pmap_insert(as, page, uva, perm);
 }
 
@@ -174,12 +176,18 @@ bool as_checkrange(as_t *as, uint32_t va, size_t size) {
 	uint32_t sva = ROUNDDOWN(va,PAGESIZE);
 	uint32_t eva = ROUNDDOWN(va + size, PAGESIZE);
 	// check for overflow (we also do not tolerate copy to the final address either)
-	if (eva < sva) {
+	if (sva == 0xfffff000 && va - 0xfffff000 + size <= 0x1000) {
+		eva = 0xffffffff;
+	} else if (eva < sva) {
 		return false;
 	}
 	while (sva <= eva) {
 		if ((pmap_lookup(as,sva) & 1) == 0)
 			return false;
+
+		if (sva == 0xfffff000)
+			break;
+
 		sva+=PAGESIZE;
 	}
 	return true;
@@ -197,16 +205,17 @@ bool as_copy(as_t *das, uint32_t dva, as_t *sas, uint32_t sva, size_t size) {
 	}
 	//cprintf("as_copy: continuing\n", dva, size);
 
-	uint32_t eva = sva + size;
 	uint32_t spa, dpa;
+	size_t copyed_bytes = 0;
 
 	// FIXME: do this more than one byte at a time.
-	while(sva < eva) {
+	while(copyed_bytes < size) {
 		spa = PGADDR(pmap_lookup(sas, sva)) + PGOFF(sva);
 		dpa = PGADDR(pmap_lookup(das, dva)) + PGOFF(dva);
 		*(char*)dpa = *(char*)spa;
 		sva++;
 		dva++;
+		copyed_bytes++;
 	}
 	//cprintf("as_copy: success\n");
 	return true;
@@ -215,12 +224,13 @@ bool as_copy(as_t *das, uint32_t dva, as_t *sas, uint32_t sva, size_t size) {
 void as_memset(as_t* as, uint32_t va, char v, size_t size) {
 	//cprintf("as_memset: from %08x\n", va);
 	if (!as_checkrange(as, va, size)) return;
-	uint32_t eva = va+size;
+	size_t set_bytes = 0;
 	uint32_t spa;
-	while(va < eva) {
+	while(set_bytes < size) {
 		spa = PGADDR(pmap_lookup(as,va)) + PGOFF(va);
 		*(char*)spa = v;
 		va++;
+		set_bytes++;
 	}
 	//cprintf("as_memset: success\n");
 }

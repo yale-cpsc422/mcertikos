@@ -9,6 +9,8 @@
 // Page directory entries and page table entries are 32-bit integers.
 typedef uint32_t as_t;
 
+as_t *kern_as;
+
 as_t* as_init(void);
 as_t* as_current();
 void as_activate(as_t* as);
