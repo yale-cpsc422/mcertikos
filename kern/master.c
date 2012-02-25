@@ -22,8 +22,7 @@
 #include <kern/slave.h>
 #include <kern/kernel.h>
 
-#include <kern/hvm/svm/svm.h>
-#include <kern/hvm/svm/vm.h>
+#include <kern/hvm/vmm.h>
 #include <architecture/cpu.h>
 
 #include <kern/debug/kbd.h>
@@ -234,9 +233,11 @@ uint32_t syscall(context* ctx) {
 		cprintf("creat vm test\n");
 		break;
 	case SYSCALL_SETUPVM:
-		cprintf("This is the service for booting a vm!;\n");
-		start_vm();
-		cprintf("come back from vm\n");
+		;
+		struct vm vm;
+		vmm_init();
+		vmm_init_vm(&vm);
+		vmm_run_vm(&vm);
 		break;
 	case SYSCALL_SETUPPIOS:
 		cprintf("This is the service for booting PIOS as a vm!;\n");

@@ -60,6 +60,8 @@
 #define T_DEFAULT       500     // Unused trap vectors produce this value
 #define T_ICNT          501     // Child process instruction count expired
 
+#define T_MAX		512
+
 // Hardware IRQ numbers. We receive these as (T_IRQ0 + IRQ_WHATEVER)
 #define IRQ_TIMER        0
 #define IRQ_KBD          1
@@ -132,36 +134,15 @@
 #define MSR_READ	0
 #define MSR_WRITE	1
 
-/* EFER bits (vol. 2, p. 55) */
-#define _EFER_SCE   0 /* System Call Extensions */
-#define _EFER_LME   8 /* Long mode enable */
-#define _EFER_LMA  10 /* Long mode active */
-#define _EFER_NX   11 /* No execute enable */
-#define _EFER_SVME 12 /* Secure Virtual Machine Enable */
-#ifdef __ASSEMBLY__
-#  define EFER_SCE   ( 1 << _EFER_SCE )
-#  define EFER_LME   ( 1 << _EFER_LME )
-#  define EFER_LMA   ( 1 << _EFER_LMA )
-#  define EFER_NX    ( 1 << _EFER_NX )
-#  define EFER_SVME  ( 1 << _EFER_SVME )
-#else /* ! __ASSEMBLY__ */
-#  define EFER_SCE   ( 1UL << _EFER_SCE )
-#  define EFER_LME   ( 1UL << _EFER_LME )
-#  define EFER_LMA   ( 1UL << _EFER_LMA )
-#  define EFER_NX    ( 1UL << _EFER_NX )
-#  define EFER_SVME  ( 1UL << _EFER_SVME )
-#endif /* __ASSEMBLY__ */
-
-#define rdmsr(msr,val1,val2) \
-       __asm__ __volatile__("rdmsr" \
-			    : "=a" (val1), "=d" (val2) \
-			    : "c" (msr))
-
-#define wrmsr(msr,val1,val2) \
-     __asm__ __volatile__("wrmsr" \
-			  : /* no outputs */ \
-			  : "c" (msr), "a" (val1), "d" (val2))
-
+/* EFER */
+#define MSR_EFER	0xc0000080
+# define MSR_EFER_SCE	(1<<0)
+# define MSR_EFER_LME	(1<<8)
+# define MSR_EFER_LMA	(1<<10)
+# define MSR_EFER_NXE	(1<<11)
+# define MSR_EFER_SVME	(1<<12)		/* for AMD processors */
+# define MSR_EFER_LMSLE	(1<<13)
+# define MSR_EFER_FFXSR	(1<<14)
 
 #ifndef __ASSEMBLER__
 
@@ -543,6 +524,20 @@ bswap(uint32_t v)
 	uint32_t r;
 	asm volatile("bswap %0" : "=r" (r) : "0" (v));
 	return r;
+}
+
+static gcc_inline uint64_t
+rdmsr(uint32_t msr)
+{
+	uint64_t rv;
+	__asm __volatile("rdmsr" : "=A" (rv) : "c" (msr));
+	return rv;
+}
+
+static gcc_inline void
+wrmsr(uint32_t msr, uint64_t newval)
+{
+        __asm __volatile("wrmsr" : : "A" (newval), "c" (msr));
 }
 
 // Host/network byte-order conversion for x86

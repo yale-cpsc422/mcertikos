@@ -5,9 +5,13 @@
 #	Recursive Make Considered Harmful
 #	http://aegis.sourceforge.net/auug97.pdf
 #
-OBJDIR := obj
+ifndef V
+V := @
+endif
 
--include conf/env.mk
+ARCH := i386
+
+OBJDIR := obj
 
 TOP := $(shell echo $${PWD- `pwd`})
 
@@ -81,7 +85,7 @@ LDFLAGS := -m elf_x86_64 -e start -nostdlib
 endif
 
 ifeq ($(ARCH), i386)
-CFLAGS += -Wall -Wno-unused -gstabs -m32 #-Werror
+CFLAGS += -Wall -Wno-unused -Werror -gstabs -m32
 LDFLAGS := -m elf_i386 -e start -nostdlib
 endif
 

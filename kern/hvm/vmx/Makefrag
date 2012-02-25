@@ -1,0 +1,13 @@
+# -*-Makefile-*-
+
+# Targets
+
+$(OBJDIR)/hvm/vmx/%.o: kern/hvm/vmx/%.c
+	@echo + cc $<
+	@mkdir -p $(@D)
+	$(V)$(CC) $(KERN_CFLAGS) -c -o $@ $<
+
+$(OBJDIR)/hvm/vmx/%.o: kern/hvm/vmx/%.S
+	@echo + as $<
+	@mkdir -p $(@D)
+	$(V)$(CC) $(KERN_CFLAGS) -c -o $@ $<

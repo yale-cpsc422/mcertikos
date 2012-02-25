@@ -15,7 +15,8 @@
 #include <kern/mem/mem.h>
 #include <kern/mem/pmem_layout.h>
 #include <inc/multiboot.h>
-#include <kern/hvm/svm/vm.h>
+
+#include <kern/hvm/vmm.h>
 
 // We can not rely on the bootloader stack to remain there
 // So we define a page of memory per CPU in use for stack.

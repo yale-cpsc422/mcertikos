@@ -8,7 +8,6 @@
 #include <architecture/mem.h>
 
 #include <kern/mem/mem.h>
-#include <kern/hvm/svm/vm.h>
 
 #include <kern/debug/debug.h>
 #include <kern/debug/stdio.h>
@@ -97,9 +96,6 @@ context_init_idt()
 // (for now I assume that all processors want to share interrupts)
 //
 static bool context_inited;
-
-// The context subsystem tracks which context is currently running on each CPU
-context* cur[MAX_CPU];
 
 void context_init()
 {
@@ -197,7 +193,7 @@ void kstack_init()
 
 // Find the CPU struct representing the current CPU.
 // It always resides at the bottom of the page containing the CPU's stack.
-static kstack* kstack_cur() {
+kstack* kstack_cur() {
 	// kstack* kstack_cur() {
 	kstack *c = (kstack*)ROUNDDOWN(read_esp(), PAGESIZE);
 	//	assert(c->magic == CPU_MAGIC);
@@ -263,57 +259,6 @@ void context_handler(int trapno, callback func)
 	assert(0 <= trapno && trapno < 256);
 	//cprintf("Registered trap %d for callback %x\n", trapno, (uint32_t)func);
 	kstack_cur()->registered_callbacks[trapno] = func;
-}
-
-
-// This function is not a part of the interface
-// it is used internally by the trap system
-void gcc_noreturn trap(trapframe *tf)
-{
-	// The user-level environment may have set the DF flag,
-	// and some versions of GCC rely on DF being clear.
-	asm volatile("cld" ::: "cc");
-	context* ctx = cur[mp_curcpu()];
-	cur[mp_curcpu()] = NULL;
-
-	// copy the trapframe into the context
-	assert(tf->tf_eip);
-	assert(tf->tf_eip < 0x50000000);
-	ctx->tf = *tf;
-
-	// When this function is called, the trapped frame is on the kstack
-	// This is not a convenient location - we move the data into its proper place
-	/*
-		if(tf->tf_trapno!=0x30){
-		cprintf("TrapNo.:%x;",tf->tf_trapno);
-		}
-		switch (tf->tf_trapno){
-		case T_IRQ0+ IRQ_KBD:
-		cprintf("keyboard pressed!");
-		}
-	*/
-	// grab the pointer to the appropriate callback functions
-	callback f = kstack_cur()->registered_callbacks[tf->tf_trapno];
-
-	//	if (cpu_cur() == &stacks[1]) {
-	//		cprintf("In trap number %d, cb %x, sl_syscall %x\n", tf->trap.tf_trapno, (uint32_t)f, (uint32_t)&stimer);
-	//	}
-	//    cprintf("In trap number %d, cpu %d, cb %x\n", tf->trap.tf_trapno, cpu_number(), (uint32_t)f);
-	//
-
-	// If the callback is registered, then execute it.
-	// We pass it the pointer to the trapped context
-	uint32_t result = 0;
-	if (f) {
-		//cprintf("Running callback %x\n", f);
-		result = f(ctx);
-	} else
-		cprintf("Unregistered interrupt fired (maybe %d)\n", ctx->tf.tf_trapno);
-
-	// A returning callback means that we should restart the context
-	assert(ctx->tf.tf_eip < 0x50000000);
-	assert(ctx->tf.tf_eip);
-	context_start(ctx);
 }
 
 void gcc_noreturn context_start (context *ctx)

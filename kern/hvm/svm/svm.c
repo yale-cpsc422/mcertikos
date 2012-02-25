@@ -1,274 +1,626 @@
-/****************************************************************
-* Derived from  XEN and MAVMM
-* Adapted for CertiKOS 
-*
-* This module provides the basic functions for AMD SVM support
-* according to AMD64 mannual Vol. 2
-*
-*/
-
-#include "svm.h"
-#include <architecture/cpufeature.h>
-#include <kern/debug/string.h>
-#include <kern/debug/stdio.h>
+#include <kern/as/as.h>
+#include <kern/debug/debug.h>
+#include <kern/debug/kbd.h>
 #include <kern/mem/mem.h>
-#include <architecture/types.h>
+#include <kern/pmap/pmap.h>
+
+#include <architecture/apic.h>
+#include <architecture/cpuid.h>
+#include <architecture/intr.h>
 #include <architecture/mem.h>
+#include <architecture/pic.h>
+#include <architecture/pic_internal.h>
+#include <architecture/types.h>
 #include <architecture/x86.h>
 
+#include <kern/hvm/vmm.h>
+#include <kern/hvm/vmm_iodev.h>
+#include <kern/hvm/dev/kbd.h>
+#include <kern/hvm/dev/pci.h>
+#include <kern/hvm/dev/pic.h>
 
-/* AMD64 manual Vol. 2, p. 441 */
-/* Host save area */
-static void *host_save_area;
+#include <kern/hvm/svm/svm.h>
+#include <kern/hvm/svm/svm_handle.h>
+#include <kern/hvm/svm/svm_utils.h>
 
-void * alloc_host_save_area ( void )
+struct {
+	struct svm 	svms[4];
+	bool		used[4];
+} svm_info;
+
+/*
+ * data allocator.
+ */
+static struct svm *
+alloc_svm(void)
 {
-	void *hsa;
+	int i;
 
-	//unsigned long n  = alloc_host_pages ( 1, 1 );
-	unsigned long n  = mem_alloc_one_page(); 
-	hsa = (void *) (n << PAGE_SHIFT);
+	for (i = 0; i < 4; i++)
+		if (svm_info.used[i] == false)
+			break;
 
-	if (hsa) memset (hsa, 0, PAGE_SIZE);
-
-	return hsa;
+	if (i == 4)
+		return NULL;
+	else {
+		memset(&svm_info.svms[i], 0x0, sizeof(struct svm));
+		svm_info.used[i] = true;
+		return &svm_info.svms[i];
+	}
 }
 
+/*
+ * Check whether the machine supports SVM. (Sec 15.4, APM Vol2 r3.19)
+ *
+ * @return true if SVM is supported; otherwise false
+ */
+static bool
+svm_check(void)
+{
+	/* check CPUID 0x80000001 */
+	uint32_t feature, dummy;
+	cpuid(CPUID_FEATURE_FUNC, &dummy, &dummy, &feature, &dummy);
+	if ((feature & CPUID_X_FEATURE_SVM) == 0) {
+		/* debug("The processor does not support SVM.\n"); */
+		return false;
+	}
 
+	/* check MSR VM_CR */
+	if ((rdmsr(MSR_VM_CR) & MSR_VM_CR_SVMDIS) == 1) {
+		/* debug("SVM is disabled.\n"); */
+		return false;
+	}
+
+	/* check CPUID 0x8000000a */
+	cpuid(CPUID_SVM_FEATURE_FUNC, &dummy, &dummy, &dummy, &feature);
+	if ((feature & CPUID_SVM_LOCKED) == 0) {
+		/* debug("SVM maybe disabled by BIOS.\n"); */
+		return false;
+	}
+
+	/* debug("SVM is available.\n"); */
+
+	return true;
+}
+
+/*
+ * Enable SVM. (Sec 15.4, APM Vol2 r3.19)
+ */
 static void
-display_cacheinfo ( struct cpuinfo_x86 *c )
+svm_enable(void)
 {
-        unsigned int n, dummy, eax, ebx, ecx, edx;
+	/* set MSR_EFER.SVME */
+	uint64_t efer;
 
-        n = c->cpuid_max_exfunc;
+	efer = rdmsr(MSR_EFER);
+	efer |= MSR_EFER_SVME;
+	wrmsr(MSR_EFER, efer);
 
-        if (n >= 0x80000005)
-        {
-                cpuid(0x80000005, &dummy, &ebx, &ecx, &edx);
-                cprintf("CPU: L1 I Cache: %xK (%x bytes/line), D cache %xK (%x bytes/line)\n",
-                                edx>>24, edx&0xFF, ecx>>24, ecx&0xFF);
-                c->x86_cache_size = (ecx >> 24) + (edx >> 24);
-                /* On K8 L1 TLB is inclusive, so don't count it */
-                c->x86_tlbsize = 0;
-        }
+	/* debug("SVM is enabled.\n"); */
+}
 
-        if (n >= 0x80000006)
-        {
-                cpuid(0x80000006, &dummy, &ebx, &ecx, &edx);
-                ecx = cpuid_ecx(0x80000006);
-                c->x86_cache_size = ecx >> 16;
-                c->x86_tlbsize += ((ebx >> 16) & 0xfff) + (ebx & 0xfff);
+/*
+ * Allocate one memory page for the host state-save area.
+ */
+static uintptr_t
+alloc_hsave_area(void)
+{
+	pageinfo *pi = mem_alloc();
 
-                cprintf("CPU: L2 Cache: %xK (%x bytes/line)\n", c->x86_cache_size, ecx & 0xFF);
-        }
+	if (pi == NULL) {
+		debug("Failed to allocate memory for the host state-save area failed.\n");
+		return 0x0;
+	}
 
-        if (n >= 0x80000007) cpuid(0x80000007, &dummy, &dummy, &dummy, &c->x86_power);
-
-        if (n >= 0x80000008)
-        {
-                cpuid(0x80000008, &eax, &dummy, &dummy, &dummy);
-                c->x86_virt_bits = (eax >> 8) & 0xff;
-                c->x86_phys_bits = eax & 0xff;
-        }
+	return mem_pi2phys(pi);
 }
 
 
+/*
+ * Allocate one memory page for VMCB.
+ *
+ * @return the pointer to VMCB if succeed; otherwise NULL.
+ */
+static struct vmcb *
+alloc_vmcb(void)
+{
+	pageinfo *pi = mem_alloc();
+
+	if (pi == NULL) {
+		debug("Failed to allocate memory for VMCB.\n");
+		return NULL;
+	}
+
+	memset((struct vmcb *) mem_pi2phys(pi), 0x0, sizeof(struct vmcb));
+
+	return (struct vmcb *) mem_pi2phys(pi);
+}
+
+/*
+ * Create the nestd page table.
+ * - identically maps the lowest 1MB guest physical memory
+ * - identically maps the memory hole above 0xf0000000
+ *
+ * TODO: This function breaks the boundary of as module and pmap module. Try to
+ *       alter all pmap APIs with as APIs.
+ *
+ * @return the pointer to the page table if succeed; otherwise NULL.
+ */
+static pmap_t *
+alloc_nested_ptable(void)
+{
+	uintptr_t addr;
+	pmap_t *pmap = pmap_new();
+
+	if (pmap == NULL) {
+		debug("Failed to allocate memory for nested page table.\n");
+		return NULL;
+	}
+
+	for (addr = 0x0; addr < VM_PHY_MEMORY_SIZE; addr += PAGESIZE) {
+		if (addr >= 0xa0000 && addr <= 0xbffff) {
+			/* identically map VGA display memory to the host */
+			as_assign((as_t *) pmap, addr, PTE_G | PTE_W | PTE_U,
+				  mem_phys2pi(addr));
+		} else if (as_reserve((as_t *) pmap, addr,
+				      PTE_G | PTE_W | PTE_U) == NULL) {
+			debug("Failed to map guest memory page at %x.\n",
+			      addr);
+			pmap_free(pmap);
+			return NULL;
+		}
+	}
+
+	return pmap;
+}
+
+/*
+ * Create an permission map. The permission map is aligned to the
+ * boundary of the physical memory page and occupies continuous
+ * ROUNDUP(size, PAGESIZE) bytes of physical memory.
+ *
+ * @param size the least size of the permission map in bytes
+ *
+ * @return the 64-bit address of the permission map if succeed;
+ *         otherwise, 0x0.
+ */
+static uint64_t
+alloc_permission_map(size_t size)
+{
+	uintptr_t addr = alloc_host_pages(size/PAGESIZE, 1);
+
+	if (addr == 0x0)
+		return 0;
+	else
+		addr = addr << PAGE_SHIFT;
+
+	memset((uint8_t *) addr, 0, size);
+
+	return (uint64_t) addr;
+}
+
+/*
+ * Enable/Disable intercept an I/O port.
+ *
+ * @param vmcb
+ * @param port the I/O port to be intercepted
+ * @param enable true to enable intercept, false to disable intercept
+ */
+void
+set_intercept_ioio(struct vmcb *vmcb, uint32_t port, bool enable)
+{
+	assert(vmcb != NULL);
+
+	uint32_t *iopm = (uint32_t *)(uintptr_t) vmcb->control.iopm_base_pa;
+
+	int entry = port / 32;
+	int bit = port - entry * 32;
+
+	if (enable)
+		iopm[entry] |= (1 << bit);
+	else
+		iopm[entry] &= ~(1 << bit);
+}
+
+/*
+ * Enable/Disable intercept reading a MSR.
+ *
+ * @param vmcb
+ * @param msr the MSR to be intercepted
+ * @param enable true to enable intercept, false to disable intercept
+ */
+void
+set_intercept_rdmsr(struct vmcb *vmcb, uint64_t msr, bool enable)
+{
+	panic("Not implemented yet.\n");
+}
+
+/*
+ * Enable/Disable intercept writing a MSR.
+ *
+ * @param vmcb
+ * @param msr the MSR to be intercepted
+ * @param enable true to enable intercept, false to disable intercept
+ */
+void
+set_intercept_wrmsr(struct vmcb *vmcb, uint64_t msr, bool enable)
+{
+	panic("Not implemented yet.\n");
+}
+
+/*
+ * Set/Unset an intercept bit in VMCB.
+ *
+ * @param vmcb the pointer to a VMCB
+ * @param bit the intercept bit to be set
+ * @param enable true to enable intercept, false to disable intercept
+ */
+void
+set_intercept(struct vmcb *vmcb, int bit, bool enable)
+{
+	assert(vmcb != NULL);
+	assert(INTERCEPT_INTR <= bit && bit <= INTERCEPT_XSETBV);
+
+	if (enable == true)
+		vmcb->control.intercept |= (1ULL << bit);
+	else
+		vmcb->control.intercept &= ~(1ULL << bit);
+}
+
+/*
+ * Enable/Disable intercept an exception.
+ *
+ * @param vmcb
+ * @param bit the vector number of the exception
+ * @param enable true to enable intercept, false to disable intercept
+ */
+void
+set_intercept_exception(struct vmcb *vmcb, int bit, bool enable)
+{
+	assert(vmcb != NULL);
+	assert(0 <= bit && bit < 32);
+
+	if (enable == true)
+		vmcb->control.intercept_exceptions |= (1UL << bit);
+	else
+		vmcb->control.intercept_exceptions &= ~(1UL << bit);
+}
+
+/*
+ * Setup the intercept.
+ *
+ * @param vmcb the pointer to a VMCB
+ *
+ * @return 0 if succeed; otherwise, 1.
+ */
 static int
-get_model_name(struct cpuinfo_x86 *c)
+setup_intercept(struct vmcb *vmcb)
 {
-        unsigned int *v;
+	assert(vmcb != NULL);
 
-        v = (unsigned int *) c->x86_model_id;
-        cpuid(0x80000002, &v[0], &v[1], &v[2], &v[3]);
-        cpuid(0x80000003, &v[4], &v[5], &v[6], &v[7]);
-        cpuid(0x80000004, &v[8], &v[9], &v[10], &v[11]);
-        c->x86_model_id[48] = 0;
-        return 1;
+	/* create IOPM */
+	vmcb->control.iopm_base_pa = alloc_permission_map(SVM_IOPM_SIZE);
+
+	if (vmcb->control.iopm_base_pa == 0x0) {
+		debug("Failed to create IOPM.\n");
+		return 1;
+	}
+
+	debug("IOPM is at %x.\n", vmcb->control.iopm_base_pa);
+
+	/* create MSRPM */
+	vmcb->control.msrpm_base_pa = alloc_permission_map(SVM_MSRPM_SIZE);
+
+	if (vmcb->control.msrpm_base_pa == 0x0) {
+		debug("Failed to create MSRPM.\n");
+		return 1;
+	}
+
+	debug("MSRPM is at %x.\n", vmcb->control.msrpm_base_pa);
+
+	/* setup IOIO intercept */
+#if 1
+	/* intercept i8259 */
+	set_intercept_ioio(vmcb, IO_PIC1, true);
+	set_intercept_ioio(vmcb, IO_PIC1+1, true);
+	set_intercept_ioio(vmcb, IO_PIC2, true);
+	set_intercept_ioio(vmcb, IO_PIC2+1, true);
+#endif
+
+#if 1
+	/* intercept PCI */
+	set_intercept_ioio(vmcb, PCI_CMD_PORT, true);
+	set_intercept_ioio(vmcb, PCI_DATA_PORT, true);
+#endif
+
+#if 1
+	/* intercept keyboard */
+	set_intercept_ioio(vmcb, KBSTATP, true);
+	set_intercept_ioio(vmcb, KBDATAP, true);
+#endif
+
+	/* intercept other things */
+	set_intercept(vmcb, INTERCEPT_VMRUN, true);
+	set_intercept(vmcb, INTERCEPT_VMMCALL, true);
+	set_intercept(vmcb, INTERCEPT_STGI, true);
+	set_intercept(vmcb, INTERCEPT_CLGI, true);
+	set_intercept(vmcb, INTERCEPT_INTR, true);
+	set_intercept(vmcb, INTERCEPT_VINTR, true);
+	set_intercept(vmcb, INTERCEPT_IOIO_PROT, true);
+	set_intercept(vmcb, INTERCEPT_CPUID, true);
+
+	/* intercept exceptions */
+	set_intercept_exception(vmcb, T_DEBUG, true);
+
+	return 0;
 }
 
+/*
+ * Setup the segment registers in VMCB.
+ *
+ * @param seg
+ * @param sel segment selector
+ * @param base segment base
+ * @param lim segment limitation
+ * @param attr segment attribution
+ */
 static void
-get_cpu_vendor ( struct cpuinfo_x86 *c )
+set_segment(struct vmcb_seg *seg,
+	    uint16_t sel, uint64_t base, uint32_t lim, uint16_t attr)
 {
-        cprintf ( "Vendor ID: %s\n", c->x86_vendor_id ); /* [DEBUG] */
+	assert(seg != NULL);
 
-        if ( ! strncmp ( c->x86_vendor_id, "AuthenticAMD", 12 ) ) {
-                c->x86_vendor = X86_VENDOR_AMD;
-        } else {
-                c->x86_vendor = X86_VENDOR_UNKNOWN;
-        }
+	seg->selector = sel;
+	seg->base = base;
+	seg->limit = lim;
+	seg->attrib = attr;
 }
 
-
+/*
+ * Setup VM to the powerup state. (Sec 14.1.3, APM Vol2 r3.19)
+ *
+ * XXX: Because CS.sel=0xf000, CS.base=0xffff_0000, and rip=0xfff0, the first
+ *      instruction of VM is at 0xffff_fff0. Remember to redirect it to 0xfff0
+ *      where the actual first instruction sits. CertiKOS treats it as a
+ *      special case when handling nested page faults.
+ */
 static void
-early_identify_cpu ( struct cpuinfo_x86 *c )
+setup_powerup_state(struct vm *vm)
 {
-        c->x86_cache_size = -1;
-        c->x86_vendor = X86_VENDOR_UNKNOWN;
-        c->x86_model = c->x86_mask = 0; /* So far unknown... */
-        c->x86_vendor_id[0] = '\0'; /* Unset */
-        c->x86_model_id[0] = '\0';  /* Unset */
-        c->x86_clflush_size = 64;
-        c->x86_cache_alignment = c->x86_clflush_size;
-        c->x86_max_cores = 1;
-        c->cpuid_max_exfunc = 0;
-        memset ( &c->x86_capability, 0, sizeof ( c->x86_capability ) );
+	assert(vm != NULL);
 
-        /* Get vendor name */
-        cpuid ( 0x00000000,
-                (unsigned int *)&c->cpuid_max_stdfunc,
-                (unsigned int *)&c->x86_vendor_id[0],
-                (unsigned int *)&c->x86_vendor_id[8],
-                (unsigned int *)&c->x86_vendor_id[4] );
+	struct svm *svm = (struct svm *) vm->cookie;
+	struct vmcb_save_area *save = &svm->vmcb->save;
 
-        get_cpu_vendor ( c );
+	save->cr0 = 0x60000010;
+	save->cr2 = save->cr3 = save->cr4 = 0;
+	save->rflags = 0x00000002;
+	save->efer = MSR_EFER_SVME;
+	save->rip = 0x0000fff0;
+	set_segment(&save->cs, 0xf000, 0xffff0000, 0xffff,
+		    SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_CODE);
+	set_segment(&save->ds, 0x0000, 0x0, 0xffff,
+		    SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_DATA);
+	set_segment(&save->es, 0x0000, 0x0, 0xffff,
+		    SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_DATA);
+	set_segment(&save->fs, 0x0000, 0x0, 0xffff,
+		    SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_DATA);
+	set_segment(&save->gs, 0x0000, 0x0, 0xffff,
+		    SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_DATA);
+	set_segment(&save->ss, 0x0000, 0x0, 0xffff,
+		    SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_DATA);
+	set_segment(&save->gdtr, 0, 0x0, 0xffff, 0);
+	set_segment(&save->idtr, 0, 0x0, 0xffff, 0);
+	set_segment(&save->ldtr, 0, 0x0, 0xffff, SEG_ATTR_P | SEG_TYPE_LDT);
+	set_segment(&save->tr, 0, 0x0, 0xffff, SEG_ATTR_P | SEG_TYPE_TSS_BUSY);
+	save->rax = 0x0;
+	save->dr6 = 0xffff0ff0;
+	save->dr7 = 0x00000400;
+	save->g_pat = 0x7040600070406UL;
 
-        /* Initialize the standard set of capabilities */
-        /* Note that the vendor-specific code below might override */
-
-        /* Intel-defined flags: level 0x00000001 */
-        if ( c->cpuid_max_stdfunc >= 0x00000001 ) {
-                uint32_t tfms;
-                uint32_t misc;
-                cpuid(0x00000001, &tfms, &misc, &c->x86_capability[4], &c->x86_capability[0]);
-                c->x86 = (tfms >> 8) & 0xf;
-                c->x86_model = (tfms >> 4) & 0xf;
-                c->x86_mask = tfms & 0xf;
-                if (c->x86 == 0xf) {
-                        c->x86 += (tfms >> 20) & 0xff;
-                }
-                if (c->x86 >= 0x6) {
-                        c->x86_model += ((tfms >> 16) & 0xF) << 4;
-                }
-                if (c->x86_capability[0] & (1<<19)) {
-                        c->x86_clflush_size = ((misc >> 8) & 0xff) * 8;
-                }
-        } else {
-                /* Have CPUID level 0 only - unheard of */
-                c->x86 = 4;
-        }
-
-        uint32_t xlvl;
-        /* AMD-defined flags: level 0x80000001 */
-        xlvl = cpuid_eax ( 0x80000000 );
-        c->cpuid_max_exfunc = xlvl;
-        if ( ( xlvl & 0xffff0000 ) == 0x80000000 ) {
-                if ( xlvl >= 0x80000001 ) {
-                        c->x86_capability[1] = cpuid_edx ( 0x80000001 );
-                        c->x86_capability[6] = cpuid_ecx ( 0x80000001 );
-                }
-                if ( xlvl >= 0x80000004 ) {
-                        get_model_name ( c ); /* Default name */
-                }
-        }
-
-        /* Transmeta-defined flags: level 0x80860001 */
-        xlvl = cpuid_eax ( 0x80860000 );
-        if ( ( xlvl & 0xffff0000 ) == 0x80860000 ) {
-                /* Don't set x86_cpuid_level here for now to not confuse. */
-                if ( xlvl >= 0x80860001 ) {
-                        c->x86_capability[2] = cpuid_edx(0x80860001);
-                }
-        }
+	svm->g_rbx = svm->g_rcx = svm->g_rsi = svm->g_rdi = svm->g_rbp = 0x0;
+	svm->g_rdx = 0x80;
 }
 
-
-static void __init_amd (struct cpuinfo_x86 *cpuinfo)
+/*
+ * Initialize SVM module.
+ * - check whether SVM is supported
+ * - enable SVM
+ * - allocate host save area
+ *
+ * @return 0 if succeed
+ */
+static int
+svm_init(void)
 {
-        /* Should distinguish Models here, but this is only a fallback anyways. */
-        strcpy (cpuinfo->x86_model_id, "Hammer");
+	uintptr_t hsave_addr;
 
-        /* AMD SVM architecture reference manual p. 81 */
-//      unsigned int n_asids = cpuid_edx (0x80000000);
-//      outf ( "The number of address space IDs: %x\n", n_asids );
+	/* check whether the processor supports SVM */
+	if (svm_check() == false)
+		return 1;
 
-        unsigned int np = cpuid_ebx(0x80000000) & 1;
-        if (!np) cprintf ("Nested paging is not supported.\n");
+	/* enable SVM */
+	svm_enable();
+
+	/* setup host state-save area */
+	if ((hsave_addr = alloc_hsave_area()) == 0x0)
+		return 1;
+	else
+		wrmsr(MSR_VM_HSAVE_PA, hsave_addr);
+
+	/* debug("Host state-save area is at %x.\n", hsave_addr); */
+
+	/* register guest interrupt handler */
+	trap_register_default_kern_handler(svm_guest_intr_handler);
+	trap_register_kern_handler(T_GPFLT, svm_guest_handle_gpf);
+
+	return 0;
 }
 
-static void init_amd (struct cpuinfo_x86 *cpuinfo)
+/*
+ * Initialize VM.
+ */
+static int
+vm_init(struct vm *vm)
 {
-        /* Bit 31 in normal CPUID used for nonstandard 3DNow ID;
-           3DNow is IDd by bit 31 in extended CPUID (1*32+31) anyway */
-        clear_bit (0*32+31, &cpuinfo->x86_capability);
+	assert(vm != NULL);
 
-        /* On C+ stepping K8 rep microcode works well for copy/memset */
-        unsigned level = cpuid_eax (1);
-        if ( (level >= 0x0f48 && level < 0x0f50) || level >= 0x0f58)
-                set_bit (X86_FEATURE_REP_GOOD, &cpuinfo->x86_capability);
+	struct svm *svm = alloc_svm();
 
-        /* Enable workaround for FXSAVE leak */
-        set_bit (X86_FEATURE_FXSAVE_LEAK, &cpuinfo->x86_capability);
+	if (svm == NULL)
+		return 1;
 
-        __init_amd (cpuinfo);
+	vm->cookie = svm;
 
-        display_cacheinfo (cpuinfo);
+	/* allocate memory for VMCB */
+	if ((svm->vmcb = alloc_vmcb()) == NULL)
+		return 1;
 
-        //enable SVM, allocate a page for host state save area,
-        // and copy its address into MSR_K8_VM_HSAVE_PA MSR
-        enable_svm (cpuinfo);
+	debug("VMCB is at %0x.\n", svm->vmcb);
+
+	/* setup VM to the powerup state */
+	setup_powerup_state(vm);
+
+	/* create the nested page table */
+	pmap_t *ncr3 = alloc_nested_ptable();
+
+	if (ncr3 == NULL)
+		return 1;
+
+	svm->vmcb->control.nested_cr3 = (uintptr_t) ncr3;
+
+	debug("Nested page table is at %x.\n", ncr3);
+
+	/* load seabios */
+	load_bios((uintptr_t) ncr3);
+
+	/* setup interception */
+	if (setup_intercept(svm->vmcb) != 0)
+		return 1;
+
+	/* miscellenea initialization */
+	svm->vmcb->control.asid = 1;
+	svm->vmcb->control.nested_ctl = 1;
+	svm->vmcb->control.tlb_ctl = 0;
+	svm->vmcb->control.tsc_offset = 0;
+	/* Sec 15.21.1, APM Vol2 r3.19 */
+	svm->vmcb->control.int_ctl = (SVM_INTR_CTRL_VINTR_MASK |
+				      (0x0 & SVM_INTR_CTRL_VTPR));
+
+	/* intialize virtual devices */
+	vkbd_init(&vm->vkbd);
+	vpci_init(&vm->vpci);
+	vpic_init(&vm->vpic);
+
+	return 0;
 }
 
-
-
-void __init enable_svm (struct cpuinfo_x86 *c)
+/*
+ * Run VM.
+ */
+static int
+vm_run(struct vm *vm)
 {
- 	/* Xen does not fill x86_capability words except 0. */
-	{
-		uint32_t ecx = cpuid_ecx ( 0x80000001 );
-		c->x86_capability[5] = ecx;
+	assert(vm != NULL);
+
+	struct svm *svm = (struct svm *) vm->cookie;
+
+	SVM_CLGI();
+
+	sti();
+	svm_run(svm);
+	cli();
+
+	if(svm->vmcb->control.exit_code == SVM_EXIT_INTR)
+		vm->exit_for_intr = true;
+
+	SVM_STGI();
+
+	return 0;
+}
+
+/*
+ * Handle VMEXIT.
+ */
+static int
+svm_handle_exit(struct vm *vm)
+{
+	assert(vm != NULL);
+
+	struct svm *svm = (struct svm *) vm->cookie;
+	struct vmcb_control_area *ctrl = &svm->vmcb->control;
+
+	bool handled = false;
+
+	debug("[%x:%llx] ",
+	      svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
+
+	switch (ctrl->exit_code) {
+	case SVM_EXIT_EXCP_BASE ... (SVM_EXIT_INTR-1):
+		info("VMEXIT for EXCP ");
+		handled = svm_handle_exception(vm);
+		break;
+
+	case SVM_EXIT_INTR:
+		info("VMEXIT for INTR.\n");
+		/* rely on kernel interrupt handlers to ack interupts */
+		handled = svm_handle_intr(vm);
+		break;
+
+	case SVM_EXIT_VINTR:
+		info("VMEXIT for VINTR.\n");
+		handled = svm_handle_vintr(vm);
+		break;
+
+	case SVM_EXIT_IOIO:
+		info("VMEXIT for IO");
+		handled = svm_handle_ioio(vm);
+		break;
+
+	case SVM_EXIT_NPF:
+		info("VMEXIT for NPF");
+		handled = svm_handle_npf(vm);
+		break;
+
+	case SVM_EXIT_CPUID:
+		info("VMEXIT for cpuid");
+		handled = svm_handle_cpuid(vm);
+		break;
+
+	case SVM_EXIT_SWINT:
+		info("VMEXIT for INTn.\n");
+		handled = svm_handle_swint(vm);
+		break;
+
+	case SVM_EXIT_RDTSC:
+		info("VMEXIT for RDTSC.\n");
+		handled = svm_handle_rdtsc(vm);
+		break;
+
+	case SVM_EXIT_ERR:
+		info("VMEXIT for invalid guest state in VMCB.\n");
+		handled = svm_handle_err(vm);
+		break;
+
+	default:
+		panic("Unhandled VMEXIT: exit_code = %x.\n",
+		      ctrl->exit_code);
 	}
 
-	if ( ! ( test_bit ( X86_FEATURE_SVME, &c->x86_capability ) ) ) {
-		cprintf ("No svm feature!\n");
-		return;
+	if (ctrl->exit_code == SVM_EXIT_ERR)
+		panic("Halt for SVM_EXIT_ERR.\n");
+
+	if (handled == false) {
+		panic("Unhandled VMEXIT: exit_code = %x.\n",
+		      ctrl->exit_code);
 	}
 
-	{ /* Before any SVM instruction can be used, EFER.SVME (bit 12
-	   * of the EFER MSR register) must be set to 1.
-	   * (See AMD64 manual Vol. 2, p. 439) */
-		uint32_t eax, edx;
-		rdmsr ( MSR_EFER, eax, edx );
-		eax |= EFER_SVME;
-		wrmsr ( MSR_EFER, eax, edx );
-	}
-
-	cprintf ("AMD SVM Extension is enabled.\n");
-
-	/* Initialize the Host Save Area */
-	// Write host save area address to MSR VM_HSAVE_PA
-	{
-		uint64_t phys_hsa;
-		uint32_t phys_hsa_lo, phys_hsa_hi;
-
-		host_save_area = alloc_host_save_area();
-		phys_hsa = (uint32_t) host_save_area;
-		phys_hsa_lo = (uint32_t) phys_hsa;
-		phys_hsa_hi = (uint32_t) (phys_hsa >> 32);
-		wrmsr (MSR_K8_VM_HSAVE_PA, phys_hsa_lo, phys_hsa_hi);
-
-		cprintf ("Host state save area: %x\n", host_save_area);
-	}
+	return 0;
 }
 
-// Identify CPU. Make sure that it is AMD with SVM feature
-// Allocate a page for host state save area and assign it to VM_HSAVE_PA MSR (vol 2 p 422)
-// Then enable SVM by setting its flag in EFER
-void __init enable_amd_svm ( void )
-{
-        struct cpuinfo_x86 cpuinfo;
-
-        early_identify_cpu (&cpuinfo);
-
-        switch (cpuinfo.x86_vendor)
-        {
-        case X86_VENDOR_AMD:
-                init_amd (&cpuinfo);
-                break;
-
-        case X86_VENDOR_UNKNOWN:
-        default:
-                cprintf ("Unknown CPU vendor\n");
-                break;
-        }
-}
-
+struct vmm_ops vmm_ops_amd = {
+	.vmm_init = svm_init,
+	.vm_init = vm_init,
+	.vm_run = vm_run,
+	.vm_handle_exit = svm_handle_exit
+};

@@ -18,8 +18,6 @@ ARCHDIR := kern/arch/$(ARCH)
 include kern/arch/$(ARCH)/Makefrag
 #include kern/arch/Makefrag
 include kern/hvm/Makefrag
-include kern/hvm/dev/Makefrag
-include kern/hvm/svm/Makefrag
 include kern/debug/Makefrag
 include kern/mem/Makefrag
 include kern/pmap/Makefrag

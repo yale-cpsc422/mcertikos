@@ -21,7 +21,7 @@
 #include <inc/client.h>
 #include <inc/user.h>
 
-#include <kern/hvm/svm/vm.h>
+#include <kern/hvm/vmm.h>
 
 #include <architecture/intr.h>
 
@@ -74,9 +74,9 @@ uint32_t sl_syscall(context* ctx) {
 			*(uint32_t*)arg = mp_curcpu();
 			break;
 		case SYSCALL_CLIENT_SETUPVM:
-			 if (!as_checkrange(as_current(), arg, sizeof(uint32_t)))
-				syscall_fail(ctx);
-				start_vm_with_interception();
+			 /* if (!as_checkrange(as_current(), arg, sizeof(uint32_t))) */
+			 /* 	syscall_fail(ctx); */
+			 /* 	start_vm_with_interception(); */
 			break;
 
     }

@@ -1,25 +1,17 @@
-#
-# Makefile fragment for the kernel.
-# This is NOT a complete makefile;
-# you must run GNU make in the top-level directory
-# where the GNUmakefile is located.
-#
+# -*-Makefile-*-
 
-OBJDIRS += kern/hvm/dev
+KERN_SRCFILES	+= kern/hvm/dev/pci.c
+KERN_SRCFILES	+= kern/hvm/dev/pic.c
+KERN_SRCFILES	+= kern/hvm/dev/kbd.c
 
-# We also snatch the use of a few handy source files
-# from the lib directory, to avoid gratuitous code duplication.
-KERN_SRCFILES +=	kern/hvm/dev/i8259.c
-KERN_SRCFILES +=	kern/hvm/dev/irq.c
-KERN_SRCFILES +=	kern/hvm/dev/pci.c
+# Targets
 
-# How to build kernel object files
-$(OBJDIR)/kern/hvm/dev/%.o: kern/hvm/dev/%.c
+$(OBJDIR)/hvm/dev/%.o: kern/hvm/dev/%.c
 	@echo + cc $<
 	@mkdir -p $(@D)
-	$(V)$(CC) -nostdinc $(KERN_CFLAGS) -c -o $@ $<
+	$(V)$(CC) $(KERN_CFLAGS) -c -o $@ $<
 
-$(OBJDIR)/kern/hvm/dev/%.o: kern/hvm/dev/%.S
+$(OBJDIR)/hvm/dev/%.o: kern/hvm/dev/%.S
 	@echo + as $<
 	@mkdir -p $(@D)
-	$(V)$(CC) -nostdinc $(KERN_CFLAGS) -c -o $@ $<
+	$(V)$(CC) $(KERN_CFLAGS) -c -o $@ $<

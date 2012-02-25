@@ -1,11 +1,13 @@
-#ifndef _KERN_HVM_PCI_H_
-#define _KERN_HVM_PCI_H_
-
-#include <kern/hvm/ioport.h>
+#ifndef _HVM_PCI_H_
+#define _HVM_PCI_H_
 
 #define PCI_CMD_PORT	0x0cf8
 #define PCI_DATA_PORT	0x0cfc
 
-void vpci_init(void);
+/* currently vpci is a dummy structure */
+struct vpci {
+};
 
-#endif /* !_KERN_HVM_PCI_H_ */
+void vpci_init(struct vpci *);
+
+#endif /* _HVM_PCI_H_ */

@@ -3,8 +3,7 @@
 #include <architecture/x86.h>
 #include <architecture/mmu.h>
 #include <inc/elf.h>
-#include <kern/hvm/svm/vm.h>
-#include <kern/hvm/svm/svm.h>
+#include <kern/hvm/vmm.h>
 #include <architecture/mem.h>
 
 #include <architecture/context.h>
@@ -73,10 +72,10 @@ procid_t proc_new(char* binary) {
 		as_free(p->as);
 		return 0;
 	}
-	
+
 	p->next = proclist;
 	proclist = p;
-	
+
 	//DEBUG STUFF:
 	// proc_debug(p->id);
 
@@ -139,11 +138,11 @@ void gcc_noreturn proc_sendsignal(procid_t proc, char* msg, size_t msgsize) {
 	assert(!p->insignal);
 	assert(msgsize < PAGESIZE);
 	// assert that this is the process to activate
-	
+
 	// The current context is already saved in p->ctx
 	// We need to create a new context with a fresh stack
 	// This is easy, but we need to remap the VM
-	
+
 	//cprintf("proc_sendsignal: process %d\n", proc);
 	p->insignal = true;
 	p->sigctx = context_new(p->sig_d.f, VM_STACKHI-PAGESIZE);
@@ -156,14 +155,14 @@ void gcc_noreturn proc_sendsignal(procid_t proc, char* msg, size_t msgsize) {
 		if (!as_checkrange(p->as, (uint32_t)p->sig_d.s, msgsize)) {
 			cprintf("proc_sendsignal: Process does not have space for message\n");
 		}
-		else 
+		else
 			memcpy(p->sig_d.s, msg, msgsize);
 	}
 
 	context_start(p->sigctx);
 	assert(1==0);
 	// this should do it.
-	
+
 }
 
 void proc_debug(procid_t proc) {
@@ -191,7 +190,7 @@ void loadelf(as_t* as, char* exe, proc* p) {
 	for (; ph < eph; ph++) {
 		if (ph->p_type != ELF_PROG_LOAD)
 			continue;
-	
+
 		void *fa = (void *) eh + ROUNDDOWN(ph->p_offset, PAGESIZE);
 		uint32_t va = ROUNDDOWN(ph->p_va, PAGESIZE);
 		uint32_t zva = ph->p_va + ph->p_filesz;

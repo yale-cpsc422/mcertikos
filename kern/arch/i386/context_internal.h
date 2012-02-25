@@ -18,51 +18,8 @@
 #include <architecture/types.h>
 #include <architecture/x86.h>
 #include <architecture/mmu.h>
-
-
-// This struct represents the format of the trap frames
-// that get pushed on the kernel stack by the processor
-// in conjunction with the interrupt/trap entry code in trapasm.S.
-// All interrupts and traps use this same format,
-// although not all fields are always used:
-// e.g., the error code (tf_err) applies only to some traps,
-// and the processor pushes tf_esp and tf_ss
-// only when taking a trap from user mode (privilege level >0).
-typedef struct trapframe {
-	// registers and other info we push manually in trapasm.S
-	pushregs tf_regs;
-	uint16_t tf_es;
-	uint16_t tf_padding1;
-	uint16_t tf_ds;
-	uint16_t tf_padding2;
-	// TRAPHANDLERs macros will set this value to the interrupt number
-    // that fired
-    uint32_t tf_trapno;
-	
-    // Some interrupts will push an error code onto the stack
-    // For others, the trap handler will place a 0 onto the stack
-    uint32_t tf_err;  
-
-    // EIP, CS, EFLAGS - frame of the CALL instruction
-	uintptr_t tf_eip;
-	uint16_t tf_cs;
-	uint16_t tf_cspad; // pads CS to 4 bytes
-	uint32_t tf_eflags;
-
-	// rest included only when crossing rings, e.g., user to kernel
-    // Ends up on the stack whenever TSS is involved in interrupt
-    // This information may not be present in all cases, and may be
-    // dangerous to access (pointers may point outside of stack)
-	uintptr_t tf_esp;
-	uint16_t tf_ss;
-	uint16_t tf_sspad;
-} trapframe;
-
-// size of trapframe pushed when called from user and kernel mode, respectively
-#define trapframe_usize sizeof(trapframe)	// full trapframe struct
-#define trapframe_ksize (sizeof(trapframe) - 8)	// no esp, ss, padding4
-
-
+#include <architecture/trap.h>
+#include <architecture/mp.h>
 
 typedef struct context {
 	char stack[PAGESIZE-sizeof(trapframe)];
@@ -106,14 +63,13 @@ typedef struct kstack {
 	char gcc_aligned(PAGESIZE) kstackhi[0];
 } kstack;
 
+// The context subsystem tracks which context is currently running on each CPU
+context* cur[MAX_CPU];
+
 #define CPU_MAGIC	0x98765432	// cpu.magic should always = this
 
-static kstack* kstack_cur();
- //kstack* kstack_cur();
+kstack* kstack_cur();
 
-
-void trap(trapframe *tf) gcc_noreturn;
-void trap_return(trapframe *tf) gcc_noreturn;
 static void context_init_idt(void);
 
 // context is an abstract type

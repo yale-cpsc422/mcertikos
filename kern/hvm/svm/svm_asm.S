@@ -1,107 +1,54 @@
-/********************************************************************************
-* Derived from  XEN and MAVMM
-* Adapted for CertiKOS 
-*
-*********************************************************************************/
+#include <kern/hvm/svm/svm.h>
 
-#define __ASSEMBLY__
+	.globl	svm_run
+svm_run:
+	/* SVM_CLGI */
 
-#define VMRUN  .byte 0x0F,0x01,0xD8
-#define VMLOAD .byte 0x0F,0x01,0xDA
-#define VMSAVE .byte 0x0F,0x01,0xDB
-#define STGI   .byte 0x0F,0x01,0xDC
-#define CLGI   .byte 0x0F,0x01,0xDD
+	movl	4(%esp), %eax
 
-	.global svm_launch
-svm_launch:
-	CLGI
+	/* store host registers */
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%edx
+	pushl	%esi
+	pushl	%edi
+	pushl	%ebp
 
-    /* save host state */
-	pushl %ebx
-	pushl %ecx
-	pushl %edx
-	pushl %esi
-	pushl %edi
-	pushl %ebp
-	/*
-	%cr2
-	%fs
-	%gs
-	ldt
-	msr_gs_base
-	*/
-	
-	/*test I/O port c008h*/
-	//mov $0xc008, %dx
-	//in %dx, %eax
-	/*end test I/O port c008h*/
+	/* restore guest registers */
+	movl	(%eax), %ebx
+	movl	8(%eax), %ecx
+	movl	16(%eax), %edx
+	movl	24(%eax), %esi
+	movl	32(%eax), %edi
+	movl	40(%eax), %ebp
 
-	//breakpoint
-	//push %dx
-	//mov 0xffffff, %dl
-//	pop %dx
+	/* load VMCB */
+	movl	48(%eax), %eax
+	SVM_VMLOAD
 
-	/* restore guest state */
-	call restore_guest_states
-	VMLOAD
+	/* switch to the guest */
+	SVM_VMRUN
 
-	VMRUN
+	/* when returning from the guest... */
+	SVM_VMSAVE
 
-	//breakpoint
-	//push %dx
-	//mov 0xffffff, %dl
-	//pop %dx
-/* save guest state */
-	VMSAVE
-	call save_guest_states
+	/* save guest registers */
+	movl	28(%esp), %eax
+	movl	%ebx, (%eax)
+	movl	%ecx, 8(%eax)
+	movl	%edx, 16(%eax)
+	movl	%esi, 24(%eax)
+	movl	%edi, 32(%eax)
+	movl	%ebp, 40(%eax)
 
-	/* restore host state */
-	popl %ebp
-	popl %edi
-	popl %esi
-	popl %edx
-	popl %ecx
-	popl %ebx
+	/* restore host registers */
+	popl	%ebp
+	popl	%edi
+	popl	%esi
+	popl	%edx
+	popl	%ecx
+	popl	%ebx
 
-	STGI
+	/* SVM_STGI */
 
 	ret
-
-restore_guest_states:
-	pushw %dx
-	mov first_boot, %dx
-	cmp $1, %dx
-	je first
-
-	popw %dx
-	movl g_ebx, %ebx	//no need to restore eax, since it will be restored from vmcb
-	movl g_ecx, %ecx
-	movl g_edx, %edx
-	movl g_esi, %esi
-	movl g_edi, %edi
-	movl g_ebp, %ebp
-	ret
-
-first:	//initialize some guest states when we move into it for the first time
-	popw %dx
-	movw $0, first_boot
-	movl $0, %ebx
-	movl $0, %ecx
-	movl $0x80, %edx
-	movl $0, %esi
-	movl $0, %edi
-	movl $0, %ebp
-	ret
-
-save_guest_states:
-	movl %ebx, g_ebx //no need to save eax, since it is already saved in vmcb
-	movl %ecx, g_ecx
-	movl %edx, g_edx
-	movl %esi, g_esi
-	movl %edi, g_edi
-	movl %ebp, g_ebp
-	ret
-
-first_boot: .word 1	//.word => 2 bytes = sizeof(dx)
-#	ud2a
-
