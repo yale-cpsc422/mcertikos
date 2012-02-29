@@ -26,7 +26,7 @@ void loader(uint32_t dev, uint32_t start_sect_idx, bios_smap_t *smap)
 
 	bios_smap_t *p = smap;
 	uint32_t smap_length = 0;
-	cprintf("* E820 Memory Map\n");
+	cprintf("* E820 Memory Map (%08x)\n", p);
 	while (p->base_addr != 0 || p->length != 0 || p->type != 0) {
 		cprintf("    base addr = %08x, ", p->base_addr);
 		cprintf("    length = %08x, ", p->length);
@@ -40,7 +40,7 @@ void loader(uint32_t dev, uint32_t start_sect_idx, bios_smap_t *smap)
 	ext2_fs_init(dev, start_sect_idx);
 
 	cprintf("Load kernel ...\n");
-	uint32_t kern_addr = load_kernel("/boot/certikos");
+	uint32_t kern_addr = load_kernel("/boot/kernel");
 
 	cprintf("Start kernel (%x) ...\n", kern_addr);
 	exec_kernel(kern_addr, &mboot_info);
