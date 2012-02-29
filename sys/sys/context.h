@@ -5,7 +5,7 @@
 
 #include <sys/gcc.h>
 #include <sys/mmu.h>
-#include <sys/pcpu.h>
+/* #include <sys/pcpu.h> */
 #include <sys/trap.h>
 #include <sys/types.h>
 

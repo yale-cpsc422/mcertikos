@@ -9,7 +9,7 @@
 
 #include <machine/mem.h>
 
-typedef struct pageinfo_t pageinfo_t;
+/* typedef struct pageinfo_t pageinfo_t; */
 
 void mem_init(mboot_info_t *);
 

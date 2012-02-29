@@ -3,6 +3,7 @@
 #include <sys/debug.h>
 #include <sys/elf.h>
 #include <sys/msg.h>
+#include <sys/pcpu.h>
 #include <sys/proc.h>
 #include <sys/spinlock.h>
 #include <sys/string.h>

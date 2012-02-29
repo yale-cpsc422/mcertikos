@@ -2,6 +2,7 @@
 #include <sys/context.h>
 #include <sys/debug.h>
 #include <sys/intr.h>
+#include <sys/pcpu.h>
 #include <sys/trap.h>
 #include <sys/types.h>
 #include <sys/x86.h>

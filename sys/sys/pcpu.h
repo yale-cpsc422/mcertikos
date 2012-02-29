@@ -4,6 +4,7 @@
 #ifdef _KERN_
 
 #include <sys/as.h>
+#include <sys/context.h>
 #include <sys/proc.h>
 #include <sys/spinlock.h>
 #include <sys/types.h>
@@ -12,9 +13,9 @@
 
 #define PCPU_AP_START_ADDR	0x8000
 
-typedef uint32_t (*callback_t) (struct context_t *);
+/* typedef uint32_t (*callback_t) (struct context_t *); */
 
-typedef struct context_t context_t;
+/* typedef struct context_t context_t; */
 
 typedef
 enum {
