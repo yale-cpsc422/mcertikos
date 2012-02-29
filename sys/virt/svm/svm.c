@@ -380,7 +380,7 @@ setup_powerup_state(struct vm *vm)
 	save->rax = 0x0;
 	save->dr6 = 0xffff0ff0;
 	save->dr7 = 0x00000400;
-	save->g_pat = 0x7040600070406UL;
+	save->g_pat = 0x7040600070406ULL;
 
 	svm->g_rbx = svm->g_rcx = svm->g_rsi = svm->g_rdi = svm->g_rbp = 0x0;
 	svm->g_rdx = 0x80;
