@@ -48,7 +48,7 @@ ioapic_register(uintptr_t addr, lapicid_t id, int g)
 void
 ioapic_init(void)
 {
-	KERN_ASSERT(ioapics != NULL);
+	/* KERN_ASSERT(ioapics != NULL); */
 
 	int i;
 
