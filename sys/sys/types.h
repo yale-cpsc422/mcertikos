@@ -23,7 +23,7 @@ typedef __uintptr_t	uintptr_t;
 typedef __size_t	size_t;
 typedef __ssize_t	ssize_t;
 
-typedef __reg_t		uint32_t;
+typedef __reg_t		reg_t;
 
 typedef __pid_t		pid_t;
 
