@@ -4,6 +4,8 @@
 
 ifndef V
 V := @
+else
+V :=
 endif
 
 ARCH		:= i386
@@ -16,10 +18,15 @@ UTILSDIR	:= $(TOP)/misc
 TESTDIR		:= $(TOP)/test
 
 # Compiler and Linker
-CC		:= gcc
 LD		:= ld
 CFLAGS		:= -Wall -Werror -Wno-unused-function -pipe -fno-builtin -nostdinc
 LDFLAGS		:= -nostdlib
+ifndef CLANG_CC
+CC		:= gcc
+else
+CC		:= clang
+CFLAGS		+= -no-integrated-as
+endif
 
 # other tools
 PERL		:= perl

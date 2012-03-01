@@ -203,7 +203,7 @@ mgmt_allocpage(context_t *ctx, mgmt_allocpage_t *param)
 	pid_t pid = param->pid;
 	uintptr_t fault_va = param->va;
 
-	if (!(pid >= 0 && pid < pcpu_ncpu())) {
+	if (!(pid < pcpu_ncpu())) {
 		KERN_DEBUG("MGMT_ALLOCPAGE: Process %d is invalid.\n", pid);
 		return 1;
 	}
@@ -329,7 +329,7 @@ master_syscall_handler(context_t *ctx)
 
 		uint32_t cpu_idx = *(uint32_t *) master_buf;
 
-		if (!(cpu_idx >= 0 && cpu_idx < pcpu_ncpu())) {
+		if (!(cpu_idx < pcpu_ncpu())) {
 			master_syscall_fail(ctx);
 			return 2;
 		}

@@ -366,7 +366,7 @@ static void _ext2_fsread(ext2_inode_t *inode, uint8_t *buf,
 
 	uint8_t blk_buf[EXT2_FS_BLK_SIZE];
 
-	if (blk_idx >= 0 && blk_idx < 12) {
+	if (blk_idx < 12) {
 		/* direct block */
 		read_block(inode->i_block[blk_idx], blk_buf);
 	} else if (blk_idx >= 12 && blk_idx < 12 + EXT2_FS_BLK_PER_BLK) {
