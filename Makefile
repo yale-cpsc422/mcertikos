@@ -19,7 +19,7 @@ TESTDIR		:= $(TOP)/test
 
 # Compiler and Linker
 LD		:= ld
-CFLAGS		:= -Wall -Werror -Wno-unused-function -pipe -fno-builtin -nostdinc
+CFLAGS		:= -Wall -Werror -Wno-unused-function -pipe -fno-builtin -nostdinc -fno-stack-protector
 LDFLAGS		:= -nostdlib
 ifndef CLANG_CC
 CC		:= gcc
