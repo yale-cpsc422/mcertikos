@@ -338,5 +338,13 @@ fls(int mask)
 	return (mask == 0 ? mask : (int)bsrl((uint32_t)mask) + 1);
 }
 
+static gcc_inline uint32_t
+read_eflags(void)
+{
+        uint32_t flags;
+
+        __asm __volatile("pushfl; popl %0" : "=r" (flags));
+        return flags;
+}
 
 #endif /* !_MACHINE_X86_H_ */

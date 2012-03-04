@@ -51,6 +51,7 @@
 #define IRQ_KBD		1	/* Keyboard interrupt */
 #define IRQ_SERIAL	4	/* Serial (COM) interrup */
 #define IRQ_SPURIOUS	7	/* Spurious interrupt */
+#define IRQ_MOUSE	12	/* Mouse interrupt */
 #define IRQ_IDE		14	/* IDE disk controller interrupt */
 #define IRQ_ERROR	19	/* */
 

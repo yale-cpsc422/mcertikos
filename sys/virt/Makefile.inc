@@ -1,10 +1,8 @@
 # -*-Makefile-*-
 
 KERN_SRCFILES	+= $(KERN_DIR)/virt/vmm.c
-KERN_SRCFILES	+= $(KERN_DIR)/virt/vmm_iodev.c
+KERN_SRCFILES	+= $(KERN_DIR)/virt/vmm_dev.c
 
-
-# KERN_BINFILES	+= $(UTILSDIR)/stage1
 KERN_BINFILES	+= $(UTILSDIR)/bios.bin
 KERN_BINFILES	+= $(UTILSDIR)/vgabios.bin
 

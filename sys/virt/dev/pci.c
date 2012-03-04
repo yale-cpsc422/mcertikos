@@ -2,7 +2,7 @@
 #include <sys/types.h>
 
 #include <sys/virt/vmm.h>
-#include <sys/virt/vmm_iodev.h>
+#include <sys/virt/vmm_dev.h>
 #include <sys/virt/dev/pci.h>
 
 static void _vpci_read_cmd_port(struct vm *, void *, uint32_t, void *);
@@ -10,17 +10,17 @@ static void _vpci_write_cmd_port(struct vm *, void *, uint32_t, void *);
 static void _vpci_read_data_port(struct vm *, void *, uint32_t, void *);
 static void _vpci_write_data_port(struct vm *, void *, uint32_t, void *);
 
-void vpci_init(struct vpci *vpci)
+void vpci_init(struct vpci *vpci, struct vm *vm)
 {
-	KERN_ASSERT(vpci != NULL);
+	KERN_ASSERT(vpci != NULL && vm != NULL);
 
-	vmm_iodev_register_read(vpci,
+	vmm_iodev_register_read(vm, vpci,
 				PCI_CMD_PORT, SZ32, _vpci_read_cmd_port);
-	vmm_iodev_register_write(vpci,
+	vmm_iodev_register_write(vm, vpci,
 				 PCI_CMD_PORT, SZ32, _vpci_write_cmd_port);
-	vmm_iodev_register_read(vpci,
+	vmm_iodev_register_read(vm, vpci,
 				PCI_DATA_PORT, SZ32, _vpci_read_data_port);
-	vmm_iodev_register_write(vpci,
+	vmm_iodev_register_write(vm, vpci,
 				 PCI_DATA_PORT, SZ32, _vpci_write_data_port);
 }
 

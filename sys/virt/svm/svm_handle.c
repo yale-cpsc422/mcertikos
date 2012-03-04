@@ -7,10 +7,8 @@
 #include <sys/x86.h>
 
 #include <sys/virt/vmm.h>
-#include <sys/virt/vmm_iodev.h>
-#include <sys/virt/dev/i8259.h>
-
-#include <dev/lapic.h>
+#include <sys/virt/vmm_dev.h>
+#include <sys/virt/dev/pic.h>
 
 #include "svm.h"
 #include "svm_handle.h"
@@ -26,7 +24,7 @@
  * @param ev whether the injected event requires an error code on the stack
  * @param errcode the error code
  */
-static void
+void
 svm_inject_event(struct vmcb *vmcb,
 		 uint8_t type, uint8_t vector, bool ev, uint32_t errcode)
 {
@@ -122,46 +120,20 @@ svm_guest_intr_handler(struct vm *vm, tf_t *tf)
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_save_area *save = &vmcb->save;
 
-	int intr_no = tf->trapno - T_IRQ0;
+	int irq = tf->trapno - T_IRQ0;
 
-	KERN_ASSERT(intr_no >= 0);
-	KERN_DEBUG("INTR%x happened in the guest.\n", intr_no);
-	KERN_DEBUG("RFLAGS=%llx.\n", save->rflags);
+	KERN_ASSERT(irq >= 0);
+	KERN_DEBUG("INTR%x happened in the guest (gIF=%x, hIF=%x).\n",
+		   irq, (save->rflags & FL_IF), (read_eflags() & FL_IF));
 
-	uint32_t eflags = (uint32_t) save->rflags;
-
-	if (eflags & FL_IF) {
+	if (vmm_handle_extintr(vm, irq)) {
 		/*
-		 * If interrupts is enabled in the guest, then
-		 * - set corresponding ISR bit of VPIC,
-		 * - clear correspoding IRR bit of VPIC,
-		 * - inject an interrupt, and
-		 * - send EOI to the physical PIC/APIC.
+		 * If there is no handler for this interrupt, then inject the
+		 * interrupt to the guest.
 		 */
-
-		vpic_set_isr(&vm->vpic, intr_no);
-		vpic_clear_irr(&vm->vpic, intr_no);
-		svm_inject_event(vmcb, SVM_EVTINJ_TYPE_INTR, intr_no, FALSE, 0);
-	} else {
-		/*
-		 * If interrupts is disabled in the guest, then
-		 * - set corresponding IRR bit of VPIC,
-		 * - inject a virtual interrupt, and
-		 * - send EOI to the physical PIC/APIC.
-		 *
-		 * XXX: (a little more about this case) when the guest enables
-		 *      interrupts sometime later, the injected virtual
-		 *      interrupt will trigger a VMEXIT (if VMM intercepts
-		 *      virtual interrupts). Then, VMM should send an EOI to the
-		 *      virtual PIC.
-		 */
-
-		vpic_set_irr(&vm->vpic, intr_no);
-		svm_inject_vintr(vmcb, intr_no, 0);
+		if (vpic_is_ready(&vm->vpic) == TRUE)
+			vpic_set_irq(&vm->vpic, irq, 1);
 	}
-
-	/* vpic_raise_irq(&vm->vpic, intr_no); */
-	/* vpic_intack(&vm->vpic, intr_no); */
 
  out:
 	intr_eoi();
@@ -205,21 +177,6 @@ bool
 svm_handle_intr(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
-
-	/* rely on the kernel interrupt handlers to complete the work */
-
-	KERN_DEBUG("IRR=");
-	int lapic_irr = LAPIC_IRR;
-	for (; lapic_irr < LAPIC_ESR; lapic_irr += 4)
-		KERN_INFO("%x ", lapic_read_debug(lapic_irr));
-	KERN_INFO("\n");
-
-	KERN_DEBUG("ISR=");
-	int lapic_isr = LAPIC_ISR;
-	for (; lapic_isr < LAPIC_IRR; lapic_isr += 4)
-		KERN_INFO("%x ", lapic_read_debug(lapic_isr));
-	KERN_INFO("\n");
-
 	return TRUE;
 }
 
@@ -241,8 +198,6 @@ svm_handle_vintr(struct vm *vm)
 
 	KERN_DEBUG("VINTR: pending=%d, vector=%x, TPR=%x, ignore TPR=%x, prio=%x, mask=%x.\n",
 		   pending, vector, v_tpr, ign_tpr, v_prio, mask_vintr);
-
-	vpic_eoi(&vm->vpic);
 
 	return TRUE;
 }
@@ -279,41 +234,18 @@ svm_handle_ioio(struct vm *vm)
 	else if (sz8)
 		data = (uint8_t) data;
 
-#if 0
+	/* KERN_INFO("(port=%x, ", port); */
 	if (type & SVM_EXITINFO1_TYPE_IN) {
-		data = inb(port);
-		KERN_DEBUG("Read %x from port %x.\n", data, port);
-	} else {
-		outb(port, data);
-		KERN_DEBUG("Write %x to port %x.\n", data, port);
-	}
-
-	ret = 0;
-#else
-	KERN_INFO("(port=%x, ", port);
-	if (type & SVM_EXITINFO1_TYPE_IN) {
-		KERN_INFO("in).\n");
+		/* KERN_INFO("in).\n"); */
 		ret = vmm_iodev_read_port(vm, port, &data);
 	} else {
-		KERN_INFO("out).\n");
+		/* KERN_INFO("out).\n"); */
 		ret = vmm_iodev_write_port(vm, port, &data);
 	}
-#endif
 
 	if (ret) {
-#if 0
+		KERN_DEBUG("Unhandled IO port %x.\n", port);
 		return FALSE;
-#else
-		if (type & SVM_EXITINFO1_TYPE_IN) {
-			data = inb(port);
-			KERN_DEBUG("(Passthrough) read %x from port %x.\n",
-				   data, port);
-		} else {
-			outb(port, data);
-			KERN_DEBUG("(Passthrough) write %x to port %x.\n",
-				   data, port);
-		}
-#endif
 	}
 
 	if (type & SVM_EXITINFO1_TYPE_IN) {

@@ -7,6 +7,9 @@
 
 #include <sys/virt/vmm.h>
 
+void svm_inject_event(struct vmcb *,
+		      uint8_t type, uint8_t vector, bool ev, uint32_t errcode);
+
 void svm_guest_handle_gpf(struct vm *, tf_t *);
 void svm_guest_intr_handler(struct vm *, tf_t *);
 

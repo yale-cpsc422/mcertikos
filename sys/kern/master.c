@@ -392,12 +392,12 @@ master_syscall_handler(context_t *ctx)
 		 * Setup and start a VM.
 		 */
 		;
-		struct vm vm;
-		if (vmm_init_vm(&vm) != 0) {
+		struct vm *vm = vmm_init_vm();
+		if (vm == NULL) {
 			KERN_DEBUG("SYSCALL_SETUPVM: Cannot initialize a VM.\n");
 			return 1;
 		}
-		vmm_run_vm(&vm);
+		vmm_run_vm(vm);
 
 		break;
 

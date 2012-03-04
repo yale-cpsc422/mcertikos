@@ -7,10 +7,10 @@
 #include <sys/x86.h>
 
 #include <sys/virt/vmm.h>
-#include <sys/virt/vmm_iodev.h>
-#include <sys/virt/dev/i8259.h>
+#include <sys/virt/vmm_dev.h>
 #include <sys/virt/dev/kbd.h>
 #include <sys/virt/dev/pci.h>
+#include <sys/virt/dev/pic.h>
 
 #include <machine/pcpu.h>
 #include <machine/pmap.h>
@@ -269,9 +269,14 @@ set_intercept_exception(struct vmcb *vmcb, int bit, bool enable)
  * @return 0 if succeed; otherwise, 1.
  */
 static int
-setup_intercept(struct vmcb *vmcb)
+setup_intercept(struct vm *vm)
 {
-	KERN_ASSERT(vmcb != NULL);
+	KERN_ASSERT(vm != NULL);
+
+	int i;
+
+	struct svm *svm = (struct svm *) vm->cookie;
+	struct vmcb *vmcb = svm->vmcb;
 
 	/* create IOPM */
 	vmcb->control.iopm_base_pa = alloc_permission_map(SVM_IOPM_SIZE);
@@ -283,6 +288,12 @@ setup_intercept(struct vmcb *vmcb)
 
 	KERN_DEBUG("IOPM is at %x.\n", vmcb->control.iopm_base_pa);
 
+	/* setup IOIO intercept */
+	for (i = 0 ; i < MAX_IOPORT; i++)
+		if (vm->iodev[i].dev != NULL) {
+			set_intercept_ioio(vmcb, i, TRUE);
+		}
+
 	/* create MSRPM */
 	vmcb->control.msrpm_base_pa = alloc_permission_map(SVM_MSRPM_SIZE);
 
@@ -292,28 +303,6 @@ setup_intercept(struct vmcb *vmcb)
 	}
 
 	KERN_DEBUG("MSRPM is at %x.\n", vmcb->control.msrpm_base_pa);
-
-	/* setup IOIO intercept */
-#if 1
-	/* intercept i8259 */
-	set_intercept_ioio(vmcb, IO_PIC1, TRUE);
-	set_intercept_ioio(vmcb, IO_PIC1+1, TRUE);
-	set_intercept_ioio(vmcb, IO_PIC2, TRUE);
-	set_intercept_ioio(vmcb, IO_PIC2+1, TRUE);
-#endif
-
-#if 1
-	/* intercept PCI */
-	set_intercept_ioio(vmcb, PCI_CMD_PORT, TRUE);
-	set_intercept_ioio(vmcb, PCI_DATA_PORT, TRUE);
-#endif
-
-#if 1
-	/* intercept keyboard */
-	set_intercept_ioio(vmcb, KBSTATP, TRUE);
-	set_intercept_ioio(vmcb, KBDATAP, TRUE);
-#endif
-
 
 	/* enable interceptions */
 	set_intercept(vmcb, INTERCEPT_VMRUN, TRUE);
@@ -386,92 +375,6 @@ setup_powerup_state(struct vm *vm)
 	svm->g_rdx = 0x80;
 }
 
-#if 0
-
-/*
- * Setup VM to the state just before executing bootloader.
- */
-static void
-setup_preboot_state(struct vm *vm)
-{
-	KERN_ASSERT(vm != NULL);
-
-	struct svm *svm = (struct svm *) vm->cookie;
-	struct vmcb_save_area *save = &svm->vmcb->save;
-
-	save->cr0 = 0x60000010;
-	save->cr2 = save->cr3 = save->cr4 = 0;
-	/* save->rflags = 0x00000002; */
-	save->rflags = 0x2206;
-	save->efer = MSR_EFER_SVME;
-	save->rip = 0x7c00;	/* where MBR is loaded */
-	set_segment(&save->cs, 0x0, 0x0, 0xffff,
-		    SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_CODE);
-	set_segment(&save->ds, 0x0, 0x0, 0xffff,
-		    SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_DATA);
-	set_segment(&save->es, 0x0, 0x0, 0xffff,
-		    SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_DATA);
-	set_segment(&save->fs, 0x0, 0x0, 0xffff,
-		    SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_DATA);
-	set_segment(&save->gs, 0x0, 0x0, 0xffff,
-		    SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_DATA);
-	set_segment(&save->ss, 0x0, 0x0, 0xffff,
-		    SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_DATA);
-	/* TODO: what should gdtr be? Is it BIOS-related? */
-	set_segment(&save->gdtr, 0, 0x0, 0xffff, 0);
-	/* TODO: what should idtr be? Is it BIOS-related? */
-	set_segment(&save->idtr, 0, 0x0, 0x3ff, 0);
-	/* TODO: what should ldtr be? Is it BIOS-related? */
-	set_segment(&save->ldtr, 0, 0x0, 0xffff,
-		    SEG_ATTR_P | SEG_TYPE_LDT);
-	/* TODO: what should tr be? Is it BIOS-related? */
-	set_segment(&save->tr, 0x0000, 0x0, 0xffff,
-		    SEG_ATTR_P | SEG_TYPE_TSS);
-	save->rax = 0x0;
-	save->dr6 = 0xffff0ff0;
-	save->dr7 = 0x00000400;
-	save->g_pat = 0x7040600070406UL;
-
-	svm->g_rbx = svm->g_rcx = svm->g_rsi = svm->g_rdi = svm->g_rbp = 0x0;
-	svm->g_rdx = 0x80;
-}
-
-static void
-setup_grub_state(struct vm *vm)
-{
-	KERN_ASSERT(vm != NULL);
-
-	struct svm *svm = (struct svm *) vm->cookie;
-	struct vmcb *vmcb = svm->vmcb;
-
-	memset(vmcb, 0x0, sizeof(vmcb));
-
-	struct vmcb_save_area *save = &vmcb->save;
-
-	save->rax = 0;
-	save->rip = 0x7c00;
-
-	set_segment(&save->cs, 0x0000, 0x0, 0xffff, 0x019b);
-	set_segment(&save->ds, 0x0040, 0x400, 0xffff, 0x93);
-	set_segment(&save->es, 0x0000, 0x0, 0xffff, 0x93);
-	set_segment(&save->fs, 0xe717, 0xe7170, 0xffff, 0x93);
-	set_segment(&save->gs, 0xf000, 0xf0000, 0xffff, 0x93);
-	set_segment(&save->ss, 0x0000, 0x0, 0xffff, 0x193);
-
-	save->efer = MSR_EFER_SVME;
-	save->cr0 = 0x10;
-
-	set_segment(&save->idtr, 0x0, 0x0, 0x3ff, 0);
-	set_segment(&save->gdtr, 0x0, 0x6e127, 0x20, 0);
-
-	save->rflags = 0x2206;
-	save->cpl = 0;
-
-	svm->g_rdx = 0x80;
-}
-
-#endif
-
 /*
  * Initialize SVM module.
  * - check whether SVM is supported
@@ -528,13 +431,8 @@ vm_init(struct vm *vm)
 
 	KERN_DEBUG("VMCB is at %0x.\n", svm->vmcb);
 
-#if 1
 	/* setup VM to the powerup state */
 	setup_powerup_state(vm);
-#else
-	/* setup VM to the preboot state */
-	setup_preboot_state(vm);
-#endif
 
 	/* create the nested page table */
 	pmap_t *ncr3 = alloc_nested_ptable();
@@ -547,12 +445,10 @@ vm_init(struct vm *vm)
 	KERN_DEBUG("Nested page table is at %x.\n", ncr3);
 
 	/* load seabios */
-#if 1
 	load_bios((uintptr_t) ncr3);
-#endif
 
 	/* setup interception */
-	if (setup_intercept(svm->vmcb) != 0)
+	if (setup_intercept(vm) != 0)
 		return 1;
 
 	/* miscellenea initialization */
@@ -563,10 +459,6 @@ vm_init(struct vm *vm)
 	/* Sec 15.21.1, APM Vol2 r3.19 */
 	svm->vmcb->control.int_ctl = (SVM_INTR_CTRL_VINTR_MASK |
 				      (0x0 & SVM_INTR_CTRL_VTPR));
-
-	vkbd_init(&vm->vkbd);
-	vpci_init(&vm->vpci);
-	vpic_init(&vm->vpic);
 
 	return 0;
 }
@@ -592,14 +484,6 @@ vm_run(struct vm *vm)
 
 	SVM_STGI();
 
-	/*
-	 * If VMEXIT is caused by interrupts in the guest, then enable
-	 * interupts in the host and let the interrupt handlers in the
-	 * host to handle the interrupts.
-	 */
-	if (vm->exit_for_intr == TRUE)
-		sti();
-
 	return 0;
 }
 
@@ -609,7 +493,8 @@ svm_handle_exit(struct vm *vm)
 	KERN_ASSERT(vm != NULL);
 
 	struct svm *svm = (struct svm *) vm->cookie;
-	struct vmcb_control_area *ctrl = &svm->vmcb->control;
+	struct vmcb *vmcb = svm->vmcb;
+	struct vmcb_control_area *ctrl = &vmcb->control;
 
 	bool handled = FALSE;
 
@@ -623,8 +508,8 @@ svm_handle_exit(struct vm *vm)
 		break;
 
 	case SVM_EXIT_INTR:
+		/* kernel interrupt handlers should come before here */
 		KERN_INFO("VMEXIT for INTR.\n");
-		/* reply on kernel interrupt handlers to ack interupts */
 		handled = svm_handle_intr(vm);
 		break;
 
@@ -634,7 +519,7 @@ svm_handle_exit(struct vm *vm)
 		break;
 
 	case SVM_EXIT_IOIO:
-		KERN_INFO("VMEXIT for IO");
+		KERN_INFO("VMEXIT for IO\n");
 		handled = svm_handle_ioio(vm);
 		break;
 
@@ -674,6 +559,11 @@ svm_handle_exit(struct vm *vm)
 	if (handled == FALSE) {
 		KERN_PANIC("Unhandled VMEXIT: exit_code = %x.\n",
 			   ctrl->exit_code);
+	}
+
+	if (vpic_has_irq(&vm->vpic) == TRUE) {
+		int irq = vpic_read_irq(&vm->vpic);
+		svm_inject_event(vmcb, SVM_EVTINJ_TYPE_INTR, irq, FALSE, 0);
 	}
 
 	return 0;
