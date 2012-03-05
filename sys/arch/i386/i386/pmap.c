@@ -1,4 +1,5 @@
 #include <sys/debug.h>
+#include <sys/gcc.h>
 #include <sys/mem.h>
 #include <sys/mmu.h>
 #include <sys/pcpu.h>
@@ -11,17 +12,26 @@
 
 #include <dev/ioapic.h>
 
-typedef pmap_t		pde_t;
-typedef pmap_t		pte_t;
+typedef pmap_t pde_t;
+typedef pmap_t pte_t;
 
 #define PTE_INV		(~((pte_t) 0))
 #define PTE_NULL	((pte_t) NULL)
 
+/*
+ * Check whether the physical address is in ACPI address space (ACPI data or
+ * APIC NVS).
+ *
+ * @param addr the physical address
+ *
+ * @return TRUE if the address is on ACPI area; otherwise FALSE.
+ */
 static bool
 is_in_acpi(uintptr_t addr)
 {
 	pmmap_t *p;
 
+	/* check ACPI data */
 	p = pmmap_acpi;
 	while (p != NULL) {
 		uintptr_t start, end;
@@ -35,6 +45,7 @@ is_in_acpi(uintptr_t addr)
 		p = p->type_next;
 	}
 
+	/* check ACPI NVS */
 	p = pmmap_nvs;
 	while (p != NULL) {
 		uintptr_t start, end;
@@ -51,6 +62,13 @@ is_in_acpi(uintptr_t addr)
 	return FALSE;
 }
 
+/*
+ * Check whether the physical address is in the IOAPIC address space.
+ *
+ * @param addr the physical address
+ *
+ * @return TRUE, if the address is in IOAPIC address space; otherwise, FALSE.
+ */
 static bool
 is_in_ioapic(uintptr_t addr)
 {
@@ -67,9 +85,20 @@ is_in_ioapic(uintptr_t addr)
 	return FALSE;
 }
 
+/*
+ * Look up the virtual address in the page tables.
+ *
+ * @param pmap the root page table
+ * @param va the virtual address
+ *
+ * @return the page table entry, if the virtual address is in the page tables;
+ *         otherwise, NULL.
+ */
 static pte_t
 pmap_lookup(pmap_t *pmap, uintptr_t va)
 {
+	KERN_ASSERT(pmap != NULL);
+
 	pde_t *pdir = (pde_t *) pmap;
 
 	pde_t pde = pdir[PDX(va)];
@@ -129,23 +158,169 @@ pmap_walk(pde_t *pdir, uintptr_t la, bool write)
 }
 
 /*
+ * Create the kernel page table. It identically maps the address from 0x0 to
+ * max(maximum physical memory address, 0x4000_0000). In addition, it also
+ * identically maps the ACPI address space, IOAPIC address space, and
+ * 0xf000_0000 to 0xffff_ffff.
+ *
+ * @param pmap the kernel page table
+ *
+ * @return the kernel page table, if succeed; otherwise, NULL.
+ */
+static pmap_t *
+create_kernel_ptab(pmap_t *pmap)
+{
+	uint32_t addr;
+	pmap_t *ret;
+
+	for (addr = 0; addr < MIN(mem_max_phys(), VM_USERLO);
+	     addr += PAGESIZE) {
+		if (is_in_acpi(addr) || is_in_ioapic(addr))
+			continue;
+
+		ret = pmap_insert(pmap, mem_phys2pi(addr), addr, PTE_W | PTE_G);
+		if (ret == NULL) {
+			pmap_free(pmap);
+			return NULL;
+		}
+	}
+
+	/* identically map memory hole above 0xf0000000 */
+	for (addr = 0xf0000000; addr < 0xffffffff; addr += PAGESIZE) {
+		if (is_in_acpi(addr) || is_in_ioapic(addr))
+			continue;
+
+		ret = pmap_insert(pmap, mem_phys2pi(addr), addr, PTE_W | PTE_G);
+		if (ret == NULL) {
+			pmap_free(pmap);
+			return NULL;
+		}
+
+		/* avoid overflow */
+		if (addr == 0xfffff000)
+			break;
+	}
+
+	/* identically map address in IOAPIC */
+	int ioapic_no;
+	ioapic_t *ioapic;
+	for (ioapic_no = 0; ioapic_no < ioapic_number(); ioapic_no++) {
+		ioapic = ioapic_get(ioapic_no);
+
+		if (ioapic == NULL) {
+			KERN_WARN("NULL IOAPIC %x.\n", ioapic_no);
+			continue;
+		}
+
+		ret = pmap_insert(pmap, mem_phys2pi((uintptr_t) ioapic),
+				  (uintptr_t) ioapic, PTE_W | PTE_G);
+		if (ret == NULL) {
+			pmap_free(pmap);
+			return NULL;
+		}
+	}
+
+	/* identically map memory in ACPI reclaimable region */
+	pmmap_t *p;
+	for (p = pmmap_acpi; p != NULL; p = p->type_next) {
+		uint32_t start_addr = ROUNDDOWN(p->start, PAGESIZE);
+		uint32_t end_addr = ROUNDUP(p->end, PAGESIZE);
+
+		for (addr = start_addr; addr < end_addr; addr += PAGESIZE) {
+			ret = pmap_insert(pmap, mem_phys2pi(addr), addr,
+					  PTE_W | PTE_G);
+			if (ret == NULL) {
+				pmap_free(pmap);
+				return NULL;
+			}
+
+			/* avoid overflow */
+			if (addr >= 0xfffff000)
+				break;
+		}
+	}
+
+	/* identically map memory in ACPI NVS region */
+	for (p = pmmap_nvs; p != NULL; p = p->type_next) {
+		uint32_t start_addr = ROUNDDOWN(p->start, PAGESIZE);
+		uint32_t end_addr = ROUNDUP(p->end, PAGESIZE);
+
+		for (addr = start_addr; addr < end_addr; addr += PAGESIZE) {
+			ret = pmap_insert(pmap, mem_phys2pi(addr), addr,
+					  PTE_W | PTE_G);
+			if (ret == NULL) {
+				pmap_free(pmap);
+				return NULL;
+			}
+
+			/* avoid overflow */
+			if (addr >= 0xfffff000)
+				break;
+		}
+	}
+
+	return pmap;
+}
+
+/*
  * Initialize pmap module.
  */
 void
 pmap_init()
 {
 	if (pcpu_onboot() == TRUE) {
-		/* do nothing currently */
+		/* pmap_new() cannot be useable right now. */
+		pageinfo_t *pi = (pageinfo_t *) mem_page_alloc();
+		if (pi == NULL)
+			KERN_PANIC("Failed to create kernel page table.\n");
+
+		mem_incref(pi);
+		kern_ptab = (pmap_t *) mem_pi2ptr(pi);
+		memset(kern_ptab, 0, PAGESIZE);
+
+		kern_ptab = create_kernel_ptab(kern_ptab);
+		if (kern_ptab == NULL)
+			KERN_PANIC("Failed to initialize kernel page table.\n");
 	}
+
+	/* enable global pages (Sec 4.10.2.4, Intel ASDM Vol3) */
+	uint32_t cr4 = rcr4();
+	cr4 |= CR4_PGE;
+	lcr4(cr4);
+
+	/* load page table */
+	pmap_install(kern_ptab);
+
+	/* turn on paging */
+	uint32_t cr0 = CR0_PE|CR0_PG|CR0_AM|CR0_WP|CR0_NE|CR0_TS|CR0_MP;
+	cr0 &= ~CR0_EM;
+	lcr0(cr0);
 }
 
 /*
- * Create an empty pmap.
+ * Create a pmap which is a clone of the kernel pmap.
  *
  * @return the address of pmap object, or NULL when failing
  */
 pmap_t *
 pmap_new(void)
+{
+	pmap_t *pmap = pmap_new_empty();
+
+	if (pmap == NULL)
+		return NULL;
+
+	/* initialize it from the kernel page table */
+	memcpy(pmap, kern_ptab, PAGESIZE);
+
+	return pmap;
+}
+
+/*
+ * Create an empty pmap.
+ */
+pmap_t *
+pmap_new_empty(void)
 {
 	pageinfo_t *pi = (pageinfo_t *) mem_page_alloc();
 
@@ -203,6 +378,26 @@ pmap_insert(pmap_t *pmap, pageinfo_t *pi, uintptr_t va, int perm)
 	*pte = mem_pi2phys(pi) | perm | PTE_P;
 
 	return pmap;
+}
+
+/*
+ * Reserve a page of physical memory for a virtual page.
+ *
+ * @return pmap if succeed; otherwise, NULL.
+ */
+pmap_t *
+pmap_reserve(pmap_t *pmap, uintptr_t va, int perm)
+{
+	KERN_ASSERT(pmap != NULL);
+
+	pageinfo_t *pi = (pageinfo_t *) mem_page_alloc();
+	if (pi == NULL)
+		return NULL;
+
+	mem_incref(pi);
+	memset(mem_pi2ptr(pi), 0, PAGESIZE);
+
+	return pmap_insert(pmap, pi, va, perm);
 }
 
 /*
@@ -281,40 +476,62 @@ pmap_setperm(pmap_t *pmap, uintptr_t va, uint32_t size, int perm)
 }
 
 void
-pmap_enable()
-{
-	uint32_t cr4 = rcr4();
-	cr4 |= CR4_PSE | CR4_PGE;
-	lcr4(cr4);
-}
-
-void
 pmap_install(pmap_t *pmap)
 {
 	lcr3((uintptr_t) pmap);
 }
 
-uintptr_t
+/*
+ * Chech whether virtual address from va to (va+size) are present in the
+ * virtual address space pmap.
+ *
+ * @param pmap
+ * @param va
+ * @param size
+ *
+ * @return TRUE, if all address are in the pmap; otherwise, FALSE.
+ */
+bool
 pmap_checkrange(pmap_t *pmap, uintptr_t va, size_t size)
 {
-	uintptr_t sva = ROUNDDOWN(va, PAGESIZE);
-	uintptr_t eva = ROUNDDOWN(va + size, PAGESIZE);
+	pte_t pte;
+	uintptr_t addr = ROUNDDOWN(va, PAGESIZE);
+	ssize_t remain_size = size;
 
-	if (eva < sva)
-		return sva;
-
-	while (sva <= eva) {
-		pte_t pte = pmap_lookup(pmap, sva);
-
-		if (pte == PTE_INV || !(pte & PTE_P))
-			return sva;
-
-		sva += PAGESIZE;
+	pte = pmap_lookup(pmap, addr);
+	if (pte == PTE_INV || !(pte & PTE_P)) {
+		KERN_DEBUG("%x is out of range of pmap %x.\n", addr, pmap);
+		return FALSE;
 	}
 
-	return ~((uintptr_t) 0x0);
+	addr += PAGESIZE;
+	remain_size -= PAGESIZE - (va - addr);
+
+	while (remain_size > 0) {
+		pte = pmap_lookup(pmap, addr);
+		if (pte == PTE_INV || !(pte & PTE_P)) {
+			KERN_DEBUG("%x is out of range of pmap %x.\n", addr, pmap);
+			return FALSE;
+		}
+
+		addr += PAGESIZE;
+		remain_size -= PAGESIZE;
+	}
+
+	return TRUE;
 }
 
+/*
+ * Copy data between two virtual address spaces.
+ *
+ * @param d_pmap the destination pmap
+ * @param d_va the destination virtual address
+ * @param s_pmap the source pmap
+ * @param s_va the source vritual address
+ * @size numbers of bytes to copy
+ *
+ * @return the actual number of bytes copied
+ */
 size_t
 pmap_copy(pmap_t *d_pmap, uintptr_t d_va,
 	  pmap_t *s_pmap, uintptr_t s_va, size_t size)
@@ -343,6 +560,16 @@ pmap_copy(pmap_t *d_pmap, uintptr_t d_va,
 	return copyed_bytes;
 }
 
+/*
+ * Set the value of address in the virtual address space.
+ *
+ * @param pmap
+ * @param va the virtual address
+ * @param c all bytes from va to (va+size) will be set to this character
+ * @param size the number of bytes to be set
+ *
+ * @return the actual number of bytes set
+ */
 size_t
 pmap_memset(pmap_t *pmap, uintptr_t va, char c, size_t size)
 {
@@ -363,147 +590,6 @@ pmap_memset(pmap_t *pmap, uintptr_t va, char c, size_t size)
 	}
 
 	return bytes;
-}
-
-pmap_t *
-pmap_kinit(pmap_t *pmap)
-{
-	int i;
-	uint32_t addr;
-	pmmap_t *p;
-	ioapic_t *ioapic;
-
-	/* identically map memory below 0xf0000000 */
-	for (addr = 0; addr < MIN(mem_max_phys(), VM_USERLO);
-	     addr += PAGESIZE) {
-		if (is_in_acpi(addr) || is_in_ioapic(addr))
-			continue;
-
-		if (!pmap_insert(pmap, mem_phys2pi(addr), addr,
-				 PTE_W | PTE_G)) {
-			pmap_free(pmap);
-			return NULL;
-		}
-	}
-
-#if 0
-	for (; addr < MIN(mem_max_phys(), VM_USERHI); addr += PAGESIZE) {
-		if (is_in_acpi(addr) || is_in_ioapic(addr))
-			continue;
-
-		if (!pmap_insert(pmap, mem_phys2pi(addr), addr,
-				 PTE_W | PTE_G | PTE_U)) {
-			pmap_free(pmap);
-			return NULL;
-		}
-	}
-#endif
-
-	/* identically map memory hole above 0xf0000000 */
-	for (addr = 0xf0000000; addr < 0xffffffff; addr += PAGESIZE) {
-		if (is_in_acpi(addr) || is_in_ioapic(addr))
-			continue;
-
-		if (!pmap_insert(pmap, mem_phys2pi(addr), addr,
-				 PTE_W | PTE_G)) {
-			pmap_free(pmap);
-			return NULL;
-		}
-		if (addr == 0xfffff000)
-			break;
-	}
-
-	/* identically map memory for IOAPIC */
-	for (i = 0; i < ioapic_number(); i++) {
-		ioapic = ioapic_get(i);
-
-		if (ioapic == NULL) {
-			pmap_free(pmap);
-			return NULL;
-		}
-
-		if (!pmap_insert(pmap, mem_phys2pi((uintptr_t) ioapic),
-				 (uintptr_t) ioapic, PTE_W | PTE_G)) {
-			pmap_free(pmap);
-			return NULL;
-		}
-	}
-
-	/* identically map memory in ACPI reclaimable region */
-	for (p = pmmap_acpi; p != NULL; p = p->type_next) {
-		uint32_t start_addr = ROUNDDOWN(p->start, PAGESIZE);
-		uint32_t end_addr = ROUNDUP(p->end, PAGESIZE);
-
-		for (addr = start_addr; addr < end_addr; addr += PAGESIZE) {
-			if (!pmap_insert(pmap, mem_phys2pi(addr), addr,
-					 PTE_W | PTE_G)) {
-				pmap_free(pmap);
-				return NULL;
-			}
-
-			if (addr >= 0xfffff000)
-				break;
-		}
-	}
-
-	/* identically map memory in ACPI NVS region */
-	for (p = pmmap_nvs; p != NULL; p = p->type_next) {
-		uint32_t start_addr = ROUNDDOWN(p->start, PAGESIZE);
-		uint32_t end_addr = ROUNDUP(p->end, PAGESIZE);
-
-		for (addr = start_addr; addr < end_addr; addr += PAGESIZE) {
-			if (!pmap_insert(pmap, mem_phys2pi(addr), addr,
-					 PTE_W | PTE_G)) {
-				pmap_free(pmap);
-				return NULL;
-			}
-
-			if (addr >= 0xfffff000)
-				break;
-		}
-	}
-
-	return pmap;
-}
-
-pmap_t *
-pmap_uinit(pmap_t *pmap)
-{
-	uint32_t addr;
-
-	/* identically map memory below 0x40000000 */
-	for (addr = 0; addr < MIN(mem_max_phys(), VM_USERLO);
-	     addr += PAGESIZE) {
-		if (!pmap_insert(pmap,
-				 mem_phys2pi(addr), addr, PTE_W | PTE_G)) {
-			pmap_free(pmap);
-			return NULL;
-		}
-	}
-
-#if 0
-	for (; addr < MIN(mem_max_phys(), VM_USERHI);
-	     addr += PAGESIZE) {
-		if (!pmap_insert(pmap, mem_phys2pi(addr), addr,
-				 PTE_W | PTE_G | PTE_U)) {
-			pmap_free(pmap);
-			return NULL;
-		}
-	}
-#endif
-
-	/* identically map memory hole above 0xf0000000 */
-	for (addr = 0xf0000000; addr < 0xffffffff; addr += PAGESIZE) {
-		if (!pmap_insert(pmap,
-				 mem_phys2pi(addr), addr, PTE_W | PTE_G)) {
-			pmap_free(pmap);
-			return NULL;
-		}
-		if (addr == 0xfffff000)
-			break;
-	}
-
-	return pmap;
 }
 
 uintptr_t

@@ -1,4 +1,3 @@
-#include <sys/as.h>
 #include <sys/context.h>
 #include <sys/debug.h>
 #include <sys/intr.h>
@@ -9,9 +8,10 @@
 
 #include <sys/virt/vmm.h>
 
-#include <dev/lapic.h>
-
+#include <machine/pmap.h>
 #include <machine/trap.h>
+
+#include <dev/lapic.h>
 
 static bool kern_in_trap = FALSE;
 static kern_tf_handler_t kern_tf_handler[T_MAX];
@@ -24,28 +24,9 @@ trap(tf_t *tf)
 
 	asm volatile("cld" ::: "cc");
 
-	if (tf->trapno == T_DEFAULT) {
-		KERN_DEBUG("Unused trap vector is triggered.\n");
-
-		KERN_DEBUG("IRR=");
-		int lapic_irr = LAPIC_IRR;
-		for (; lapic_irr < LAPIC_ESR; lapic_irr += 4)
-			KERN_INFO("%x ", lapic_read_debug(lapic_irr));
-		KERN_INFO("\n");
-
-		KERN_DEBUG("ISR=");
-		int lapic_isr = LAPIC_ISR;
-		for (; lapic_isr < LAPIC_IRR; lapic_isr += 4)
-			KERN_INFO("%x ", lapic_read_debug(lapic_isr));
-		KERN_INFO("\n");
-
-		KERN_PANIC("");
-	}
-
-	if (as_cur() != kern_as) { 	/* from userspace */
+	if (rcr3() != (uint32_t) kern_ptab) { 	/* from userspace */
 		/* switch to kernel virtual space */
-		as_t *old_as = as_cur();
-		as_activate(kern_as);
+		pmap_install(kern_ptab);
 
 		context_t *ctx = context_cur();
 		KERN_ASSERT(ctx != NULL);
@@ -67,7 +48,7 @@ trap(tf_t *tf)
 		KERN_ASSERT(ctx->tf.eip);
 
 		/* switch back to user virtual space */
-		as_activate(old_as);
+		pmap_install(pcpu_cur()->proc->pmap);
 		context_start(ctx);
 	} else {			/* from kernel space */
 		KERN_DEBUG("Exceptions or interruprs from the kernel space.\n");

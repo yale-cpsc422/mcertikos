@@ -1,4 +1,3 @@
-#include <sys/as.h>
 #include <sys/debug.h>
 #include <sys/intr.h>
 #include <sys/mem.h>
@@ -155,7 +154,7 @@ static pmap_t *
 alloc_nested_ptable(void)
 {
 	uintptr_t addr;
-	pmap_t *pmap = pmap_new();
+	pmap_t *pmap = pmap_new_empty();
 
 	if (pmap == NULL) {
 		KERN_DEBUG("Failed to allocate memory for nested page table.\n");
@@ -165,10 +164,10 @@ alloc_nested_ptable(void)
 	for (addr = 0x0; addr < VM_PHY_MEMORY_SIZE; addr += PAGESIZE) {
 		if (addr >= 0xa0000 && addr <= 0xbffff) {
 			/* identically map VGA display memory to the host */
-			as_assign((as_t *) pmap, addr, PTE_G | PTE_W | PTE_U,
-				  mem_phys2pi(addr));
-		} else if (as_reserve((as_t *) pmap, addr,
-				       PTE_G | PTE_W | PTE_U) == NULL) {
+			pmap_insert(pmap,
+				    mem_phys2pi(addr), addr, PTE_G | PTE_W | PTE_U);
+		} else if (pmap_reserve(pmap, addr,
+					PTE_G | PTE_W | PTE_U) == NULL) {
 			KERN_DEBUG("Failed to map guest memory page at %x.\n",
 				   addr);
 			pmap_free(pmap);

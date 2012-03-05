@@ -3,13 +3,14 @@
 
 #ifdef _KERN_
 
-#include <sys/as.h>
 #include <sys/context.h>
 #include <sys/gcc.h>
 #include <sys/msg.h>
 #include <sys/signal.h>
 #include <sys/spinlock.h>
 #include <sys/types.h>
+
+#include <machine/pmap.h>
 
 #define NMSG	8
 
@@ -32,7 +33,7 @@ struct proc_t {
 
 	proc_state_t	state;	/* state of process */
 
-	as_t		*as;	/* address space of this process */
+	pmap_t		*pmap;	/* page table */
 
 	struct context_t  *normal_ctx;	/* context for normal execution */
 	struct context_t  *signal_ctx;	/* context for handling interrupts */
@@ -50,7 +51,7 @@ void proc_start(pid_t) gcc_noreturn;
 int proc_send_msg(pid_t, msg_type_t, void *data, size_t);
 msg_t *proc_recv_msg(pid_t);
 
-as_t *proc_as(pid_t);
+pmap_t *proc_pmap(pid_t);
 
 void proc_lock(pid_t);
 void proc_unlock(pid_t);

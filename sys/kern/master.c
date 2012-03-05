@@ -1,4 +1,3 @@
-#include <sys/as.h>
 #include <sys/context.h>
 #include <sys/debug.h>
 #include <sys/intr.h>
@@ -12,6 +11,8 @@
 #include <sys/x86.h>
 
 #include <sys/virt/vmm.h>
+
+#include <machine/pmap.h>
 
 #include <dev/kbd.h>
 
@@ -43,16 +44,14 @@ copy_from_user(void *dest, void *src, size_t size)
 	if (dest == NULL || src == NULL || size == 0)
 		return NULL;
 
-	as_t *user_as = pcpu_cur()->proc->as;
-	/* KERN_DEBUG("user_as=%x\n", user_as); */
-	if (as_checkrange(user_as, src, size) != VM_TOP) {
-		KERN_DEBUG("Source buffer is out of range of user address space.\n");
+	pmap_t *user_pmap = pcpu_cur()->proc->pmap;
+	if (pmap_checkrange(user_pmap, (uintptr_t) src, size) == FALSE) {
+		KERN_DEBUG("%x ~ %x do not fit in the user address space.\n",
+			   src, src+size);
 		return NULL;
 	}
 
-	as_t *kern_as = as_cur();
-	/* KERN_DEBUG("kern_as=%x\n", kern_as); */
-	as_copy(kern_as, (uintptr_t) dest, user_as, (uintptr_t) src, size);
+	pmap_copy(kern_ptab, (uintptr_t) dest, user_pmap, (uintptr_t) src, size);
 
 	return dest;
 }
@@ -74,22 +73,20 @@ copy_to_user(void *dest, void *src, size_t size)
 	if (dest == NULL || src == NULL || size == 0)
 		return NULL;
 
-	as_t *kern_as = as_cur();
-	if (as_checkrange(kern_as, src, size) != VM_TOP)
-		KERN_PANIC("Source buffer is out of range of kernel address space.\n");
-
-	as_t *user_as = pcpu_cur()->proc->as;
-	uintptr_t fault_va;
-	while ((fault_va = as_checkrange(user_as, dest, size)) != VM_TOP) {
-		if (!as_reserve(user_as, (uintptr_t) PGADDR(fault_va),
-				PTE_W | PTE_U | PTE_P)) {
-			KERN_DEBUG("Cannot allocate physical memory for 0x%x\n",
-				   fault_va);
-			return NULL;
-		}
+	if (pmap_checkrange(kern_ptab, (uintptr_t) src, size) == FALSE) {
+		KERN_DEBUG("%x ~ %x do not fit in the kernel address space.\n",
+			   src, src+size);
+		return NULL;
 	}
 
-	as_copy(user_as, (uintptr_t) dest, kern_as, (uintptr_t) src, size);
+	pmap_t *user_pmap = pcpu_cur()->proc->pmap;
+	if (pmap_checkrange(user_pmap, (uintptr_t) dest, size) == FALSE) {
+		KERN_DEBUG("%x ~ %x do not fit in the user address space.\n",
+			   dest, dest+size);
+		return NULL;
+	}
+
+	pmap_copy(user_pmap, (uintptr_t) dest, kern_ptab, (uintptr_t) src, size);
 
 	return dest;
 }
@@ -133,10 +130,10 @@ master_pgf_handler(context_t *ctx)
 
 	KERN_INFO("Page fault at 0x%x in userspace.\n", fault_va);
 
-	as_t *user_as = pcpu_cur()->proc->as;
+	pmap_t *user_pmap = pcpu_cur()->proc->pmap;
 
-	if (!as_reserve(user_as, (uintptr_t) PGADDR(fault_va),
-			PTE_W | PTE_U | PTE_P)) {
+	if (!pmap_reserve(user_pmap, (uintptr_t) PGADDR(fault_va),
+			  PTE_W | PTE_U | PTE_P)) {
 		KERN_DEBUG("Cannot allocate physical memory for 0x%x\n",
 			   fault_va);
 		KERN_PANIC("Stop here.\n");
@@ -210,7 +207,7 @@ mgmt_allocpage(context_t *ctx, mgmt_allocpage_t *param)
 
 	proc_lock(pid);
 
-	if (!as_reserve(proc_as(pid), fault_va, PTE_P | PTE_U | PTE_W)) {
+	if (!pmap_reserve(proc_pmap(pid), fault_va, PTE_P | PTE_U | PTE_W)) {
 		KERN_DEBUG("MGMT_ALLOCPAGE: Cannot allocate physical memory for 0x%x.\n",
 			   fault_va);
 		proc_unlock(pid);

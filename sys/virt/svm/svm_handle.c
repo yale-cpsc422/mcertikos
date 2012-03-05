@@ -1,4 +1,3 @@
-#include <sys/as.h>
 #include <sys/debug.h>
 #include <sys/intr.h>
 #include <sys/pcpu.h>
@@ -9,6 +8,8 @@
 #include <sys/virt/vmm.h>
 #include <sys/virt/vmm_dev.h>
 #include <sys/virt/dev/pic.h>
+
+#include <machine/pmap.h>
 
 #include "svm.h"
 #include "svm_handle.h"
@@ -303,8 +304,8 @@ svm_handle_npf(struct vm *vm)
 	}
 #endif
 
-	if (as_reserve((as_t *)(uintptr_t) ctrl->nested_cr3, fault_addr,
-		       PTE_W | PTE_U | PTE_P) == NULL) {
+	if (pmap_reserve((pmap_t *)(uintptr_t) ctrl->nested_cr3,
+			 fault_addr, PTE_W | PTE_G | PTE_U) == NULL) {
 		KERN_DEBUG("Failed to reserve memory for guest address %x.\n",
 			   fault_addr);
 		return FALSE;

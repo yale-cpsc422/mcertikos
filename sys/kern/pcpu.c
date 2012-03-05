@@ -1,5 +1,4 @@
 #include <sys/types.h>
-#include <sys/as.h>
 #include <sys/debug.h>
 #include <sys/gcc.h>
 #include <sys/mmu.h>
@@ -9,6 +8,7 @@
 #include <sys/x86.h>
 
 #include <machine/pcpu.h>
+#include <machine/pmap.h>
 
 #include <dev/ioapic.h>
 #include <dev/lapic.h>
@@ -80,7 +80,7 @@ pcpu_init_cpu()
 	stack_pointer = ROUNDUP(stack_pointer, PAGE_SIZE);
 	__pcpu_init_cpu(pcpu_cur_idx(), &c->_pcpu, stack_pointer);
 
-	c->as = (as_t *) NULL;
+	c->pmap = (pmap_t *) NULL;
 
 	pageinfo_t *pi = mem_page_alloc();
 	KERN_ASSERT(pi != NULL);

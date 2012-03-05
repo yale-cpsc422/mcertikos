@@ -3,13 +3,13 @@
 
 #ifdef _KERN_
 
-#include <sys/as.h>
 #include <sys/context.h>
 #include <sys/proc.h>
 #include <sys/spinlock.h>
 #include <sys/types.h>
 
 #include <machine/pcpu.h>
+#include <machine/pmap.h>
 
 #define PCPU_AP_START_ADDR	0x8000
 
@@ -38,8 +38,8 @@ struct pcpu_t {
 	/* machine-dependent fields */
 	__pcpu_t	*_pcpu;
 
-	/* address space of the current;y running process on this cpu */
-	as_t		*as;
+	/* page table used on this processor */
+	pmap_t		*pmap;
 
 	/* interrupt handlers */
 	callback_t	*registered_callbacks;

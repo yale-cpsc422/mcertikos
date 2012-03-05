@@ -5,6 +5,8 @@
 
 #include <sys/types.h>
 
+#include <machine/pmap.h>
+
 #define ELF_MAGIC 0x464C457FU	/* "\x7FELF" in little endian */
 
 // ELF header
@@ -69,7 +71,7 @@ typedef struct sechdr {
 // Values for sechdr::sh_name
 #define ELF_SHN_UNDEF		0
 
-void elf_load(as_t *, uintptr_t);
+void elf_load(pmap_t *, uintptr_t);
 uintptr_t elf_entry(uintptr_t);
 
 #endif /* _KERN_ */

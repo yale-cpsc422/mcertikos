@@ -11,26 +11,26 @@
 // Page directory entries and page table entries are 32-bit integers.
 typedef uintptr_t pmap_t;
 
+pmap_t *kern_ptab;
+
 void pmap_init(void);
 
 pmap_t *pmap_new(void);
-void pmap_free(pmap_t *pmap);
+pmap_t *pmap_new_empty(void);
+void pmap_free(pmap_t *);
 
-pmap_t *pmap_insert(pmap_t *pmap, pageinfo_t *pi, uintptr_t va, int perm);
-void pmap_remove(pmap_t *pmap, uintptr_t va, size_t size);
+pmap_t *pmap_insert(pmap_t *, pageinfo_t *, uintptr_t va, int perm);
+pmap_t *pmap_reserve(pmap_t *, uintptr_t va, int perm);
+void pmap_remove(pmap_t *, uintptr_t va, size_t size);
 
-int pmap_setperm(pmap_t *pmap, uintptr_t va, size_t size, int perm);
+int pmap_setperm(pmap_t *, uintptr_t va, size_t size, int perm);
 
-void pmap_enable(void);
 void pmap_install(pmap_t *pmap);
 
 size_t pmap_copy(pmap_t *, uintptr_t, pmap_t *, uintptr_t, size_t);
 size_t pmap_memset(pmap_t *, uintptr_t, char, size_t);
 
-uintptr_t pmap_checkrange(pmap_t *, uintptr_t, size_t);
-
-pmap_t *pmap_kinit(pmap_t *);
-pmap_t *pmap_uinit(pmap_t *);
+bool pmap_checkrange(pmap_t *, uintptr_t, size_t);
 
 uintptr_t pmap_la2pa(pmap_t *, uintptr_t la);
 

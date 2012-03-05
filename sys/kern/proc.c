@@ -1,4 +1,3 @@
-#include <sys/as.h>
 #include <sys/context.h>
 #include <sys/debug.h>
 #include <sys/elf.h>
@@ -9,6 +8,8 @@
 #include <sys/string.h>
 #include <sys/types.h>
 #include <sys/vm.h>
+
+#include <machine/pmap.h>
 
 #define NPROC		64
 
@@ -198,9 +199,9 @@ proc_new(uintptr_t binary)
 
 	spinlock_init(&proc->lk);
 
-	proc->as = as_new(TRUE);
+	proc->pmap = pmap_new();
 
-	if (proc->as == NULL) {
+	if (proc->pmap == NULL) {
 		KERN_DEBUG("Cannot allocate address space for process %d\n",
 			   proc->pid);
 
@@ -212,7 +213,7 @@ proc_new(uintptr_t binary)
 		return NULL;
 	}
 
-	elf_load(proc->as, binary);
+	elf_load(proc->pmap, binary);
 
 	proc->normal_ctx =
 		context_new((void (*)(void)) elf_entry(binary),
@@ -228,8 +229,8 @@ proc_new(uintptr_t binary)
 
 		return NULL;
 	}
-	as_assign(proc->as, VM_STACKHI - PAGESIZE,
-		  PTE_P | PTE_U | PTE_W, mem_ptr2pi(proc->normal_ctx));
+	pmap_insert(proc->pmap, mem_ptr2pi(proc->normal_ctx),
+		    VM_STACKHI-PAGESIZE, PTE_P | PTE_U | PTE_G | PTE_W);
 	proc->signal_ctx = NULL;
 
 	mqueue_init(&proc->mqueue);
@@ -255,17 +256,18 @@ proc_start(pid_t pid)
 	KERN_ASSERT(spinlock_holding(&proc->lk) == TRUE);
 
 	KERN_ASSERT(proc->state == PROC_READY);
-	KERN_ASSERT(proc->as != NULL);
+	KERN_ASSERT(proc->pmap != NULL);
 	KERN_ASSERT(proc->normal_ctx != NULL);
 
 	pcpu_t *c = pcpu_cur();
 	spinlock_acquire(&c->lk);
 	c->proc = proc;
+	c->pmap = proc->pmap;
 	spinlock_release(&c->lk);
 
 	proc->state = PROC_RUN;
 
-	as_activate(proc->as);
+	pmap_install(proc->pmap);
 
 	spinlock_release(&proc->lk);
 
@@ -328,8 +330,8 @@ proc_recv_msg(pid_t pid)
 	return msg;
 }
 
-as_t *
-proc_as(pid_t pid)
+pmap_t *
+proc_pmap(pid_t pid)
 {
 	spinlock_acquire(&ptable.lk);
 	proc_t *proc = pid2proc(pid);
@@ -338,7 +340,7 @@ proc_as(pid_t pid)
 
 	KERN_ASSERT(spinlock_holding(&proc->lk) == TRUE);
 
-	return proc->as;
+	return proc->pmap;
 }
 
 void

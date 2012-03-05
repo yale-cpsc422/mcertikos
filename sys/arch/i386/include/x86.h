@@ -244,6 +244,15 @@ rcr2(void)
 	return val;
 }
 
+static gcc_inline uint32_t
+rcr3(void)
+{
+	uint32_t data;
+
+	__asm __volatile("movl %%cr3,%0" : "=r" (data));
+	return (data);
+}
+
 static inline void
 lcr3(uint32_t val)
 {

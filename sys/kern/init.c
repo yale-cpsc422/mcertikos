@@ -1,4 +1,3 @@
-#include <sys/as.h>
 #include <sys/console.h>
 #include <sys/context.h>
 #include <sys/debug.h>
@@ -14,6 +13,8 @@
 #include <sys/x86.h>
 
 #include <sys/virt/vmm.h>
+
+#include <machine/pmap.h>
 
 #include <dev/timer.h>
 
@@ -71,11 +72,7 @@ kern_init(mboot_info_t *mbi)
 	 * Initialize kernel page table.
 	 */
 	KERN_INFO("Initialize kernel page table ... ");
-	kern_as = as_init();
-	if (as_cur() == NULL) {
-		KERN_INFO("failed.\n");
-		KERN_PANIC("as_init() returns NULL.\n");
-	}
+	pmap_init();
 	KERN_INFO("done.\n");
 
 	/*
