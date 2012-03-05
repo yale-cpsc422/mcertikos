@@ -73,9 +73,8 @@ svm_check(void)
 	}
 
 	/* check MSR VM_CR */
-	if ((rdmsr(MSR_VM_CR) & MSR_VM_CR_SVMDIS) == 1) {
-		/* KERN_DEBUG("SVM is disabled.\n"); */
-		return FALSE;
+	if ((rdmsr(MSR_VM_CR) & MSR_VM_CR_SVMDIS) == 0) {
+		return TRUE;
 	}
 
 	/* check CPUID 0x8000000a */
