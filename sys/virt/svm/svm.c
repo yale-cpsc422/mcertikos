@@ -82,6 +82,9 @@ svm_check(void)
 	if ((feature & CPUID_SVM_LOCKED) == 0) {
 		/* KERN_DEBUG("SVM maybe disabled by BIOS.\n"); */
 		return FALSE;
+	} else {
+		/* KERN_DEBUG("SVM maybe disabled with key.\n"); */
+		return FALSE;
 	}
 
 	/* KERN_DEBUG("SVM is available.\n"); */
