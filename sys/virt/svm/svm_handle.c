@@ -154,7 +154,7 @@ svm_handle_exception(struct vm *vm)
 
 	switch (exit_code) {
 	case SVM_EXIT_EXCP_BASE+T_DEBUG:
-		KERN_INFO("DEBUG.\n");
+		dprintf("DEBUG.\n");
 
 		if (svm->single_step == TRUE) {
 			svm->single_step = FALSE;
@@ -235,12 +235,12 @@ svm_handle_ioio(struct vm *vm)
 	else if (sz8)
 		data = (uint8_t) data;
 
-	/* KERN_INFO("(port=%x, ", port); */
+	/* dprintf("(port=%x, ", port); */
 	if (type & SVM_EXITINFO1_TYPE_IN) {
-		/* KERN_INFO("in).\n"); */
+		/* dprintf("in).\n"); */
 		ret = vmm_iodev_read_port(vm, port, &data);
 	} else {
-		/* KERN_INFO("out).\n"); */
+		/* dprintf("out).\n"); */
 		ret = vmm_iodev_write_port(vm, port, &data);
 	}
 
@@ -281,7 +281,7 @@ svm_handle_npf(struct vm *vm)
 	uint64_t errcode = ctrl->exit_info_1;
 	uintptr_t fault_addr = (uintptr_t) PGADDR(ctrl->exit_info_2);
 
-	KERN_INFO("(va=%x, err=%llx).\n", fault_addr, errcode);
+	dprintf("(va=%x, err=%llx).\n", fault_addr, errcode);
 
 	KERN_ASSERT(errcode & SVM_EXITINFO1_NFP_U);
 
@@ -337,7 +337,7 @@ svm_handle_cpuid(struct vm *vm)
 
 	uint32_t rax, rbx, rcx, rdx;
 
-	KERN_INFO(" %x.\n", save->rax);
+	dprintf(" %x.\n", save->rax);
 
 	switch (save->rax) {
 	case 0x40000000:

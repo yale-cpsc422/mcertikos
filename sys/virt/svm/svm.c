@@ -504,48 +504,48 @@ svm_handle_exit(struct vm *vm)
 
 	switch (ctrl->exit_code) {
 	case SVM_EXIT_EXCP_BASE ... (SVM_EXIT_INTR-1):
-		KERN_INFO("VMEXIT for EXCP ");
+		dprintf("VMEXIT for EXCP ");
 		handled = svm_handle_exception(vm);
 		break;
 
 	case SVM_EXIT_INTR:
 		/* kernel interrupt handlers should come before here */
-		KERN_INFO("VMEXIT for INTR.\n");
+		dprintf("VMEXIT for INTR.\n");
 		handled = svm_handle_intr(vm);
 		break;
 
 	case SVM_EXIT_VINTR:
-		KERN_INFO("VMEXIT for VINTR.\n");
+		dprintf("VMEXIT for VINTR.\n");
 		handled = svm_handle_vintr(vm);
 		break;
 
 	case SVM_EXIT_IOIO:
-		KERN_INFO("VMEXIT for IO\n");
+		dprintf("VMEXIT for IO\n");
 		handled = svm_handle_ioio(vm);
 		break;
 
 	case SVM_EXIT_NPF:
-		KERN_INFO("VMEXIT for NPF");
+		dprintf("VMEXIT for NPF");
 		handled = svm_handle_npf(vm);
 		break;
 
 	case SVM_EXIT_CPUID:
-		KERN_INFO("VMEXIT for cpuid");
+		dprintf("VMEXIT for cpuid");
 		handled = svm_handle_cpuid(vm);
 		break;
 
 	case SVM_EXIT_SWINT:
-		KERN_INFO("VMEXIT for INTn.\n");
+		dprintf("VMEXIT for INTn.\n");
 		handled = svm_handle_swint(vm);
 		break;
 
 	case SVM_EXIT_RDTSC:
-		KERN_INFO("VMEXIT for RDTSC.\n");
+		dprintf("VMEXIT for RDTSC.\n");
 		handled = svm_handle_rdtsc(vm);
 		break;
 
 	case SVM_EXIT_ERR:
-		KERN_INFO("VMEXIT for invalid guest state in VMCB.\n");
+		dprintf("VMEXIT for invalid guest state in VMCB.\n");
 		handled = svm_handle_err(vm);
 		break;
 

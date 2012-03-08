@@ -27,6 +27,8 @@
 
 int vcprintf(const char *, va_list);
 int cprintf(const char *, ...);
+int vdprintf(const char *, va_list);
+int dprintf(const char *, ...);
 void vprintfmt(void (*putch)(int, void *), void *, const char *, va_list);
 
 void debug_info(const char *, ...);

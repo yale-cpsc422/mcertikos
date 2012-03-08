@@ -17,8 +17,8 @@ debug_normal(const char *file, int line, const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
-	cprintf("[D] %s:%d: ", file, line);
-	vcprintf(fmt, ap);
+	dprintf("[D] %s:%d: ", file, line);
+	vdprintf(fmt, ap);
 	va_end(ap);
 }
 
