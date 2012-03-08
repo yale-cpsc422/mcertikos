@@ -1,5 +1,6 @@
 #include <sys/console.h>
 #include <sys/debug.h>
+#include <sys/intr.h>
 #include <sys/types.h>
 #include <sys/x86.h>
 
@@ -173,17 +174,172 @@ kbd_intr(void)
 	cons_intr(kbd_proc_data);
 }
 
+static void
+kbd_wait4_input_empty(void)
+{
+	uint8_t status;
+
+	/* KERN_DEBUG("Waiting for ~IBF...\n"); */
+
+	while (1) {
+		status = inb(KBSTATP);
+		if (!(status & KBS_IBF))
+			break;
+	}
+}
+
+static void
+kbd_wait4_output_full(void)
+{
+	uint8_t status;
+
+	/* KERN_DEBUG("Waiting for OBF...\n"); */
+
+	while (1) {
+		status = inb(KBSTATP);
+		if (status & KBS_DIB)
+			break;
+	}
+}
+
+static void
+kbd_disable(void)
+{
+	kbd_wait4_input_empty();
+	outb(KBCMDP, KBC_KBDDISABLE);
+}
+
+static void
+kbd_send_cmd(uint8_t cmd)
+{
+	kbd_wait4_input_empty();
+	outb(KBCMDP, KBC_RAMWRITE);
+	kbd_wait4_input_empty();
+	/* KERN_DEBUG("Send command %x.\n", cmd); */
+	outb(KBDATAP, cmd);
+}
+
 void
 kbd_init(void)
 {
+	uint8_t status;
+
+	/* self-test */
+	kbd_wait4_input_empty();
+	outb(KBCMDP, KBC_SELFTEST);
+	kbd_wait4_output_full();
+	status = inb(KBDATAP);
+	if (status != 0x55) {
+		KERN_DEBUG("i8042 self-test failed.\n");
+		goto fail;
+	}
+	/* KERN_DEBUG("i8042 self-test is ok.\n"); */
+
+	/* keyboard interface test */
+	kbd_wait4_input_empty();
+	outb(KBCMDP, KBC_KBDTEST);
+	kbd_wait4_output_full();
+	status = inb(KBDATAP);
+	if (status != 0x00) {
+		KERN_DEBUG("Keyboard interface test failed, code=%x.\n", status);
+		goto fail;
+	}
+	/* KERN_DEBUG("Keyboard interface test is ok.\n"); */
+
+	kbd_send_cmd(0x30);
+	kbd_send_cmd(0x20);
+
+	/* reset */
+	kbd_wait4_input_empty();
+	outb(KBDATAP, KBC_RESET);
+	kbd_wait4_output_full();
+	status = inb(KBDATAP);
+	if (status != KBR_ACK) {
+		KERN_DEBUG("Keyborad reset failed.\n");
+		goto fail;
+	}
+	kbd_wait4_output_full();
+	status = inb(KBDATAP);
+	if (status != KBR_RSTDONE) {
+		KERN_DEBUG("Keyborad reset failed.\n");
+		goto fail;
+	}
+	/* KERN_DEBUG("Keyboard reset is ok.\n"); */
+
+	/*
+	 * FIXME: This piece of code does work in Simnow, but works well in QEMU
+	 *        and BOCHS.
+	 */
+#if 0
+	kbd_send_cmd(0x30);
+	kbd_send_cmd(0x20);
+
+	/* reset keyboard to power-on condition */
+	kbd_wait4_input_empty();
+	outb(KBDATAP, KBC_DISABLE);
+	kbd_wait4_output_full();
+	status = inb(KBDATAP);
+	if (status != KBR_ACK) {
+		KERN_DEBUG("Reset keyboard failed.\n");
+		goto fail;
+	}
+	/* KERN_DEBUG("Reset keyboard is ok.\n"); */
+#endif
+
+	kbd_send_cmd(0x30);
+	kbd_send_cmd(0x20);
+
+	/* select to scancode set 2 */
+	kbd_wait4_input_empty();
+	outb(KBDATAP, KBC_SETTABLE);
+	kbd_wait4_output_full();
+	status = inb(KBDATAP);
+	if (status != KBR_ACK) {
+		KERN_DEBUG("Select scancode set failed.\n");
+		goto fail;
+	}
+	kbd_wait4_input_empty();
+	outb(KBDATAP, 0x2);
+	kbd_wait4_output_full();
+	status = inb(KBDATAP);
+	if (status != KBR_ACK) {
+		KERN_DEBUG("Select scancode set failed.\n");
+		goto fail;
+	}
+	/* KERN_DEBUG("Select scanmode is ok.\n"); */
+
+	/* set to PC/XT mode */
+	kbd_send_cmd(0x30);
+	kbd_send_cmd(0x70);
+	kbd_send_cmd(0x60);
+
+	/* enable KBD */
+	kbd_wait4_input_empty();
+	outb(KBDATAP, KBC_ENABLE);
+	kbd_wait4_output_full();
+	status = inb(KBDATAP);
+	if (status != KBR_ACK) {
+		KERN_DEBUG("Enable keyboard failed.\n");
+		goto fail;
+	}
+	/* KERN_DEBUG("Enable keyboard is ok.\n"); */
+
+	kbd_send_cmd(0x61);
+
+	return;
+
+ fail:
+	KERN_DEBUG("status=%x.\n", status);
+	KERN_DEBUG("Disable keyboard.\n");
+	kbd_disable();
+	return;
 }
 
 void
 kbd_intenable(void)
 {
 	// Enable interrupt delivery via the PIC/APIC
-	pic_enable(IRQ_KBD);
-	ioapic_enable(IRQ_KBD+T_IRQ0, 0);
+	intr_enable(IRQ_KBD, 0);
 
 	// Drain the kbd buffer so that the hardware generates interrupts.
 	kbd_intr();

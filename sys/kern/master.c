@@ -471,7 +471,7 @@ master_kernel(void)
 	intr_enable(IRQ_TIMER, 0);
 
 	KERN_INFO("[MASTER] Enable KBD interrupt.\n");
-	intr_enable(IRQ_KBD, 0);
+	kbd_intenable();
 
 	KERN_INFO("[MASTER] Enable IDE interrupt.\n");
 	intr_enable(IRQ_IDE, 0);
