@@ -128,7 +128,7 @@ master_pgf_handler(context_t *ctx)
 		return 1;
 	}
 
-	KERN_INFO("Page fault at 0x%x in userspace.\n", fault_va);
+	KERN_DEBUG("Page fault at 0x%x in userspace.\n", fault_va);
 
 	pmap_t *user_pmap = pcpu_cur()->proc->pmap;
 
@@ -442,7 +442,7 @@ master_timer_handler(context_t *ctx)
 static uint32_t
 master_kbd_handler(context_t *ctx)
 {
-	/* KERN_DEBUG("master_kbd_handler\n"); */
+	KERN_DEBUG("master_kbd_handler\n");
 
 	intr_eoi();
 	kbd_intr();

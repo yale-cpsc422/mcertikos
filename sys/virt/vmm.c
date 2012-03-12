@@ -13,7 +13,7 @@ static bool vmm_inited = FALSE;
 static struct vm vm_pool[4];
 static spinlock_t vm_pool_lock;
 
-static struct vm *cur_vm;
+static struct vm *cur_vm = NULL;
 
 static enum {SVM, VMX} virt_type;
 static struct vmm_ops *vmm_ops = NULL;
@@ -99,6 +99,7 @@ vmm_init_vm(void)
 	vpic_init(&vm->vpic, vm);
 	vkbd_init(&vm->vkbd, vm);
 	vpci_init(&vm->vpci, vm);
+	/* vserial_init(&vm->vserial, vm); */
 
 	/* machine-dependent VM initialization */
 	if (vmm_ops->vm_init(vm) != 0) {

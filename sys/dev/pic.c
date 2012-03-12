@@ -78,7 +78,7 @@ pic_init(void)
 	outb(IO_PIC2, 0x0a);               /* OCW3 */
 
 	// mask all interrupts
-	outb(IO_PIC1+1, 0xFB); /* only unmask SLAVE INTR line */
+	outb(IO_PIC1+1, 0xFF);
 	outb(IO_PIC2+1, 0xFF);
 }
 

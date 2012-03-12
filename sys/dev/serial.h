@@ -21,6 +21,9 @@
 #include <sys/types.h>
 
 #define COM1		0x3F8
+#define COM2		0x2F8
+#define COM3		0x3E8
+#define COM4		0x2E8
 
 #define COM_RX		0	// In:	Receive buffer (DLAB=0)
 #define COM_TX		0	// Out: Transmit buffer (DLAB=0)

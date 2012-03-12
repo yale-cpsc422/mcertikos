@@ -126,6 +126,7 @@ i8259_update_irq(struct i8259 *chip)
 
 	irq = i8259_get_irq(chip);
 	if (irq >= 0) {
+		chip->isr |= (1 << irq);
 		chip->int_out = 1;
 	} else
 		chip->int_out = 0;
@@ -569,6 +570,11 @@ void
 vpic_init(struct vpic *vpic, struct vm *vm)
 {
 	KERN_ASSERT(vpic != NULL);
+
+	KERN_DEBUG("Master: %x, ISR@%x, IRR@%x, IMR@%x\n", &vpic->master,
+		   &vpic->master.isr, &vpic->master.irr, &vpic->master.imr);
+	KERN_DEBUG("Slave: %x, ISR@%x, IRR@%x, IMR@%x\n", &vpic->slave,
+		   &vpic->slave.isr, &vpic->slave.irr, &vpic->slave.imr);
 
 	i8259_reset(&vpic->master);
 	vpic->master.master = TRUE;

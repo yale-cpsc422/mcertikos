@@ -434,7 +434,7 @@ vkbd_init(struct vkbd *vkbd, struct vm *vm)
 	ps2_kbd_init(&vkbd->kbd, vkbd_update_kbd_irq, vkbd);
 	ps2_mouse_init(&vkbd->mouse, vkbd_update_aux_irq, vkbd);
 
-	/* register */
+	/* register virtualized device (handlers of I/O ports &  IRQs) */
 	vmm_iodev_register_read(vm, vkbd, KBSTATP, SZ8, _vkbd_ioport_read);
 	vmm_iodev_register_read(vm, vkbd, KBDATAP, SZ8, _vkbd_ioport_read);
 	vmm_iodev_register_write(vm, vkbd, KBCMDP, SZ8, _vkbd_ioport_write);

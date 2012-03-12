@@ -222,117 +222,117 @@ kbd_send_cmd(uint8_t cmd)
 void
 kbd_init(void)
 {
-	uint8_t status;
+/* 	uint8_t status; */
 
-	/* self-test */
-	kbd_wait4_input_empty();
-	outb(KBCMDP, KBC_SELFTEST);
-	kbd_wait4_output_full();
-	status = inb(KBDATAP);
-	if (status != 0x55) {
-		KERN_DEBUG("i8042 self-test failed.\n");
-		goto fail;
-	}
-	/* KERN_DEBUG("i8042 self-test is ok.\n"); */
+/* 	/\* self-test *\/ */
+/* 	kbd_wait4_input_empty(); */
+/* 	outb(KBCMDP, KBC_SELFTEST); */
+/* 	kbd_wait4_output_full(); */
+/* 	status = inb(KBDATAP); */
+/* 	if (status != 0x55) { */
+/* 		KERN_DEBUG("i8042 self-test failed.\n"); */
+/* 		goto fail; */
+/* 	} */
+/* 	/\* KERN_DEBUG("i8042 self-test is ok.\n"); *\/ */
 
-	/* keyboard interface test */
-	kbd_wait4_input_empty();
-	outb(KBCMDP, KBC_KBDTEST);
-	kbd_wait4_output_full();
-	status = inb(KBDATAP);
-	if (status != 0x00) {
-		KERN_DEBUG("Keyboard interface test failed, code=%x.\n", status);
-		goto fail;
-	}
-	/* KERN_DEBUG("Keyboard interface test is ok.\n"); */
+/* 	/\* keyboard interface test *\/ */
+/* 	kbd_wait4_input_empty(); */
+/* 	outb(KBCMDP, KBC_KBDTEST); */
+/* 	kbd_wait4_output_full(); */
+/* 	status = inb(KBDATAP); */
+/* 	if (status != 0x00) { */
+/* 		KERN_DEBUG("Keyboard interface test failed, code=%x.\n", status); */
+/* 		goto fail; */
+/* 	} */
+/* 	/\* KERN_DEBUG("Keyboard interface test is ok.\n"); *\/ */
 
-	kbd_send_cmd(0x30);
-	kbd_send_cmd(0x20);
+/* 	kbd_send_cmd(0x30); */
+/* 	kbd_send_cmd(0x20); */
 
-	/* reset */
-	kbd_wait4_input_empty();
-	outb(KBDATAP, KBC_RESET);
-	kbd_wait4_output_full();
-	status = inb(KBDATAP);
-	if (status != KBR_ACK) {
-		KERN_DEBUG("Keyborad reset failed.\n");
-		goto fail;
-	}
-	kbd_wait4_output_full();
-	status = inb(KBDATAP);
-	if (status != KBR_RSTDONE) {
-		KERN_DEBUG("Keyborad reset failed.\n");
-		goto fail;
-	}
-	/* KERN_DEBUG("Keyboard reset is ok.\n"); */
+/* 	/\* reset *\/ */
+/* 	kbd_wait4_input_empty(); */
+/* 	outb(KBDATAP, KBC_RESET); */
+/* 	kbd_wait4_output_full(); */
+/* 	status = inb(KBDATAP); */
+/* 	if (status != KBR_ACK) { */
+/* 		KERN_DEBUG("Keyborad reset failed.\n"); */
+/* 		goto fail; */
+/* 	} */
+/* 	kbd_wait4_output_full(); */
+/* 	status = inb(KBDATAP); */
+/* 	if (status != KBR_RSTDONE) { */
+/* 		KERN_DEBUG("Keyborad reset failed.\n"); */
+/* 		goto fail; */
+/* 	} */
+/* 	/\* KERN_DEBUG("Keyboard reset is ok.\n"); *\/ */
 
-	/*
-	 * FIXME: This piece of code does work in Simnow, but works well in QEMU
-	 *        and BOCHS.
-	 */
-#if 0
-	kbd_send_cmd(0x30);
-	kbd_send_cmd(0x20);
+/* 	/\* */
+/* 	 * FIXME: This piece of code does work in Simnow, but works well in QEMU */
+/* 	 *        and BOCHS. */
+/* 	 *\/ */
+/* #if 0 */
+/* 	kbd_send_cmd(0x30); */
+/* 	kbd_send_cmd(0x20); */
 
-	/* reset keyboard to power-on condition */
-	kbd_wait4_input_empty();
-	outb(KBDATAP, KBC_DISABLE);
-	kbd_wait4_output_full();
-	status = inb(KBDATAP);
-	if (status != KBR_ACK) {
-		KERN_DEBUG("Reset keyboard failed.\n");
-		goto fail;
-	}
-	/* KERN_DEBUG("Reset keyboard is ok.\n"); */
-#endif
+/* 	/\* reset keyboard to power-on condition *\/ */
+/* 	kbd_wait4_input_empty(); */
+/* 	outb(KBDATAP, KBC_DISABLE); */
+/* 	kbd_wait4_output_full(); */
+/* 	status = inb(KBDATAP); */
+/* 	if (status != KBR_ACK) { */
+/* 		KERN_DEBUG("Reset keyboard failed.\n"); */
+/* 		goto fail; */
+/* 	} */
+/* 	/\* KERN_DEBUG("Reset keyboard is ok.\n"); *\/ */
+/* #endif */
 
-	kbd_send_cmd(0x30);
-	kbd_send_cmd(0x20);
+/* 	kbd_send_cmd(0x30); */
+/* 	kbd_send_cmd(0x20); */
 
-	/* select to scancode set 2 */
-	kbd_wait4_input_empty();
-	outb(KBDATAP, KBC_SETTABLE);
-	kbd_wait4_output_full();
-	status = inb(KBDATAP);
-	if (status != KBR_ACK) {
-		KERN_DEBUG("Select scancode set failed.\n");
-		goto fail;
-	}
-	kbd_wait4_input_empty();
-	outb(KBDATAP, 0x2);
-	kbd_wait4_output_full();
-	status = inb(KBDATAP);
-	if (status != KBR_ACK) {
-		KERN_DEBUG("Select scancode set failed.\n");
-		goto fail;
-	}
-	/* KERN_DEBUG("Select scanmode is ok.\n"); */
+/* 	/\* select to scancode set 2 *\/ */
+/* 	kbd_wait4_input_empty(); */
+/* 	outb(KBDATAP, KBC_SETTABLE); */
+/* 	kbd_wait4_output_full(); */
+/* 	status = inb(KBDATAP); */
+/* 	if (status != KBR_ACK) { */
+/* 		KERN_DEBUG("Select scancode set failed.\n"); */
+/* 		goto fail; */
+/* 	} */
+/* 	kbd_wait4_input_empty(); */
+/* 	outb(KBDATAP, 0x2); */
+/* 	kbd_wait4_output_full(); */
+/* 	status = inb(KBDATAP); */
+/* 	if (status != KBR_ACK) { */
+/* 		KERN_DEBUG("Select scancode set failed.\n"); */
+/* 		goto fail; */
+/* 	} */
+/* 	/\* KERN_DEBUG("Select scanmode is ok.\n"); *\/ */
 
-	/* set to PC/XT mode */
-	kbd_send_cmd(0x30);
-	kbd_send_cmd(0x70);
-	kbd_send_cmd(0x60);
+/* 	/\* set to PC/XT mode *\/ */
+/* 	kbd_send_cmd(0x30); */
+/* 	kbd_send_cmd(0x70); */
+/* 	kbd_send_cmd(0x60); */
 
-	/* enable KBD */
-	kbd_wait4_input_empty();
-	outb(KBDATAP, KBC_ENABLE);
-	kbd_wait4_output_full();
-	status = inb(KBDATAP);
-	if (status != KBR_ACK) {
-		KERN_DEBUG("Enable keyboard failed.\n");
-		goto fail;
-	}
-	/* KERN_DEBUG("Enable keyboard is ok.\n"); */
+/* 	/\* enable KBD *\/ */
+/* 	kbd_wait4_input_empty(); */
+/* 	outb(KBDATAP, KBC_ENABLE); */
+/* 	kbd_wait4_output_full(); */
+/* 	status = inb(KBDATAP); */
+/* 	if (status != KBR_ACK) { */
+/* 		KERN_DEBUG("Enable keyboard failed.\n"); */
+/* 		goto fail; */
+/* 	} */
+/* 	/\* KERN_DEBUG("Enable keyboard is ok.\n"); *\/ */
 
-	kbd_send_cmd(0x61);
+/* 	kbd_send_cmd(0x61); */
 
-	return;
+/* 	return; */
 
- fail:
-	KERN_DEBUG("status=%x.\n", status);
-	KERN_DEBUG("Disable keyboard.\n");
-	kbd_disable();
-	return;
+/*  fail: */
+/* 	KERN_DEBUG("status=%x.\n", status); */
+/* 	KERN_DEBUG("Disable keyboard.\n"); */
+/* 	kbd_disable(); */
+/* 	return; */
 }
 
 void

@@ -8,6 +8,7 @@
 #include <sys/virt/dev/kbd.h>
 #include <sys/virt/dev/pci.h>
 #include <sys/virt/dev/pic.h>
+#include <sys/virt/dev/serial.h>
 
 #define VM_PHY_MEMORY_SIZE	(64 * 1024 * 1024)
 
@@ -46,6 +47,7 @@ struct vm {
 	struct vpic	vpic;		/* virtual PIC (i8259) */
 	struct vpci	vpci;		/* virtual PCI host */
 	struct vkbd	vkbd;		/* virtual keyboard */
+	struct vserial	vserial;	/* virtual serial ports */
 
 	bool		used;
 };
