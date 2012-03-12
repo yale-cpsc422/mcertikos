@@ -1,0 +1,7 @@
+* add neccessary locks to structures
+
+* let keyboard work in GRUB menu interface in the guest
+
+* let VM run in the process
+
+* boot TTY Linux as the management guest OS
