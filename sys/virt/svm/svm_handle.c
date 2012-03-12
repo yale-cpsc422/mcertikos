@@ -349,8 +349,9 @@ svm_handle_cpuid(struct vm *vm)
 
 	case 0x00000001:
 		cpuid(save->rax, &rax, &rbx, &rcx, &rdx);
-		save->rax = rax;
-		svm->g_rbx = rbx;
+		save->rax = 0x0; /* empty CPU family, model, step, etc. */
+		svm->g_rbx = /* only 1 processor/core */
+			(rbx & ~(uint64_t) (0xf << 16)) | (uint64_t) (1 << 16);
 		svm->g_rcx = rcx & ~(uint64_t) (CPUID_FEATURE_AVX |
 						CPUID_FEATURE_AES |
 						CPUID_FEATURE_MONITOR);
@@ -360,7 +361,7 @@ svm_handle_cpuid(struct vm *vm)
 
 	case 0x80000001:
 		cpuid(save->rax, &rax, &rbx, &rcx, &rdx);
-		save->rax = rax;
+		save->rax = 0x0; /* empty CPU family, model, step, etc. */
 		svm->g_rbx = rbx;
 		svm->g_rcx = rcx & ~(uint64_t) (CPUID_X_FEATURE_SKINIT |
 						CPUID_X_FEATURE_SVM);
@@ -377,6 +378,10 @@ svm_handle_cpuid(struct vm *vm)
 
 		break;
 	}
+
+	KERN_DEBUG("eax=%x, ebx=%x, ecx=%x, edx=%x\n",
+		   (uint32_t) save->rax, (uint32_t) svm->g_rbx,
+		   (uint32_t) svm->g_rcx, (uint32_t) svm->g_rdx);
 
 	save->rip += 2;		/* cpuid is a two-byte instruction. */
 
