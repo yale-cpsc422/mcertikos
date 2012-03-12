@@ -5,3 +5,5 @@
 * let VM run in the process
 
 * boot TTY Linux as the management guest OS
+
+* construct E820 memory mappings for the guest

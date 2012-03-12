@@ -80,6 +80,10 @@ qemu-kvm: $(CERTIKOS_IMG)
 qemu-bios: $(CERTIKOS_IMG)
 	$(V)$(QEMU) $(QEMUOPTS) $(QEMUOPTS_BIOS)
 
+iso: all
+	$(V)cp $(OBJDIR)/sys/kernel $(UTILSDIR)/iso/boot/kernel
+	$(V)grub-mkrescue -o $(CERTIKOS_IMG) $(UTILSDIR)/iso
+
 package:
 	$(V)tar czf ../certikos.tar.gz --exclude=obj --exclude=cscope.* .
 
