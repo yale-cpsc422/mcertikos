@@ -520,7 +520,7 @@ svm_handle_exit(struct vm *vm)
 		break;
 
 	case SVM_EXIT_IOIO:
-		dprintf("VMEXIT for IO\n");
+		dprintf("VMEXIT for IO");
 		handled = svm_handle_ioio(vm);
 		break;
 

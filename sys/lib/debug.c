@@ -3,6 +3,8 @@
 #include <sys/types.h>
 #include <sys/x86.h>
 
+#include <sys/virt/vmm.h>
+
 void
 debug_info(const char *fmt, ...)
 {
@@ -17,7 +19,10 @@ debug_normal(const char *file, int line, const char *fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
-	dprintf("[D] %s:%d: ", file, line);
+	if (vmm_cur_vm() != NULL)
+		dprintf("[D] %s:%d: ", file, line);
+	else
+		dprintf("<D> %s:%d: ", file, line);
 	vdprintf(fmt, ap);
 	va_end(ap);
 }
@@ -27,13 +32,11 @@ debug_panic(const char *file, int line, const char *fmt,...)
 {
 	va_list ap;
 
-	/* /\* Avoid infinite recursion if we're panicking from kernel mode. *\/ */
-	/* if ((read_cs() & 3) == 0) */
-	/*	goto dead; */
-
-	/* First print the requested message */
 	va_start(ap, fmt);
-	cprintf("[P] %s:%d: ", file, line);
+	if (vmm_cur_vm() != NULL)
+		cprintf("[P] %s:%d: ", file, line);
+	else
+		cprintf("<P> %s:%d: ", file, line);
 	vcprintf(fmt, ap);
 	va_end(ap);
 	halt();
@@ -44,7 +47,10 @@ debug_warn(const char *file, int line, const char *fmt,...)
 {
 	va_list ap;
 	va_start(ap, fmt);
-	cprintf("[W] %s:%d: ", file, line);
+	if (vmm_cur_vm() != NULL)
+		cprintf("[W] %s:%d: ", file, line);
+	else
+		cprintf("<W> %s:%d: ", file, line);
 	vcprintf(fmt, ap);
 	va_end(ap);
 }

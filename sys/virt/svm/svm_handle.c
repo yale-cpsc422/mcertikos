@@ -235,12 +235,12 @@ svm_handle_ioio(struct vm *vm)
 	else if (sz8)
 		data = (uint8_t) data;
 
-	/* dprintf("(port=%x, ", port); */
+	dprintf("(port=%x, ", port);
 	if (type & SVM_EXITINFO1_TYPE_IN) {
-		/* dprintf("in).\n"); */
+		dprintf("in).\n");
 		ret = vmm_iodev_read_port(vm, port, &data);
 	} else {
-		/* dprintf("out).\n"); */
+		dprintf("out).\n");
 		ret = vmm_iodev_write_port(vm, port, &data);
 	}
 
