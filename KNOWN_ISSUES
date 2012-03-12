@@ -1,3 +1,7 @@
 * When building the userspace programs (in user/) by gcc-4.4, gcc-4.4 puts the PLT segments below 0x4000_0000, even though the option "-Ttext=0x40000000e" is present (in user/Makefile.inc). This will cause parts of the userspace program are loaded in the kernel space (below 0x40000000).
 
   WORKAROUND: use newer version gcc, such as gcc-4.6. Newer version gcc does not generate the PLT segments.
+
+* When booting grub-legacy in the guest, there is no response to the keyboard at the grub menu interface. The first time clicking keyboard at the menu interface in the guest, BIOS will send commands to i8042 to disable keyboard, but will not enable it again later. While in the host, the same operation will cause BIOS to disable keyboard first and later disable it.
+
+  WORKAROUND: none
