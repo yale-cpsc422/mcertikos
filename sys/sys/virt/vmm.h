@@ -33,10 +33,6 @@ struct vm {
 	void		*cookie;	/* processor-specific data */
 
 	bool		exit_for_intr;	/* VMEXIT for interrupts */
-	/*
-	 * FIXME: Once we move the guest to the process, remember to fix this.
-	 */
-	tf_t		*tf;		/* trapframe */
 
 	struct {
 		void			*dev;
@@ -90,7 +86,7 @@ typedef int (*vm_exit_handle_func_t)(struct vm *);
  *
  * @return 0 if no errors happen
  */
-typedef int (*vm_intr_handle_func_t)(struct vm *);
+typedef int (*vm_intr_handle_func_t)(struct vm *, uint8_t irqno);
 
 typedef enum {EVENT_INT, EVENT_NMI, EVENT_EXPT, EVENT_SWINT} event_t;
 
@@ -150,7 +146,7 @@ void vmm_set_vm_irq(struct vm *, int irq, int level);
 /*
  *
  */
-void vmm_handle_intr(struct vm *);
+void vmm_handle_intr(struct vm *, uint8_t irqno);
 
 #endif /* _KERN_ */
 

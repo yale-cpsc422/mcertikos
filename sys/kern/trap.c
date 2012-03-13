@@ -44,19 +44,24 @@ trap(tf_t *tf)
 
 		KERN_ASSERT(tf->eip >= VM_USERLO && tf->eip < VM_USERHI);
 		ctx->tf = *tf;
-	} else {
-		struct vm *vm = vmm_cur_vm();
-		KERN_ASSERT(vm != NULL && vm->tf == NULL);
-		vm->tf = tf;
 	}
 
 	callback_t f = pcpu_cur()->registered_callbacks[tf->trapno];
 
 	if (f)
 		f(ctx);
-	else
-		KERN_WARN("No registered handler for trap %x.\n",
-			  ctx->tf.trapno);
+	else {
+		if (ctx != NULL)
+			KERN_WARN("No registered handler for trap %x.\n",
+				  ctx->tf.trapno);
+		else { /* if the interrupt is from guest and the host has no
+			  handler for it, just let VMM handle the interrupt. */
+			struct vm *vm = vmm_cur_vm();
+			int irq = tf->trapno - T_IRQ0;
+			KERN_ASSERT(vm != NULL && irq >= 0);
+			vmm_handle_intr(vm, irq);
+		}
+	}
 
 	if (ctx != NULL) {
 		pmap_install(pcpu_cur()->proc->pmap);

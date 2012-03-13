@@ -110,16 +110,13 @@ svm_guest_handle_gpf(struct vm *vm, tf_t *tf)
  * back to the guest.
  */
 int
-svm_guest_intr_handler(struct vm *vm)
+svm_guest_intr_handler(struct vm *vm, uint8_t irq)
 {
-	KERN_ASSERT(vm != NULL && vm->exit_for_intr == TRUE && vm->tf != NULL);
+	KERN_ASSERT(vm != NULL && vm->exit_for_intr == TRUE);
 
-	tf_t *tf = vm->tf;
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_save_area *save = &vmcb->save;
-
-	int irq = tf->trapno - T_IRQ0;
 
 	KERN_ASSERT(irq >= 0);
 	KERN_DEBUG("INTR%x happened in the guest (gIF=%x, hIF=%x).\n",
@@ -135,7 +132,6 @@ svm_guest_intr_handler(struct vm *vm)
 	}
 
 	vm->exit_for_intr = FALSE;
-	vm->tf = NULL;
 	intr_eoi();
 
 	return 0;

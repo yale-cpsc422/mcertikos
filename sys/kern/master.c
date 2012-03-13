@@ -441,7 +441,7 @@ master_timer_handler(context_t *ctx)
 	if (from_guest != TRUE)
 		intr_eoi();
 	else
-		vmm_handle_intr(vm);
+		vmm_handle_intr(vm, IRQ_TIMER);
 
 	return 0;
 }
@@ -465,7 +465,7 @@ master_kbd_handler(context_t *ctx)
 		intr_eoi();
 		kbd_intr();
 	} else /* for a guest */
-		vmm_handle_intr(vm);
+		vmm_handle_intr(vm, IRQ_KBD);
 	return 0;
 }
 

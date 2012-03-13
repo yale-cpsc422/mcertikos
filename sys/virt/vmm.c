@@ -94,7 +94,6 @@ vmm_init_vm(void)
 	memset(vm, 0x0, sizeof(struct vm));
 
 	vm->exit_for_intr = FALSE;
-	vm->tf = NULL;
 
 	/* initializa virtualized devices */
 	vpic_init(&vm->vpic, vm);
@@ -148,9 +147,9 @@ vmm_set_vm_irq(struct vm *vm, int irq, int level)
 }
 
 void
-vmm_handle_intr(struct vm *vm)
+vmm_handle_intr(struct vm *vm, uint8_t irqno)
 {
 	KERN_ASSERT(vm != NULL);
 
-	vmm_ops->vm_intr_handle(vm);
+	vmm_ops->vm_intr_handle(vm, irqno);
 }
