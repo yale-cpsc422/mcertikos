@@ -59,13 +59,13 @@ vmm_iodev_register_write(struct vm *vm,
 	KERN_ASSERT(port < MAX_IOPORT);
 
 	if (vm->iodev[port].dev != NULL && vm->iodev[port].dev != iodev) {
-		KERN_DEBUG("Port %x is alwritey occupied by device %x.\n",
+		KERN_DEBUG("Port %x is already occupied by device %x.\n",
 			   port, vm->iodev[port].dev);
 		return 1;
 	}
 
 	if (vm->iodev[port].write_func[size] != NULL) {
-		KERN_DEBUG("Function %x is alwritey resgitered to write port %x.\n",
+		KERN_DEBUG("Function %x is already resgitered to write port %x.\n",
 			   vm->iodev[port].write_func[size], port);
 		return 1;
 	}

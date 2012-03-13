@@ -227,25 +227,30 @@ svm_handle_ioio(struct vm *vm)
 	bool type = exitinfo1 & SVM_EXITINFO1_TYPE_MASK;
 
 	uint32_t data = (uint32_t) save->rax;
-	data_sz_t size=SZ8;//set the default data size to be SZ8
-
-	if (sz32) {
-		data = (uint32_t) data;
-		size=SZ32;
-	} else if (sz16) {
-		data = (uint16_t) data;
-		size=SZ16;
-	} else if (sz8) {
-		data = (uint8_t) data;
-		size=SZ8;
-	}
+	data_sz_t size = SZ8; /*set the default data size to be SZ8 */
 
 	dprintf("(port=%x, ", port);
+
+	if (sz32) {
+		dprintf("4 bytes, ");
+		data = (uint32_t) data;
+		size = SZ32;
+	} else if (sz16) {
+		dprintf("2 bytes, ");
+		data = (uint16_t) data;
+		size = SZ16;
+	} else if (sz8) {
+		dprintf("1 byte, ");
+		data = (uint8_t) data;
+		size = SZ8;
+	} else
+		KERN_PANIC("Invalid data length.\n");
+
 	if (type & SVM_EXITINFO1_TYPE_IN) {
-		dprintf("2^%d byte, in).\n", size);
+		dprintf("in).\n");
 		ret = vmm_iodev_read_port(vm, port, &data, size);
 	} else {
-		dprintf("2^%d byte, out).\n", size);
+		dprintf("out).\n");
 		ret = vmm_iodev_write_port(vm, port, &data, size);
 	}
 
