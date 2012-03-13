@@ -82,7 +82,7 @@ TRAPHANDLER     (Xdefault, 500)
 .type	_alltraps,@function
 .p2align 4, 0x90		/* 16-byte alignment, nop filled */
 _alltraps:
-	cli
+	cli			# make sure there is no nested trap
 
 	pushl %ds		# build context
 	pushl %es

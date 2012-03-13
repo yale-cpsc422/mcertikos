@@ -10,13 +10,22 @@
 
 #include <machine/pmap.h>
 #include <machine/trap.h>
+#include <machine/vm.h>
 
 #include <dev/lapic.h>
 
-static bool kern_in_trap = FALSE;
-static kern_tf_handler_t kern_tf_handler[T_MAX];
-static kern_tf_handler_t default_handler;
-
+/*
+ * XXX: Currently CertiKOS runs the guest in the kernel space, so interrupts
+ *      which happen in the guest and is intercepted by the host is actually
+ *      happen in the kernel space of CertiKOS. Though trap() uses the same
+ *      handlers for the interrupts in the kernel space and the user space,
+ *      it still has to treat them differently when saving and restoring the
+ *      trap contexts. For the kernel space interrupts, the trap context is
+ *      the trap frame; while for the user space interrupts, it's context.
+ *
+ * FIXME: Once we move the guest to the user space, remember to fix the
+ *        context saving and restoring code in trap().
+ */
 void
 trap(tf_t *tf)
 {
@@ -24,89 +33,36 @@ trap(tf_t *tf)
 
 	asm volatile("cld" ::: "cc");
 
-	if (rcr3() != (uint32_t) kern_ptab) { 	/* from userspace */
-		/* switch to kernel virtual space */
+	context_t *ctx = NULL;
+
+	if (rcr3() != (uint32_t) kern_ptab) {
 		pmap_install(kern_ptab);
 
-		context_t *ctx = context_cur();
+		ctx = context_cur();
 		KERN_ASSERT(ctx != NULL);
 		context_set_cur(NULL);
 
-		KERN_ASSERT(tf->eip);
-		KERN_ASSERT(tf->eip < 0x50000000);
+		KERN_ASSERT(tf->eip >= VM_USERLO && tf->eip < VM_USERHI);
 		ctx->tf = *tf;
+	} else {
+		struct vm *vm = vmm_cur_vm();
+		KERN_ASSERT(vm != NULL && vm->tf == NULL);
+		vm->tf = tf;
+	}
 
-		callback_t f = pcpu_cur()->registered_callbacks[tf->trapno];
+	callback_t f = pcpu_cur()->registered_callbacks[tf->trapno];
 
-		if (f)
-			f(ctx);
-		else
-			KERN_WARN("No registered handler for trap %x.\n",
-				  ctx->tf.trapno);
+	if (f)
+		f(ctx);
+	else
+		KERN_WARN("No registered handler for trap %x.\n",
+			  ctx->tf.trapno);
 
-		KERN_ASSERT(ctx->tf.eip < 0x50000000);
-		KERN_ASSERT(ctx->tf.eip);
-
-		/* switch back to user virtual space */
+	if (ctx != NULL) {
 		pmap_install(pcpu_cur()->proc->pmap);
 		context_start(ctx);
-	} else {			/* from kernel space */
-		KERN_DEBUG("Exceptions or interruprs from the kernel space.\n");
-
-		/* trap_dump(tf); */
-
-		if (kern_in_trap == TRUE)
-			halt();
-
-		kern_in_trap = TRUE;
-
-		int trapno = tf->trapno;
-
-		KERN_ASSERT(0 <= trapno && trapno < T_MAX);
-
-		kern_tf_handler_t handler = kern_tf_handler[trapno];
-
-		if (handler == NULL) {
-			KERN_WARN("No registered handler for trap %x.\n",
-				  trapno);
-			handler = default_handler;
-		}
-
-		handler(vmm_cur_vm(), tf);
-
-		kern_in_trap = FALSE;
-
-		vmm_cur_vm()->exit_for_intr = FALSE;
-
+	} else
 		trap_return(tf);
-	}
-}
 
-int
-trap_register_default_handler(kern_tf_handler_t handler)
-{
-	KERN_ASSERT(handler != NULL);
-
-	default_handler = handler;
-	return 0;
-}
-
-int
-trap_register_kern_handler(int trapno, kern_tf_handler_t handler)
-{
-	KERN_ASSERT(0 <= trapno && trapno < T_MAX);
-	KERN_ASSERT(handler != NULL);
-
-	if (kern_tf_handler[trapno] != NULL) {
-		KERN_WARN("Kernel trap handler %x has already been registered for trap %x.\n",
-			  kern_tf_handler[trapno], trapno);
-		return 1;
-	}
-
-	/* KERN_DEBUG("Register kernel trap handler %x for trap %x.\n", */
-	/* 	   handler, trapno); */
-
-	kern_tf_handler[trapno] = handler;
-
-	return 0;
+	KERN_PANIC("We should not be here.\n");
 }

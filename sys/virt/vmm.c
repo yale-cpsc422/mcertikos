@@ -94,6 +94,7 @@ vmm_init_vm(void)
 	memset(vm, 0x0, sizeof(struct vm));
 
 	vm->exit_for_intr = FALSE;
+	vm->tf = NULL;
 
 	/* initializa virtualized devices */
 	vpic_init(&vm->vpic, vm);
@@ -122,11 +123,11 @@ vmm_run_vm(struct vm *vm)
 		vmm_ops->vm_run(vm);
 		/*
 		 * If VM exits for interrupts, then enable interrupts in the
-		 * host in order to let host interrupt handlers take in.
+		 * host in order to let host interrupt handlers come in.
 		 */
 		if (vm->exit_for_intr == TRUE)
 			sti();
-		vmm_ops->vm_handle(vm);
+		vmm_ops->vm_exit_handle(vm);
 	}
 
 	return 0;
@@ -144,4 +145,12 @@ vmm_set_vm_irq(struct vm *vm, int irq, int level)
 	KERN_ASSERT(vm != NULL);
 
 	vpic_set_irq(&vm->vpic, irq, level);
+}
+
+void
+vmm_handle_intr(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	vmm_ops->vm_intr_handle(vm);
 }

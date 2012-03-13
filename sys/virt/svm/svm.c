@@ -68,7 +68,7 @@ svm_check(void)
 	uint32_t feature, dummy;
 	cpuid(CPUID_FEATURE_FUNC, &dummy, &dummy, &feature, &dummy);
 	if ((feature & CPUID_X_FEATURE_SVM) == 0) {
-		/* KERN_DEBUG("The processor does not support SVM.\n"); */
+		KERN_DEBUG("The processor does not support SVM.\n");
 		return FALSE;
 	}
 
@@ -80,14 +80,14 @@ svm_check(void)
 	/* check CPUID 0x8000000a */
 	cpuid(CPUID_SVM_FEATURE_FUNC, &dummy, &dummy, &dummy, &feature);
 	if ((feature & CPUID_SVM_LOCKED) == 0) {
-		/* KERN_DEBUG("SVM maybe disabled by BIOS.\n"); */
+		KERN_DEBUG("SVM maybe disabled by BIOS.\n");
 		return FALSE;
 	} else {
-		/* KERN_DEBUG("SVM maybe disabled with key.\n"); */
+		KERN_DEBUG("SVM maybe disabled with key.\n");
 		return FALSE;
 	}
 
-	/* KERN_DEBUG("SVM is available.\n"); */
+	KERN_DEBUG("SVM is available.\n");
 
 	return TRUE;
 }
@@ -105,7 +105,7 @@ svm_enable(void)
 	efer |= MSR_EFER_SVME;
 	wrmsr(MSR_EFER, efer);
 
-	/* KERN_DEBUG("SVM is enabled.\n"); */
+	KERN_DEBUG("SVM is enabled.\n");
 }
 
 /*
@@ -402,11 +402,7 @@ svm_init(void)
 	else
 		wrmsr(MSR_VM_HSAVE_PA, hsave_addr);
 
-	/* KERN_DEBUG("Host state-save area is at %x.\n", hsave_addr); */
-
-	/* register guest interrupt handler  */
-	trap_register_default_handler(svm_guest_intr_handler);
-	trap_register_kern_handler(T_GPFLT, svm_guest_handle_gpf);
+	KERN_DEBUG("Host state-save area is at %x.\n", hsave_addr);
 
 	return 0;
 }
@@ -574,5 +570,6 @@ struct vmm_ops vmm_ops_amd = {
 	.vmm_init	= svm_init,
 	.vm_init	= vm_init,
 	.vm_run		= vm_run,
-	.vm_handle	= svm_handle_exit
+	.vm_exit_handle	= svm_handle_exit,
+	.vm_intr_handle	= svm_guest_intr_handler
 };

@@ -439,13 +439,26 @@ master_timer_handler(context_t *ctx)
 	return 0;
 }
 
+/*
+ * Keyboard interrupt handler for the master kernel. It checks whether the
+ * interrupt is for a normal application or for a guest. Then it dispatch the
+ * interrupt to the handler provided by the keyboard driver or to the handler
+ * provided by the VMM module.
+ */
 static uint32_t
 master_kbd_handler(context_t *ctx)
 {
 	KERN_DEBUG("master_kbd_handler\n");
 
-	intr_eoi();
-	kbd_intr();
+	struct vm *vm = vmm_cur_vm();
+	bool from_guest =
+		(vm != NULL && vm->exit_for_intr == TRUE) ? TRUE : FALSE;
+
+	if (from_guest != TRUE) { /* for a normal application */
+		intr_eoi();
+		kbd_intr();
+	} else /* for a guest */
+		vmm_handle_intr(vm);
 	return 0;
 }
 

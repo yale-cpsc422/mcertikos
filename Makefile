@@ -87,10 +87,6 @@ iso: all
 package:
 	$(V)tar czf ../certikos.tar.gz --exclude=obj --exclude=cscope.* .
 
-iso: all
-	$(V)cp $(OBJDIR)/sys/kernel $(UTILSDIR)/iso/boot/kernel
-	$(V)grub-mkrescue -o $(CERTIKOS_IMG) $(UTILSDIR)/iso
-
 cscope:
 	$(V)rm -rf cscope.*
 	$(V)find . -name "*.[chsS]" > cscope.files

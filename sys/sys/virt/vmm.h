@@ -10,6 +10,8 @@
 #include <sys/virt/dev/pic.h>
 #include <sys/virt/dev/serial.h>
 
+#include <machine/trap.h>
+
 #define VM_PHY_MEMORY_SIZE	(64 * 1024 * 1024)
 
 #define MAX_IOPORT		0x10000
@@ -30,7 +32,11 @@ typedef void (*intr_handle_t)(struct vm *);
 struct vm {
 	void		*cookie;	/* processor-specific data */
 
-	bool		exit_for_intr;	/**/
+	bool		exit_for_intr;	/* VMEXIT for interrupts */
+	/*
+	 * FIXME: Once we move the guest to the process, remember to fix this.
+	 */
+	tf_t		*tf;		/* trapframe */
 
 	struct {
 		void			*dev;
@@ -53,32 +59,39 @@ struct vm {
 };
 
 /*
- * Machine-dependent VMM initialization function.
+ * Arch-dependent VMM initialization function.
  *
  * @return 0 if no errors happen
  */
 typedef int (*vmm_init_func_t)(void);
 
 /*
- * Machine-dependent VM initialization function.
+ * Arch-dependent VM initialization function.
  *
  * @return 0 if no errors happen
  */
 typedef int (*vm_init_func_t)(struct vm *);
 
 /*
- * Machine-dependent function that start running a VM.
+ * Arch-dependent function that starts running a VM.
  *
  * @return 0 if no errors happen
  */
 typedef int (*vm_run_func_t)(struct vm *);
 
 /*
- * Machine-dependent function that handle the interrupt the execution of VM.
+ * Arch-dependent function that handles VMEXIT events.
  *
  * @return 0 if no errors happen
  */
-typedef int (*vm_handle_func_t)(struct vm *);
+typedef int (*vm_exit_handle_func_t)(struct vm *);
+
+/*
+ * Arch-dependent function that handle interrupts in the guest.
+ *
+ * @return 0 if no errors happen
+ */
+typedef int (*vm_intr_handle_func_t)(struct vm *);
 
 typedef enum {EVENT_INT, EVENT_NMI, EVENT_EXPT, EVENT_SWINT} event_t;
 
@@ -105,7 +118,8 @@ struct vmm_ops {
 
 	vm_init_func_t		vm_init;
 	vm_run_func_t		vm_run;
-	vm_handle_func_t	vm_handle;
+	vm_exit_handle_func_t	vm_exit_handle;
+	vm_intr_handle_func_t	vm_intr_handle;
 	vm_inject_func_t	vm_inject;
 };
 
@@ -133,6 +147,11 @@ struct vm *vmm_cur_vm(void);
  * Assert/Deassert an IRQ to VM.
  */
 void vmm_set_vm_irq(struct vm *, int irq, int level);
+
+/*
+ *
+ */
+void vmm_handle_intr(struct vm *);
 
 #endif /* _KERN_ */
 

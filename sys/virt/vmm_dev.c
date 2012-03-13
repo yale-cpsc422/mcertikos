@@ -144,7 +144,8 @@ vmm_iodev_write_port(struct vm *vm, uint32_t port, void *data)
 
 int
 vmm_register_extintr(struct vm *vm, void *dev,
-		     uint8_t intr_no, intr_handle_t handle) {
+		     uint8_t intr_no, intr_handle_t handle)
+{
 	KERN_ASSERT(vm != NULL && dev != NULL && handle != NULL);
 	KERN_ASSERT(intr_no < MAX_EXTINTR);
 

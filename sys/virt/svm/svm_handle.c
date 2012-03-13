@@ -109,14 +109,12 @@ svm_guest_handle_gpf(struct vm *vm, tf_t *tf)
  * Handle interrupts from guest. The default behavior is to inject the interrupt
  * back to the guest.
  */
-void
-svm_guest_intr_handler(struct vm *vm, tf_t *tf)
+int
+svm_guest_intr_handler(struct vm *vm)
 {
-	KERN_ASSERT(tf != NULL);
+	KERN_ASSERT(vm != NULL && vm->exit_for_intr == TRUE && vm->tf != NULL);
 
-	if (vm == NULL || vm->exit_for_intr == FALSE)
-		goto out;
-
+	tf_t *tf = vm->tf;
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_save_area *save = &vmcb->save;
@@ -136,9 +134,11 @@ svm_guest_intr_handler(struct vm *vm, tf_t *tf)
 			vpic_set_irq(&vm->vpic, irq, 1);
 	}
 
- out:
 	intr_eoi();
 	vm->exit_for_intr = FALSE;
+	vm->tf = NULL;
+
+	return 0;
 }
 
 bool
