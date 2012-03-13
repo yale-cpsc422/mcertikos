@@ -16,7 +16,7 @@
  */
 int
 vmm_iodev_register_read(struct vm *vm,
-			void *iodev, uint32_t port, data_sz_t data_sz,
+			void *iodev, uint32_t port, data_sz_t size,
 			iodev_read_func_t port_read)
 {
 	KERN_ASSERT(vm != NULL && iodev != NULL && port_read != NULL);
@@ -28,15 +28,14 @@ vmm_iodev_register_read(struct vm *vm,
 		return 1;
 	}
 
-	if (vm->iodev[port].read_func != NULL) {
+	if (vm->iodev[port].read_func[size] != NULL) {
 		KERN_DEBUG("Function %x is already resgitered to read port %x.\n",
-			   vm->iodev[port].read_func, port);
+			   vm->iodev[port].read_func[size], port);
 		return 1;
 	}
 
 	vm->iodev[port].dev = iodev;
-	vm->iodev[port].read_func = port_read;
-	vm->iodev[port].read_size = data_sz;
+	vm->iodev[port].read_func[size] = port_read;
 
 	return 0;
 }
@@ -53,7 +52,7 @@ vmm_iodev_register_read(struct vm *vm,
  */
 int
 vmm_iodev_register_write(struct vm *vm,
-			 void *iodev, uint32_t port, data_sz_t data_sz,
+			 void *iodev, uint32_t port, data_sz_t size,
 			 iodev_write_func_t port_write)
 {
 	KERN_ASSERT(vm != NULL && iodev != NULL && port_write != NULL);
@@ -65,15 +64,14 @@ vmm_iodev_register_write(struct vm *vm,
 		return 1;
 	}
 
-	if (vm->iodev[port].write_func != NULL) {
+	if (vm->iodev[port].write_func[size] != NULL) {
 		KERN_DEBUG("Function %x is alwritey resgitered to write port %x.\n",
-			   vm->iodev[port].write_func, port);
+			   vm->iodev[port].write_func[size], port);
 		return 1;
 	}
 
 	vm->iodev[port].dev = iodev;
-	vm->iodev[port].write_func = port_write;
-	vm->iodev[port].write_size = data_sz;
+	vm->iodev[port].write_func[size] = port_write;
 
 	return 0;
 }
@@ -89,7 +87,7 @@ vmm_iodev_register_write(struct vm *vm,
  * @return 0 if read succeeeds
  */
 int
-vmm_iodev_read_port(struct vm *vm, uint32_t port, void *data)
+vmm_iodev_read_port(struct vm *vm, uint32_t port, void *data, data_sz_t size)
 {
 	KERN_ASSERT(vm != NULL && data != NULL);
 	KERN_ASSERT(port < MAX_IOPORT);
@@ -99,13 +97,13 @@ vmm_iodev_read_port(struct vm *vm, uint32_t port, void *data)
 		return 1;
 	}
 
-	if (vm->iodev[port].read_func == NULL) {
+	if (vm->iodev[port].read_func[size]== NULL) {
 		KERN_DEBUG("No read function was registered on port %x.\n",
 			   port);
 		return 1;
 	}
 
-	vm->iodev[port].read_func(vm, vm->iodev[port].dev, port, data);
+	vm->iodev[port].read_func[size](vm, vm->iodev[port].dev, port, data);
 
 	return 0;
 }
@@ -121,7 +119,7 @@ vmm_iodev_read_port(struct vm *vm, uint32_t port, void *data)
  * @return 0 if write succeeds
  */
 int
-vmm_iodev_write_port(struct vm *vm, uint32_t port, void *data)
+vmm_iodev_write_port(struct vm *vm, uint32_t port, void *data, data_sz_t size)
 {
 	KERN_ASSERT(vm != NULL && data != NULL);
 	KERN_ASSERT(port < MAX_IOPORT);
@@ -131,13 +129,13 @@ vmm_iodev_write_port(struct vm *vm, uint32_t port, void *data)
 		return 1;
 	}
 
-	if (vm->iodev[port].write_func == NULL) {
+	if (vm->iodev[port].write_func[size] == NULL) {
 		KERN_DEBUG("No write function was registered on port %x.\n",
 			   port);
 		return 1;
 	}
 
-	vm->iodev[port].write_func(vm, vm->iodev[port].dev, port, data);
+	vm->iodev[port].write_func[size](vm, vm->iodev[port].dev, port, data);
 
 	return 0;
 }

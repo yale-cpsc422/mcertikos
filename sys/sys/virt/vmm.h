@@ -34,9 +34,10 @@ struct vm {
 
 	struct {
 		void			*dev;
-		iodev_read_func_t	read_func;
-		iodev_write_func_t	write_func;
-		data_sz_t		read_size, write_size;
+		//assume that operations on a port can have different data size
+		iodev_read_func_t	read_func[3]; // read data size: 0-sz8, 1-sz16,2-sz32
+		iodev_write_func_t	write_func[3];// write data size:0-sz8, 1-sz16,2-sz32
+	//	data_sz_t		read_size, write_size;
 	} iodev[MAX_IOPORT];
 
 	struct {

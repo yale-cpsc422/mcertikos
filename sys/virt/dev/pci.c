@@ -22,6 +22,14 @@ void vpci_init(struct vpci *vpci, struct vm *vm)
 				PCI_DATA_PORT, SZ32, _vpci_read_data_port);
 	vmm_iodev_register_write(vm, vpci,
 				 PCI_DATA_PORT, SZ32, _vpci_write_data_port);
+	vmm_iodev_register_read(vm, vpci,
+				PCI_DATA_PORT, SZ16, _vpci_read_data_port);
+	vmm_iodev_register_write(vm, vpci,
+				 PCI_DATA_PORT, SZ16, _vpci_write_data_port);
+	vmm_iodev_register_read(vm, vpci,
+				PCI_DATA_PORT, SZ8, _vpci_read_data_port);
+	vmm_iodev_register_write(vm, vpci,
+				 PCI_DATA_PORT, SZ8, _vpci_write_data_port);
 }
 
 static uint32_t

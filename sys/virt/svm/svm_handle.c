@@ -227,21 +227,26 @@ svm_handle_ioio(struct vm *vm)
 	bool type = exitinfo1 & SVM_EXITINFO1_TYPE_MASK;
 
 	uint32_t data = (uint32_t) save->rax;
+	data_sz_t size=SZ8;//set the default data size to be SZ8
 
-	if (sz32)
+	if (sz32) {
 		data = (uint32_t) data;
-	else if (sz16)
+		size=SZ32;
+	} else if (sz16) {
 		data = (uint16_t) data;
-	else if (sz8)
+		size=SZ16;
+	} else if (sz8) {
 		data = (uint8_t) data;
+		size=SZ8;
+	}
 
 	dprintf("(port=%x, ", port);
 	if (type & SVM_EXITINFO1_TYPE_IN) {
-		dprintf("in).\n");
-		ret = vmm_iodev_read_port(vm, port, &data);
+		dprintf("2^%d byte, in).\n", size);
+		ret = vmm_iodev_read_port(vm, port, &data, size);
 	} else {
-		dprintf("out).\n");
-		ret = vmm_iodev_write_port(vm, port, &data);
+		dprintf("2^%d byte, out).\n", size);
+		ret = vmm_iodev_write_port(vm, port, &data, size);
 	}
 
 	if (ret) {
