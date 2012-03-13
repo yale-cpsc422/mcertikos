@@ -61,8 +61,11 @@ trap(tf_t *tf)
 	if (ctx != NULL) {
 		pmap_install(pcpu_cur()->proc->pmap);
 		context_start(ctx);
-	} else
+	} else {
+		tf->eflags &= ~(uint32_t) FL_IF; /* avoid nested traps in the
+						    kernel */
 		trap_return(tf);
+	}
 
 	KERN_PANIC("We should not be here.\n");
 }

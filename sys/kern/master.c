@@ -435,7 +435,14 @@ master_timer_handler(context_t *ctx)
 {
 	/* KERN_DEBUG("master_timer_handler\n"); */
 
-	intr_eoi();
+	struct vm *vm = vmm_cur_vm();
+	bool from_guest =
+		(vm != NULL && vm->exit_for_intr == TRUE) ? TRUE : FALSE;
+	if (from_guest != TRUE)
+		intr_eoi();
+	else
+		vmm_handle_intr(vm);
+
 	return 0;
 }
 

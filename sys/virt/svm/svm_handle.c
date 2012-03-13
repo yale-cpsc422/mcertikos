@@ -134,9 +134,9 @@ svm_guest_intr_handler(struct vm *vm)
 			vpic_set_irq(&vm->vpic, irq, 1);
 	}
 
-	intr_eoi();
 	vm->exit_for_intr = FALSE;
 	vm->tf = NULL;
+	intr_eoi();
 
 	return 0;
 }
