@@ -97,7 +97,7 @@ vmm_iodev_read_port(struct vm *vm, uint32_t port, void *data, data_sz_t size)
 		return 1;
 	}
 
-	if (vm->iodev[port].read_func[size]== NULL) {
+	if (vm->iodev[port].read_func[size] == NULL) {
 		KERN_DEBUG("No read function was registered on port %x.\n",
 			   port);
 		return 1;

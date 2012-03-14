@@ -495,8 +495,9 @@ svm_handle_exit(struct vm *vm)
 
 	bool handled = FALSE;
 
-	KERN_DEBUG("[%x:%llx] ",
-		   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
+	if (ctrl->exit_code != SVM_EXIT_IOIO)
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 
 	switch (ctrl->exit_code) {
 	case SVM_EXIT_EXCP_BASE ... (SVM_EXIT_INTR-1):
@@ -516,7 +517,7 @@ svm_handle_exit(struct vm *vm)
 		break;
 
 	case SVM_EXIT_IOIO:
-		dprintf("VMEXIT for IO");
+		/* dprintf("VMEXIT for IO"); */
 		handled = svm_handle_ioio(vm);
 		break;
 

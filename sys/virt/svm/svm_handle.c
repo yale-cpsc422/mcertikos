@@ -92,6 +92,52 @@ skip_intercept_cur_instr(struct vm *vm, int bit)
 	set_intercept_exception(vmcb, T_DEBUG, TRUE);
 }
 
+static void
+physical_ioport_read(uint32_t port, void *data, data_sz_t size)
+{
+	KERN_ASSERT(data != NULL);
+
+	switch (size) {
+	case SZ8:
+		*(uint8_t *) data = inb(port);
+		break;
+
+	case SZ16:
+		*(uint16_t *) data = inw(port);
+		break;
+
+	case SZ32:
+		*(uint32_t *) data = inl(port);
+		break;
+
+	default:
+		KERN_PANIC("Invalid data size.\n");
+	}
+}
+
+static void
+physical_ioport_write(uint32_t port, void *data, data_sz_t size)
+{
+	KERN_ASSERT(data != NULL);
+
+	switch (size) {
+	case SZ8:
+		outb(port, *(uint8_t *) data);
+		break;
+
+	case SZ16:
+		outw(port, *(uint16_t *) data);
+		break;
+
+	case SZ32:
+		outl(port, *(uint32_t *) data);
+		break;
+
+	default:
+		KERN_PANIC("Invalid data size.\n");
+	}
+}
+
 void
 svm_guest_handle_gpf(struct vm *vm, tf_t *tf)
 {
@@ -223,36 +269,41 @@ svm_handle_ioio(struct vm *vm)
 	bool type = exitinfo1 & SVM_EXITINFO1_TYPE_MASK;
 
 	uint32_t data = (uint32_t) save->rax;
-	data_sz_t size = SZ8; /*set the default data size to be SZ8 */
+	data_sz_t size = SZ8; /* set the default data size to 1 byte */
 
-	dprintf("(port=%x, ", port);
+	/* dprintf("(port=%x, ", port); */
 
 	if (sz32) {
-		dprintf("4 bytes, ");
+		/* dprintf("4 bytes, "); */
 		data = (uint32_t) data;
 		size = SZ32;
 	} else if (sz16) {
-		dprintf("2 bytes, ");
+		/* dprintf("2 bytes, "); */
 		data = (uint16_t) data;
 		size = SZ16;
 	} else if (sz8) {
-		dprintf("1 byte, ");
+		/* dprintf("1 byte, "); */
 		data = (uint8_t) data;
 		size = SZ8;
 	} else
 		KERN_PANIC("Invalid data length.\n");
 
 	if (type & SVM_EXITINFO1_TYPE_IN) {
-		dprintf("in).\n");
+		/* dprintf("in).\n"); */
 		ret = vmm_iodev_read_port(vm, port, &data, size);
-	} else {
-		dprintf("out).\n");
-		ret = vmm_iodev_write_port(vm, port, &data, size);
-	}
 
-	if (ret) {
-		KERN_DEBUG("Unhandled IO port %x.\n", port);
-		return FALSE;
+		if (ret) {
+			/* KERN_DEBUG("Passthrough\n"); */
+			physical_ioport_read(port, &data, size);
+		}
+	} else {
+		/* dprintf("out).\n"); */
+		ret = vmm_iodev_write_port(vm, port, &data, size);
+
+		if (ret) {
+			/* KERN_DEBUG("Passthrough\n"); */
+			physical_ioport_write(port, &data, size);
+		}
 	}
 
 	if (type & SVM_EXITINFO1_TYPE_IN) {

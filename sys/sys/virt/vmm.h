@@ -6,6 +6,7 @@
 #include <sys/types.h>
 
 #include <sys/virt/dev/kbd.h>
+#include <sys/virt/dev/nvram.h>
 #include <sys/virt/dev/pci.h>
 #include <sys/virt/dev/pic.h>
 #include <sys/virt/dev/serial.h>
@@ -49,6 +50,7 @@ struct vm {
 	struct vpci	vpci;		/* virtual PCI host */
 	struct vkbd	vkbd;		/* virtual keyboard */
 	struct vserial	vserial;	/* virtual serial ports */
+	struct vnvram	vnvram;		/* virtual NVRAM */
 
 	bool		used;
 };

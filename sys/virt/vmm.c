@@ -100,6 +100,7 @@ vmm_init_vm(void)
 	vkbd_init(&vm->vkbd, vm);
 	vpci_init(&vm->vpci, vm);
 	/* vserial_init(&vm->vserial, vm); */
+	vnvram_init(&vm->vnvram, vm);
 
 	/* machine-dependent VM initialization */
 	if (vmm_ops->vm_init(vm) != 0) {
