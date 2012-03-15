@@ -12,9 +12,9 @@ i8259_pre_debug(struct i8259 *chip)
 {
 	KERN_ASSERT(chip != NULL);
 	if (chip->master == TRUE)
-		dprintf("Master: ");
+		KERN_DEBUG("Master: ");
 	else
-		dprintf("Slave: ");
+		KERN_DEBUG("Slave: ");
 }
 
 /*
@@ -211,13 +211,13 @@ i8259_intack(struct i8259 *chip, int irq)
 			chip->lowest_priority = (irq + 1) & 7;
 		}
 	} else {
-		dprintf("Set bit %x of ISR.\n", irq);
+		KERN_DEBUG("Set bit %x of ISR.\n", irq);
 		chip->isr |= (1 << irq);
 	}
 
 	/* We don't clear a level sensitive interrupt here */
 	if (!(chip->elcr & (1 << irq))) {
-		dprintf("Clear bit %x of IRR.\n", irq);
+		KERN_DEBUG("Clear bit %x of IRR.\n", irq);
 		chip->irr &= ~(1 << irq);
 	}
 

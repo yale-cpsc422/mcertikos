@@ -48,10 +48,6 @@ svm_inject_event(struct vmcb *vmcb,
 
 	KERN_DEBUG("Inject event: type=%x, vec=%x, errcode=%x\n",
 		   type, vector, errcode);
-	KERN_DEBUG("VMCB@%x, ctrl->event_inj@%x, ctrl->event_inj_err@%x\n",
-		   vmcb, &ctrl->event_inj, &ctrl->event_inj_err);
-	KERN_DEBUG("ctrl->event_inj=%x, ctrl->event_inj_err=%x\n",
-		   ctrl->event_inj, ctrl->event_inj_err);
 }
 
 static void

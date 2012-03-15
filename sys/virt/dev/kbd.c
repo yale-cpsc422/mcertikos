@@ -131,17 +131,15 @@ vkbd_update_irq(struct vkbd *vkbd)
 
 	/* the interrupts from i8042 are edge-triggered */
 
-	if (irq_kbd_level)
-		KERN_DEBUG("Set IRQ_KBD high.\n");
-	else
-		KERN_DEBUG("Set IRQ_KBD low.\n");
-	vmm_set_vm_irq(vkbd->vm, IRQ_KBD, irq_kbd_level);
+	if (irq_kbd_level) {
+		vmm_set_vm_irq(vkbd->vm, IRQ_KBD, 0);
+		vmm_set_vm_irq(vkbd->vm, IRQ_KBD, 1);
+	}
 
-	if (irq_mouse_level)
-		KERN_DEBUG("Set IRQ_MOUSE high.\n");
-	else
-		KERN_DEBUG("Set IRQ_MOUSE low.\n");
-	vmm_set_vm_irq(vkbd->vm, IRQ_MOUSE, irq_mouse_level);
+	if (irq_mouse_level) {
+		vmm_set_vm_irq(vkbd->vm, IRQ_MOUSE, 0);
+		vmm_set_vm_irq(vkbd->vm, IRQ_MOUSE, 1);
+	}
 }
 
 static void
