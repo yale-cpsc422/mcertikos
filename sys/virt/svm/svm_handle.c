@@ -27,7 +27,7 @@
  */
 void
 svm_inject_event(struct vmcb *vmcb,
-		 uint8_t type, uint8_t vector, bool ev, uint32_t errcode)
+		 uint32_t type, uint8_t vector, bool ev, uint32_t errcode)
 {
 	KERN_ASSERT(vmcb != NULL);
 	KERN_ASSERT(type == SVM_EVTINJ_TYPE_INTR ||
@@ -48,6 +48,10 @@ svm_inject_event(struct vmcb *vmcb,
 
 	KERN_DEBUG("Inject event: type=%x, vec=%x, errcode=%x\n",
 		   type, vector, errcode);
+	KERN_DEBUG("VMCB@%x, ctrl->event_inj@%x, ctrl->event_inj_err@%x\n",
+		   vmcb, &ctrl->event_inj, &ctrl->event_inj_err);
+	KERN_DEBUG("ctrl->event_inj=%x, ctrl->event_inj_err=%x\n",
+		   ctrl->event_inj, ctrl->event_inj_err);
 }
 
 static void
@@ -394,7 +398,7 @@ svm_handle_cpuid(struct vm *vm)
 
 	uint32_t rax, rbx, rcx, rdx;
 
-	dprintf(" %x.\n", save->rax);
+	/* dprintf(" %x.\n", save->rax); */
 
 	switch (save->rax) {
 	case 0x40000000:
@@ -436,9 +440,9 @@ svm_handle_cpuid(struct vm *vm)
 		break;
 	}
 
-	KERN_DEBUG("eax=%x, ebx=%x, ecx=%x, edx=%x\n",
-		   (uint32_t) save->rax, (uint32_t) svm->g_rbx,
-		   (uint32_t) svm->g_rcx, (uint32_t) svm->g_rdx);
+	/* KERN_DEBUG("eax=%x, ebx=%x, ecx=%x, edx=%x\n", */
+	/* 	   (uint32_t) save->rax, (uint32_t) svm->g_rbx, */
+	/* 	   (uint32_t) svm->g_rcx, (uint32_t) svm->g_rdx); */
 
 	save->rip += 2;		/* cpuid is a two-byte instruction. */
 

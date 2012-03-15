@@ -57,7 +57,7 @@ pic_init(void)
 	//	  can be hardwired).
 	//    a:  1 = Automatic EOI mode
 	//    p:  0 = MCS-80/85 mode, 1 = intel x86 mode
-	outb(IO_PIC1+1, 0x3);
+	outb(IO_PIC1+1, 0x1);
 
 	// Set up slave (8259A-2)
 	outb(IO_PIC2, 0x11);			// ICW1

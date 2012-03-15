@@ -1,10 +1,21 @@
 #include <sys/debug.h>
+#include <sys/gcc.h>
 #include <sys/types.h>
 
 #include <sys/virt/vmm.h>
 #include <sys/virt/vmm_dev.h>
 
 #include <dev/pic.h>
+
+static gcc_inline void
+i8259_pre_debug(struct i8259 *chip)
+{
+	KERN_ASSERT(chip != NULL);
+	if (chip->master == TRUE)
+		dprintf("Master: ");
+	else
+		dprintf("Slave: ");
+}
 
 /*
  * Get the priority number of the IR in mask with the highest priority.
@@ -122,14 +133,18 @@ i8259_update_irq(struct i8259 *chip)
 {
 	KERN_ASSERT(chip != NULL);
 
+	i8259_pre_debug(chip);
+
 	int irq;
 
 	irq = i8259_get_irq(chip);
 	if (irq >= 0) {
-		chip->isr |= (1 << irq);
+		dprintf("Set INT_OUT for IRQ %x.\n", irq);
 		chip->int_out = 1;
-	} else
+	} else {
+		dprintf("Clear INT_OUT.\n");
 		chip->int_out = 0;
+	}
 }
 
 /*
@@ -140,14 +155,18 @@ i8259_set_irq(struct i8259 *chip, int irq, int level)
 {
 	KERN_ASSERT(chip != NULL);
 
+	i8259_pre_debug(chip);
+
 	int mask = 1 << irq;
 
 	if (chip->elcr & mask) {
 		/* level triggered */
 		if (level) {
+			dprintf("Set bit %x of IRR.\n", irq);
 			chip->irr |= mask;
 			chip->last_irr |= mask;
 		} else {
+			dprintf("Clear bit %x of IRR.\n", irq);
 			chip->irr &= ~mask;
 			chip->last_irr &= ~mask;
 		}
@@ -155,10 +174,13 @@ i8259_set_irq(struct i8259 *chip, int irq, int level)
 		/* edge triggered */
 		if (level) {
 			if ((chip->last_irr & mask) == 0) {
+				dprintf("Set bit %x of IRR.\n", irq);
 				chip->irr |= mask;
-			}
+			} else
+				dprintf("\n");
 			chip->last_irr |= mask;
 		} else {
+			dprintf("Clear bit %x of IRR.\n", irq);
 			chip->last_irr &= ~mask;
 		}
 	}
@@ -181,16 +203,21 @@ i8259_intack(struct i8259 *chip, int irq)
 {
 	KERN_ASSERT(chip != NULL);
 
+	i8259_pre_debug(chip);
+	dprintf("INTA\n");
+
 	if (chip->auto_eoi_mode) {
 		if (chip->rotate_on_auto_eoi == TRUE) {
 			chip->lowest_priority = (irq + 1) & 7;
 		}
 	} else {
+		dprintf("Set bit %x of ISR.\n", irq);
 		chip->isr |= (1 << irq);
 	}
 
 	/* We don't clear a level sensitive interrupt here */
 	if (!(chip->elcr & (1 << irq))) {
+		dprintf("Clear bit %x of IRR.\n", irq);
 		chip->irr &= ~(1 << irq);
 	}
 
@@ -356,6 +383,8 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 					break;
 
 				irq = (priority + chip->lowest_priority) & 7;
+				i8259_pre_debug(chip);
+				dprintf("Clear bit %x of ISR.\n", irq);
 				chip->isr &= ~(1 << irq);
 				if (cmd == 5) {
 					KERN_DEBUG("OCW2: Rotate to %x, port=%x.\n",
@@ -369,6 +398,8 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 				KERN_DEBUG("OCW2: EOI for IRQ%x, port=%x.\n",
 					   data & 7, port);
 				irq = data & 7;
+				i8259_pre_debug(chip);
+				dprintf("Clear bit %x of ISR.\n", irq);
 				chip->isr &= ~(1 << irq);
 				i8259_update_irq(chip);
 				break;
@@ -384,6 +415,8 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 				KERN_DEBUG("OCW2: Rotate to %x, port=%x.\n",
 					   (data + 1) & 7, port);
 				irq = data & 7;
+				i8259_pre_debug(chip);
+				dprintf("Clear bit %x of ISR.\n", irq);
 				chip->isr &= ~(1 << irq);
 				chip->lowest_priority = (irq + 1) & 7;
 				i8259_update_irq(chip);
@@ -643,6 +676,9 @@ vpic_has_irq(struct vpic *vpic)
 {
 	KERN_ASSERT(vpic != NULL);
 
+	if (vpic->master.int_out == 1)
+		KERN_DEBUG("master.INT_OUT is set.\n");
+
 	return (vpic->master.int_out != 0) ? TRUE : FALSE;
 }
 
@@ -661,7 +697,7 @@ vpic_set_irq(struct vpic *vpic, int irq, int level)
 		i8259_set_irq(&vpic->master, irq, level);
 	} else {
 		i8259_set_irq(&vpic->slave, irq-8, level);
-		if (vpic->slave.int_out != 8)
+		if (vpic->slave.int_out != 0)
 			i8259_set_irq(&vpic->master, 2, 1);
 	}
 }

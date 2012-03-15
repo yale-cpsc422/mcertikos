@@ -314,7 +314,7 @@ setup_intercept(struct vm *vm)
 	set_intercept(vmcb, INTERCEPT_IOIO_PROT, TRUE);
 	set_intercept(vmcb, INTERCEPT_CPUID, TRUE);
 	/* set_intercept(vmcb, INTERCEPT_INTn, TRUE); */
-	set_intercept(vmcb, INTERCEPT_VINTR, TRUE);
+	/* set_intercept(vmcb, INTERCEPT_VINTR, TRUE); */
 	/* set_intercept(vmcb, INTERCEPT_RDTSC, TRUE); */
 
 	/* setup exception intercept */
@@ -495,7 +495,8 @@ svm_handle_exit(struct vm *vm)
 
 	bool handled = FALSE;
 
-	if (ctrl->exit_code != SVM_EXIT_IOIO)
+	if (ctrl->exit_code != SVM_EXIT_IOIO &&
+	    ctrl->exit_code != SVM_EXIT_CPUID)
 		KERN_DEBUG("[%x:%llx] ",
 			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 
@@ -527,7 +528,7 @@ svm_handle_exit(struct vm *vm)
 		break;
 
 	case SVM_EXIT_CPUID:
-		dprintf("VMEXIT for cpuid");
+		/* dprintf("VMEXIT for cpuid"); */
 		handled = svm_handle_cpuid(vm);
 		break;
 

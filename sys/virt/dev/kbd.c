@@ -129,15 +129,19 @@ vkbd_update_irq(struct vkbd *vkbd)
 		}
 	}
 
-	if (irq_kbd_level) {
-		KERN_DEBUG("Raise IRQ_KBD.\n");
-		vmm_set_vm_irq(vkbd->vm, IRQ_KBD, irq_kbd_level);
-	}
+	/* the interrupts from i8042 are edge-triggered */
 
-	if (irq_mouse_level) {
-		KERN_DEBUG("Raise IRQ_MOUSE.\n");
-		vmm_set_vm_irq(vkbd->vm, IRQ_MOUSE, irq_mouse_level);
-	}
+	if (irq_kbd_level)
+		KERN_DEBUG("Set IRQ_KBD high.\n");
+	else
+		KERN_DEBUG("Set IRQ_KBD low.\n");
+	vmm_set_vm_irq(vkbd->vm, IRQ_KBD, irq_kbd_level);
+
+	if (irq_mouse_level)
+		KERN_DEBUG("Set IRQ_MOUSE high.\n");
+	else
+		KERN_DEBUG("Set IRQ_MOUSE low.\n");
+	vmm_set_vm_irq(vkbd->vm, IRQ_MOUSE, irq_mouse_level);
 }
 
 static void
@@ -148,10 +152,8 @@ vkbd_update_kbd_irq(void *opaque, int level)
 	struct vkbd *vkbd = (struct vkbd *) opaque;
 
 	if (level) {
-		KERN_DEBUG("KBD has pending data.\n");
 		vkbd->pending |= KBD_PENDING_KBD;
 	} else {
-		KERN_DEBUG("KBD has no pending data.\n");
 		vkbd->pending &= ~KBD_PENDING_KBD;
 	}
 
@@ -186,10 +188,10 @@ vkbd_queue(struct vkbd *vkbd, int b, int aux)
 	KERN_ASSERT(vkbd != NULL);
 
 	if (aux) {
-		/* KERN_DEBUG("Enqueue %x to AUX.\n", (uint8_t) b); */
+		KERN_DEBUG("Enqueue %x to AUX.\n", (uint8_t) b);
 		ps2_queue(&vkbd->mouse.common, b);
 	} else {
-		/* KERN_DEBUG("Enqueue %x to KBD.\n", (uint8_t) b); */
+		KERN_DEBUG("Enqueue %x to KBD.\n", (uint8_t) b);
 		ps2_queue(&vkbd->kbd.common, b);
 	}
 }
@@ -383,7 +385,7 @@ _vkbd_ioport_read(struct vm *vm, void *vkbd, uint32_t port, void *data)
 	else
 		*(uint8_t *) data = vkbd_read_data(vkbd);
 
-	KERN_DEBUG("port=%x, data=%x.\n", port, *(uint8_t *) data);
+	/* KERN_DEBUG("port=%x, data=%x.\n", port, *(uint8_t *) data); */
 }
 
 static void
@@ -392,7 +394,7 @@ _vkbd_ioport_write(struct vm *vm, void *vkbd, uint32_t port, void *data)
 	KERN_ASSERT(vm != NULL && vkbd != NULL && data != NULL);
 	KERN_ASSERT(port == KBCMDP || port == KBDATAP);
 
-	KERN_DEBUG("port=%x, data=%x.\n", port, *(uint8_t *) data);
+	/* KERN_DEBUG("port=%x, data=%x.\n", port, *(uint8_t *) data); */
 
 	if (port == KBDATAP)
 		vkbd_write_data(vkbd, *(uint8_t *) data);
