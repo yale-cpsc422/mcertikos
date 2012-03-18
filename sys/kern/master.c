@@ -433,7 +433,7 @@ master_syscall_handler(context_t *ctx)
 static uint32_t
 master_timer_handler(context_t *ctx)
 {
-	/* KERN_DEBUG("master_timer_handler\n"); */
+	KERN_DEBUG("master_timer_handler\n");
 
 	struct vm *vm = vmm_cur_vm();
 	bool from_guest =
