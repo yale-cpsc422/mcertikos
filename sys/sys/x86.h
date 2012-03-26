@@ -115,7 +115,7 @@ halt(void)
 static gcc_inline void
 pause(void)
 {
-	__asm __volatile("pause");
+	__asm __volatile("pause":::"memory");
 }
 
 static gcc_inline uint32_t

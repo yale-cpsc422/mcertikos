@@ -472,9 +472,9 @@ vm_run(struct vm *vm)
 
 	SVM_CLGI();
 
-	sti();
+	intr_local_enable();
 	svm_run(svm);
-	cli();
+	intr_local_disable();
 
 	if(svm->vmcb->control.exit_code == SVM_EXIT_INTR)
 		vm->exit_for_intr = TRUE;

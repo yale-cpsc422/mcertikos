@@ -2,7 +2,6 @@
 #include <sys/intr.h>
 #include <sys/pcpu.h>
 #include <sys/types.h>
-#include <sys/x86.h>
 
 #include <dev/ioapic.h>
 #include <dev/lapic.h>
@@ -33,22 +32,6 @@ intr_init(void)
 	}
 
 	intr_inited = TRUE;
-}
-
-void
-intr_global_enable(void)
-{
-	sti();
-
-	KERN_DEBUG("STI.\n");
-}
-
-void
-intr_global_disable(void)
-{
-	cli();
-
-	KERN_DEBUG("CLI.\n");
 }
 
 void
