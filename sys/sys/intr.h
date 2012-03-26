@@ -1,14 +1,24 @@
 #ifndef _KERN_INTR_H_
 #define _KERN_INTR_H_
 
-#ifndef _KERN_
-#error "This is a kernel header file; do not include it in userspace program."
-#endif /* !_KERN_ */
+#ifdef _KERN_
+
+#include <sys/x86.h>
+
+#define intr_local_enable()			\
+	do {					\
+		sti();				\
+	} while (0);
+
+#define intr_local_disable()			\
+	do {					\
+		cli();				\
+	} while(0)
 
 void intr_init(void);
 void intr_enable(int irq, int cpunum);
-void intr_global_enable(void);
-void intr_global_disable(void);
 void intr_eoi(void);
+
+#endif /* _KERN_ */
 
 #endif /* !_KERN_INTR_H_ */

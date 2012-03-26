@@ -438,10 +438,11 @@ master_timer_handler(context_t *ctx)
 	struct vm *vm = vmm_cur_vm();
 	bool from_guest =
 		(vm != NULL && vm->exit_for_intr == TRUE) ? TRUE : FALSE;
-	if (from_guest != TRUE)
-		intr_eoi();
-	else
+
+	if (from_guest == TRUE)
 		vmm_handle_intr(vm, IRQ_TIMER);
+
+	intr_eoi();
 
 	return 0;
 }
@@ -462,10 +463,12 @@ master_kbd_handler(context_t *ctx)
 		(vm != NULL && vm->exit_for_intr == TRUE) ? TRUE : FALSE;
 
 	if (from_guest != TRUE) { /* for a normal application */
-		intr_eoi();
 		kbd_intr();
 	} else /* for a guest */
 		vmm_handle_intr(vm, IRQ_KBD);
+
+	intr_eoi();
+
 	return 0;
 }
 

@@ -1,4 +1,5 @@
 #include <sys/debug.h>
+#include <sys/intr.h>
 #include <sys/spinlock.h>
 #include <sys/string.h>
 #include <sys/types.h>
@@ -126,7 +127,33 @@ vmm_run_vm(struct vm *vm)
 		 * host in order to let host interrupt handlers come in.
 		 */
 		if (vm->exit_for_intr == TRUE)
-			sti();
+			intr_local_enable();
+
+		/*
+		 * Wait until the interrupt is handled.
+		 * XXX: According to Intel's instruction set reference, STI
+		 *      takes effect after the instruction following STI.
+		 *      However, it maybe not enough in QEMU+KVM, so following
+		 *      loop is added to explictly wait for the effect.
+		 * XXX: pause() in the loop body can NOT be removed. pause() is
+		 *      actually "__asm __volatile("pause":::"memory")". Note
+		 *      the third parameter of the inline assembly tells the
+		 *      compilers it may clobber some memory, so that the
+		 *      compiler may not treat this loop as an empty loop.
+		 *      Otherwise, compilers may merge this loop and above if
+		 *      statement as
+		 *         if (vm->exit_for_intr == TRUE) {
+		 *                 intr_local_enable();
+		 *                 while (1)
+		 *                         ;
+		 *         }
+		 *      , which will halt the whole kernel when the if condition
+		 *      is satisfied.
+		 */
+		while (vm->exit_for_intr == TRUE)
+			pause();
+		/* assertion that makes sure that interrupts are disabled */
+		KERN_ASSERT((read_eflags() & FL_IF) == 0x0);
 		vmm_ops->vm_exit_handle(vm);
 	}
 

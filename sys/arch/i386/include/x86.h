@@ -294,13 +294,13 @@ cpuid(uint32_t info,
 static gcc_inline void
 cli(void)
 {
-	__asm __volatile("cli");
+	__asm __volatile("cli":::"memory");
 }
 
 static gcc_inline void
 sti(void)
 {
-	__asm __volatile("sti");
+	__asm __volatile("sti;nop");
 }
 
 static gcc_inline uint64_t

@@ -178,7 +178,6 @@ svm_guest_intr_handler(struct vm *vm, uint8_t irq)
 	}
 
 	vm->exit_for_intr = FALSE;
-	intr_eoi();
 
 	return 0;
 }
