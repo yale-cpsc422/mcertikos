@@ -33,35 +33,27 @@ is_amd(void)
 }
 
 static void
-vmm_update_tsc(struct vm *vm, uint64_t host_tsc)
-{
-	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(vm->host_tsc < host_tsc);
-
-#if 1
-	uint64_t delta = host_tsc - vm->host_tsc;
-	uint64_t incr = (delta * VM_TSC_FREQ) / (tsc_per_ms * 1000);
-	vm->tsc += incr;
-#else
-	uint64_t incr = VM_TSC_FREQ / VM_TSC_FREQ;
-	vm->tsc += incr;
-#endif
-}
-
-static void
 vmm_pre_time_update(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
-	vm->host_tsc = rdtsc();
+
+	/* empty currently */
 }
 
 static void
-vmm_post_time_update(struct vm *vm, uint64_t current_tsc)
+vmm_post_time_update(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(vm->host_tsc < current_tsc);
 
-	vmm_update_tsc(vm, current_tsc);
+	/* update guest TSC */
+	uint64_t enter_host_tsc = vmm_ops->vm_enter_tsc(vm);
+	uint64_t exit_host_tsc = vmm_ops->vm_exit_tsc(vm);
+	KERN_ASSERT(enter_host_tsc < exit_host_tsc);
+	uint64_t delta = exit_host_tsc - enter_host_tsc;
+	uint64_t incr = (delta * VM_TSC_FREQ) / (tsc_per_ms * 1000);
+	vm->tsc += (incr - VM_TSC_ADJUST);
+
+	/* update guest PIT */
 	vpit_update(vm);
 }
 
@@ -163,8 +155,7 @@ vmm_run_vm(struct vm *vm)
 
 		vmm_ops->vm_run(vm);
 
-		uint64_t exit_time = rdtsc();
-		vmm_post_time_update(vm, exit_time);
+		vmm_post_time_update(vm);
 
 		/*
 		 * If VM exits for interrupts, then enable interrupts in the

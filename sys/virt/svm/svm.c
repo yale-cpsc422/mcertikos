@@ -22,14 +22,6 @@
 #include "svm_handle.h"
 #include "svm_utils.h"
 
-/* struct vcpu { */
-/* 	uint64_t	flags; */
-/* 	int 		h_cpu; */
-/* 	uint64_t	g_msrs[SVM_MSR_NUM]; */
-/* 	struct vlapic	*vlapic; */
-/* 	int		vcpuid; */
-/* }; */
-
 struct {
 	struct svm 	svms[4];
 	bool		used[4];
@@ -459,6 +451,10 @@ vm_init(struct vm *vm)
 				      (0x0 & SVM_INTR_CTRL_VTPR));
 	vm->exit_for_intr = FALSE;
 
+	/* initialize TSC */
+	svm->enter_tsc = 0x0;
+	svm->exit_tsc = 0xffffffffffffffff;
+
 	return 0;
 }
 
@@ -582,10 +578,32 @@ svm_handle_exit(struct vm *vm)
 	return 0;
 }
 
+static uint64_t
+svm_get_start_tsc(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct svm *svm = (struct svm *) vm->cookie;
+
+	return svm->enter_tsc;
+}
+
+static uint64_t
+svm_get_exit_tsc(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct svm *svm = (struct svm *) vm->cookie;
+
+	return svm->exit_tsc;
+}
+
 struct vmm_ops vmm_ops_amd = {
 	.vmm_init	= svm_init,
 	.vm_init	= vm_init,
 	.vm_run		= vm_run,
 	.vm_exit_handle	= svm_handle_exit,
-	.vm_intr_handle	= svm_guest_intr_handler
+	.vm_intr_handle	= svm_guest_intr_handler,
+	.vm_enter_tsc	= svm_get_start_tsc,
+	.vm_exit_tsc	= svm_get_exit_tsc,
 };

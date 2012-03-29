@@ -65,6 +65,7 @@ vpit_get_count(struct vpit_channel *ch)
 
 	d = muldiv64(vmm_rdtsc(ch->pit->vm) - ch->count_load_time,
 		     VM_PIT_FREQ, VM_TSC_FREQ);
+	d /= VM_TIME_SCALE;
 	count = (uint64_t)(uint32_t) ch->count;
 
 	switch(ch->mode) {
@@ -119,6 +120,7 @@ vpit_get_out(struct vpit_channel *ch, uint64_t current_time)
 
 	d = muldiv64(current_time - ch->count_load_time,
 		     VM_PIT_FREQ, VM_TSC_FREQ);
+	d /= VM_TIME_SCALE;
 	count = (uint64_t)(uint32_t) ch->count;
 	switch(ch->mode) {
 	case PIT_CHANNEL_MODE_0:
@@ -163,6 +165,7 @@ vpit_get_next_transition_time(struct vpit_channel *ch, uint64_t current_time,
 
 	d = muldiv64(current_time - ch->count_load_time,
 		     VM_PIT_FREQ, VM_TSC_FREQ);
+	d /= VM_TIME_SCALE;
 	count = (uint64_t)(uint32_t) ch->count;
 	*valid = TRUE;
 	switch(ch->mode) {
@@ -307,8 +310,8 @@ vpit_load_count(struct vpit_channel *ch, uint16_t val)
 		count = 0x10000;
 	ch->count_load_time = vmm_rdtsc(ch->pit->vm);
 	ch->count = count;
-	KERN_DEBUG("[%llx] Set counter: %x.\n",
-		   ch->count_load_time, ch->count);
+	/* KERN_DEBUG("[%llx] Set counter: %x.\n", */
+	/* 	   ch->count_load_time, ch->count); */
 	vpit_irq_timer_update(ch, ch->count_load_time);
 }
 
@@ -405,14 +408,14 @@ vpit_ioport_write(struct vpit *pit, uint32_t port, uint8_t data)
 				spinlock_acquire(&ch->lk);
 
 				if (!(data & 0x20)) { /* latch count */
-					KERN_DEBUG("Latch counter of channel %d.\n",
-						   i);
+					/* KERN_DEBUG("Latch counter of channel %d.\n", */
+					/* 	   i); */
 					vpit_latch_count(ch);
 				}
 
 				if (!(data & 0x10)) { /* latch status */
-					KERN_DEBUG("Latch status of channel %d.\n",
-						   i);
+					/* KERN_DEBUG("Latch status of channel %d.\n", */
+					/* 	   i); */
 
 					/* only latch once */
 					if (ch->status_latched) {
@@ -438,12 +441,12 @@ vpit_ioport_write(struct vpit *pit, uint32_t port, uint8_t data)
 			spinlock_acquire(&ch->lk);
 
 			if (rw == 0) { /* counter latch command */
-				KERN_DEBUG("Latch counter of channel %d.\n",
-					   channel);
+				/* KERN_DEBUG("Latch counter of channel %d.\n", */
+				/* 	   channel); */
 				vpit_latch_count(ch);
 			} else {
-				KERN_DEBUG("Set channel %d: RW=%x, Mode=%x.\n",
-					   channel, rw, (data >> 1) & 7);
+				/* KERN_DEBUG("Set channel %d: RW=%x, Mode=%x.\n", */
+				/* 	   channel, rw, (data >> 1) & 7); */
 				ch->rw_mode = rw;
 				ch->read_state = rw;
 				ch->write_state = rw;
@@ -463,30 +466,30 @@ vpit_ioport_write(struct vpit *pit, uint32_t port, uint8_t data)
 		switch (ch->write_state) {
 		case PIT_RW_STATE_LSB:
 			/* load LSB only */
-			KERN_DEBUG("Load LSB to channel %d: %x.\n",
-				   channel, data);
+			/* KERN_DEBUG("Load LSB to channel %d: %x.\n", */
+			/* 	   channel, data); */
 			vpit_load_count(ch, data);
 			break;
 
 		case PIT_RW_STATE_MSB:
 			/* load MSB only */
-			KERN_DEBUG("Load MSB to channel %d: %x.\n",
-				   channel, data);
+			/* KERN_DEBUG("Load MSB to channel %d: %x.\n", */
+			/* 	   channel, data); */
 			vpit_load_count(ch, data << 8);
 			break;
 
 		case PIT_RW_STATE_WORD0:
 			/* load LSB first */
-			KERN_DEBUG("Load LSB to channel %d: %x.\n",
-				   channel, data);
+			/* KERN_DEBUG("Load LSB to channel %d: %x.\n", */
+			/* 	   channel, data); */
 			ch->write_latch = data;
 			ch->write_state = PIT_RW_STATE_WORD1;
 			break;
 
 		case PIT_RW_STATE_WORD1:
 			/* load MSB then */
-			KERN_DEBUG("Load MSB to channel %d: %x.\n",
-				   channel, data);
+			/* KERN_DEBUG("Load MSB to channel %d: %x.\n", */
+			/* 	   channel, data); */
 			vpit_load_count(ch, ch->write_latch | (data << 8));
 			ch->write_state = PIT_RW_STATE_WORD0;
 			break;
@@ -514,32 +517,32 @@ vpit_ioport_read(struct vpit *pit, uint32_t port)
 	spinlock_acquire(&ch->lk);
 
 	if (ch->status_latched) { /* read latched status byte */
-		KERN_DEBUG("Read status of channel %d: %x.\n",
-			   channel, ch->status);
+		/* KERN_DEBUG("Read status of channel %d: %x.\n", */
+		/* 	   channel, ch->status); */
 		ch->status_latched = 0;
 		ret = ch->status;
 	} else if (ch->count_latched) { /* read latched count */
 		switch(ch->count_latched) {
 		case PIT_RW_STATE_LSB:
 			/* read LSB only */
-			KERN_DEBUG("Read LSB from channel %d: %x.\n",
-				   channel, ch->latched_count & 0xff);
+			/* KERN_DEBUG("Read LSB from channel %d: %x.\n", */
+			/* 	   channel, ch->latched_count & 0xff); */
 			ret = ch->latched_count & 0xff;
 			ch->count_latched = 0;
 			break;
 
 		case PIT_RW_STATE_MSB:
 			/* read MSB only */
-			KERN_DEBUG("Read MSB from channel %d: %x.\n",
-				   channel, ch->latched_count >> 8);
+			/* KERN_DEBUG("Read MSB from channel %d: %x.\n", */
+			/* 	   channel, ch->latched_count >> 8); */
 			ret = ch->latched_count >> 8;
 			ch->count_latched = 0;
 			break;
 
 		case PIT_RW_STATE_WORD0:
 			/* read LSB first */
-			KERN_DEBUG("Read LSB from channel %d: %x.\n",
-				   ch->latched_count & 0xff);
+			/* KERN_DEBUG("Read LSB from channel %d: %x.\n", */
+			/* 	   ch->latched_count & 0xff); */
 			ret = ch->latched_count & 0xff;
 			ch->count_latched = PIT_RW_STATE_MSB;
 			break;
@@ -553,30 +556,30 @@ vpit_ioport_read(struct vpit *pit, uint32_t port)
 		case PIT_RW_STATE_LSB:
 			count = vpit_get_count(ch);
 			ret = count & 0xff;
-			KERN_DEBUG("Read LSB from channel %d: %x.\n",
-				   channel, ret);
+			/* KERN_DEBUG("Read LSB from channel %d: %x.\n", */
+			/* 	   channel, ret); */
 			break;
 
 		case PIT_RW_STATE_MSB:
 			count = vpit_get_count(ch);
 			ret = (count >> 8) & 0xff;
-			KERN_DEBUG("Read MSB from channel %d: %x.\n",
-				   channel, ret);
+			/* KERN_DEBUG("Read MSB from channel %d: %x.\n", */
+			/* 	   channel, ret); */
 			break;
 
 		case PIT_RW_STATE_WORD0:
 			count = vpit_get_count(ch);
 			ret = count & 0xff;
-			KERN_DEBUG("Read LSB from channel %d: %x.\n",
-				   channel, ret);
+			/* KERN_DEBUG("Read LSB from channel %d: %x.\n", */
+			/* 	   channel, ret); */
 			ch->read_state = PIT_RW_STATE_WORD1;
 			break;
 
 		case PIT_RW_STATE_WORD1:
 			count = vpit_get_count(ch);
 			ret = (count >> 8) & 0xff;
-			KERN_DEBUG("Read MSB from channel %d: %x.\n",
-				   channel, ret);
+			/* KERN_DEBUG("Read MSB from channel %d: %x.\n", */
+			/* 	   channel, ret); */
 			ch->read_state = PIT_RW_STATE_WORD0;
 			break;
 

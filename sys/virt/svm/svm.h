@@ -386,6 +386,8 @@ struct svm {
 	 * to do that by ourself.
 	 */
 	uint64_t	g_rbx, g_rcx, g_rdx, g_rsi, g_rdi, g_rbp;
+	uint64_t	enter_tsc;
+	uint64_t	exit_tsc;
 
 	struct vmcb	*vmcb;		/* VMCB */
 
