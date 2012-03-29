@@ -10,6 +10,7 @@ KERN_SRCFILES	+= $(KERN_DIR)/kern/proc.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/intr.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/master.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/slave.c
+KERN_SRCFILES	+= $(KERN_DIR)/kern/timer.c
 
 # Targets
 

@@ -3,11 +3,12 @@
 #include <sys/spinlock.h>
 #include <sys/string.h>
 #include <sys/types.h>
-#include <sys/x86.h>
 
 #include <sys/virt/vmm.h>
 
 #include <machine/pcpu.h>
+
+#include <dev/tsc.h>
 
 static bool vmm_inited = FALSE;
 
@@ -29,6 +30,39 @@ static bool gcc_inline
 is_amd(void)
 {
 	return (strncmp(cpuinfo.vendor, "AuthenticAMD", 20) == 0);
+}
+
+static void
+vmm_update_tsc(struct vm *vm, uint64_t host_tsc)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(vm->host_tsc < host_tsc);
+
+#if 1
+	uint64_t delta = host_tsc - vm->host_tsc;
+	uint64_t incr = (delta * VM_TSC_FREQ) / (tsc_per_ms * 1000);
+	vm->tsc += incr;
+#else
+	uint64_t incr = VM_TSC_FREQ / VM_TSC_FREQ;
+	vm->tsc += incr;
+#endif
+}
+
+static void
+vmm_pre_time_update(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+	vm->host_tsc = rdtsc();
+}
+
+static void
+vmm_post_time_update(struct vm *vm, uint64_t current_tsc)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(vm->host_tsc < current_tsc);
+
+	vmm_update_tsc(vm, current_tsc);
+	vpit_update(vm);
 }
 
 int
@@ -96,12 +130,16 @@ vmm_init_vm(void)
 
 	vm->exit_for_intr = FALSE;
 
+	vm->tsc = 0;
+
 	/* initializa virtualized devices */
+	/* XXX: there is no order requirement right now. */
 	vpic_init(&vm->vpic, vm);
 	vkbd_init(&vm->vkbd, vm);
 	vpci_init(&vm->vpci, vm);
 	/* vserial_init(&vm->vserial, vm); */
 	vnvram_init(&vm->vnvram, vm);
+	vpit_init(&vm->vpit, vm);
 
 	/* machine-dependent VM initialization */
 	if (vmm_ops->vm_init(vm) != 0) {
@@ -121,7 +159,13 @@ vmm_run_vm(struct vm *vm)
 	cur_vm = vm;
 
 	while (1) {
+		vmm_pre_time_update(vm);
+
 		vmm_ops->vm_run(vm);
+
+		uint64_t exit_time = rdtsc();
+		vmm_post_time_update(vm, exit_time);
+
 		/*
 		 * If VM exits for interrupts, then enable interrupts in the
 		 * host in order to let host interrupt handlers come in.
@@ -180,4 +224,12 @@ vmm_handle_intr(struct vm *vm, uint8_t irqno)
 	KERN_ASSERT(vm != NULL);
 
 	vmm_ops->vm_intr_handle(vm, irqno);
+}
+
+uint64_t
+vmm_rdtsc(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	return vm->tsc;
 }

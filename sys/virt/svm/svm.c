@@ -315,7 +315,8 @@ setup_intercept(struct vm *vm)
 	set_intercept(vmcb, INTERCEPT_CPUID, TRUE);
 	/* set_intercept(vmcb, INTERCEPT_INTn, TRUE); */
 	/* set_intercept(vmcb, INTERCEPT_VINTR, TRUE); */
-	/* set_intercept(vmcb, INTERCEPT_RDTSC, TRUE); */
+	set_intercept(vmcb, INTERCEPT_RDTSC, TRUE);
+	set_intercept(vmcb, INTERCEPT_RDTSCP, TRUE);
 
 	/* setup exception intercept */
 	set_intercept_exception(vmcb, T_DEBUG, TRUE);
@@ -456,6 +457,7 @@ vm_init(struct vm *vm)
 	/* Sec 15.21.1, APM Vol2 r3.19 */
 	svm->vmcb->control.int_ctl = (SVM_INTR_CTRL_VINTR_MASK |
 				      (0x0 & SVM_INTR_CTRL_VTPR));
+	vm->exit_for_intr = FALSE;
 
 	return 0;
 }
@@ -470,14 +472,18 @@ vm_run(struct vm *vm)
 
 	struct svm *svm = (struct svm *) vm->cookie;
 
+	/* KERN_DEBUG("[%x:%llx] Enter guest.\n", */
+	/* 	   svm->vmcb->save.cs.selector, svm->vmcb->save.rip); */
+
 	SVM_CLGI();
 
 	intr_local_enable();
 	svm_run(svm);
 	intr_local_disable();
 
-	if(svm->vmcb->control.exit_code == SVM_EXIT_INTR)
+	if(svm->vmcb->control.exit_code == SVM_EXIT_INTR) {
 		vm->exit_for_intr = TRUE;
+	}
 
 	SVM_STGI();
 
@@ -496,7 +502,9 @@ svm_handle_exit(struct vm *vm)
 	bool handled = FALSE;
 
 	if (ctrl->exit_code != SVM_EXIT_IOIO &&
-	    ctrl->exit_code != SVM_EXIT_CPUID)
+	    ctrl->exit_code != SVM_EXIT_CPUID &&
+	    ctrl->exit_code != SVM_EXIT_INTR &&
+	    ctrl->exit_code != SVM_EXIT_RDTSC)
 		KERN_DEBUG("[%x:%llx] ",
 			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 
@@ -508,7 +516,7 @@ svm_handle_exit(struct vm *vm)
 
 	case SVM_EXIT_INTR:
 		/* kernel interrupt handlers should come before here */
-		dprintf("VMEXIT for INTR.\n");
+		/* dprintf("VMEXIT for INTR (post).\n"); */
 		handled = svm_handle_intr(vm);
 		break;
 
@@ -538,8 +546,13 @@ svm_handle_exit(struct vm *vm)
 		break;
 
 	case SVM_EXIT_RDTSC:
-		dprintf("VMEXIT for RDTSC.\n");
+		/* dprintf("VMEXIT for RDTSC.\n"); */
 		handled = svm_handle_rdtsc(vm);
+		break;
+
+	case SVM_EXIT_RDTSCP:
+		dprintf("VMEXIT for RDTSCP.\n");
+		handled = svm_handle_rdtscp(vm);
 		break;
 
 	case SVM_EXIT_ERR:
@@ -562,6 +575,7 @@ svm_handle_exit(struct vm *vm)
 
 	if (vpic_has_irq(&vm->vpic) == TRUE) {
 		int irq = vpic_read_irq(&vm->vpic);
+		KERN_DEBUG("Found pending INTR %x.\n", irq);
 		svm_inject_event(vmcb, SVM_EVTINJ_TYPE_INTR, irq, FALSE, 0);
 	}
 

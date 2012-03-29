@@ -9,6 +9,7 @@
 #include <sys/pcpu.h>
 #include <sys/slave.h>
 #include <sys/string.h>
+#include <sys/timer.h>
 #include <sys/types.h>
 #include <sys/x86.h>
 
@@ -16,6 +17,7 @@
 
 #include <machine/pmap.h>
 
+#include <dev/tsc.h>
 #include <dev/timer.h>
 
 uint8_t pcpu_stack[MAX_CPU * PAGE_SIZE] gcc_aligned(PAGE_SIZE);
@@ -77,13 +79,26 @@ kern_init(mboot_info_t *mbi)
 
 	/*
 	 * Initialize i8253 timer.
+	 * XXX: MUST be initialized before tsc_init().
 	 */
 	KERN_INFO("Initialize i8253 timer ... ");
-	timer_init();
+	timer_hw_init();
+	KERN_INFO("done.\n");
+
+	/*
+	 * Calibrate TSC.
+	 * XXX: Must be initialized before lapic_init().
+	 */
+	KERN_INFO("Initialize TSC ... ");
+	if (tsc_init()) {
+		KERN_INFO("failed.\n");
+		halt();
+	}
 	KERN_INFO("done.\n");
 
 	/*
 	 * Intialize interrupt system.
+	 * XXX: lapic_init() is called in intr_init().
 	 */
 	KERN_INFO("Initialize the interrupt system ... ");
 	intr_init();
@@ -113,6 +128,11 @@ kern_init(mboot_info_t *mbi)
 		pcpu_boot_ap(i, slave_kernel, (uintptr_t) &stack[i * PAGE_SIZE]);
 		KERN_INFO("done.\n");
 	}
+
+	/* Initialize timer */
+	KERN_INFO("Initialize timer event list ... ");
+	timer_init();
+	KERN_INFO("done.\n");
 
 	/* Initialize process module. */
 	KERN_INFO("Initialize process module ... ");

@@ -3,3 +3,4 @@ cscope.*
 *~
 obj
 obj/*
+*.DS_Store

@@ -8,6 +8,7 @@ KERN_SRCFILES	+= $(KERN_DIR)/dev/pic.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/lapic.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/ioapic.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/timer.c
+KERN_SRCFILES	+= $(KERN_DIR)/dev/tsc.c
 
 # Targets
 

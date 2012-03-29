@@ -43,6 +43,60 @@ lapic_register(uintptr_t lapic_addr)
 	lapic = (lapic_t *) lapic_addr;
 }
 
+static uint32_t
+lapic_calibrate_timer(uint32_t latch, uint32_t ms, int loopmin)
+{
+	uint32_t timer, timer1, timer2, delta, timermin, timermax;;
+	int pitcnt;
+
+	lapic_write(LAPIC_TICR, ~(uint32_t) 0x0);
+
+	/* Set the Gate high, disable speaker */
+	outb(0x61, (inb(0x61) & ~0x02) | 0x01);
+
+	/*
+	 * Setup CTC channel 2* for mode 0, (interrupt on terminal
+	 * count mode), binary count. Set the latch register to 50ms
+	 * (LSB then MSB) to begin countdown.
+	 */
+	outb(0x43, 0xb0);
+	outb(0x42, latch & 0xff);
+	outb(0x42, latch >> 8);
+
+	timer = timer1 = timer2 = lapic_read(LAPIC_TCCR);
+
+	pitcnt = 0;
+	timermax = 0;
+	timermin = ~(uint32_t) 0x0;
+	while ((inb(0x61) & 0x20) == 0) {
+		timer2 = lapic_read(LAPIC_TCCR);
+		delta = timer - timer2;
+		timer = timer2;
+		if (delta < timermin)
+			timermin = delta;
+		if (delta > timermax)
+			timermax = delta;
+		pitcnt++;
+	}
+
+	/*
+	 * Sanity checks:
+	 *
+	 * If we were not able to read the PIT more than loopmin
+	 * times, then we have been hit by a massive SMI
+	 *
+	 * If the maximum is 10 times larger than the minimum,
+	 * then we got hit by an SMI as well.
+	 */
+	if (pitcnt < loopmin || timermax > 10 * timermin)
+		return ~(uint32_t) 0x0;
+
+	/* Calculate the PIT value */
+	delta = timer1 - timer2;
+	/* do_div(delta, ms); */
+	return delta/ms;
+}
+
 /*
  * Initialize local APIC.
  */
@@ -54,26 +108,41 @@ lapic_init()
 
 	/* debug("Use local APIC at %x\n", (uintptr_t) lapic); */
 
-	// Set DFR to flat mode
-	lapic_write(LAPIC_DFR, LAPIC_DFR_FLAT_MODE);
-
-	// clear LDR
-	lapic_write(LAPIC_LDR, 0x0);
-
 	// Enable local APIC; set spurious interrupt vector.
 	lapic_write(LAPIC_SVR, LAPIC_SVR_ENABLE | (T_IRQ0 + IRQ_SPURIOUS));
 
-#if 0
-	// The timer repeatedly counts down at bus frequency
-	// from lapic[TICR] and then issues an interrupt.
-	// If we cared more about precise timekeeping,
-	// TICR would be calibrated using an external time source.
 	lapic_write(LAPIC_TDCR, LAPIC_TIMER_X1);
-	lapic_write(LAPIC_TIMER, LAPIC_TIMER_PERIODIC | (T_IRQ0 + IRQ_TIMER) | 0x10000);
-	lapic_write(LAPIC_TICR, 10000000);
+	lapic_write(LAPIC_TIMER, LAPIC_TIMER_PERIODIC | (T_IRQ0 + IRQ_TIMER));
+#if 0
+	/*
+	 * FIXME: The APIC timer calibration here maybe incorrect !!
+	 */
+	/*
+	 * Calibrate the internal timer of LAPIC using TSC.
+	 * XXX: TSC should be already calibrated before here.
+	 */
+	uint32_t lapic_ticks_per_ms;
+	int i;
+	for (i = 0; i < 5; i++) {
+		lapic_ticks_per_ms =
+			lapic_calibrate_timer(CAL_LATCH, CAL_MS, CAL_PIT_LOOPS);
+		if (lapic_ticks_per_ms != ~(uint32_t) 0x0)
+			break;
+		KERN_DEBUG("Retry to calibrate internal timer of LAPIC.\n");
+	}
+	if (lapic_ticks_per_ms == ~(uint32_t) 0x0) {
+		KERN_WARN("Failed to calibrate internal timer of LAPIC.\n");
+		lapic_write(LAPIC_TICR, 10000000);
+	} else {
+		KERN_DEBUG("LAPIC timer freq = %llu Hz.\n",
+			   (uint64_t) lapic_ticks_per_ms * 1000);
+		uint32_t lapic_ticks_per_pit_tick =
+			lapic_ticks_per_ms * 1000 / (uint32_t) TIMER_FREQ;
+		KERN_DEBUG("Set TICR to %llu.\n", lapic_ticks_per_pit_tick);
+		lapic_write(LAPIC_TICR, lapic_ticks_per_pit_tick);
+	}
 #else
-	/* Disable internal timer of lapic. */
-	lapic_write(LAPIC_TIMER, LAPIC_TIMER_MASKED);
+	lapic_write(LAPIC_TICR, 10000000);
 #endif
 
 	// Disable logical interrupt lines.
@@ -84,6 +153,12 @@ lapic_init()
 	// on machines that provide that interrupt entry.
 	if (((lapic_read(LAPIC_VER)>>16) & 0xFF) >= 4)
 		lapic_write(LAPIC_PCINT, APIC_LVTT_M);
+
+	// Set DFR to flat mode
+	lapic_write(LAPIC_DFR, LAPIC_DFR_FLAT_MODE);
+
+	// clear LDR
+	lapic_write(LAPIC_LDR, 0x0);
 
 	// Map error interrupt to IRQ_ERROR.
 	lapic_write(LAPIC_ERROR, T_IRQ0 + IRQ_ERROR);

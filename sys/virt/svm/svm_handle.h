@@ -21,6 +21,7 @@ bool svm_handle_npf(struct vm *);
 bool svm_handle_cpuid(struct vm *);
 bool svm_handle_swint(struct vm *);
 bool svm_handle_rdtsc(struct vm *);
+bool svm_handle_rdtscp(struct vm *);
 bool svm_handle_err(struct vm *);
 
 #endif /* _KERN_ */

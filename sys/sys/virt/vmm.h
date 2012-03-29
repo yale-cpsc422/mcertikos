@@ -9,11 +9,15 @@
 #include <sys/virt/dev/nvram.h>
 #include <sys/virt/dev/pci.h>
 #include <sys/virt/dev/pic.h>
+#include <sys/virt/dev/pit.h>
 #include <sys/virt/dev/serial.h>
 
 #include <machine/trap.h>
 
 #define VM_PHY_MEMORY_SIZE	(64 * 1024 * 1024)
+
+#define VM_PIT_FREQ		(1193182)
+#define VM_TSC_FREQ		(800 * 1000 * 1000)
 
 #define MAX_IOPORT		0x10000
 #define MAX_EXTINTR		0x100
@@ -46,11 +50,15 @@ struct vm {
 		intr_handle_t	handle;
 	} extintr[MAX_EXTINTR];
 
+	uint64_t	tsc;
+	uint64_t	host_tsc;
+
 	struct vpic	vpic;		/* virtual PIC (i8259) */
 	struct vpci	vpci;		/* virtual PCI host */
-	struct vkbd	vkbd;		/* virtual keyboard */
+	struct vkbd	vkbd;		/* virtual keyboard controller (i8042) */
 	struct vserial	vserial;	/* virtual serial ports */
 	struct vnvram	vnvram;		/* virtual NVRAM */
+	struct vpit	vpit;		/* virtual PIT (i8254) */
 
 	bool		used;
 };
@@ -146,9 +154,14 @@ struct vm *vmm_cur_vm(void);
 void vmm_set_vm_irq(struct vm *, int irq, int level);
 
 /*
- *
+ * VMM stage of interrupt handling.
  */
 void vmm_handle_intr(struct vm *, uint8_t irqno);
+
+/*
+ * Read TSC of a VM.
+ */
+uint64_t vmm_rdtsc(struct vm *);
 
 #endif /* _KERN_ */
 

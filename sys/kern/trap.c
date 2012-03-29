@@ -33,6 +33,9 @@ trap(tf_t *tf)
 
 	asm volatile("cld" ::: "cc");
 
+	if (tf->trapno < T_IRQ0)
+		trap_dump(tf);
+
 	context_t *ctx = NULL;
 
 	if (rcr3() != (uint32_t) kern_ptab) {
@@ -58,6 +61,7 @@ trap(tf_t *tf)
 			  handler for it, just let VMM handle the interrupt. */
 			struct vm *vm = vmm_cur_vm();
 			int irq = tf->trapno - T_IRQ0;
+			KERN_DEBUG("vm=%x, irq=%d, eip=%x.\n", vm, irq, tf->eip);
 			KERN_ASSERT(vm != NULL && irq >= 0);
 			vmm_handle_intr(vm, irq);
 		}

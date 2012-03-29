@@ -6,6 +6,7 @@
 #include <sys/pcpu.h>
 #include <sys/proc.h>
 #include <sys/syscall.h>
+#include <sys/timer.h>
 #include <sys/types.h>
 #include <sys/vm.h>
 #include <sys/x86.h>
@@ -89,6 +90,16 @@ copy_to_user(void *dest, void *src, size_t size)
 	pmap_copy(user_pmap, (uintptr_t) dest, kern_ptab, (uintptr_t) src, size);
 
 	return dest;
+}
+
+static uint32_t
+master_default_exception_handler(context_t *ctx)
+{
+	KERN_ASSERT(ctx != NULL);
+
+	KERN_DEBUG("Exception %x, rip = %x.\n", ctx->tf.trapno, ctx->tf.eip);
+
+	return 0;
 }
 
 static uint32_t
@@ -431,9 +442,19 @@ master_syscall_handler(context_t *ctx)
 }
 
 static uint32_t
+master_spurious_handler(context_t *ctx)
+{
+	KERN_DEBUG("Ignore spurious interrupt.\n");
+	/* XXX: do not send EOI for spurious interrupt */
+	return 0;
+}
+
+static uint32_t
 master_timer_handler(context_t *ctx)
 {
-	KERN_DEBUG("master_timer_handler\n");
+	/* KERN_DEBUG("master_timer_handler\n"); */
+
+	timer_handle_timeout();
 
 	struct vm *vm = vmm_cur_vm();
 	bool from_guest =
@@ -483,9 +504,30 @@ master_kernel(void)
 	context_register_handler(T_GPFLT, master_gpf_handler);
 	context_register_handler(T_PGFLT, master_pgf_handler);
 	context_register_handler(T_SYSCALL, master_syscall_handler);
+	/* use default handler to handle other exceptions */
+	context_register_handler(T_DIVIDE, master_default_exception_handler);
+	context_register_handler(T_DEBUG, master_default_exception_handler);
+	context_register_handler(T_NMI, master_default_exception_handler);
+	context_register_handler(T_BRKPT, master_default_exception_handler);
+	context_register_handler(T_OFLOW, master_default_exception_handler);
+	context_register_handler(T_BOUND, master_default_exception_handler);
+	context_register_handler(T_ILLOP, master_default_exception_handler);
+	context_register_handler(T_DEVICE, master_default_exception_handler);
+	context_register_handler(T_DBLFLT, master_default_exception_handler);
+	context_register_handler(T_COPROC, master_default_exception_handler);
+	context_register_handler(T_TSS, master_default_exception_handler);
+	context_register_handler(T_SEGNP, master_default_exception_handler);
+	context_register_handler(T_STACK, master_default_exception_handler);
+	context_register_handler(T_RES, master_default_exception_handler);
+	context_register_handler(T_FPERR, master_default_exception_handler);
+	context_register_handler(T_ALIGN, master_default_exception_handler);
+	context_register_handler(T_MCHK, master_default_exception_handler);
+	context_register_handler(T_SIMD, master_default_exception_handler);
+	context_register_handler(T_SECEV, master_default_exception_handler);
 	KERN_INFO("done.\n");
 
 	KERN_INFO("[MASTER] Register interrupt handlers ... ");
+	context_register_handler(T_IRQ0+IRQ_SPURIOUS, master_spurious_handler);
 	context_register_handler(T_IRQ0+IRQ_TIMER, master_timer_handler);
 	context_register_handler(T_IRQ0+IRQ_KBD, master_kbd_handler);
 	KERN_INFO("done.\n");

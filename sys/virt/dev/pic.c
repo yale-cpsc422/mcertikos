@@ -7,15 +7,14 @@
 
 #include <dev/pic.h>
 
-static gcc_inline void
-i8259_pre_debug(struct i8259 *chip)
-{
-	KERN_ASSERT(chip != NULL);
-	if (chip->master == TRUE)
-		KERN_DEBUG("Master: ");
-	else
-		KERN_DEBUG("Slave: ");
-}
+#define i8259_pre_debug(chip)					\
+	do {							\
+		struct i8259 *_chip = (struct i8259 *) (chip);	\
+		if (_chip->master == TRUE)			\
+			KERN_DEBUG("Master: ");			\
+		else						\
+			KERN_DEBUG("Slave: ");			\
+	} while (0)
 
 /*
  * Get the priority number of the IR in mask with the highest priority.
@@ -211,13 +210,15 @@ i8259_intack(struct i8259 *chip, int irq)
 			chip->lowest_priority = (irq + 1) & 7;
 		}
 	} else {
-		KERN_DEBUG("Set bit %x of ISR.\n", irq);
+		i8259_pre_debug(chip);
+		dprintf("Set bit %x of ISR.\n", irq);
 		chip->isr |= (1 << irq);
 	}
 
 	/* We don't clear a level sensitive interrupt here */
 	if (!(chip->elcr & (1 << irq))) {
-		KERN_DEBUG("Clear bit %x of IRR.\n", irq);
+		i8259_pre_debug(chip);
+		dprintf("Clear bit %x of IRR.\n", irq);
 		chip->irr &= ~(1 << irq);
 	}
 
@@ -290,8 +291,8 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 			 * D0   : 1 - ICW needed
 			 *        0 - NO ICW4 needed
 			 */
-			KERN_DEBUG("Write ICW1: data=%x, port=%x.\n",
-				   data, port);
+			i8259_pre_debug(chip);
+			dprintf("Write ICW1: data=%x, port=%x.\n", data, port);
 
 			i8259_init_reset(chip);
 			chip->init_state = 1;
@@ -319,28 +320,30 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 			int select_isr = (data & 0x03);
 
 			if (poll) { /* set poll mode */
-				KERN_DEBUG("OCW3: Set poll mode, port=%x.\n",
-					   port);
+				i8259_pre_debug(chip);
+				dprintf("OCW3: Set poll mode, port=%x.\n", port);
 				chip->poll = TRUE;
 			}
 
 			if (select_isr == 0x2) { /* select IRR */
-				KERN_DEBUG("OCW3: Select IRR, port=%x.\n",
-					   port);
+				i8259_pre_debug(chip);
+				dprintf("OCW3: Select IRR, port=%x.\n", port);
 				chip->select_isr = FALSE;
 			} else if (select_isr == 0x3) { /* select ISR */
-				KERN_DEBUG("OCW3: Select ISR, port=%x.\n",
-					   port);
+				i8259_pre_debug(chip);
+				dprintf("OCW3: Select ISR, port=%x.\n", port);
 				chip->select_isr = TRUE;
 			}
 
 			if (special_mask == 0x2) { /* reset special mask mode */
-				KERN_DEBUG("OCW3: Reset special mask mode, port=%x.\n",
-					   port);
+				i8259_pre_debug(chip);
+				dprintf("OCW3: Reset special mask mode, port=%x.\n",
+					port);
 				chip->special_mask_mode = FALSE;
 			} else if (special_mask == 0x3) { /* set specal mask */
-				KERN_DEBUG("OCW3: Set special mask mode, port=%x.\n",
-					   port);
+				i8259_pre_debug(chip);
+				dprintf("OCW3: Set special mask mode, port=%x.\n",
+					port);
 				chip->special_mask_mode = TRUE;
 			}
 		} else {
@@ -363,19 +366,22 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 			uint8_t cmd = (data >> 5) & 0x7;
 			switch (cmd) {
 			case 0: /* rotate on automatic EOI (clear) */
-				KERN_DEBUG("OCW2: Clear rotate on automatic EOI, port=%x.\n",
-					   port);
+				i8259_pre_debug(chip);
+				dprintf("OCW2: Clear rotate on automatic EOI, port=%x.\n",
+					port);
 				chip->rotate_on_auto_eoi = FALSE;
 				break;
 
 			case 4: /* rotate on automatic EOI (set) */
-				KERN_DEBUG("OCW2: Set rotate on automatic EOI, port=%x.\n",
-					   port);
+				i8259_pre_debug(chip);
+				dprintf("OCW2: Set rotate on automatic EOI, port=%x.\n",
+					port);
 				chip->rotate_on_auto_eoi = TRUE;
 				break;
 
 			case 1: /* non-specific EOI */
-				KERN_DEBUG("OCW2: EOI, port=%x.\n", port);
+				i8259_pre_debug(chip);
+				dprintf("OCW2: EOI, port=%x.\n", port);
 			case 5: /* rotate on non-specific EOI */
 				priority = i8259_get_priority(chip, chip->isr);
 
@@ -387,16 +393,18 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 				dprintf("Clear bit %x of ISR.\n", irq);
 				chip->isr &= ~(1 << irq);
 				if (cmd == 5) {
-					KERN_DEBUG("OCW2: Rotate to %x, port=%x.\n",
-						   (irq + 1) % 7, port);
+					i8259_pre_debug(chip);
+					dprintf("OCW2: Rotate to %x, port=%x.\n",
+						(irq + 1) % 7, port);
 					chip->lowest_priority = (irq + 1) & 7;
 				}
 				i8259_update_irq(chip);
 				break;
 
 			case 3: /* specific EOI */
-				KERN_DEBUG("OCW2: EOI for IRQ%x, port=%x.\n",
-					   data & 7, port);
+				i8259_pre_debug(chip);
+				dprintf("OCW2: EOI for IRQ%x, port=%x.\n",
+					data & 7, port);
 				irq = data & 7;
 				i8259_pre_debug(chip);
 				dprintf("Clear bit %x of ISR.\n", irq);
@@ -405,15 +413,17 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 				break;
 
 			case 6: /* set priority */
-				KERN_DEBUG("OCW2: Set priority to %x, port=%x.\n",
-					   (data + 1) & 7, port);
+				i8259_pre_debug(chip);
+				dprintf("OCW2: Set priority to %x, port=%x.\n",
+					(data + 1) & 7, port);
 				chip->lowest_priority = (data + 1) & 7;
 				i8259_update_irq(chip);
 				break;
 
 			case 7: /* rotate on specific EOI */
-				KERN_DEBUG("OCW2: Rotate to %x, port=%x.\n",
-					   (data + 1) & 7, port);
+				i8259_pre_debug(chip);
+				dprintf("OCW2: Rotate to %x, port=%x.\n",
+					(data + 1) & 7, port);
 				irq = data & 7;
 				i8259_pre_debug(chip);
 				dprintf("Clear bit %x of ISR.\n", irq);
@@ -423,7 +433,8 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 				break;
 
 			default:
-				KERN_DEBUG("OCW2: Nop, port=%x.\n", port);
+				i8259_pre_debug(chip);
+				dprintf("OCW2: Nop, port=%x.\n", port);
 				break;
 			}
 		}
@@ -434,15 +445,16 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 	case IO_PIC2+1:
 		switch (chip->init_state) {
 		case 0: /* OCW1 */
-			KERN_DEBUG("OCW1: Set IMR=%x, port=%x.\n",
-				   data, port);
+			i8259_pre_debug(chip);
+			dprintf("OCW1: Set IMR=%x, port=%x.\n", data, port);
 			chip->imr = data;
 			i8259_update_irq(chip);
 			break;
 
 		case 1: /* ICW2 */
-			KERN_DEBUG("ICW2: Set IRQ base=%x, port=%x.\n",
-				   data & 0xf8, port);
+			i8259_pre_debug(chip);
+			dprintf("ICW2: Set IRQ base=%x, port=%x.\n",
+				data & 0xf8, port);
 			chip->irq_base = data & 0xf8;
 			chip->init_state =
 				chip->single_mode ? (chip->init4 ? 3 : 0) : 2;
@@ -451,7 +463,8 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 			break;
 
 		case 2: /* ICW3 */
-			KERN_DEBUG("ICW3: port=%x.\n", port);
+			i8259_pre_debug(chip);
+			dprintf("ICW3: port=%x.\n", port);
 			if (chip->init4) {
 				chip->init_state = 3;
 			} else {
@@ -474,8 +487,9 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 			 * D0    : 1 - 8086/0888 mode
 			 *         0 - MCS-80/85 mode
 			 */
-			KERN_DEBUG("ICW4: SFN mode=%x, AEOI=%x, port=%x.\n",
-				   (data >> 4) & 1, (data >> 1) & 1, port);
+			i8259_pre_debug(chip);
+			dprintf("ICW4: SFN mode=%x, AEOI=%x, port=%x.\n",
+				(data >> 4) & 1, (data >> 1) & 1, port);
 			chip->special_fully_nested_mode = (data >> 4) & 1;
 			chip->auto_eoi_mode = (data >> 1) & 1;
 			chip->init_state = 0;
@@ -515,22 +529,25 @@ vpic_ioport_read(struct vpic *vpic, uint8_t port)
 		}
 		chip->poll = 0;
 
-		KERN_DEBUG("Polling read: data=%x, port=%x.\n", ret, port);
+		i8259_pre_debug(chip);
+		dprintf("Polling read: data=%x, port=%x.\n", ret, port);
 	} else {
 		if (port == IO_PIC1 || port == IO_PIC2) {
 			if (chip->select_isr == TRUE) {
 				ret = chip->isr;
-				KERN_DEBUG("Read ISR: data=%x, port=%x.\n",
-					   ret, port);
+				i8259_pre_debug(chip);
+				dprintf("Read ISR: data=%x, port=%x.\n",
+					ret, port);
 			} else {
 				ret = chip->irr;
-				KERN_DEBUG("Read IRR: data=%x, port=%x.\n",
-					   ret, port);
+				i8259_pre_debug(chip);
+				dprintf("Read IRR: data=%x, port=%x.\n",
+					ret, port);
 			}
 		} else {
 			ret = chip->imr;
-			KERN_DEBUG("Read IMR: data=%x, port=%x.\n",
-				   ret, port);
+			i8259_pre_debug(chip);
+			dprintf("Read IMR: data=%x, port=%x.\n", ret, port);
 		}
 	}
 

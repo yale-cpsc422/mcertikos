@@ -160,13 +160,13 @@ svm_guest_intr_handler(struct vm *vm, uint8_t irq)
 {
 	KERN_ASSERT(vm != NULL && vm->exit_for_intr == TRUE);
 
-	struct svm *svm = (struct svm *) vm->cookie;
-	struct vmcb *vmcb = svm->vmcb;
-	struct vmcb_save_area *save = &vmcb->save;
+	/* struct svm *svm = (struct svm *) vm->cookie; */
+	/* struct vmcb *vmcb = svm->vmcb; */
+	/* struct vmcb_save_area *save = &vmcb->save; */
 
 	KERN_ASSERT(irq >= 0);
-	KERN_DEBUG("INTR%x happened in the guest (gIF=%x, hIF=%x).\n",
-		   irq, (save->rflags & FL_IF), (read_eflags() & FL_IF));
+	/* KERN_DEBUG("INTR %x happened in the guest (gIF=%x, hIF=%x).\n", */
+	/* 	   irq, (save->rflags & FL_IF), (read_eflags() & FL_IF)); */
 
 	if (vmm_handle_extintr(vm, irq)) {
 		/*
@@ -219,6 +219,7 @@ bool
 svm_handle_intr(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
+	/* Interrupts should be already handled before. */
 	return TRUE;
 }
 
@@ -412,16 +413,30 @@ svm_handle_cpuid(struct vm *vm)
 						CPUID_FEATURE_AES |
 						CPUID_FEATURE_MONITOR);
 		svm->g_rdx = rdx & ~(uint64_t) (CPUID_FEATURE_HTT |
-						CPUID_FEATURE_APIC);
+						CPUID_FEATURE_MCA |
+						CPUID_FEATURE_MTRR |
+						CPUID_FEATURE_APIC |
+						CPUID_FEATURE_MCE |
+						CPUID_FEATURE_MSR |
+						CPUID_FEATURE_DE);
 		break;
 
 	case 0x80000001:
 		cpuid(save->rax, &rax, &rbx, &rcx, &rdx);
 		save->rax = 0x0; /* empty CPU family, model, step, etc. */
 		svm->g_rbx = rbx;
-		svm->g_rcx = rcx & ~(uint64_t) (CPUID_X_FEATURE_SKINIT |
+		svm->g_rcx = rcx & ~(uint64_t) (CPUID_X_FEATURE_WDT |
+						CPUID_X_FEATURE_SKINIT |
+						CPUID_X_FEATURE_XAPIC |
 						CPUID_X_FEATURE_SVM);
-		svm->g_rdx = rdx & ~(uint64_t) CPUID_FEATURE_APIC;
+		svm->g_rdx = rdx & ~(uint64_t) (CPUID_X_FEATURE_RDTSCP |
+						CPUID_X_FEATURE_NX |
+						CPUID_X_FEATURE_MCA |
+						CPUID_X_FEATURE_MTRR |
+						CPUID_X_FEATURE_APIC |
+						CPUID_X_FEATURE_MCE |
+						CPUID_X_FEATURE_MSR |
+						CPUID_X_FEATURE_DE);
 
 		break;
 
@@ -474,12 +489,31 @@ svm_handle_rdtsc(struct vm *vm)
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_save_area *save = &vmcb->save;
 
-	uint64_t tsc = rdtsc();
-	svm->g_rdx = (tsc >> 32);
-	save->rax = (tsc & 0xffffffff);
+	svm->g_rdx = vm->tsc >> 32;
+	save->rax = (vm->tsc & 0xffffffff);
 	save->rip += 2;
 
 	return TRUE;
+}
+
+/*
+ * CertiKOS does not support RDTSCP instruction in guest, so when it detects the
+ * guest tries to execute RDTSCP instructions, it injects an invalid opcode
+ * exception to the guest.
+ */
+bool
+svm_handle_rdtscp(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct svm *svm = (struct svm *) vm->cookie;
+	struct vmcb *vmcb = svm->vmcb;
+
+	svm_inject_event(vmcb, SVM_EVTINJ_TYPE_EXEPT, T_ILLOP, FALSE, 0);
+
+	/* XXX: Do NOT increase rip since we inject an exception. */
+
+	return 0;
 }
 
 /*
