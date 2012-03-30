@@ -314,6 +314,7 @@ __pcpu_mp_init(void)
 	KERN_DEBUG("Use the fallback multiprocessor initialization.\n");
 	if (mp_init_fallback() == FALSE) {
 		ismp = 0;
+		ncpu = 1;
 		return FALSE;
 	} else
 		return TRUE;
