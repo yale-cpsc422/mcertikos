@@ -45,7 +45,7 @@ pcpu_init()
 
 	pcpu = (pcpu_t *) pcpu_stack;
 
-	for (i = 0; i < 4/* MAX_CPU */; ++i) {
+	for (i = 0; i < MAX_CPU; ++i) {
 		spinlock_init(&pcpu[i].lk);
 		pcpu[i].inited = FALSE;
 		pcpu[i].stat = PCPU_STOP;
