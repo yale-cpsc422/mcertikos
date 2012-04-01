@@ -21,6 +21,8 @@
 #include "svm.h"
 #include "svm_handle.h"
 #include "svm_utils.h"
+#include "svm_intr.h"
+
 
 /* struct vcpu { */
 /* 	uint64_t	flags; */
@@ -313,7 +315,7 @@ setup_intercept(struct vm *vm)
 	set_intercept(vmcb, INTERCEPT_INTR, TRUE);
 	set_intercept(vmcb, INTERCEPT_IOIO_PROT, TRUE);
 	set_intercept(vmcb, INTERCEPT_CPUID, TRUE);
-	/* set_intercept(vmcb, INTERCEPT_INTn, TRUE); */
+	/*set_intercept(vmcb, INTERCEPT_INTn, TRUE); */
 	/* set_intercept(vmcb, INTERCEPT_VINTR, TRUE); */
 	/* set_intercept(vmcb, INTERCEPT_RDTSC, TRUE); */
 
@@ -492,7 +494,6 @@ svm_handle_exit(struct vm *vm)
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_control_area *ctrl = &vmcb->control;
-
 	bool handled = FALSE;
 
 	if (ctrl->exit_code != SVM_EXIT_IOIO &&
@@ -518,7 +519,7 @@ svm_handle_exit(struct vm *vm)
 		break;
 
 	case SVM_EXIT_IOIO:
-		/* dprintf("VMEXIT for IO"); */
+	  //dprintf("VMEXIT for IO");
 		handled = svm_handle_ioio(vm);
 		break;
 
@@ -560,11 +561,9 @@ svm_handle_exit(struct vm *vm)
 			   ctrl->exit_code);
 	}
 
-	if (vpic_has_irq(&vm->vpic) == TRUE) {
-		int irq = vpic_read_irq(&vm->vpic);
-		svm_inject_event(vmcb, SVM_EVTINJ_TYPE_INTR, irq, FALSE, 0);
-	}
 
+	if (vpic_has_irq(&vm->vpic) == TRUE)
+		detect_guest_intr(vm);
 	return 0;
 }
 

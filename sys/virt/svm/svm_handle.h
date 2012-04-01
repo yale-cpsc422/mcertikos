@@ -23,6 +23,8 @@ bool svm_handle_swint(struct vm *);
 bool svm_handle_rdtsc(struct vm *);
 bool svm_handle_err(struct vm *);
 
+void svm_inject_vintr(struct vmcb *, uint8_t, uint8_t);
+
 #endif /* _KERN_ */
 
 #endif /* !_VIRT_SVM_HANDLE_H_ */

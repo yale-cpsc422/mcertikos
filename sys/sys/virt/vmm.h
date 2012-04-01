@@ -144,7 +144,7 @@ struct vm *vmm_cur_vm(void);
  * Assert/Deassert an IRQ to VM.
  */
 void vmm_set_vm_irq(struct vm *, int irq, int level);
-
+void inject_vkbd_queue(struct vkbd *vkbd, int b, int aux);
 /*
  *
  */

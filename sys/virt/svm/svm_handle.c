@@ -14,6 +14,7 @@
 #include "svm.h"
 #include "svm_handle.h"
 #include "svm_utils.h"
+#include "svm_intr.h"
 
 /*
  * Inject an event to the guest. (Sec 15.20, APM Vol2 r3.19)
@@ -50,7 +51,7 @@ svm_inject_event(struct vmcb *vmcb,
 		   type, vector, errcode);
 }
 
-static void
+void
 svm_inject_vintr(struct vmcb *vmcb, uint8_t vector, uint8_t priority)
 {
 	KERN_ASSERT(vmcb != NULL);
@@ -58,7 +59,8 @@ svm_inject_vintr(struct vmcb *vmcb, uint8_t vector, uint8_t priority)
 	struct vmcb_control_area *ctrl  = &vmcb->control;
 
 	ctrl->int_ctl =
-		SVM_INTR_CTRL_VIRQ | ((priority << 16) & SVM_INTR_CTRL_PRIO);
+		SVM_INTR_CTRL_VIRQ | ((priority << 16) & SVM_INTR_CTRL_PRIO) | SVM_INTR_CTRL_IGN_VTPR;
+
 	ctrl->int_vector = vector;
 
 	KERN_DEBUG("Inject VINTR: vec=%x, prio=%x.\n", vector, priority);
@@ -219,7 +221,6 @@ svm_handle_exception(struct vm *vm)
 bool
 svm_handle_intr(struct vm *vm)
 {
-	KERN_ASSERT(vm != NULL);
 	return TRUE;
 }
 
@@ -231,6 +232,7 @@ svm_handle_vintr(struct vm *vm)
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_control_area *ctrl = &vmcb->control;
+	struct vmcb_save_area *save = &vmcb->save;
 
 	uint8_t v_tpr = ctrl->int_ctl & 0xff;
 	int pending = (ctrl->int_ctl >> 8) & 0x1;
@@ -239,6 +241,14 @@ svm_handle_vintr(struct vm *vm)
 	int mask_vintr = (ctrl->int_ctl >> 24) & 0x1;
 	uint8_t vector = ctrl->int_vector;
 
+	if (save->rflags) {
+	  if (!(save->rflags & 0x200))
+	    KERN_DEBUG("IF FLAG is not set ! \n");
+	  else {
+	    KERN_DEBUG("IF FLAG is set ! \n");
+	    guest_intr_inject_event(vm);
+	  }
+	}
 	KERN_DEBUG("VINTR: pending=%d, vector=%x, TPR=%x, ignore TPR=%x, prio=%x, mask=%x.\n",
 		   pending, vector, v_tpr, ign_tpr, v_prio, mask_vintr);
 

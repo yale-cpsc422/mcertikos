@@ -457,15 +457,9 @@ master_kbd_handler(context_t *ctx)
 {
 	KERN_DEBUG("master_kbd_handler\n");
 
-	struct vm *vm = vmm_cur_vm();
-	bool from_guest =
-		(vm != NULL && vm->exit_for_intr == TRUE) ? TRUE : FALSE;
+	kbd_intr();
+	intr_eoi();
 
-	if (from_guest != TRUE) { /* for a normal application */
-		intr_eoi();
-		kbd_intr();
-	} else /* for a guest */
-		vmm_handle_intr(vm, IRQ_KBD);
 	return 0;
 }
 

@@ -420,6 +420,11 @@ vkbd_sync_kbd(struct vm *vm)
 	}
 }
 
+void inject_vkbd_queue(struct vkbd *vkbd, int b, int aux)
+{
+  	vkbd_queue(vkbd, b, aux);
+}
+
 void
 vkbd_init(struct vkbd *vkbd, struct vm *vm)
 {

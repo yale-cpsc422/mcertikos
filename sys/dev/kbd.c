@@ -11,6 +11,10 @@
 #include <dev/lapic.h>
 #include <dev/pic.h>
 
+#include <sys/vm.h>
+#include <sys/virt/vmm.h>
+
+
 #define NO		0
 
 #define SHIFT		(1<<0)
@@ -118,10 +122,19 @@ kbd_proc_data(void)
 	uint8_t data;
 	static uint32_t shift;
 
+	struct vm *vm = vmm_cur_vm();
+	bool from_guest =
+		(vm != NULL && vm->exit_for_intr == TRUE) ? TRUE : FALSE;
+
 	if ((inb(KBSTATP) & KBS_DIB) == 0)
 		return -1;
 
 	data = inb(KBDATAP);
+
+	if (from_guest == TRUE) {
+		inject_vkbd_queue(&vm->vkbd, data, 0);
+		return 0;
+	}
 
 	if (data == 0xE0) {
 		// E0 escape character
