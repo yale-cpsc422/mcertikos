@@ -5,6 +5,8 @@
 #error "This is a kernel header file; do not include it in userspace program."
 #endif /* !_KERN_ */
 
+#include <sys/gcc.h>
+
 #include <machine/types.h>
 
 typedef __uint8_t	uint8_t;
@@ -88,7 +90,7 @@ typedef __pid_t		pid_t;
 	})
 
 /* Return the offset of 'member' relative to the beginning of a struct type */
-#define offsetof(type, member)		__builtin_offsetof((type), (member))
+#define offsetof(type, member)		__builtin_offsetof(type, member)
 
 typedef uint8_t		bool;
 

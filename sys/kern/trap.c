@@ -33,6 +33,9 @@ trap(tf_t *tf)
 
 	asm volatile("cld" ::: "cc");
 
+	if (tf->trapno != T_SYSCALL && tf->trapno != T_IRQ0+IRQ_TIMER)
+		KERN_DEBUG("trap(): %x.\n", tf->trapno);
+
 	if (tf->trapno < T_IRQ0)
 		trap_dump(tf);
 

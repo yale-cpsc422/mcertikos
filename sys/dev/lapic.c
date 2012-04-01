@@ -8,6 +8,8 @@
 #include <dev/lapic.h>
 #include <dev/timer.h>
 
+#define LAPIC_TIMER_INTR_FREQ	10
+
 volatile lapic_t *lapic;
 
 /*
@@ -113,7 +115,6 @@ lapic_init()
 
 	lapic_write(LAPIC_TDCR, LAPIC_TIMER_X1);
 	lapic_write(LAPIC_TIMER, LAPIC_TIMER_PERIODIC | (T_IRQ0 + IRQ_TIMER));
-#if 0
 	/*
 	 * FIXME: The APIC timer calibration here maybe incorrect !!
 	 */
@@ -128,22 +129,18 @@ lapic_init()
 			lapic_calibrate_timer(CAL_LATCH, CAL_MS, CAL_PIT_LOOPS);
 		if (lapic_ticks_per_ms != ~(uint32_t) 0x0)
 			break;
-		KERN_DEBUG("Retry to calibrate internal timer of LAPIC.\n");
+		KERN_DEBUG("[%d] Retry to calibrate internal timer of LAPIC.\n", i);
 	}
 	if (lapic_ticks_per_ms == ~(uint32_t) 0x0) {
 		KERN_WARN("Failed to calibrate internal timer of LAPIC.\n");
-		lapic_write(LAPIC_TICR, 10000000);
-	} else {
+		KERN_DEBUG("Assume LAPIC timer freq = 1 GHz.\n");
+		lapic_ticks_per_ms = 1000000;
+	} else
 		KERN_DEBUG("LAPIC timer freq = %llu Hz.\n",
 			   (uint64_t) lapic_ticks_per_ms * 1000);
-		uint32_t lapic_ticks_per_pit_tick =
-			lapic_ticks_per_ms * 1000 / (uint32_t) TIMER_FREQ;
-		KERN_DEBUG("Set TICR to %llu.\n", lapic_ticks_per_pit_tick);
-		lapic_write(LAPIC_TICR, lapic_ticks_per_pit_tick);
-	}
-#else
-	lapic_write(LAPIC_TICR, 10000000);
-#endif
+	uint32_t ticr = lapic_ticks_per_ms * 1000 / LAPIC_TIMER_INTR_FREQ;
+	KERN_DEBUG("Set LAPIC TICR = %x.\n", ticr);
+	lapic_write(LAPIC_TICR, ticr);
 
 	// Disable logical interrupt lines.
 	lapic_write(LAPIC_LINT0, LAPIC_LINT_MASKED);

@@ -92,6 +92,7 @@ svm_run:
 	rdtscp
 	movl	%eax, 56(%ebx)
 	movl	%edx, 60(%ebx)
+	movl	%ebx, %eax
 
 	/* restore host registers */
 	popl	%ebp

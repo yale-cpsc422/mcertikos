@@ -79,7 +79,7 @@ tsc_init(void)
 		ret = tsc_calibrate(CAL_LATCH, CAL_MS, CAL_PIT_LOOPS);
 		if (ret != ~(uint64_t) 0x0)
 			break;
-		KERN_DEBUG("Retry to calibrate TSC [%d].\n", i+1);
+		KERN_DEBUG("[%d] Retry to calibrate TSC.\n", i+1);
 	}
 
 	if (ret == ~(uint64_t) 0x0)

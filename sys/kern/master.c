@@ -445,7 +445,7 @@ static uint32_t
 master_spurious_handler(context_t *ctx)
 {
 	KERN_DEBUG("Ignore spurious interrupt.\n");
-	/* XXX: do not send EOI for spurious interrupt */
+	/* XXX: do not send EOI for spurious interrupts */
 	return 0;
 }
 
