@@ -36,7 +36,7 @@ struct i8259 {
 
 	uint8_t		elcr;
 	uint8_t		elcr_mask;
-
+	
 	bool		ready;
 };
 
@@ -44,6 +44,7 @@ struct vpic {
 	uint8_t		int_out;
 	struct i8259	master;
 	struct i8259	slave;
+	int             irq_blocked;
 };
 
 void vpic_init(struct vpic *, struct vm *);

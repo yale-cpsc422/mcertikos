@@ -376,6 +376,7 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 
 			case 1: /* non-specific EOI */
 				KERN_DEBUG("OCW2: EOI, port=%x.\n", port);
+				vpic->irq_blocked = 0;
 			case 5: /* rotate on non-specific EOI */
 				priority = i8259_get_priority(chip, chip->isr);
 
@@ -615,6 +616,7 @@ vpic_init(struct vpic *vpic, struct vm *vm)
 	vpic->slave.master = FALSE;
 	vpic->master.vpic = vpic->slave.vpic = vpic;
 
+	vpic->irq_blocked = 0;
 	vmm_iodev_register_read(vm, vpic, IO_PIC1, SZ8, _vpic_ioport_read);
 	vmm_iodev_register_read(vm, vpic, IO_PIC1+1, SZ8, _vpic_ioport_read);
 	vmm_iodev_register_read(vm, vpic, IO_PIC2, SZ8, _vpic_ioport_read);

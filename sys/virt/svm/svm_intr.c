@@ -12,10 +12,10 @@ void detect_guest_intr(struct vm *vm)
 
 	/* If a EOI has not been received for a pending
 	 * intr, then just return
-	 *
+	 */
 	
-	if (svm->intr_in_waiting)
-	return;*/
+	if (vm->vpic.irq_blocked)
+	return;
 
 	/* 
 	 * Enable VINTR so that we can VMEXIT 
@@ -48,7 +48,8 @@ void guest_intr_inject_event(struct vm *vm)
 		KERN_DEBUG("No pending IRQ found \n");
 		return;
 	}
-
+	
+	vm->vpic.irq_blocked = 1;
 	svm_inject_event(vmcb, SVM_EVTINJ_TYPE_INTR, 9, FALSE, 0);
 }
 
