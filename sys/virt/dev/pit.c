@@ -693,11 +693,7 @@ vpit_irq_timer_update(struct vpit_channel *ch, uint64_t current_time)
 	bool is_channel0 = (&ch->pit->channels[0] == ch) ? TRUE : FALSE;
 	if (ch->enabled == TRUE && is_channel0 == TRUE &&
 	    ch->next_transition_time <= current_time) {
-		/* KERN_DEBUG("[%llx] Channel 0 timeout: %llx.\n", */
-		/* 	   current_time, ch->next_transition_time); */
 		int irq_level = vpit_get_out(ch, current_time);
-		KERN_DEBUG("[%llx] Set TIMER_IRQ to %x.\n",
-			   current_time, irq_level);
 		vmm_set_vm_irq(ch->pit->vm, IRQ_TIMER, irq_level);
 	}
 
