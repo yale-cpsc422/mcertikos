@@ -167,7 +167,14 @@ int vmm_run_vm(struct vm *);
 struct vm *vmm_cur_vm(void);
 
 /*
- * Assert/Deassert an IRQ to VM.
+ * Set the level of an IRQ of the virtualized PIC/APIC.
+ * XXX: It's to set the level of an IRQ line, other than to trigger or
+ *      untrigger an interrupt, e.g. for an edge-triggered interrupt IRQ1,
+ *        vmm_set_vm_irq(vm, IRQ1, 1);
+ *      does not trigger IRQ1 if the level of IRQ1 is already 1;
+ *        vmm_set_vm_irq(vm, IRQ1, 0);
+ *        vmm_set_vm_irq(vm, IRQ1, 1);
+ *      emulate the edge trigger and conseqently do trigger the interrupt.
  */
 void vmm_set_vm_irq(struct vm *, int irq, int level);
 

@@ -31,7 +31,7 @@ struct i8259 {
 	bool		auto_eoi_mode;
 	bool		rotate_on_auto_eoi;
 	bool		special_mask_mode;
-	bool 		fully_nested_mode;
+	bool		fully_nested_mode;
 	bool		special_fully_nested_mode;
 
 	uint8_t		elcr;
@@ -49,6 +49,7 @@ struct vpic {
 void vpic_init(struct vpic *, struct vm *);
 bool vpic_has_irq(struct vpic *);
 int vpic_read_irq(struct vpic *);
+int vpic_get_irq(struct vpic *);
 void vpic_set_irq(struct vpic *, int irq, int level);
 bool vpic_is_ready(struct vpic *);
 

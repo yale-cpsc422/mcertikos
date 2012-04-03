@@ -686,6 +686,37 @@ vpic_read_irq(struct vpic *vpic)
 }
 
 /*
+ * Get the pending irq vector number. It does not change the state of VPIC.
+ * @return the vector number; or -1, if no pending irq.
+ */
+int
+vpic_get_irq(struct vpic *vpic)
+{
+	KERN_ASSERT(vpic != NULL);
+
+	int irq, irq2, intno;
+
+	irq = i8259_get_irq(&vpic->master);
+
+	if (irq >= 0) {
+		if (irq == 2) {
+			/* irq is from slave i8259 */
+			irq2 = i8259_get_irq(&vpic->slave);
+
+			/* spurious IRQ on slave controller */
+			if (irq2 < 0)
+				intno = -1;
+			else
+				intno = vpic->slave.irq_base + irq2;
+		} else
+			intno = vpic->master.irq_base + irq;
+	} else
+		intno = -1;
+
+	return intno;
+}
+
+/*
  * Check wheter there is IRQ from virtualized PIC.
  */
 bool

@@ -14,6 +14,7 @@
 #include "svm.h"
 #include "svm_handle.h"
 #include "svm_utils.h"
+#include "svm_intr.h"
 
 /*
  * Inject an event to the guest. (Sec 15.20, APM Vol2 r3.19)
@@ -46,19 +47,33 @@ svm_inject_event(struct vmcb *vmcb,
 	if (ev == TRUE)
 		ctrl->event_inj |= SVM_EVTINJ_VALID_ERR;
 
-	KERN_DEBUG("Inject event: type=%x, vec=%x, errcode=%x\n",
-		   type, vector, errcode);
+	switch (type) {
+	case SVM_EVTINJ_TYPE_INTR:
+		KERN_DEBUG("Inject ExtINTR: vec=%x.\n", vector);
+		break;
+	case SVM_EVTINJ_TYPE_NMI:
+		KERN_DEBUG("Inject NMI.\n");
+		break;
+	case SVM_EVTINJ_TYPE_EXEPT:
+		KERN_DEBUG("Inject exception: vec=%x, ev=%x, errcode=%x.\n",
+			   vector, ev, errcode);
+		break;
+	case SVM_EVTINJ_TYPE_SOFT:
+		KERN_DEBUG("Inject INT %x.\n", vector);
+		break;
+	}
 }
 
-static void
+void
 svm_inject_vintr(struct vmcb *vmcb, uint8_t vector, uint8_t priority)
 {
 	KERN_ASSERT(vmcb != NULL);
 
 	struct vmcb_control_area *ctrl  = &vmcb->control;
 
-	ctrl->int_ctl =
-		SVM_INTR_CTRL_VIRQ | ((priority << 16) & SVM_INTR_CTRL_PRIO);
+	ctrl->int_ctl |= SVM_INTR_CTRL_VIRQ |
+		((priority << SVM_INTR_CTRL_PRIO_SHIFT) & SVM_INTR_CTRL_PRIO) |
+		SVM_INTR_CTRL_IGN_VTPR;
 	ctrl->int_vector = vector;
 
 	KERN_DEBUG("Inject VINTR: vec=%x, prio=%x.\n", vector, priority);
@@ -136,19 +151,6 @@ physical_ioport_write(uint32_t port, void *data, data_sz_t size)
 	default:
 		KERN_PANIC("Invalid data size.\n");
 	}
-}
-
-void
-svm_guest_handle_gpf(struct vm *vm, tf_t *tf)
-{
-	KERN_ASSERT(tf != NULL);
-	KERN_ASSERT(tf->trapno == T_GPFLT);
-
-
-	if (vm == NULL || vm->exit_for_intr == FALSE)
-		KERN_PANIC("General protection fault in kernel.\n");
-	else
-		KERN_PANIC("Trap %x from guest.\n", tf->trapno);
 }
 
 /*
@@ -231,16 +233,36 @@ svm_handle_vintr(struct vm *vm)
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_control_area *ctrl = &vmcb->control;
+	struct vmcb_save_area *save = &vmcb->save;
 
-	uint8_t v_tpr = ctrl->int_ctl & 0xff;
-	int pending = (ctrl->int_ctl >> 8) & 0x1;
-	uint8_t v_prio = (ctrl->int_ctl >> 16) & 0xf;
-	int ign_tpr = (ctrl->int_ctl >> 20) & 0x1;
-	int mask_vintr = (ctrl->int_ctl >> 24) & 0x1;
+	uint8_t v_tpr = ctrl->int_ctl & SVM_INTR_CTRL_VTPR;
+	int pending = ctrl->int_ctl & SVM_INTR_CTRL_VIRQ;
+	uint8_t v_prio = ctrl->int_ctl & SVM_INTR_CTRL_PRIO;
+	int ign_tpr = ctrl->int_ctl & SVM_INTR_CTRL_IGN_VTPR;
+	int mask_vintr = ctrl->int_ctl & SVM_INTR_CTRL_VINTR_MASK;
 	uint8_t vector = ctrl->int_vector;
 
 	KERN_DEBUG("VINTR: pending=%d, vector=%x, TPR=%x, ignore TPR=%x, prio=%x, mask=%x.\n",
-		   pending, vector, v_tpr, ign_tpr, v_prio, mask_vintr);
+		   pending >> SVM_INTR_CTRL_VIRQ_SHIFT,
+		   vector, v_tpr,
+		   ign_tpr >> SVM_INTR_CTRL_IGN_VTPR_SHIFT,
+		   v_prio >> SVM_INTR_CTRL_PRIO_SHIFT,
+		   mask_vintr >> SVM_INTR_CTRL_VINTR_MASK_SHIFT);
+
+	if (save->rflags) {
+		if (!(save->rflags & FL_IF))
+			/*
+			 * XXX: Is IF bit of EFLAGS always set whenever a
+			 *      virtual interrupt is taken?
+			 * TODO: If so, change this branch to an assertion
+			 *         KERN_ASSERT(save->rflags & FL_IF);
+			 */
+			KERN_WARN("IF FLAG is not set ! \n");
+		else {
+			KERN_DEBUG("IF FLAG is set ! \n");
+			ctrl->int_ctl &= ~SVM_INTR_CTRL_VIRQ;
+		}
+	}
 
 	return TRUE;
 }

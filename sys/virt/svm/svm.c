@@ -20,6 +20,7 @@
 
 #include "svm.h"
 #include "svm_handle.h"
+#include "svm_intr.h"
 #include "svm_utils.h"
 
 struct {
@@ -494,7 +495,6 @@ svm_handle_exit(struct vm *vm)
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_control_area *ctrl = &vmcb->control;
-	struct vmcb_save_area *save = &vmcb->save;
 
 	bool handled = FALSE;
 
@@ -570,12 +570,7 @@ svm_handle_exit(struct vm *vm)
 			   ctrl->exit_code);
 	}
 
-	if (vpic_has_irq(&vm->vpic) == TRUE) {
-		int irq = vpic_read_irq(&vm->vpic);
-		KERN_DEBUG("Found pending INTR %x, gIF=%x.\n",
-			   irq, (uint32_t) (save->rflags & FL_IF));
-		svm_inject_event(vmcb, SVM_EVTINJ_TYPE_INTR, irq, FALSE, 0);
-	}
+	svm_intr_assist(vm);
 
 	return 0;
 }
