@@ -40,7 +40,7 @@ typedef void (*intr_handle_t)(struct vm *);
 struct vm {
 	void		*cookie;	/* processor-specific data */
 
-	bool		exit_for_intr;	/* VMEXIT for interrupts */
+	volatile bool	exit_for_intr;	/* VMEXIT for interrupts */
 
 	struct {
 		void			*dev;

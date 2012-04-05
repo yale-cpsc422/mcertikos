@@ -502,7 +502,9 @@ svm_handle_exit(struct vm *vm)
 
 	if (ctrl->exit_code != SVM_EXIT_IOIO &&
 	    ctrl->exit_code != SVM_EXIT_CPUID &&
+#ifndef DEBUG_VPIC
 	    ctrl->exit_code != SVM_EXIT_INTR &&
+#endif
 	    ctrl->exit_code != SVM_EXIT_RDTSC)
 		KERN_DEBUG("[%x:%llx] ",
 			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
@@ -515,7 +517,9 @@ svm_handle_exit(struct vm *vm)
 
 	case SVM_EXIT_INTR:
 		/* kernel interrupt handlers should come before here */
-		/* dprintf("VMEXIT for INTR (post).\n"); */
+#ifdef DEBUG_VPIC
+		dprintf("VMEXIT for INTR (post).\n");
+#endif
 		KERN_ASSERT(vm->exit_for_intr == FALSE);
 		handled = svm_handle_intr(vm);
 		break;

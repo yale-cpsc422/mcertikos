@@ -44,7 +44,7 @@ vpit_debug_foo(const char *foo, ...)
 #define PIT_CONTROL_PORT	0x43
 #define PIT_GATE_PORT		0x61
 
-static void vpit_irq_timer_update(struct vpit_channel *, uint64_t current_tsc);
+static void vpit_channel_update(struct vpit_channel *, uint64_t current_tsc);
 
 static gcc_inline uint64_t
 muldiv64(uint64_t a, uint32_t b, uint32_t c)
@@ -165,6 +165,36 @@ vpit_get_out(struct vpit_channel *ch, uint64_t current_time)
 	return out;
 }
 
+static uint64_t
+vpit_get_next_intr_time(struct vpit *pit)
+{
+	KERN_ASSERT(pit != NULL);
+
+	struct vpit_channel *ch0 = &pit->channels[0];
+	uint64_t count = (uint64_t)(uint32_t) ch0->count;
+	uint64_t next_tsc = 0;
+
+	switch(ch0->mode) {
+	case PIT_CHANNEL_MODE_0:
+	case PIT_CHANNEL_MODE_1:
+	case PIT_CHANNEL_MODE_2:
+	case PIT_CHANNEL_MODE_3:
+		next_tsc = ch0->count_load_time +
+			muldiv64(count, VM_TSC_FREQ, VM_PIT_FREQ);
+		break;
+	case PIT_CHANNEL_MODE_4:
+	case PIT_CHANNEL_MODE_5:
+		next_tsc = ch0->count_load_time +
+			muldiv64(count+1, VM_TSC_FREQ, VM_PIT_FREQ);
+		break;
+
+	default:
+		KERN_PANIC("Invalid PIT channle mode %x.\n", ch0->mode);
+	}
+
+	return next_tsc;
+}
+
 /*
  * Get the time of next OUT change. If no OUT change will happen, valid will be
  * FALSE.
@@ -256,7 +286,7 @@ vpit_set_gate(struct vpit *pit, int channel, int val)
 		if (ch->gate < val) {
 			/* restart counting on rising edge */
 			ch->count_load_time = load_time;
-			vpit_irq_timer_update(ch, ch->count_load_time);
+			vpit_channel_update(ch, ch->count_load_time);
 		}
 		break;
 	case 2:
@@ -264,7 +294,7 @@ vpit_set_gate(struct vpit *pit, int channel, int val)
 		if (ch->gate < val) {
 			/* restart counting on rising edge */
 			ch->count_load_time = load_time;
-			vpit_irq_timer_update(ch, ch->count_load_time);
+			vpit_channel_update(ch, ch->count_load_time);
 		}
 		/* XXX: disable/enable counting */
 		break;
@@ -328,7 +358,7 @@ vpit_load_count(struct vpit_channel *ch, uint16_t val)
 	ch->count = count;
 	vpit_debug("[%llx] Set counter: %x.\n",
 		   ch->count_load_time, ch->count);
-	vpit_irq_timer_update(ch, ch->count_load_time);
+	vpit_channel_update(ch, ch->count_load_time);
 }
 
 static void
@@ -700,39 +730,79 @@ _vpit_gate_ioport_write(struct vm *vm, void *pit, uint32_t port, void *data)
 }
 
 static void
-vpit_irq_timer_update(struct vpit_channel *ch, uint64_t current_time)
+vpit_channel_update(struct vpit_channel *ch, uint64_t current_time)
 {
 	KERN_ASSERT(ch != NULL);
 	KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
 
-	/* if OUT of channel0 changes, let virtualized i8259 know */
+	/*
+	 * Check channel 0 for timer interrupt.
+	 * XXX: The trigger of the timer interrupt is asynchronous to the
+	 *      counter, i.e. the timer interrupt maybe triggered in an
+	 *      underminated period after the counter countdowns to zero.
+	 *      Only when this function is called at higher freqency than
+	 *      i8254, it could be possible to trigger the synchronous timer
+	 *      interrupt. Therefore, the virtualized PIT is suitable for
+	 *      those operating systems who count the number of timer interrupt
+	 *      to get the time.
+	 */
 	bool is_channel0 = (&ch->pit->channels[0] == ch) ? TRUE : FALSE;
-	if (ch->enabled == TRUE && is_channel0 == TRUE &&
-	    ch->next_transition_time <= current_time) {
-		int irq_level = vpit_get_out(ch, ch->next_transition_time);
-		vmm_set_vm_irq(ch->pit->vm, IRQ_TIMER, irq_level);
+	if (ch->enabled == TRUE && is_channel0 == TRUE) {
+		uint64_t intr_time = vpit_get_next_intr_time(ch->pit);
+		if (intr_time <= current_time &&
+		    (ch->last_intr_time_valid == FALSE ||
+		     ch->last_intr_time < intr_time)) {
+			ch->last_intr_time_valid = TRUE;
+			ch->last_intr_time = intr_time;
+
+			vpit_debug("Trigger IRQ_TIMER.\n");
+			vmm_set_vm_irq(ch->pit->vm, IRQ_TIMER, 0);
+			vmm_set_vm_irq(ch->pit->vm, IRQ_TIMER, 1);
+		}
 	}
 
-	/* update next transition time */
-	uint64_t expired_time;
-	bool expired_time_valid;
+	/*
+	 *  Reload counter if necessary.
+	 */
+	uint64_t count = (uint64_t)(uint32_t) ch->count;
+	uint64_t expired_time, cycle, d;
+	switch (ch->mode) {
+	case PIT_CHANNEL_MODE_0:
+	case PIT_CHANNEL_MODE_1:
+		expired_time = ch->count_load_time +
+			muldiv64(count, VM_TSC_FREQ, VM_PIT_FREQ);
+		if (current_time >= expired_time)
+			ch->enabled = FALSE;
+		else
+			ch->enabled = TRUE;
+		break;
 
-	expired_time = vpit_get_next_transition_time(ch, current_time,
-						     &expired_time_valid);
-
-	if (expired_time_valid == TRUE) {
-		/* vpit_debug("[%llx] Update timeout of channel %x to %llx.\n", */
-		/* 	   current_time, */
-		/* 	   (ch - ch->pit->channels)/sizeof(struct vpit_channel), */
-		/* 	   expired_time); */
-
-		ch->next_transition_time = expired_time;
+	case PIT_CHANNEL_MODE_2:
+	case PIT_CHANNEL_MODE_3:
+		expired_time = ch->count_load_time +
+			muldiv64(count, VM_TSC_FREQ, VM_PIT_FREQ);
+		if (current_time >= expired_time) {
+			d = current_time - expired_time;
+			cycle = muldiv64(count, VM_TSC_FREQ, VM_PIT_FREQ);
+			d /= cycle;
+			ch->count_load_time +=
+				muldiv64(count*(d+1), VM_TSC_FREQ, VM_PIT_FREQ);
+		}
 		ch->enabled = TRUE;
-	} else {
-		/* vpit_debug("[%llx] Disable channel %x.\n", */
-		/* 	   current_time, */
-		/* 	   (ch - ch->pit->channels)/sizeof(struct vpit_channel)); */
-		ch->enabled = FALSE;
+		break;
+
+	case PIT_CHANNEL_MODE_4:
+	case PIT_CHANNEL_MODE_5:
+		expired_time = ch->count_load_time +
+			muldiv64(count+1, VM_TSC_FREQ, VM_PIT_FREQ);
+		if (current_time >= expired_time)
+			ch->enabled = FALSE;
+		else
+			ch->enabled = TRUE;
+		break;
+
+	default:
+		KERN_PANIC("Invalid PIT channle mode %x.\n", ch->mode);
 	}
 }
 
@@ -755,16 +825,19 @@ vpit_init(struct vpit *pit, struct vm *vm)
 	spinlock_init(&pit->channels[0].lk);
 	pit->channels[0].pit = pit;
 	pit->channels[0].enabled = FALSE;
+	pit->channels[0].last_intr_time_valid = FALSE;
 
 	/* initialize channel 1 */
 	spinlock_init(&pit->channels[1].lk);
 	pit->channels[1].pit = pit;
 	pit->channels[1].enabled = FALSE;
+	pit->channels[1].last_intr_time_valid = FALSE;
 
 	/* initialize channel 2 */
 	spinlock_init(&pit->channels[2].lk);
 	pit->channels[2].pit = pit;
 	pit->channels[2].enabled = FALSE;
+	pit->channels[2].last_intr_time_valid = FALSE;
 
 	/* register virtualized device (handlers of I/O ports & IRQ) */
 	vmm_iodev_register_read(vm, pit, PIT_CONTROL_PORT, SZ8,
@@ -802,7 +875,7 @@ vpit_update(struct vm *vm)
 		struct vpit_channel *ch = &vm->vpit.channels[i];
 		spinlock_acquire(&ch->lk);
 		if (ch->enabled == TRUE)
-			vpit_irq_timer_update(ch, tsc);
+			vpit_channel_update(ch, tsc);
 		spinlock_release(&ch->lk);
 	}
 }

@@ -65,7 +65,6 @@ tsc_calibrate(uint32_t latch, uint32_t ms, int loopmin)
 int
 tsc_init(void)
 {
-
 	uint64_t ret;
 	int i;
 
@@ -75,16 +74,19 @@ tsc_init(void)
 	 * XXX: If TSC calibration fails frequently, try to increase the
 	 *      upperbound of loop condition, e.g. alternating 3 to 10.
 	 */
-	for (i = 0; i < 3; i++) {
+	for (i = 0; i < 10; i++) {
 		ret = tsc_calibrate(CAL_LATCH, CAL_MS, CAL_PIT_LOOPS);
 		if (ret != ~(uint64_t) 0x0)
 			break;
 		KERN_DEBUG("[%d] Retry to calibrate TSC.\n", i+1);
 	}
 
-	if (ret == ~(uint64_t) 0x0)
+	if (ret == ~(uint64_t) 0x0) {
+		KERN_DEBUG("TSC calibration failed.\n");
+		KERN_DEBUG("Assume TSC freq = 1 GHz.\n");
+		tsc_per_ms = 1000000;
 		return 1;
-	else {
+	} else {
 		tsc_per_ms = ret;
 		KERN_DEBUG("TSC freq = %llu Hz.\n", tsc_per_ms*1000);
 		return 0;

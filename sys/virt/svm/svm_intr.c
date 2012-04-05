@@ -55,16 +55,18 @@ svm_intr_assist(struct vm *vm)
 
 	/* no interrupt pending */
 	if ((intr_vec = vpic_get_irq(pic)) == -1) {
-		KERN_ASSERT(!(ctrl->int_ctl & SVM_INTR_CTRL_VIRQ));
+		/* KERN_ASSERT(!(ctrl->int_ctl & SVM_INTR_CTRL_VIRQ)); */
 		return;
 	}
 
 	/* virtual interrupt pending or interrupts in guest is blocked */
 	if (ctrl->int_ctl & SVM_INTR_CTRL_VIRQ &&
-	    svm->pending_vintr == intr_vec)
+	    svm->pending_vintr == intr_vec) {
+		KERN_DEBUG("INTR vec=%x is already pending.\n", intr_vec);
 		return;
+	}
 
-	KERN_DEBUG("Found fresh pending INTR: vec=%x.\n", intr_vec);
+	/* KERN_DEBUG("Found pending INTR: vec=%x.\n", intr_vec); */
 
 	if (ctrl->int_ctl & SVM_INTR_CTRL_VIRQ ||
 	    svm_intr_blocked(vmcb) == TRUE) {

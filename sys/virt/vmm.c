@@ -184,6 +184,9 @@ vmm_run_vm(struct vm *vm)
 		 *         }
 		 *      , which will halt the whole kernel when the if condition
 		 *      is satisfied.
+		 * XXX: Another solution is to declare exit_for_intr as volatile.
+		 *      CertiKOS uses both to prevent compilers doing
+		 *      unnecessary optimizations.
 		 */
 		while (vm->exit_for_intr == TRUE)
 			pause();

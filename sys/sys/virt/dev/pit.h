@@ -33,7 +33,9 @@ struct vpit_channel {
 	uint8_t		bcd; /* XXX: not implemented yet  */
 	uint8_t		gate;
 	uint64_t	count_load_time;
-	uint64_t	next_transition_time;
+
+	uint64_t	last_intr_time;
+	bool		last_intr_time_valid;
 
 	bool		enabled;
 };

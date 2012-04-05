@@ -164,13 +164,14 @@ svm_guest_intr_handler(struct vm *vm, uint8_t irq)
 {
 	KERN_ASSERT(vm != NULL && vm->exit_for_intr == TRUE);
 
-	/* struct svm *svm = (struct svm *) vm->cookie; */
-	/* struct vmcb *vmcb = svm->vmcb; */
-	/* struct vmcb_save_area *save = &vmcb->save; */
-
 	KERN_ASSERT(irq >= 0);
-	/* KERN_DEBUG("INTR %x happened in the guest (gIF=%x, hIF=%x).\n", */
-	/* 	   irq, (save->rflags & FL_IF), (read_eflags() & FL_IF)); */
+#ifdef DEBUG_VPIC
+	struct svm *svm = (struct svm *) vm->cookie;
+	struct vmcb *vmcb = svm->vmcb;
+	struct vmcb_save_area *save = &vmcb->save;
+	KERN_DEBUG("INTR %x happened in the guest (gIF=%x, hIF=%x).\n",
+		   irq, (save->rflags & FL_IF), (read_eflags() & FL_IF));
+#endif
 
 	if (vmm_handle_extintr(vm, irq)) {
 		/*

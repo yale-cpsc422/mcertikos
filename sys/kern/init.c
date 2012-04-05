@@ -92,7 +92,7 @@ kern_init(mboot_info_t *mbi)
 	KERN_INFO("Initialize TSC ... ");
 	if (tsc_init()) {
 		KERN_INFO("failed.\n");
-		halt();
+		KERN_WARN("System time will be inaccurate.\n");
 	}
 	KERN_INFO("done.\n");
 
