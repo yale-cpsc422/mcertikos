@@ -1,5 +1,18 @@
 # -*-Makefile-*-
 
+ifdef DEBUG_VPIC
+KERN_CFLAGS	+= -DDEBUG_VPIC
+endif
+
+ifdef DEBUG_VKBD
+KERN_CFLAGS	+= -DDEBUG_VKBD
+endif
+
+ifdef DEBUG_VPIT
+KERN_CFLAGS	+= -DDEBUG_VPIT
+endif
+
+
 KERN_SRCFILES	+= $(KERN_DIR)/virt/dev/kbd.c
 KERN_SRCFILES	+= $(KERN_DIR)/virt/dev/nvram.c
 KERN_SRCFILES	+= $(KERN_DIR)/virt/dev/pci.c

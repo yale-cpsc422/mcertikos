@@ -51,6 +51,7 @@ vdprintf(const char *fmt, va_list ap)
 int
 dprintf(const char *fmt, ...)
 {
+#ifdef DEBUG_MSG
 	va_list ap;
 	int cnt;
 
@@ -59,4 +60,7 @@ dprintf(const char *fmt, ...)
 	va_end(ap);
 
 	return cnt;
+#else
+	return 0;
+#endif
 }

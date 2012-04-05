@@ -17,6 +17,7 @@ debug_info(const char *fmt, ...)
 void
 debug_normal(const char *file, int line, const char *fmt, ...)
 {
+#ifdef DEBUG_MSG
 	va_list ap;
 	va_start(ap, fmt);
 	if (vmm_cur_vm() != NULL)
@@ -25,11 +26,13 @@ debug_normal(const char *file, int line, const char *fmt, ...)
 		dprintf("<D> %s:%d: ", file, line);
 	vdprintf(fmt, ap);
 	va_end(ap);
+#endif
 }
 
 void
 debug_panic(const char *file, int line, const char *fmt,...)
 {
+#ifdef DEBUG_MSG
 	va_list ap;
 
 	va_start(ap, fmt);
@@ -39,12 +42,14 @@ debug_panic(const char *file, int line, const char *fmt,...)
 		cprintf("<P> %s:%d: ", file, line);
 	vcprintf(fmt, ap);
 	va_end(ap);
+#endif
 	halt();
 }
 
 void
 debug_warn(const char *file, int line, const char *fmt,...)
 {
+#ifdef DEBUG_MSG
 	va_list ap;
 	va_start(ap, fmt);
 	if (vmm_cur_vm() != NULL)
@@ -53,4 +58,5 @@ debug_warn(const char *file, int line, const char *fmt,...)
 		cprintf("<W> %s:%d: ", file, line);
 	vcprintf(fmt, ap);
 	va_end(ap);
+#endif
 }

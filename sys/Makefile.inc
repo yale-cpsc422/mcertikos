@@ -4,11 +4,15 @@ KERN_DIR	:= sys
 KERN_OBJDIR	:= $(OBJDIR)/sys
 
 # Arch-independent compiling and linking options
-KERN_CFLAGS	:= $(CFLAGS) -D_KERN_ -O1 -I$(KERN_DIR) -I.
+KERN_CFLAGS	:= $(CFLAGS) -D_KERN_ -O2 -I$(KERN_DIR) -I.
 KERN_LDFLAGS	:= $(LDFLAGS) -e start
 
 ifdef SERIAL_DEBUG
 KERN_CFLAGS	+= -DSERIAL_DEBUG
+endif
+
+ifdef DEBUG_MSG
+KERN_CFLAGS	+= -DDEBUG_MSG
 endif
 
 # Sub-makefiles

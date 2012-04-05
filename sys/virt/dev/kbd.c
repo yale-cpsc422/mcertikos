@@ -1,4 +1,5 @@
 #include <sys/debug.h>
+#include <sys/gcc.h>
 #include <sys/string.h>
 #include <sys/types.h>
 #include <sys/trap.h>
@@ -10,6 +11,21 @@
 #include <sys/virt/dev/ps2.h>
 
 #include <dev/kbd.h>
+
+#ifdef DEUBG_VKBD
+
+#define vkbd_debug vkbd_debug
+
+#else
+
+static gcc_inline void
+vkbd_debug_foo(const char *fmt, ...)
+{
+}
+
+#define vkbd_debug vkbd_debug_foo
+
+#endif
 
 /* Keyboard Controller Commands */
 #define KBD_CCMD_READ_MODE	0x20	/* Read mode bits */
@@ -186,10 +202,10 @@ vkbd_queue(struct vkbd *vkbd, int b, int aux)
 	KERN_ASSERT(vkbd != NULL);
 
 	if (aux) {
-		KERN_DEBUG("Enqueue %x to AUX.\n", (uint8_t) b);
+		vkbd_debug("Enqueue %x to AUX.\n", (uint8_t) b);
 		ps2_queue(&vkbd->mouse.common, b);
 	} else {
-		KERN_DEBUG("Enqueue %x to KBD.\n", (uint8_t) b);
+		vkbd_debug("Enqueue %x to KBD.\n", (uint8_t) b);
 		ps2_queue(&vkbd->kbd.common, b);
 	}
 }
@@ -383,7 +399,7 @@ _vkbd_ioport_read(struct vm *vm, void *vkbd, uint32_t port, void *data)
 	else
 		*(uint8_t *) data = vkbd_read_data(vkbd);
 
-	/* KERN_DEBUG("port=%x, data=%x.\n", port, *(uint8_t *) data); */
+	/* vkbd_debug("Read port=%x, data=%x.\n", port, *(uint8_t *) data); */
 }
 
 static void
@@ -392,7 +408,7 @@ _vkbd_ioport_write(struct vm *vm, void *vkbd, uint32_t port, void *data)
 	KERN_ASSERT(vm != NULL && vkbd != NULL && data != NULL);
 	KERN_ASSERT(port == KBCMDP || port == KBDATAP);
 
-	/* KERN_DEBUG("port=%x, data=%x.\n", port, *(uint8_t *) data); */
+	/* vkbd_debug("Write port=%x, data=%x.\n", port, *(uint8_t *) data); */
 
 	if (port == KBDATAP)
 		vkbd_write_data(vkbd, *(uint8_t *) data);

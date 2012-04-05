@@ -8,7 +8,16 @@
 #include <dev/lapic.h>
 #include <dev/timer.h>
 
-#define LAPIC_TIMER_INTR_FREQ	10
+/*
+ * Set the timer interrupt to a lower frequency when debugging to make CertiKOS
+ * have enough time to output debugging messages between two consecutive timer
+ * interrupts.
+ */
+#ifdef DEBUG_MSG
+#define LAPIC_TIMER_INTR_FREQ	1
+#else
+#define LAPIC_TIMER_INTR_FREQ	100
+#endif
 
 volatile lapic_t *lapic;
 

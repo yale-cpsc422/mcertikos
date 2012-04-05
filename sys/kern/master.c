@@ -454,6 +454,9 @@ master_timer_handler(context_t *ctx)
 {
 	/* KERN_DEBUG("master_timer_handler\n"); */
 
+	if (vmm_cur_vm() == NULL)
+		KERN_INFO("master_timer_handler\n");
+
 	timer_handle_timeout();
 
 	struct vm *vm = vmm_cur_vm();

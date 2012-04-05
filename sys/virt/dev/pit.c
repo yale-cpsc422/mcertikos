@@ -1,4 +1,5 @@
 #include <sys/debug.h>
+#include <sys/gcc.h>
 #include <sys/spinlock.h>
 #include <sys/string.h>
 #include <sys/types.h>
@@ -7,6 +8,21 @@
 #include <sys/virt/vmm.h>
 #include <sys/virt/vmm_dev.h>
 #include <sys/virt/dev/pit.h>
+
+#ifdef DEBUG_VPIT
+
+#define vpit_debug KERN_DEBUG
+
+#else
+
+static gcc_inline void
+vpit_debug_foo(const char *foo, ...)
+{
+}
+
+#define vpit_debug vpit_debug_foo
+
+#endif
 
 #define PIT_CHANNEL_MODE_0	0	/* interrupt on terminal count */
 #define PIT_CHANNEL_MODE_1	1	/* hardware retriggerable one-shot */
@@ -310,7 +326,7 @@ vpit_load_count(struct vpit_channel *ch, uint16_t val)
 		count = 0x10000;
 	ch->count_load_time = vmm_rdtsc(ch->pit->vm);
 	ch->count = count;
-	KERN_DEBUG("[%llx] Set counter: %x.\n",
+	vpit_debug("[%llx] Set counter: %x.\n",
 		   ch->count_load_time, ch->count);
 	vpit_irq_timer_update(ch, ch->count_load_time);
 }
@@ -408,13 +424,13 @@ vpit_ioport_write(struct vpit *pit, uint32_t port, uint8_t data)
 				spinlock_acquire(&ch->lk);
 
 				if (!(data & 0x20)) { /* latch count */
-					KERN_DEBUG("Latch counter of channel %d.\n",
+					vpit_debug("Latch counter of channel %d.\n",
 						   i);
 					vpit_latch_count(ch);
 				}
 
 				if (!(data & 0x10)) { /* latch status */
-					KERN_DEBUG("Latch status of channel %d.\n",
+					vpit_debug("Latch status of channel %d.\n",
 						   i);
 
 					/* only latch once */
@@ -441,11 +457,11 @@ vpit_ioport_write(struct vpit *pit, uint32_t port, uint8_t data)
 			spinlock_acquire(&ch->lk);
 
 			if (rw == 0) { /* counter latch command */
-				KERN_DEBUG("Latch counter of channel %d.\n",
+				vpit_debug("Latch counter of channel %d.\n",
 					   channel);
 				vpit_latch_count(ch);
 			} else {
-				KERN_DEBUG("Set channel %d: RW=%x, Mode=%x.\n",
+				vpit_debug("Set channel %d: RW=%x, Mode=%x.\n",
 					   channel, rw, (data >> 1) & 7);
 				ch->rw_mode = rw;
 				ch->read_state = rw;
@@ -466,21 +482,21 @@ vpit_ioport_write(struct vpit *pit, uint32_t port, uint8_t data)
 		switch (ch->write_state) {
 		case PIT_RW_STATE_LSB:
 			/* load LSB only */
-			KERN_DEBUG("Load LSB to channel %d: %x.\n",
+			vpit_debug("Load LSB to channel %d: %x.\n",
 				   channel, data);
 			vpit_load_count(ch, data);
 			break;
 
 		case PIT_RW_STATE_MSB:
 			/* load MSB only */
-			KERN_DEBUG("Load MSB to channel %d: %x.\n",
+			vpit_debug("Load MSB to channel %d: %x.\n",
 				   channel, data);
 			vpit_load_count(ch, data << 8);
 			break;
 
 		case PIT_RW_STATE_WORD0:
 			/* load LSB first */
-			KERN_DEBUG("Load LSB to channel %d: %x.\n",
+			vpit_debug("Load LSB to channel %d: %x.\n",
 				   channel, data);
 			ch->write_latch = data;
 			ch->write_state = PIT_RW_STATE_WORD1;
@@ -488,7 +504,7 @@ vpit_ioport_write(struct vpit *pit, uint32_t port, uint8_t data)
 
 		case PIT_RW_STATE_WORD1:
 			/* load MSB then */
-			KERN_DEBUG("Load MSB to channel %d: %x.\n",
+			vpit_debug("Load MSB to channel %d: %x.\n",
 				   channel, data);
 			vpit_load_count(ch, ch->write_latch | (data << 8));
 			ch->write_state = PIT_RW_STATE_WORD0;
@@ -517,7 +533,7 @@ vpit_ioport_read(struct vpit *pit, uint32_t port)
 	spinlock_acquire(&ch->lk);
 
 	if (ch->status_latched) { /* read latched status byte */
-		KERN_DEBUG("Read status of channel %d: %x.\n",
+		vpit_debug("Read status of channel %d: %x.\n",
 			   channel, ch->status);
 		ch->status_latched = 0;
 		ret = ch->status;
@@ -525,7 +541,7 @@ vpit_ioport_read(struct vpit *pit, uint32_t port)
 		switch(ch->count_latched) {
 		case PIT_RW_STATE_LSB:
 			/* read LSB only */
-			KERN_DEBUG("Read LSB from channel %d: %x.\n",
+			vpit_debug("Read LSB from channel %d: %x.\n",
 				   channel, ch->latched_count & 0xff);
 			ret = ch->latched_count & 0xff;
 			ch->count_latched = 0;
@@ -533,7 +549,7 @@ vpit_ioport_read(struct vpit *pit, uint32_t port)
 
 		case PIT_RW_STATE_MSB:
 			/* read MSB only */
-			KERN_DEBUG("Read MSB from channel %d: %x.\n",
+			vpit_debug("Read MSB from channel %d: %x.\n",
 				   channel, ch->latched_count >> 8);
 			ret = ch->latched_count >> 8;
 			ch->count_latched = 0;
@@ -541,7 +557,7 @@ vpit_ioport_read(struct vpit *pit, uint32_t port)
 
 		case PIT_RW_STATE_WORD0:
 			/* read LSB first */
-			KERN_DEBUG("Read LSB from channel %d: %x.\n",
+			vpit_debug("Read LSB from channel %d: %x.\n",
 				   channel, ch->latched_count & 0xff);
 			ret = ch->latched_count & 0xff;
 			ch->count_latched = PIT_RW_STATE_MSB;
@@ -556,21 +572,21 @@ vpit_ioport_read(struct vpit *pit, uint32_t port)
 		case PIT_RW_STATE_LSB:
 			count = vpit_get_count(ch);
 			ret = count & 0xff;
-			KERN_DEBUG("Read LSB from channel %d: %x.\n",
+			vpit_debug("Read LSB from channel %d: %x.\n",
 				   channel, ret);
 			break;
 
 		case PIT_RW_STATE_MSB:
 			count = vpit_get_count(ch);
 			ret = (count >> 8) & 0xff;
-			KERN_DEBUG("Read MSB from channel %d: %x.\n",
+			vpit_debug("Read MSB from channel %d: %x.\n",
 				   channel, ret);
 			break;
 
 		case PIT_RW_STATE_WORD0:
 			count = vpit_get_count(ch);
 			ret = count & 0xff;
-			KERN_DEBUG("Read LSB from channel %d: %x.\n",
+			vpit_debug("Read LSB from channel %d: %x.\n",
 				   channel, ret);
 			ch->read_state = PIT_RW_STATE_WORD1;
 			break;
@@ -578,7 +594,7 @@ vpit_ioport_read(struct vpit *pit, uint32_t port)
 		case PIT_RW_STATE_WORD1:
 			count = vpit_get_count(ch);
 			ret = (count >> 8) & 0xff;
-			KERN_DEBUG("Read MSB from channel %d: %x.\n",
+			vpit_debug("Read MSB from channel %d: %x.\n",
 				   channel, ret);
 			ch->read_state = PIT_RW_STATE_WORD0;
 			break;
@@ -603,7 +619,7 @@ _vpit_ioport_read(struct vm *vm, void *pit, uint32_t port, void *data)
 
 	*(uint8_t *) data = vpit_ioport_read(pit, port);
 
-	/* KERN_DEBUG("Read: port=%x, data=%x.\n", port, *(uint8_t *) data); */
+	/* vpit_debug("Read: port=%x, data=%x.\n", port, *(uint8_t *) data); */
 }
 
 static void
@@ -613,7 +629,7 @@ _vpit_ioport_write(struct vm *vm, void *pit, uint32_t port, void *data)
 	KERN_ASSERT(port == PIT_CONTROL_PORT || port == PIT_CHANNEL0_PORT ||
 		    port == PIT_CHANNEL1_PORT || port == PIT_CHANNEL2_PORT);
 
-	/* KERN_DEBUG("Write: port=%x, data=%x.\n", port, *(uint8_t *) data); */
+	/* vpit_debug("Write: port=%x, data=%x.\n", port, *(uint8_t *) data); */
 
 	vpit_ioport_write(pit, port, *(uint8_t *) data);
 }
@@ -639,7 +655,7 @@ vpit_gate_ioport_read(struct vpit *pit)
 		(vpit_get_out(ch, current_time) << 5) | vpit_get_gate(pit, 2);
 	spinlock_release(&ch->lk);
 
-	/* KERN_DEBUG("[%llx] Read GATE of channel 2: %x\n", current_time, ret); */
+	/* vpit_debug("[%llx] Read GATE of channel 2: %x\n", current_time, ret); */
 
 	return ret;
 }
@@ -657,7 +673,7 @@ vpit_gate_ioport_write(struct vpit *pit, uint8_t data)
 {
 	KERN_ASSERT(pit != NULL);
 
-	/* KERN_DEBUG("[%llx] Set GATE of channel 2: gate=%x.\n", */
+	/* vpit_debug("[%llx] Set GATE of channel 2: gate=%x.\n", */
 	/* 	   vmm_rdtsc(pit->vm), data & 0x1); */
 
 	spinlock_acquire(&pit->channels[2].lk);
@@ -693,7 +709,7 @@ vpit_irq_timer_update(struct vpit_channel *ch, uint64_t current_time)
 	bool is_channel0 = (&ch->pit->channels[0] == ch) ? TRUE : FALSE;
 	if (ch->enabled == TRUE && is_channel0 == TRUE &&
 	    ch->next_transition_time <= current_time) {
-		int irq_level = vpit_get_out(ch, current_time);
+		int irq_level = vpit_get_out(ch, ch->next_transition_time);
 		vmm_set_vm_irq(ch->pit->vm, IRQ_TIMER, irq_level);
 	}
 
@@ -705,7 +721,7 @@ vpit_irq_timer_update(struct vpit_channel *ch, uint64_t current_time)
 						     &expired_time_valid);
 
 	if (expired_time_valid == TRUE) {
-		/* KERN_DEBUG("[%llx] Update timeout of channel %x to %llx.\n", */
+		/* vpit_debug("[%llx] Update timeout of channel %x to %llx.\n", */
 		/* 	   current_time, */
 		/* 	   (ch - ch->pit->channels)/sizeof(struct vpit_channel), */
 		/* 	   expired_time); */
@@ -713,7 +729,7 @@ vpit_irq_timer_update(struct vpit_channel *ch, uint64_t current_time)
 		ch->next_transition_time = expired_time;
 		ch->enabled = TRUE;
 	} else {
-		/* KERN_DEBUG("[%llx] Disable channel %x.\n", */
+		/* vpit_debug("[%llx] Disable channel %x.\n", */
 		/* 	   current_time, */
 		/* 	   (ch - ch->pit->channels)/sizeof(struct vpit_channel)); */
 		ch->enabled = FALSE;

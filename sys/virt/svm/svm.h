@@ -398,6 +398,7 @@ struct svm {
 
 	bool		single_step;
 	int		skip_intercept;
+	int		pending_vintr;
 };
 
 /* defined in svm_asm.S */

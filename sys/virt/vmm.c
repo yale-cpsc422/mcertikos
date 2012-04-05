@@ -213,7 +213,6 @@ void
 vmm_handle_intr(struct vm *vm, uint8_t irqno)
 {
 	KERN_ASSERT(vm != NULL);
-
 	vmm_ops->vm_intr_handle(vm, irqno);
 }
 

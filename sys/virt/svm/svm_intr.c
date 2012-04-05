@@ -37,6 +37,10 @@ svm_intr_blocked(struct vmcb *vmcb)
 	return FALSE;
 }
 
+/*
+ * Inject pending interrupts to the guest according to the interrupt setup of
+ * the guest.
+ */
 void
 svm_intr_assist(struct vm *vm)
 {
@@ -50,19 +54,29 @@ svm_intr_assist(struct vm *vm)
 	int intr_vec;
 
 	/* no interrupt pending */
-	if ((intr_vec = vpic_get_irq(pic)) == -1)
+	if ((intr_vec = vpic_get_irq(pic)) == -1) {
+		KERN_ASSERT(!(ctrl->int_ctl & SVM_INTR_CTRL_VIRQ));
 		return;
+	}
 
 	/* virtual interrupt pending or interrupts in guest is blocked */
+	if (ctrl->int_ctl & SVM_INTR_CTRL_VIRQ &&
+	    svm->pending_vintr == intr_vec)
+		return;
+
+	KERN_DEBUG("Found fresh pending INTR: vec=%x.\n", intr_vec);
+
 	if (ctrl->int_ctl & SVM_INTR_CTRL_VIRQ ||
 	    svm_intr_blocked(vmcb) == TRUE) {
 		/* XXX: is the priority correct? */
 		svm_inject_vintr(vmcb, 0, intr_vec >> 4);
+		svm->pending_vintr = intr_vec;
 		set_intercept(vmcb, INTERCEPT_VINTR, TRUE);
 		return;
 	}
 
 	intr_vec = vpic_read_irq(pic);
 	svm_inject_event(vmcb, SVM_EVTINJ_TYPE_INTR, intr_vec, FALSE, 0);
+	svm->pending_vintr = -1;
 	set_intercept(vmcb, INTERCEPT_VINTR, FALSE);
 }

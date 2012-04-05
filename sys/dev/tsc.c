@@ -75,7 +75,7 @@ tsc_init(void)
 	 * XXX: If TSC calibration fails frequently, try to increase the
 	 *      upperbound of loop condition, e.g. alternating 3 to 10.
 	 */
-	for (i = 0; i < 25; i++) {
+	for (i = 0; i < 3; i++) {
 		ret = tsc_calibrate(CAL_LATCH, CAL_MS, CAL_PIT_LOOPS);
 		if (ret != ~(uint64_t) 0x0)
 			break;

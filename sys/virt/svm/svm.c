@@ -456,6 +456,8 @@ vm_init(struct vm *vm)
 	svm->enter_tsc = 0x0;
 	svm->exit_tsc = 0xffffffffffffffff;
 
+	svm->pending_vintr = -1;
+
 	return 0;
 }
 
@@ -514,6 +516,7 @@ svm_handle_exit(struct vm *vm)
 	case SVM_EXIT_INTR:
 		/* kernel interrupt handlers should come before here */
 		/* dprintf("VMEXIT for INTR (post).\n"); */
+		KERN_ASSERT(vm->exit_for_intr == FALSE);
 		handled = svm_handle_intr(vm);
 		break;
 

@@ -38,6 +38,8 @@ svm_inject_event(struct vmcb *vmcb,
 
 	struct vmcb_control_area *ctrl = &vmcb->control;
 
+	KERN_ASSERT((ctrl->event_inj & SVM_EVTINJ_VALID) == 0);
+
 	ctrl->event_inj =
 		SVM_EVTINJ_VALID |
 		((type << SVM_EVTINJ_TYPE_SHIFT) & SVM_EVTINJ_TYPE_MASK) |
