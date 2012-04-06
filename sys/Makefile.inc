@@ -7,15 +7,8 @@ KERN_OBJDIR	:= $(OBJDIR)/sys
 KERN_CFLAGS	:= $(CFLAGS) -D_KERN_ -O2 -I$(KERN_DIR) -I.
 KERN_LDFLAGS	:= $(LDFLAGS) -e start
 
-ifdef SERIAL_DEBUG
-KERN_CFLAGS	+= -DSERIAL_DEBUG
-endif
-
-ifdef DEBUG_MSG
-KERN_CFLAGS	+= -DDEBUG_MSG
-endif
-
 # Sub-makefiles
+include		$(KERN_DIR)/config.mk
 include		$(KERN_DIR)/arch/Makefile.inc
 include		$(KERN_DIR)/dev/Makefile.inc
 include		$(KERN_DIR)/kern/Makefile.inc

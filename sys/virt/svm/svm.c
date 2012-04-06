@@ -500,24 +500,21 @@ svm_handle_exit(struct vm *vm)
 
 	bool handled = FALSE;
 
-	if (ctrl->exit_code != SVM_EXIT_IOIO &&
-	    ctrl->exit_code != SVM_EXIT_CPUID &&
-#ifndef DEBUG_VPIC
-	    ctrl->exit_code != SVM_EXIT_INTR &&
-#endif
-	    ctrl->exit_code != SVM_EXIT_RDTSC)
-		KERN_DEBUG("[%x:%llx] ",
-			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
-
 	switch (ctrl->exit_code) {
 	case SVM_EXIT_EXCP_BASE ... (SVM_EXIT_INTR-1):
+#ifdef DEBUG_GUEST_EXCEPT
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for EXCP ");
+#endif
 		handled = svm_handle_exception(vm);
 		break;
 
 	case SVM_EXIT_INTR:
 		/* kernel interrupt handlers should come before here */
-#ifdef DEBUG_VPIC
+#ifdef DEBUG_GUEST_INTR
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for INTR (post).\n");
 #endif
 		KERN_ASSERT(vm->exit_for_intr == FALSE);
@@ -525,46 +522,78 @@ svm_handle_exit(struct vm *vm)
 		break;
 
 	case SVM_EXIT_VINTR:
+#ifdef DEBUG_GUEST_VINTR
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for VINTR.\n");
+#endif
 		handled = svm_handle_vintr(vm);
 		break;
 
 	case SVM_EXIT_IOIO:
-		/* dprintf("VMEXIT for IO"); */
+#ifdef DEBUG_GUEST_IOIO
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
+		dprintf("VMEXIT for IO");
+#endif
 		handled = svm_handle_ioio(vm);
 		break;
 
 	case SVM_EXIT_NPF:
+#ifdef DEBUG_GUEST_NPF
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for NPF");
+#endif
 		handled = svm_handle_npf(vm);
 		break;
 
 	case SVM_EXIT_CPUID:
-		/* dprintf("VMEXIT for cpuid"); */
+#ifdef DEBUG_GUEST_CPUID
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
+		dprintf("VMEXIT for cpuid");
+#endif
 		handled = svm_handle_cpuid(vm);
 		break;
 
 	case SVM_EXIT_SWINT:
+#ifdef DEBUG_GUEST_SWINT
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for INTn.\n");
+#endif
 		handled = svm_handle_swint(vm);
 		break;
 
 	case SVM_EXIT_RDTSC:
-		/* dprintf("VMEXIT for RDTSC.\n"); */
+#ifdef DEBUG_GUEST_TSC
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
+		dprintf("VMEXIT for RDTSC.\n");
+#endif
 		handled = svm_handle_rdtsc(vm);
 		break;
 
 	case SVM_EXIT_RDTSCP:
+#ifdef DEBUG_GUEST_TSC
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for RDTSCP.\n");
+#endif
 		handled = svm_handle_rdtscp(vm);
 		break;
 
 	case SVM_EXIT_ERR:
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for invalid guest state in VMCB.\n");
 		handled = svm_handle_err(vm);
 		break;
 
 	default:
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		KERN_PANIC("Unhandled VMEXIT: exit_code = %x.\n",
 			   ctrl->exit_code);
 	}

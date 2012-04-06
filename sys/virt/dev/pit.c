@@ -21,7 +21,6 @@ vpit_debug_foo(const char *foo, ...)
 }
 
 #define vpit_debug vpit_debug_foo
-
 #endif
 
 #define PIT_CHANNEL_MODE_0	0	/* interrupt on terminal count */

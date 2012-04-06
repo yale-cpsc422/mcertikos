@@ -14,7 +14,7 @@
  * interrupts.
  */
 #ifdef DEBUG_MSG
-#define LAPIC_TIMER_INTR_FREQ	1
+#define LAPIC_TIMER_INTR_FREQ	10
 #else
 #define LAPIC_TIMER_INTR_FREQ	100
 #endif

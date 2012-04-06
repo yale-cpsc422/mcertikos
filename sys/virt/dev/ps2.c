@@ -74,7 +74,6 @@ ps2_queue(struct PS2 *ps2, int b)
 
 	if (q->count >= PS2_QUEUE_SIZE)
 		return;
-	/* KERN_DEBUG("Enqueue %x to PS2.\n", (uint8_t) b); */
 	q->data[q->wptr] = b;
 	if (++q->wptr == PS2_QUEUE_SIZE)
 		q->wptr = 0;

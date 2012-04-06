@@ -3,15 +3,9 @@
 #
 
 ifndef V
-V := @
+V		:= @
 else
-V :=
-endif
-
-ifdef SERIAL_DEBUG
-SERIAL_DEBUG	:= 1
-else
-SERIAL_DEBUG	:=
+V		:=
 endif
 
 ARCH		:= i386
