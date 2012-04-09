@@ -1,5 +1,7 @@
 # -*-Makefile-*-
 
+OBJDIRS		+= $(KERN_OBJDIR)/lib
+
 KERN_SRCFILES	+= $(KERN_DIR)/lib/string.c
 KERN_SRCFILES	+= $(KERN_DIR)/lib/cprintf.c
 KERN_SRCFILES	+= $(KERN_DIR)/lib/dprintf.c

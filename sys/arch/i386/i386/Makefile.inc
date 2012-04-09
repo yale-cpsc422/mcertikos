@@ -1,5 +1,7 @@
 # -*-Makefile-*-
 
+OBJDIRS		+= $(ARCH_OBJDIR)/i386
+
 KERN_SRCFILES	+= $(ARCH_DIR)/i386/entry.S
 KERN_SRCFILES	+= $(ARCH_DIR)/i386/pcpu.c
 KERN_SRCFILES	+= $(ARCH_DIR)/i386/pcpu_mp.c

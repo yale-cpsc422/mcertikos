@@ -1,5 +1,7 @@
 # -*-Makefile-*-
 
+OBJDIRS		+= $(KERN_OBJDIR)/virt/svm
+
 KERN_SRCFILES	+= $(KERN_DIR)/virt/svm/svm.c
 KERN_SRCFILES	+= $(KERN_DIR)/virt/svm/svm_asm.S
 KERN_SRCFILES	+= $(KERN_DIR)/virt/svm/svm_handle.c

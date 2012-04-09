@@ -1,5 +1,7 @@
 # -*-Makefile-*-
 
+OBJDIRS		+= $(USER_OBJDIR)/lib
+
 USER_LIB_SRC	+= $(USER_DIR)/lib/string.c
 USER_LIB_SRC	+= $(USER_DIR)/lib/printf.c
 USER_LIB_SRC	+= $(USER_DIR)/lib/printfmt.c

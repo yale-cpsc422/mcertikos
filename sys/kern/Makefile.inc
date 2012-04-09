@@ -1,5 +1,7 @@
 # -*-Makefile-*-
 
+OBJDIRS		+= $(KERN_OBJDIR)/kern
+
 KERN_SRCFILES	+= $(KERN_DIR)/kern/init.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/console.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/pcpu.c

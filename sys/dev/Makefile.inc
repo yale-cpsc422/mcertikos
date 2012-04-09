@@ -1,5 +1,7 @@
 # -*-Makefile-*-
 
+OBJDIRS		+= $(KERN_OBJDIR)/dev
+
 KERN_SRCFILES	+= $(KERN_DIR)/dev/video.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/kbd.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/serial.c

@@ -1,5 +1,7 @@
 # -*-Makefile-*-
 
+OBJDIRS		+= $(KERN_OBJDIR)/virt
+
 KERN_SRCFILES	+= $(KERN_DIR)/virt/vmm.c
 KERN_SRCFILES	+= $(KERN_DIR)/virt/vmm_dev.c
 

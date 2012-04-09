@@ -16,10 +16,11 @@ SRCDIR		:= $(TOP)
 OBJDIR		:= $(TOP)/obj
 UTILSDIR	:= $(TOP)/misc
 TESTDIR		:= $(TOP)/test
+OBJDIRS		:=
 
 # Compiler and Linker
 LD		:= ld
-CFLAGS		:= -Wall -Werror -Wno-strict-aliasing -Wno-unused-function -pipe -fno-builtin -nostdinc -fno-stack-protector
+CFLAGS		:= -MD -Wall -Werror -Wno-strict-aliasing -Wno-unused-function -pipe -fno-builtin -nostdinc -fno-stack-protector
 LDFLAGS		:= -nostdlib
 ifndef CLANG_CC
 CC		:= gcc
@@ -59,7 +60,7 @@ QEMUOPTS_BIOS	:= -L $(UTILSDIR)/qemu/
 
 # Targets
 
-.PHONY: all boot dev kern lib sys user
+.PHONY: all boot dev kern lib sys user deps
 
 all: boot sys user
 	@echo "All targets are done."
@@ -92,10 +93,18 @@ cscope:
 	$(V)find . -name "*.[chsS]" > cscope.files
 	$(V)cscope -bkq -i cscope.files
 
-clean:
-	$(V)rm -rf $(OBJDIR)
-
 # Sub-makefiles
 include boot/Makefile.inc
 include user/Makefile.inc
 include sys/Makefile.inc
+
+deps: $(OBJDIR)/.deps
+
+$(OBJDIR)/.deps: $(foreach dir, $(OBJDIRS), $(wildcard $(dir)/*.d))
+	$(V)mkdir -p $(@D)
+	$(V)$(PERL) $(UTILSDIR)/mergedep.pl $@ $^
+
+-include $(OBJDIR)/.deps
+
+clean:
+	$(V)rm -rf $(OBJDIR)

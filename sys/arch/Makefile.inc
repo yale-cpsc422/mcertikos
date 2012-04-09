@@ -4,6 +4,8 @@ ARCH_DIR	:= $(KERN_DIR)/arch/$(ARCH)
 ARCH_OBJDIR	:= $(KERN_OBJDIR)/arch/$(ARCH)
 ARCH_HEADERS	:= $(OBJDIR)/headers/machine
 
+OBJDIRS		+= $(ARCH_OBJDIR)
+
 KERN_CFLAGS	+= -I$(OBJDIR)/headers
 
 include		$(ARCH_DIR)/Makefile.inc
