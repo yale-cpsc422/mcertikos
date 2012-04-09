@@ -135,6 +135,7 @@ kern_init_ap(void (*f)(void))
 	pcpu_init_cpu();
 	intr_init();
 
+	pmap_init();
 	c->booted = TRUE;
 	f();
 }

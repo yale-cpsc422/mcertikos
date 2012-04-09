@@ -1,12 +1,19 @@
-#ifndef _USER_STDARG_H_
-#define _USER_STDARG_H_
+/*	$NetBSD: stdarg.h,v 1.12 1995/12/25 23:15:31 mycroft Exp $	*/
 
-typedef __builtin_va_list       va_list;
+#ifndef USER_INC_STDARG_H
+#define	USER_INC_STDARG_H
 
-#define va_start(ap, last)	__builtin_va_start((ap), (last))
+typedef char *va_list;
 
-#define va_arg(ap, type)	__builtin_va_arg((ap), type)
+#define	__va_size(type) \
+	(((sizeof(type) + sizeof(long) - 1) / sizeof(long)) * sizeof(long))
 
-#define va_end(ap)		__builtin_va_end(ap)
+#define	va_start(ap, last) \
+	((ap) = (va_list)&(last) + __va_size(last))
 
-#endif /* !_USER_STDARG_H_ */
+#define	va_arg(ap, type) \
+	(*(type *)((ap) += __va_size(type), (ap) - __va_size(type)))
+
+#define	va_end(ap)	((void)0)
+
+#endif	/* !USER_INC_STDARG_H */

@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <sys/vm.h>
 #include <sys/x86.h>
+#include <sys/master.h>
 
 #include <sys/virt/vmm.h>
 
@@ -25,6 +26,11 @@ extern uint8_t _binary___obj_user_mgmt_mgmt_size[];
 static pid_t mgmt_pid;
 
 static uint8_t master_buf[PAGE_SIZE];
+uint32_t  time=0;
+
+//volatile kstack stacks[MAX_CPU];
+volatile cpu_use cpus[MAX_CPU];
+
 
 /*
  * Copy data from user's virtual address space to kernel's virtual address
@@ -256,15 +262,17 @@ master_syscall_handler(context_t *ctx)
 		{context_arg2(ctx), context_arg3(ctx), context_arg4(ctx)};
 
 	switch (cmd) {
-	case SYSCALL_PUTC:
+	case SYSCALL_PUTS:
 		if (copy_from_user(master_buf,
-				   (char *) args[0], sizeof(char)) == NULL) {
+				   (char *) args[0], PAGE_SIZE)== NULL) {
 			master_syscall_fail(ctx);
 			memset(master_buf, 0, sizeof(char));
 			return 1;
 		}
-
-		cprintf("%c", *(char *) master_buf);
+	
+		master_buf[PAGE_SIZE-1]=0;
+		//cprintf("%c", *(char *) master_buf);
+		cprintf("%s", master_buf);
 
 		memset(master_buf, 0, sizeof(char));
 
@@ -277,8 +285,7 @@ master_syscall_handler(context_t *ctx)
 		 * args[0]: none;
 		 *         the address where the character would be stored.
 		 */
-		*(char *) master_buf = getchar();
-
+		*(char *) master_buf = getchar(); 
 		if (copy_to_user((char *) args[0],
 				 master_buf, sizeof(char)) == NULL) {
 			master_syscall_fail(ctx);
@@ -364,7 +371,10 @@ master_syscall_handler(context_t *ctx)
 		uintptr_t binary = *(uintptr_t *) master_buf;
 		memset(master_buf, 0x0, sizeof(uintptr_t));
 
+		KERN_DEBUG("SYSCALL_LOAD: binary:%x.\n", binary);
 		pid_t pid = proc_new(binary);
+		KERN_DEBUG("proc created");
+
 		if (pid == 0) {
 			KERN_DEBUG("SYSCALL_LOAD: Cannot create a new process.\n");
 			master_syscall_fail(ctx);
@@ -384,7 +394,7 @@ master_syscall_handler(context_t *ctx)
 
 		break;
 
-	case SYSCALL_SETUPVM:
+	case SYSCALL_STARTUPVM:
 		/*
 		 * Setup and start a VM.
 		 */
@@ -417,6 +427,24 @@ master_syscall_handler(context_t *ctx)
 			memset(master_buf, 0x0, sizeof(mgmt_data_t));
 			return 1;
 		}
+/*
+		mgmt_data_t* data = (mgmt_data_t*) master_buf;
+		switch (data->command) {
+                                case MGMT_START:
+                                        mgmt_start(ctx, (mgmt_start_t*)(&data->params));
+                                        break;
+
+                                case MGMT_STOP:
+                                        mgmt_stop(ctx, (mgmt_stop_t*)(&data->params));
+                                        break;
+                                case MGMT_ALLOCPAGE:
+                                        uint32_t result=mgmt_allocpage(ctx, (mgmt_allocpage_t*)(&data->params));
+                                        break;
+                                default:
+                                        cprintf("Unknown MGMT syscall\n");
+                                        break;
+		}
+*/
 
 		memset(master_buf, 0x0, sizeof(mgmt_data_t));
 
@@ -435,6 +463,7 @@ master_timer_handler(context_t *ctx)
 {
 	/* KERN_DEBUG("master_timer_handler\n"); */
 
+	time ++;
 	struct vm *vm = vmm_cur_vm();
 	bool from_guest =
 		(vm != NULL && vm->exit_for_intr == TRUE) ? TRUE : FALSE;

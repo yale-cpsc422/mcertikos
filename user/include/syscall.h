@@ -3,12 +3,13 @@
 
 #include <gcc.h>
 #include <types.h>
-
+#include <sys/sys/syscall.h>
 /* must be identity to T_SYSCALL defined in sys/arch/xxx/include/trap.h */
-#define T_SYSCALL		48
+//#define T_SYSCALL		48
 
 /* must be identity to those defined in sys/sys/user.h */
-#define SYSCALL_PUTC		1
+/*
+#define SYSCALL_PUTS		1
 #define SYSCALL_GETC		2
 #define SYSCALL_NCPU		3
 #define SYSCALL_CPUSTAT		4
@@ -17,12 +18,13 @@
 #define SYSCALL_LOAD		7
 #define SYSCALL_MGMT		8
 #define SYSCALL_STARTUPVM		9
+*/
 
 /* must be identity to those defined in sys/sys/user.h */
 #define MGMT_START		1
 #define MGMT_STOP		2
 #define MGMT_ALLOCA_PAGE	3
-
+/*
 static void gcc_inline
 sys_putc(const char *c)
 {
@@ -31,6 +33,14 @@ sys_putc(const char *c)
 		       "a" (SYSCALL_PUTC),
 		       "b" (c)
 		     : "cc", "memory");
+}
+*/
+static void gcc_inline sys_puts(const char *s) {
+    asm volatile("int %0" :
+            : "i" (T_SYSCALL),
+              "a" (SYSCALL_PUTS),
+              "b" (s)
+            : "cc", "memory");
 }
 
 static int gcc_inline

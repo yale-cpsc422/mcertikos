@@ -20,6 +20,41 @@ enum {
 #define ARGS_NUM	2
 #define ARG_SIZE	32
 
+#define MAX_PROG 10
+#define MAX_PROGNAME 50
+#define MAX_PROCS 50
+
+//bounded client pplications named by their paths
+extern uint8_t _binary___obj_client_client1_client1_start[];
+extern uint8_t _binary___obj_client_vmclient_vmclient_start[];
+extern uint8_t _binary___obj_client_evilclient_evilclient_start[];
+
+struct program {
+        char progname[MAX_PROGNAME];
+        uint8_t * prog_ptr;
+};
+
+struct program programs[] =
+{
+        {"client1", _binary___obj_client_client1_client1_start},
+        {"vmclient", _binary___obj_client_vmclient_vmclient_start},
+        {"evilclient", _binary___obj_client_evilclient_evilclient_start},
+        {"", (uint8_t *)0}
+};
+
+static int prog_num = 3;
+//static int waiting_for_input;
+
+struct proc_info {
+        uint32_t pid; // 0 = empty  
+        char progname[MAX_PROGNAME];
+        int cpu; // -1 = not active};
+};
+
+static struct proc_info procs[MAX_PROCS];
+//static int cpu_procs[255]; // stores the proc_index of the process running on that CPU
+
+
 struct cmd_table_t {
 	cmd_t	cmd;
 	char	cmd_string[CMD_LEN];
@@ -206,13 +241,47 @@ exec_cmd()
 	case CMD_STARTVM:
 		printf("Start VM ... \n");
 		sys_startupvm();
-
 		break;
 
 	case CMD_LOAD:
+		printf("Loading ... \n");
+		int program_idx;
+		program_idx=  * (int *)parse_result.arg[0];
+		printf("arg0:%d,arg1:%d",*(int * )parse_result.arg[0],*(int * )parse_result.arg[1]);
+		printf("program_idx:%d",program_idx);
+		if (!(0<=program_idx && program_idx < prog_num)) {
+                   printf("Program number %d does not exist\n", program_idx);
+                   return;
+                }
+                // search for an empty proc entry
+                int proc_index;
+                for (proc_index=0;proc_index < MAX_PROCS; proc_index++) {
+                        if (!procs[proc_index].pid) break;
+                }
+                if (proc_index == MAX_PROCS) {
+                        printf("Management program can not handle any more processes (max %d)\n", MAX_PROCS);
+                        return;
+                }
+
+         	printf("Loading program %s\n", programs[program_idx].progname);
+                
+		sys_load((uintptr_t )programs[program_idx].prog_ptr, &procs[proc_index].pid);
+
+                if (procs[proc_index].pid) {
+                        strncpy(procs[proc_index].progname, programs[program_idx].progname, MAX_PROGNAME);
+                        procs[proc_index].cpu = -1;
+                        printf("Program loaded, pid %d\n", procs[proc_index].pid);
+                }
+                else {
+                        printf("Failed to load the program\n");
+                }
+	
+		break;
 	case CMD_START:
+		printf("Starting ... \n");
+		break;
 	case CMD_STOP:
-		printf("Not implement yet.\n");
+		printf("Stopping ...\n");
 		break;
 
 	default:

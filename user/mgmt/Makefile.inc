@@ -11,9 +11,10 @@ USER_BINFILES	+= $(USER_OBJDIR)/mgmt/mgmt
 
 mgmt: $(USER_OBJDIR)/mgmt/mgmt
 
-$(USER_OBJDIR)/mgmt/mgmt: $(USER_LIB_OBJ) $(USER_MGMT_OBJ)
+$(USER_OBJDIR)/mgmt/mgmt: $(USER_LIB_OBJ) $(USER_MGMT_OBJ) $(OBJDIR)/client/client1/client1 \
+	$(OBJDIR)/client/evilclient/evilclient $(OBJDIR)/client/vmclient/vmclient
 	@echo + ld[USER/mgmt] $@
-	$(V)$(LD) -o $@ $(USER_LDFLAGS) $(USER_LIB_OBJ) $(USER_MGMT_OBJ) $(GCC_LIBS)
+	$(V)$(LD) -o $@ $(USER_LDFLAGS) $(USER_LIB_OBJ) $(USER_MGMT_OBJ) $(GCC_LIBS) -b binary $(OBJDIR)/client/client1/client1 $(OBJDIR)/client/evilclient/evilclient $(OBJDIR)/client/vmclient/vmclient
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym
 

@@ -10,6 +10,13 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <syscall.h>
+/*
+#include <client/gcc.h>
+#include <client/types.h>
+#include <client/stdarg.h>
+#include <client/stdio.h>
+#include <client/syscall.h>
+*/
 // Collect up to MAX_BUF-1 characters into a buffer
 // and perform ONE system call to print all of them,
 // in order to make the lines output to the console atomic
@@ -21,38 +28,22 @@ struct printbuf {
 	char buf[MAX_BUF];
 };
 
-void putc(char c) {
-	char echo[2];
-	echo[1]=0;
-	echo[0] = c;
-	puts(echo);
-}
-
-
-void puts(const char *str) {
-	sys_puts(str);
-}
-
 
 void gets(char* buf, int size) {
 	int num = 0;
 	char c=0;
+	char echo[2];
+	echo[1]=0;
     while(num < (size-1)) {
 		c=0;
 		while ((c = getc()) == 0);
-		if (c >= ' ') {
-			putc(c);
-			buf [num++] = c;
-		}
+		echo[0] = c;
+		puts(echo);
 		if (c == '\n' || c == '\r') {
-			putc('\n');
 			buf[num] = 0;
 			return;
 		}
-		if (c == '\b' && num > 0) {
-			num--;
-			putc('\b');
-		}
+		buf [num++] = c;
 	}
 	buf[size-1]=0;
 	return;
@@ -70,15 +61,15 @@ putch(int ch, struct printbuf *b)
 	b->cnt++;
 }
 
-struct printbuf b;
 int
 vprintf(const char *fmt, va_list ap)
 {
+	struct printbuf b;
 
 	b.idx = 0;
 	b.cnt = 0;
 	vprintfmt((void*)putch, &b, fmt, ap);
-	
+
 	b.buf[b.idx] = 0;
 	puts(b.buf);
 
