@@ -188,8 +188,10 @@ svm_guest_intr_handler(struct vm *vm, uint8_t irq)
 		 * If there is no handler for this interrupt, then inject the
 		 * interrupt to the guest.
 		 */
-		if (vpic_is_ready(&vm->vpic) == TRUE)
+		if (vpic_is_ready(&vm->vpic) == TRUE) {
+			vpic_set_irq(&vm->vpic, irq, 0);
 			vpic_set_irq(&vm->vpic, irq, 1);
+		}
 	}
 
 	vm->exit_for_intr = FALSE;

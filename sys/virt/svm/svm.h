@@ -16,6 +16,8 @@
 #include <sys/gcc.h>
 #include <sys/types.h>
 
+#include <sys/virt/vmm.h>
+
 enum {
 	INTERCEPT_INTR,
 	INTERCEPT_NMI,
@@ -404,7 +406,7 @@ struct svm {
 /* defined in svm_asm.S */
 extern void svm_run(struct svm *);
 
-void set_intercept_ioio(struct vmcb *, uint32_t port, bool enable);
+void set_intercept_ioio(struct vmcb *, uint32_t port, data_sz_t, bool enable);
 void set_intercept_rdmsr(struct vmcb *, uint64_t msr, bool enable);
 void set_intercept_wrmsr(struct vmcb *, uint64_t msr, bool enable);
 void set_intercept(struct vmcb *, int bit, bool enable);

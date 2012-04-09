@@ -5,87 +5,46 @@
 #include <sys/virt/vmm_dev.h>
 #include <sys/virt/dev/pci.h>
 
-static void _vpci_read_cmd_port(struct vm *, void *, uint32_t, void *);
-static void _vpci_write_cmd_port(struct vm *, void *, uint32_t, void *);
-static void _vpci_read_data_port(struct vm *, void *, uint32_t, void *);
-static void _vpci_write_data_port(struct vm *, void *, uint32_t, void *);
+static void
+_vpci_ioport_read(struct vm *vm, void *vpci, uint32_t port, void *data)
+{
+	KERN_ASSERT(port >= PCI_CMD_PORT && port < PCI_DATA_PORT+4);
+	KERN_ASSERT(data != NULL);
+
+	*(uint32_t *) data = 0xffffffff;
+}
+
+static void
+_vpci_ioport_write(struct vm *vm, void *vpci, uint32_t port, void *data)
+{
+	KERN_ASSERT(port >= PCI_CMD_PORT && port < PCI_DATA_PORT+4);
+	KERN_ASSERT(data != NULL);
+}
 
 void vpci_init(struct vpci *vpci, struct vm *vm)
 {
 	KERN_ASSERT(vpci != NULL && vm != NULL);
 
-	vmm_iodev_register_read(vm, vpci,
-				PCI_CMD_PORT, SZ32, _vpci_read_cmd_port);
-	vmm_iodev_register_write(vm, vpci,
-				 PCI_CMD_PORT, SZ32, _vpci_write_cmd_port);
-	vmm_iodev_register_read(vm, vpci,
-				PCI_DATA_PORT, SZ32, _vpci_read_data_port);
-	vmm_iodev_register_write(vm, vpci,
-				 PCI_DATA_PORT, SZ32, _vpci_write_data_port);
-	vmm_iodev_register_read(vm, vpci,
-				PCI_DATA_PORT, SZ16, _vpci_read_data_port);
-	vmm_iodev_register_write(vm, vpci,
-				 PCI_DATA_PORT, SZ16, _vpci_write_data_port);
-	vmm_iodev_register_read(vm, vpci,
-				PCI_DATA_PORT, SZ8, _vpci_read_data_port);
-	vmm_iodev_register_write(vm, vpci,
-				 PCI_DATA_PORT, SZ8, _vpci_write_data_port);
-}
+	uint32_t port;
 
-static uint32_t
-vpci_read_cmd_port(void)
-{
-	return 0xffffffff;
-}
+	for (port = PCI_CMD_PORT; port < PCI_DATA_PORT+4; port++) {
+		vmm_iodev_register_read(vm, vpci,
+					port, SZ8, _vpci_ioport_read);
+		vmm_iodev_register_write(vm, vpci,
+					 port, SZ8, _vpci_ioport_write);
 
-static void
-vpci_write_cmd_port(uint32_t data)
-{
-}
+		if (PCI_DATA_PORT+4-port > 1) {
+			vmm_iodev_register_read(vm, vpci,
+						port, SZ16, _vpci_ioport_read);
+			vmm_iodev_register_write(vm, vpci,
+						 port, SZ16, _vpci_ioport_write);
+		}
 
-static uint32_t
-vpci_read_data_port(void)
-{
-	return 0xffffffff;
-}
-
-static void
-vpci_write_data_port(uint32_t data)
-{
-}
-
-static void
-_vpci_read_cmd_port(struct vm *vm, void *vpci, uint32_t port, void *data)
-{
-	KERN_ASSERT(port == PCI_CMD_PORT);
-	KERN_ASSERT(data != NULL);
-
-	*(uint32_t *) data = vpci_read_cmd_port();
-}
-
-static void
-_vpci_write_cmd_port(struct vm *vm, void *vpci, uint32_t port, void *data)
-{
-	KERN_ASSERT(port == PCI_CMD_PORT);
-	KERN_ASSERT(data != NULL);
-
-	vpci_write_cmd_port(*(uint32_t *) data);
-}
-
-static void
-_vpci_read_data_port(struct vm *vm, void *vpci, uint32_t port, void *data)
-{
-	KERN_ASSERT(port == PCI_DATA_PORT);
-	KERN_ASSERT(data != NULL);
-
-	*(uint32_t *) data = vpci_read_data_port();
-}
-
-static void
-_vpci_write_data_port(struct vm *vm, void *vpci, uint32_t port, void *data)
-{
-	KERN_ASSERT(port == PCI_DATA_PORT);
-	KERN_ASSERT(data != NULL);
-
-	vpci_write_data_port(*(uint32_t *) data);
+		if (PCI_DATA_PORT+4-port > 2) {
+			vmm_iodev_register_read(vm, vpci,
+						port, SZ32, _vpci_ioport_read);
+			vmm_iodev_register_write(vm, vpci,
+						 port, SZ32, _vpci_ioport_write);
+		}
+	}
 }

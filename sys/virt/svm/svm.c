@@ -198,19 +198,25 @@ alloc_permission_map(size_t size)
 }
 
 void
-set_intercept_ioio(struct vmcb *vmcb, uint32_t port, bool enable)
+set_intercept_ioio(struct vmcb *vmcb, uint32_t port, data_sz_t size, bool enable)
 {
 	KERN_ASSERT(vmcb != NULL);
 
 	uint32_t *iopm = (uint32_t *)(uintptr_t) vmcb->control.iopm_base_pa;
 
-	int entry = port / 32;
-	int bit = port - entry * 32;
+	int i;
+	int port1, entry, bit;
 
-	if (enable)
-		iopm[entry] |= (1 << bit);
-	else
-		iopm[entry] &= ~(1 << bit);
+	for (i = 0; i <= size; i++) {
+		port1 = port + i;
+		entry = port1 / 32;
+		bit = port1 - entry *32;
+
+		if (enable == TRUE)
+			iopm[entry] |= (1 << bit);
+		else
+			iopm[entry] |= ~(1 << bit);
+	}
 }
 
 void
@@ -267,7 +273,7 @@ setup_intercept(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
 
-	int i;
+	int i, j;
 
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
@@ -284,9 +290,11 @@ setup_intercept(struct vm *vm)
 
 	/* setup IOIO intercept */
 	for (i = 0 ; i < MAX_IOPORT; i++)
-		if (vm->iodev[i].dev != NULL) {
-			set_intercept_ioio(vmcb, i, TRUE);
-		}
+		if (vm->iodev[i].dev != NULL)
+			for (j = 0; j < 3; j++)
+				if (vm->iodev[i].read_func[j] != NULL ||
+				    vm->iodev[i].write_func[j] != NULL)
+					set_intercept_ioio(vmcb, i, j, TRUE);
 
 	/* create MSRPM */
 	vmcb->control.msrpm_base_pa = alloc_permission_map(SVM_MSRPM_SIZE);
