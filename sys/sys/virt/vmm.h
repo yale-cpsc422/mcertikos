@@ -42,6 +42,9 @@ struct vm {
 
 	volatile bool	exit_for_intr;	/* VMEXIT for interrupts */
 
+	bool		halt_for_hlt;
+	uint64_t	hlt_rip;
+
 	struct {
 		void			*dev;
 		iodev_read_func_t	read_func[3]; // read data size: 0-sz8, 1-sz16,2-sz32

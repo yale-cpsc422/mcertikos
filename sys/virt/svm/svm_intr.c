@@ -53,6 +53,7 @@ svm_intr_assist(struct vm *vm)
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_control_area *ctrl = &vmcb->control;
+	struct vmcb_save_area *save = &vmcb->save;
 
 	struct vpic *pic = &vm->vpic;
 	int intr_vec;
@@ -80,6 +81,18 @@ svm_intr_assist(struct vm *vm)
 		svm_inject_vintr(vmcb, 0, intr_vec >> 4);
 		svm->pending_vintr = intr_vec;
 		set_intercept(vmcb, INTERCEPT_VINTR, TRUE);
+
+		/* check pending HLT */
+		if (vm->halt_for_hlt == TRUE) {
+#ifdef DEBUG_GUEST_HLT
+			KERN_DEBUG("Clear HLT flag.\n");
+#endif
+			KERN_ASSERT(save->rip == vm->hlt_rip);
+
+			save->rip += 1;
+			vm->halt_for_hlt = FALSE;
+		}
+
 		return;
 	}
 
@@ -87,4 +100,15 @@ svm_intr_assist(struct vm *vm)
 	svm_inject_event(vmcb, SVM_EVTINJ_TYPE_INTR, intr_vec, FALSE, 0);
 	svm->pending_vintr = -1;
 	set_intercept(vmcb, INTERCEPT_VINTR, FALSE);
+
+	/* check pending HLT */
+	if (vm->halt_for_hlt == TRUE) {
+#ifdef DEBUG_GUEST_HLT
+		KERN_DEBUG("Clear HLT flag.\n");
+#endif
+		KERN_ASSERT(save->rip == vm->hlt_rip);
+
+		save->rip += 1;
+		vm->halt_for_hlt = FALSE;
+	}
 }

@@ -1,4 +1,5 @@
 #include <sys/debug.h>
+#include <sys/intr.h>
 #include <sys/stdarg.h>
 #include <sys/types.h>
 #include <sys/x86.h>
@@ -43,6 +44,7 @@ debug_panic(const char *file, int line, const char *fmt,...)
 	vcprintf(fmt, ap);
 	va_end(ap);
 #endif
+	intr_local_disable();
 	halt();
 }
 

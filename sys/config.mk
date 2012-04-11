@@ -54,6 +54,11 @@ ifdef DEBUG_GUEST_TSC
 KERN_CFLAGS	+= -DDEBUG_GUEST_TSC
 endif
 
+# If set, enable debugging guest HLT instructions
+ifdef DEBUG_GUEST_HLT
+KERN_CFLAGS	+= -DDEBUG_GUEST_HLT
+endif
+
 # If set, enable debugging event injection
 ifdef DEBUG_EVT_INJECT
 KERN_CFLAGS	+= -DDEBUG_EVT_INJECT

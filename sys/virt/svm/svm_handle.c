@@ -523,7 +523,7 @@ svm_handle_cpuid(struct vm *vm)
 		   (uint32_t) svm->g_rcx, (uint32_t) svm->g_rdx);
 #endif
 
-	save->rip += 2;		/* cpuid is a two-byte instruction. */
+	save->rip += 2;
 
 	return TRUE;
 }
@@ -560,6 +560,7 @@ svm_handle_rdtsc(struct vm *vm)
 
 	svm->g_rdx = vm->tsc >> 32;
 	save->rax = (vm->tsc & 0xffffffff);
+
 	save->rip += 2;
 
 	return TRUE;
@@ -583,6 +584,48 @@ svm_handle_rdtscp(struct vm *vm)
 	/* XXX: Do NOT increase rip since we inject an exception. */
 
 	return 0;
+}
+
+bool
+svm_handle_hlt(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct svm *svm = (struct svm *) vm->cookie;
+	struct vmcb *vmcb = svm->vmcb;
+	struct vmcb_save_area *save = &vmcb->save;
+
+	if (vm->halt_for_hlt == TRUE) {
+		KERN_ASSERT(save->rip == vm->hlt_rip);
+		return TRUE;
+	}
+
+#ifdef DEBUG_GUEST_HLT
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
+		dprintf("VMEXIT for HLT.\n");
+#endif
+
+	vm->halt_for_hlt = TRUE;
+	vm->hlt_rip = save->rip;
+
+	/* if CPL != 0 in protected mode or v86 mode, inject #GP(0) */
+	if ((save->cr0 & CR0_PE || save->cr4 & CR4_VME) && save->cpl != 0) {
+#ifdef DEBUG_GUEST_HLT
+		KERN_DEBUG("HLT with CPL != 0.\n");
+#endif
+		svm_inject_event(vmcb, SVM_EVTINJ_TYPE_EXEPT, T_GPFLT, TRUE, 0);
+		return TRUE;
+	}
+
+	if (!(save->rflags & FL_IF)) {
+#ifdef DEBUG_GUEST_HLT
+		KERN_DEBUG("HLT with FL_IF=0.\n");
+#endif
+		return FALSE;
+	}
+
+	return TRUE;
 }
 
 /*
