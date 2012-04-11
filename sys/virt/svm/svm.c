@@ -318,7 +318,7 @@ setup_intercept(struct vm *vm)
 	/* set_intercept(vmcb, INTERCEPT_VINTR, TRUE); */
 	set_intercept(vmcb, INTERCEPT_RDTSC, TRUE);
 	set_intercept(vmcb, INTERCEPT_RDTSCP, TRUE);
-	set_intercept(vmcb, INTERCEPT_HLT, TRUE);
+	/* set_intercept(vmcb, INTERCEPT_HLT, TRUE); */
 
 	/* setup exception intercept */
 	set_intercept_exception(vmcb, T_DEBUG, TRUE);
@@ -493,6 +493,48 @@ vm_run(struct vm *vm)
 
 	if(ctrl->exit_code == SVM_EXIT_INTR) {
 		vm->exit_for_intr = TRUE;
+	}
+
+	if (ctrl->exit_int_info & SVM_EXITINTINFO_VALID) {
+		uint32_t exit_int_info = ctrl->exit_int_info;
+		uint32_t errcode = ctrl->exit_int_info_err;
+		uint32_t int_type = exit_int_info & SVM_EXITINTINFO_TYPE_MASK;
+
+		switch (int_type) {
+		case SVM_EXITINTINFO_TYPE_INTR:
+#ifdef DEBUG_GUEST_INTR
+			KERN_DEBUG("Pending INTR: vec=%x.\n",
+				   exit_int_info & SVM_EXITINTINFO_VEC_MASK);
+#endif
+			ctrl->event_inj = exit_int_info;
+			ctrl->event_inj_err = errcode;
+			break;
+
+		case SVM_EXITINTINFO_TYPE_NMI:
+#ifdef DEBUG_GUEST_INTR
+			KERN_DEBUG("Pending NMI.\n");
+#endif
+			ctrl->event_inj = exit_int_info;
+			ctrl->event_inj_err = errcode;
+			break;
+
+		case SVM_EXITINTINFO_TYPE_EXEPT:
+#ifdef DEBUG_GUEST_INTR
+			KERN_DEBUG("Pending exception: vec=%x, errcode=%x.\n",
+				   exit_int_info & SVM_EXITINTINFO_VEC_MASK,
+				   errocde);
+#endif
+			break;
+
+		case SVM_EXITINTINFO_TYPE_SOFT:
+#ifdef DEBUG_GUEST_INTR
+			KERN_DEBUG("Pending soft INTR.\n");
+#endif
+			break;
+
+		default:
+			KERN_PANIC("Invalid event type: %x.\n", int_type);
+		}
 	}
 
 	SVM_STGI();

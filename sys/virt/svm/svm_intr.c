@@ -25,14 +25,14 @@ svm_intr_blocked(struct vmcb *vmcb)
 	struct vmcb_save_area *save = &vmcb->save;
 
 	if (!(save->rflags & FL_IF)) {
-#ifdef DEBUG_INTR
+#ifdef DEBUG_GUEST_INTR
 		KERN_DEBUG("INTR is blocked due to interrpts being disabled.\n");
 #endif
 		return TRUE;
 	}
 
 	if (ctrl->int_state & 0x1) {
-#ifdef DEBUG_INTR
+#ifdef DEBUG_GUEST_INTR
 		KERN_DEBUG("INTR is blocked due to interrupt shadow.\n");
 #endif
 		return TRUE;
@@ -62,20 +62,7 @@ svm_intr_assist(struct vm *vm)
 	if ((intr_vec = vpic_get_irq(pic)) == -1)
 		return;
 
-	/* virtual interrupt pending or interrupts in guest is blocked */
-	if (ctrl->int_ctl & SVM_INTR_CTRL_VIRQ &&
-	    svm->pending_vintr == intr_vec) {
-#ifdef DEBUG_INTR
-		KERN_DEBUG("INTR vec=%x is already pending.\n", intr_vec);
-#endif
-		return;
-	}
-
-#ifdef DEBUG_INTR
-	KERN_DEBUG("Found pending INTR: vec=%x.\n", intr_vec);
-#endif
-
-	if (ctrl->int_ctl & SVM_INTR_CTRL_VIRQ ||
+	if (ctrl->event_inj & SVM_EVTINJ_VALID ||
 	    svm_intr_blocked(vmcb) == TRUE) {
 		/* XXX: is the priority correct? */
 		svm_inject_vintr(vmcb, 0, intr_vec >> 4);
