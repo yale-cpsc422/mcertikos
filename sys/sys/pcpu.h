@@ -77,7 +77,7 @@ void pcpu_init_cpu(void);
 
 void pcpu_boot_ap(uint32_t, void (*f)(void), uintptr_t);
 
-pcpu_t *pcpu_cur(void);
+pcpu_t * pcpu_cur(void);
 int pcpu_cur_idx(void);
 
 uint32_t pcpu_ncpu(void);

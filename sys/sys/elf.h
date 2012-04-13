@@ -4,6 +4,7 @@
 #ifdef _KERN_
 
 #include <sys/types.h>
+#include <sys/proc.h>
 
 #include <machine/pmap.h>
 
@@ -71,8 +72,9 @@ typedef struct sechdr {
 // Values for sechdr::sh_name
 #define ELF_SHN_UNDEF		0
 
-void elf_load(pmap_t *, uintptr_t);
+void elf_load(pmap_t *, uintptr_t, proc_t *);
 uintptr_t elf_entry(uintptr_t);
+void load_elf(pmap_t *pmap_s, uintptr_t exe_s, pmap_t *pmap_d);
 
 #endif /* _KERN_ */
 

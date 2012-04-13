@@ -24,25 +24,27 @@ enum {
 #define MAX_PROGNAME 50
 #define MAX_PROCS 50
 
+int cpus;
 //bounded client pplications named by their paths
-extern uint8_t _binary___obj_client_client1_client1_start[];
-extern uint8_t _binary___obj_client_vmclient_vmclient_start[];
-extern uint8_t _binary___obj_client_evilclient_evilclient_start[];
+extern char _binary___obj_client_client1_client1_start[];
+extern char _binary___obj_client_vmclient_vmclient_start[];
+extern char _binary___obj_client_evilclient_evilclient_start[];
 
 struct program {
         char progname[MAX_PROGNAME];
-        uint8_t * prog_ptr;
+        char * prog_ptr;
 };
 
 struct program programs[] =
 {
         {"client1", _binary___obj_client_client1_client1_start},
-        {"vmclient", _binary___obj_client_vmclient_vmclient_start},
+        {"client1", _binary___obj_client_client1_client1_start},
         {"evilclient", _binary___obj_client_evilclient_evilclient_start},
-        {"", (uint8_t *)0}
+        {"vmclient", _binary___obj_client_vmclient_vmclient_start},
+        {"", (char *)0}
 };
 
-static int prog_num = 3;
+static int prog_num = 4;
 //static int waiting_for_input;
 
 struct proc_info {
@@ -52,7 +54,7 @@ struct proc_info {
 };
 
 static struct proc_info procs[MAX_PROCS];
-//static int cpu_procs[255]; // stores the proc_index of the process running on that CPU
+static int cpu_procs[255]; // stores the proc_index of the process running on that CPU
 
 
 struct cmd_table_t {
@@ -83,14 +85,15 @@ init_cmd_table()
 
 	cmd_table[CMD_LOAD].cmd = CMD_LOAD;
 	strncpy(cmd_table[CMD_LOAD].cmd_string, "load", CMD_LEN);
-	cmd_table[CMD_LOAD].nargs = 2;
+	cmd_table[CMD_LOAD].nargs = 1;
 	cmd_table[CMD_LOAD].arg_type[0] = TYPE_INT;
-	cmd_table[CMD_LOAD].arg_type[1] = TYPE_INT;
+//	cmd_table[CMD_LOAD].arg_type[1] = TYPE_INT;
 
 	cmd_table[CMD_START].cmd = CMD_START;
 	strncpy(cmd_table[CMD_START].cmd_string, "start", CMD_LEN);
-	cmd_table[CMD_START].nargs = 1;
+	cmd_table[CMD_START].nargs = 2;
 	cmd_table[CMD_START].arg_type[0] = TYPE_INT;
+	cmd_table[CMD_START].arg_type[1] = TYPE_INT;
 
 	cmd_table[CMD_STOP].cmd = CMD_STOP;
 	strncpy(cmd_table[CMD_STOP].cmd_string, "stop", CMD_LEN);
@@ -265,7 +268,7 @@ exec_cmd()
 
          	printf("Loading program %s\n", programs[program_idx].progname);
                 
-		sys_load((uintptr_t )programs[program_idx].prog_ptr, &procs[proc_index].pid);
+		sys_load((uintptr_t)&programs[program_idx].prog_ptr, &procs[proc_index].pid);
 
                 if (procs[proc_index].pid) {
                         strncpy(procs[proc_index].progname, programs[program_idx].progname, MAX_PROGNAME);
@@ -279,9 +282,59 @@ exec_cmd()
 		break;
 	case CMD_START:
 		printf("Starting ... \n");
+		int pid=0;
+		int cpu=0;
+
+		cpu= *(int * ) parse_result.arg[0];
+		pid= *(int * ) parse_result.arg[1];
+	
+		for (proc_index=0;proc_index<MAX_PROCS;proc_index++) {
+                        if (procs[proc_index].pid == pid) break;
+                }
+                if (proc_index == MAX_PROCS) {
+                        printf("Process with id %d does not exist\n", pid);
+                        return;
+                }
+                if (procs[proc_index].cpu != -1) {
+                        printf("Process is already running on CPU %d\n", procs[proc_index].cpu);
+                }
+
+                if (!(1 <= cpu && cpu < cpus)) {
+                        printf("Cpu %d can not be used, only cpus 1-%d are valid\n", cpu, cpus-1);
+                        return;
+                }
+                if (cpu_procs[cpu] != -1) {
+                        printf("CPU %d is already in use by process %d\n", cpu, procs[cpu_procs[cpu]].pid);
+                        return;
+                }
+                procs[proc_index].cpu = cpu;
+                cpu_procs[cpu] = proc_index;
+                cpustart(cpu,pid);	
 		break;
 	case CMD_STOP:
 		printf("Stopping ...\n");
+
+		cpu= *(int * ) parse_result.arg[0];
+                if (!(1 <= cpu && cpu < cpus)) {
+                        printf("Cpu %d can not be used, only cpus 1-%d are valid\n", cpu, cpus-1);
+                        return;
+                }
+
+                proc_index = cpu_procs[cpu];
+                if (proc_index == -1) {
+                        printf("Cpu %d is already idle\n", cpu);
+                        return;
+                }
+
+                cpu_procs[cpu] = -1;
+                if (!procs[proc_index].pid) {
+                        printf("MGMT FAILURE: cpu %d is running a process which does not exist\n", cpu);
+                        return;
+                }
+                procs[proc_index].cpu = -1;
+                printf("Stopping cpu %d, process id %d.\n \n", cpu, procs[proc_index].pid);
+                stop_cpu(cpu);
+
 		break;
 
 	default:
@@ -292,6 +345,16 @@ exec_cmd()
 int main()
 {
 	char buf[BUFSIZE];
+	int i;
+	
+	cpus=sys_ncpu();
+        // clear out process table
+        for(i=0;i<MAX_PROCS;i++)
+                procs[i].pid = 0;
+              
+        for(i=0;i<255;i++)
+                cpu_procs[i] = -1;
+
 
 	memset(buf, 0x0, sizeof(char) * BUFSIZE);
 

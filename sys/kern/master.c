@@ -11,6 +11,7 @@
 #include <sys/x86.h>
 #include <sys/master.h>
 
+#include <sys/sys/elf.h>
 #include <sys/virt/vmm.h>
 
 #include <machine/pmap.h>
@@ -84,6 +85,7 @@ copy_to_user(void *dest, void *src, size_t size)
 			   src, src+size);
 		return NULL;
 	}
+	
 
 	pmap_t *user_pmap = pcpu_cur()->proc->pmap;
 	if (pmap_checkrange(user_pmap, (uintptr_t) dest, size) == FALSE) {
@@ -119,7 +121,10 @@ master_gpf_handler(context_t *ctx)
 static uint32_t
 master_pgf_handler(context_t *ctx)
 {
+	KERN_DEBUG("CR2:%x\n",rcr2());
+	KERN_DEBUG("CR3:%x\n",rcr3());
 	KERN_ASSERT(ctx != NULL);
+	
 
 	uint32_t errno = context_errno(ctx);
 	uintptr_t fault_va = rcr2();
@@ -170,7 +175,11 @@ mgmt_start(context_t *ctx, mgmt_start_t *param)
 	}
 
 	/* TODO: use IPI to start AP */
-	KERN_PANIC("MGMT_START: Not implemented yet.\n");
+//	KERN_PANIC("MGMT_START: Not implemented yet.\n");
+	cprintf("start: %d on CPU: %d\n", param->pid, param->cpu);
+	cpus[param->cpu].start = param->pid;
+	
+//	proc_lock(param->pid);
 
 	return 0;
 }
@@ -195,7 +204,10 @@ mgmt_stop(context_t *ctx, mgmt_stop_t *param)
 	}
 
 	/* TODO: use IPI ot stop AP */
-	KERN_PANIC("MGMT_STOP: Not implemented yet.\n");
+	//KERN_PANIC("MGMT_STOP: Not implemented yet.\n");
+
+        cpus[param->cpu].stop = TRUE;
+
 
 	return 0;
 }
@@ -372,8 +384,10 @@ master_syscall_handler(context_t *ctx)
 		memset(master_buf, 0x0, sizeof(uintptr_t));
 
 		KERN_DEBUG("SYSCALL_LOAD: binary:%x.\n", binary);
+		//elfhdr *eh = (elfhdr *) binary;
+		//KERN_DEBUG("code:%x.\n", eh->e_magic);
 		pid_t pid = proc_new(binary);
-		KERN_DEBUG("proc created");
+		KERN_DEBUG("proc created\n");
 
 		if (pid == 0) {
 			KERN_DEBUG("SYSCALL_LOAD: Cannot create a new process.\n");
@@ -422,7 +436,7 @@ master_syscall_handler(context_t *ctx)
 			return 1;
 		}
 
-		if (!master_mgmt_handler(ctx, (mgmt_data_t *) master_buf)) {
+		if (master_mgmt_handler(ctx, (mgmt_data_t *) master_buf)) {
 			master_syscall_fail(ctx);
 			memset(master_buf, 0x0, sizeof(mgmt_data_t));
 			return 1;

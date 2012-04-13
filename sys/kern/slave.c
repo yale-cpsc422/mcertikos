@@ -169,20 +169,20 @@ void wait_to_start() {
 	//int i=0;
 	//pid_t pid;
 	KERN_ASSERT(cpus[mycpu].running == FALSE);
-	/* cprintf("CPU %d, waiting to start\n, addr cpu = %x", */
-	/*	mycpu, &cpus[mycpu]); */
+	cprintf("CPU %d, waiting to start\n, addr cpu = %x", mycpu, &cpus[mycpu]); 
 	while(cpus[mycpu].start == 0);
 	cprintf("CPU %d, starting process %d\n", mycpu, cpus[mycpu].start);
-//	cprintf("cpustacks@%x, esp:@%x\n",cpu_stacks[mycpu],read_esp())
+//	cprintf("cpustacks@%x, esp:@%x\n",pcpu_stacks[mycpu],read_esp());
 	cpus[mycpu].running = cpus[mycpu].start;
 	cpus[mycpu].start=0;
+	proc_lock(cpus[mycpu].running);
 	proc_start(cpus[mycpu].running);
 }
 
 void slave_kernel() {
 	int mycpu;
 	mycpu = pcpu_cur_idx();
-	/* cprintf("* current cpu is : %d\n",mycpu); */
+	cprintf("* current cpu is : %d\n",mycpu); 
 	intr_enable(IRQ_TIMER, mycpu);
 	context_register_handler(T_IRQ0+IRQ_TIMER,&stimer);
 	context_register_handler(T_CLIENT_SYSCALL,&sl_syscall);

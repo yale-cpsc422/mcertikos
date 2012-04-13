@@ -121,4 +121,24 @@ sys_startupvm(void)
 		     : "cc", "memory");
 }
 
+static void cpustart(uint32_t cpu, uint32_t procid) {
+        mgmt_start_t params = {cpu, procid};
+        mgmt_data_t data;
+        data.cmd = MGMT_START;
+        *((mgmt_start_t*)&data.params) = params;
+        sys_mgmt(&data);
+        return;
+}
+
+
+static void stop_cpu(uint32_t cpu) {
+        mgmt_stop_t params = {cpu};
+        mgmt_data_t data;
+        data.cmd = MGMT_STOP;
+        *((mgmt_stop_t*)&data.params) = params;
+        sys_mgmt(&data);
+        return;
+}
+
+
 #endif /* !_USER_SYSCALL_H_ */
