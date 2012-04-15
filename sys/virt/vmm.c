@@ -121,7 +121,6 @@ vmm_init_vm(void)
 	memset(vm, 0x0, sizeof(struct vm));
 
 	vm->exit_for_intr = FALSE;
-	vm->halt_for_hlt = FALSE;
 
 	vm->tsc = 0;
 

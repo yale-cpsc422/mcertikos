@@ -22,7 +22,6 @@ bool svm_handle_swint(struct vm *);
 bool svm_handle_rdtsc(struct vm *);
 bool svm_handle_rdtscp(struct vm *);
 bool svm_handle_err(struct vm *);
-bool svm_handle_hlt(struct vm *);
 
 void svm_inject_vintr(struct vmcb *, uint8_t, uint8_t);
 

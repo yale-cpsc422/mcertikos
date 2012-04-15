@@ -318,7 +318,6 @@ setup_intercept(struct vm *vm)
 	/* set_intercept(vmcb, INTERCEPT_VINTR, TRUE); */
 	set_intercept(vmcb, INTERCEPT_RDTSC, TRUE);
 	set_intercept(vmcb, INTERCEPT_RDTSCP, TRUE);
-	/* set_intercept(vmcb, INTERCEPT_HLT, TRUE); */
 
 	/* setup exception intercept */
 	set_intercept_exception(vmcb, T_DEBUG, TRUE);
@@ -635,10 +634,6 @@ svm_handle_exit(struct vm *vm)
 		dprintf("VMEXIT for RDTSCP.\n");
 #endif
 		handled = svm_handle_rdtscp(vm);
-		break;
-
-	case SVM_EXIT_HLT:
-		handled = svm_handle_hlt(vm);
 		break;
 
 	case SVM_EXIT_ERR:
