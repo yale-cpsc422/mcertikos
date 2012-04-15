@@ -403,6 +403,8 @@ struct svm {
 	int		pending_vintr;
 };
 
+bool svm_feature_nrip;
+
 /* defined in svm_asm.S */
 extern void svm_run(struct svm *);
 

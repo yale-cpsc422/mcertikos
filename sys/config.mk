@@ -78,3 +78,13 @@ endif
 ifdef DEBUG_VPIT
 KERN_CFLAGS	+= -DDEBUG_VPIT
 endif
+
+# If set, enable debugging VM_ENTER
+ifdef DEBUG_VM_ENTER
+KERN_CFLAGS	+= -DDEBUG_VM_ENTER
+endif
+
+# If set, enable debugging VM_EXIT
+ifdef DEBUG_VM_EXIT
+KERN_CFLAGS	+= -DDEBUG_VM_EXIT
+endif
