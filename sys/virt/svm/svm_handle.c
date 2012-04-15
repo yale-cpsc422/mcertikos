@@ -594,7 +594,6 @@ svm_handle_hlt(struct vm *vm)
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_save_area *save = &vmcb->save;
-	struct vmcb_control_area *ctrl = &vmcb->control;
 
 	if (vm->halt_for_hlt == TRUE) {
 		KERN_ASSERT(save->rip == vm->hlt_rip);
@@ -602,8 +601,11 @@ svm_handle_hlt(struct vm *vm)
 	}
 
 #ifdef DEBUG_GUEST_HLT
-	KERN_DEBUG("Set HLT flag.\n");
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
+		dprintf("VMEXIT for HLT.\n");
 #endif
+
 	vm->halt_for_hlt = TRUE;
 	vm->hlt_rip = save->rip;
 
@@ -622,13 +624,6 @@ svm_handle_hlt(struct vm *vm)
 #endif
 		return FALSE;
 	}
-
-	/*
-	 * hlt maybe in the interrupt shadow, e.g. hlt is after sti. Clear the
-	 * interrupt shadow before switching to the guest so that the injected
-	 * interrupts can be accepted to resume the processor.
-	 */
-	ctrl->int_state = 0;
 
 	return TRUE;
 }

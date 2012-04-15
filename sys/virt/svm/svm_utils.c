@@ -91,6 +91,7 @@ load_bios(uintptr_t ncr3)
 		  kern_ptab, (uintptr_t) _binary___misc_bios_bin_start,
 		  (size_t) _binary___misc_bios_bin_size);
 
+#if 1
 	/* load VGA BIOS */
 	extern uint8_t _binary___misc_vgabios_bin_start[],
 		_binary___misc_vgabios_bin_size[];
@@ -100,4 +101,5 @@ load_bios(uintptr_t ncr3)
 	pmap_copy((pmap_t *) ncr3, 0xc0000,
 		  kern_ptab, (uintptr_t) _binary___misc_vgabios_bin_start,
 		  (size_t) _binary___misc_vgabios_bin_size);
+#endif
 }
