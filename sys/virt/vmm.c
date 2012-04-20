@@ -129,9 +129,16 @@ vmm_init_vm(void)
 	vpic_init(&vm->vpic, vm);
 	vkbd_init(&vm->vkbd, vm);
 	vpci_init(&vm->vpci, vm);
-	/* vserial_init(&vm->vserial, vm); */
 	vnvram_init(&vm->vnvram, vm);
 	vpit_init(&vm->vpit, vm);
+
+#ifdef REDIRECT_GUEST_SERIAL
+	vserial_init(&vm->vserial, vm);
+#endif
+
+#ifdef GUEST_DEBUG_DEV
+	guest_debug_dev_init(&vm->debug_dev, vm);
+#endif
 
 	/* machine-dependent VM initialization */
 	if (vmm_ops->vm_init(vm) != 0) {

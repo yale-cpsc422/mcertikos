@@ -78,3 +78,13 @@ endif
 ifdef DEBUG_VPIT
 KERN_CFLAGS	+= -DDEBUG_VPIT
 endif
+
+# If set, enable guest debug I/O port
+ifdef GUEST_DEBUG_DEV
+KERN_CFLAGS	+= -DGUEST_DEBUG_DEV
+endif
+
+# If set, redirect the guest serial port output to stdout
+ifdef REDIRECT_GUEST_SERIAL
+KERN_CFLAGS	+= -DREDIRECT_GUEST_SERIAL
+endif

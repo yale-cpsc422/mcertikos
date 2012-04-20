@@ -9,6 +9,7 @@ KERN_SRCFILES	+= $(KERN_DIR)/virt/dev/pic.c
 KERN_SRCFILES	+= $(KERN_DIR)/virt/dev/pit.c
 KERN_SRCFILES	+= $(KERN_DIR)/virt/dev/ps2.c
 KERN_SRCFILES	+= $(KERN_DIR)/virt/dev/serial.c
+KERN_SRCFILES	+= $(KERN_DIR)/virt/dev/debug_dev.c
 
 # Targets
 

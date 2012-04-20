@@ -11,10 +11,11 @@
 #include <sys/virt/dev/pic.h>
 #include <sys/virt/dev/pit.h>
 #include <sys/virt/dev/serial.h>
+#include <sys/virt/dev/debug_dev.h>
 
 #include <machine/trap.h>
 
-#define VM_PHY_MEMORY_SIZE	(64 * 1024 * 1024)
+#define VM_PHY_MEMORY_SIZE	(128 * 1024 * 1024)
 
 #define VM_TIME_SCALE		1
 #define VM_TSC_ADJUST		0
@@ -61,6 +62,8 @@ struct vm {
 	struct vserial	vserial;	/* virtual serial ports */
 	struct vnvram	vnvram;		/* virtual NVRAM */
 	struct vpit	vpit;		/* virtual PIT (i8254) */
+
+	struct guest_debug_dev debug_dev;
 
 	bool		used;
 };
