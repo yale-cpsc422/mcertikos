@@ -131,6 +131,7 @@ vmm_init_vm(void)
 	vpci_init(&vm->vpci, vm);
 	vnvram_init(&vm->vnvram, vm);
 	vpit_init(&vm->vpit, vm);
+	vide_init(&vm->vide, vm);
 
 #ifdef REDIRECT_GUEST_SERIAL
 	vserial_init(&vm->vserial, vm);
