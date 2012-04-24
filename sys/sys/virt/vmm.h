@@ -12,7 +12,6 @@
 #include <sys/virt/dev/pit.h>
 #include <sys/virt/dev/serial.h>
 #include <sys/virt/dev/debug_dev.h>
-#include <sys/virt/dev/ide.h>
 
 #include <machine/trap.h>
 
@@ -63,7 +62,6 @@ struct vm {
 	struct vserial	vserial;	/* virtual serial ports */
 	struct vnvram	vnvram;		/* virtual NVRAM */
 	struct vpit	vpit;		/* virtual PIT (i8254) */
-	struct vide	vide;
 
 	struct guest_debug_dev debug_dev;
 
