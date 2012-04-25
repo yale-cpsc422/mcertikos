@@ -13,10 +13,10 @@ volatile static bool intr_inited = FALSE;
 void
 intr_init(void)
 {
-	if (intr_inited == TRUE)
-		return;
+//	if (intr_inited == TRUE)
+//		return;
 
-	KERN_INFO("(Legacy PIC) ");
+//	KERN_INFO("(Legacy PIC) ");
 	pic_init();
 
 #if 1
@@ -26,10 +26,14 @@ intr_init(void)
 #endif
 
 	if (using_apic == TRUE) {
-		KERN_INFO("(APIC) ");
-		ioapic_init();
+//		KERN_INFO(" Is MP, using (APIC) ");
+
+	//init ioapic on boot cpu
+		if (pcpu_onboot()){
+			ioapic_init(); 
+		}
 		lapic_init();
-	}
+	} 
 
 	intr_inited = TRUE;
 }

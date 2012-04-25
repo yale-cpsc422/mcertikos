@@ -70,7 +70,7 @@ pcpu_init_cpu()
 
 	spinlock_acquire(&c->lk);
 
-	if (pcpu->inited == TRUE) {
+	if (c->inited == TRUE) {
 		spinlock_release(&c->lk);
 		return;
 	}
@@ -104,17 +104,19 @@ pcpu_boot_ap(uint32_t cpu_idx, void (*f)(void), uintptr_t stack_addr)
 	/* start function f is avalid */
 	KERN_ASSERT(f != NULL);
 
-	pcpu_stack[cpu_idx] = stack_addr + PAGE_SIZE;
 	pcpu[cpu_idx].booted = FALSE;
-
+	
+//	KERN_DEBUG("PCPU:%x\n", &pcpu_stack);
+//	KERN_DEBUG("cpu# %d, stack: %x\n",cpu_idx, stack_addr+PAGE_SIZE);
+//	KERN_DEBUG("pcpu:%x, pcpu_booted:%x\n", &pcpu_stack[cpu_idx], &pcpu[cpu_idx].booted);
 	uint8_t *boot = (uint8_t *) PCPU_AP_START_ADDR;
 	*(uintptr_t *) (boot - 4) = stack_addr + PAGE_SIZE;
 	*(uintptr_t *) (boot - 8) = (uintptr_t) f;
 	*(uintptr_t *) (boot - 12) = (uintptr_t) kern_init_ap;
 	lapic_startcpu(pcpu_cpu_lapicid(cpu_idx), (uintptr_t) boot);
 
-	while (pcpu[cpu_idx].booted == FALSE)
-		pause();
+	while (pcpu[cpu_idx].booted == FALSE);
+	//	pause();
 
 	return;
 }

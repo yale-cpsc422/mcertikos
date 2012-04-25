@@ -159,8 +159,13 @@ context_start(context_t *ctx)
 
 	__context_cur[pcpu_cur_idx()] = ctx;
 
-	/* trap_dump(&ctx->tf); */
-
+/* For DEBUG
+	if(pcpu_cur_idx()==1)
+	{
+		trap_dump(&ctx->tf); 
+	}
+	
+*/
 	KERN_ASSERT(ctx->tf.eip < 0x50000000);
 	trap_return(&ctx->tf);
 }

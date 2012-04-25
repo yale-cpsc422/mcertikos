@@ -224,20 +224,19 @@ proc_new(uintptr_t binary)
 	KERN_DEBUG("mgmt_ptab:%x\n",mgmt_pmap);
 
 	if (mgmt!=NULL){
+		KERN_DEBUG("binary:%x\n",binary);
+		//binary=pmap_la2pa(mgmt_pmap,binary);
+		//KERN_DEBUG("binary:%x\n",binary);
+		load_elf(mgmt_pmap,binary,proc->pmap);
 
-	KERN_DEBUG("binary:%x\n",binary);
-	//binary=pmap_la2pa(mgmt_pmap,binary);
-	//KERN_DEBUG("binary:%x\n",binary);
-	load_elf(mgmt_pmap,binary,proc->pmap);
-
-	uintptr_t binary_mgmt=pmap_la2pa(mgmt_pmap,binary);
-	proc->normal_ctx =
-		context_new((void (*)(void)) elf_entry(binary_mgmt),
+		uintptr_t binary_in_mgmt=pmap_la2pa(mgmt_pmap,binary);
+		proc->normal_ctx =
+		context_new((void (*)(void)) elf_entry(binary_in_mgmt),
 			    VM_STACKHI - PAGESIZE);
 	} else {
-	load_elf(kern_ptab,binary,proc->pmap);
-	//elf_load(kern_ptab,binary,proc);
-	proc->normal_ctx =
+		load_elf(kern_ptab,binary,proc->pmap);
+		//elf_load(kern_ptab,binary,proc);
+		proc->normal_ctx =
 		context_new((void (*)(void)) elf_entry(binary),
 			    VM_STACKHI - PAGESIZE);
 	}
@@ -296,6 +295,8 @@ proc_start(pid_t pid)
 	proc->state = PROC_RUN;
 
 	pmap_install(proc->pmap);
+	KERN_DEBUG("proc->pmap:%x\n",proc->pmap);
+	KERN_DEBUG("pmap_check:%x, %d\n",proc->normal_ctx, pmap_checkrange(proc->pmap, (uintptr_t) proc->normal_ctx, sizeof( struct context_t)));
 
 	spinlock_release(&proc->lk);
 
