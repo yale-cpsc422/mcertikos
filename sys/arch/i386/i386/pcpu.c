@@ -3,6 +3,7 @@
 #include <sys/string.h>
 #include <sys/types.h>
 #include <sys/x86.h>
+#include <sys/context.h>
 
 #include <machine/mmu.h>
 #include <machine/pcpu.h>
@@ -12,6 +13,8 @@
 static bool __pcpu_inited = FALSE;
 
 static __pcpu_t _pcpu[MAX_CPU];
+
+extern pseudodesc_t  idt_pd;
 
 static void
 __pcpu_print_cpuinfo(void)
@@ -136,6 +139,13 @@ __pcpu_init_cpu(uint32_t idx, __pcpu_t **_c, uintptr_t kstack_hi)
 
 	/* load TSS */
 	ltr(CPU_GDT_TSS);
+
+	// This "pseudo-descriptor" is needed only by the LIDT instruction,
+        // to specify both the size and address of th IDT at once.
+        // Load the IDT into this processor's IDT register.
+	KERN_DEBUG("idt_pd@%x\n", &idt_pd);
+        asm volatile("lidt %0" : : "m" (idt_pd));
+
 
 	_pcpu[idx].inited = TRUE;
 
