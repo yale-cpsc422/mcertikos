@@ -5,6 +5,7 @@
 #include <sys/mmu.h>
 #include <sys/pcpu.h>
 #include <sys/proc.h>
+#include <sys/string.h>
 #include <sys/syscall.h>
 #include <sys/timer.h>
 #include <sys/types.h>
@@ -42,17 +43,25 @@ copy_from_user(void *dest, void *src, size_t size)
 {
 	/* KERN_DEBUG("copy_from_user(): %x <- %x, size=%x\n", dest, src, size); */
 
-	if (dest == NULL || src == NULL || size == 0)
+	if (dest == NULL || src == NULL || size == 0 ||
+	    (uintptr_t) dest + size > VM_USERLO || (uintptr_t) src < VM_USERLO)
 		return NULL;
 
 	pmap_t *user_pmap = pcpu_cur()->proc->pmap;
+
+	if (pmap_checkrange(user_pmap, (uintptr_t) dest, size) == FALSE) {
+		KERN_DEBUG("%x ~ %x do not fit in the kernel address space.\n",
+			   dest, dest+size);
+		return NULL;
+	}
+
 	if (pmap_checkrange(user_pmap, (uintptr_t) src, size) == FALSE) {
 		KERN_DEBUG("%x ~ %x do not fit in the user address space.\n",
 			   src, src+size);
 		return NULL;
 	}
 
-	pmap_copy(kern_ptab, (uintptr_t) dest, user_pmap, (uintptr_t) src, size);
+	memcpy(dest, src, size);
 
 	return dest;
 }
@@ -71,23 +80,26 @@ copy_from_user(void *dest, void *src, size_t size)
 static void *
 copy_to_user(void *dest, void *src, size_t size)
 {
-	if (dest == NULL || src == NULL || size == 0)
+	if (dest == NULL || src == NULL || size == 0 ||
+	    (uintptr_t) dest < VM_USERLO || (uintptr_t) src + size > VM_USERLO)
 		return NULL;
 
-	if (pmap_checkrange(kern_ptab, (uintptr_t) src, size) == FALSE) {
+	pmap_t *user_pmap = pcpu_cur()->proc->pmap;
+
+	if (pmap_checkrange(user_pmap, (uintptr_t) src, size) == FALSE) {
 		KERN_DEBUG("%x ~ %x do not fit in the kernel address space.\n",
 			   src, src+size);
 		return NULL;
 	}
 
-	pmap_t *user_pmap = pcpu_cur()->proc->pmap;
+
 	if (pmap_checkrange(user_pmap, (uintptr_t) dest, size) == FALSE) {
 		KERN_DEBUG("%x ~ %x do not fit in the user address space.\n",
 			   dest, dest+size);
 		return NULL;
 	}
 
-	pmap_copy(user_pmap, (uintptr_t) dest, kern_ptab, (uintptr_t) src, size);
+	memcpy(dest, src, size);
 
 	return dest;
 }

@@ -38,9 +38,7 @@ trap(tf_t *tf)
 
 	context_t *ctx = NULL;
 
-	if (rcr3() != (uint32_t) kern_ptab) {
-		pmap_install(kern_ptab);
-
+	if (tf->eip >= VM_USERLO) {
 		ctx = context_cur();
 		KERN_ASSERT(ctx != NULL);
 		context_set_cur(NULL);
@@ -68,7 +66,6 @@ trap(tf_t *tf)
 	}
 
 	if (ctx != NULL) {
-		pmap_install(pcpu_cur()->proc->pmap);
 		context_start(ctx);
 	} else {
 		tf->eflags &= ~(uint32_t) FL_IF; /* avoid nested traps in the

@@ -11,8 +11,6 @@
 // Page directory entries and page table entries are 32-bit integers.
 typedef uintptr_t pmap_t;
 
-pmap_t *kern_ptab;
-
 void pmap_init(void);
 
 pmap_t *pmap_new(void);

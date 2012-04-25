@@ -15,6 +15,8 @@
 typedef pmap_t pde_t;
 typedef pmap_t pte_t;
 
+static pde_t pmap_bootpdir[NPDENTRIES] gcc_aligned(PAGESIZE);
+
 #define PTE_INV		(~((pte_t) 0))
 #define PTE_NULL	((pte_t) NULL)
 
@@ -168,7 +170,7 @@ pmap_walk(pde_t *pdir, uintptr_t la, bool write)
  * @return the kernel page table, if succeed; otherwise, NULL.
  */
 static pmap_t *
-create_kernel_ptab(pmap_t *pmap)
+pmap_init_bootpdir(pmap_t *pmap)
 {
 	uint32_t addr;
 	pmap_t *ret;
@@ -266,21 +268,13 @@ create_kernel_ptab(pmap_t *pmap)
  * Initialize pmap module.
  */
 void
-pmap_init()
+pmap_init(void)
 {
 	if (pcpu_onboot() == TRUE) {
 		/* pmap_new() cannot be useable right now. */
-		pageinfo_t *pi = (pageinfo_t *) mem_page_alloc();
-		if (pi == NULL)
-			KERN_PANIC("Failed to create kernel page table.\n");
-
-		mem_incref(pi);
-		kern_ptab = (pmap_t *) mem_pi2ptr(pi);
-		memset(kern_ptab, 0, PAGESIZE);
-
-		kern_ptab = create_kernel_ptab(kern_ptab);
-		if (kern_ptab == NULL)
-			KERN_PANIC("Failed to initialize kernel page table.\n");
+		memset(pmap_bootpdir, 0, PAGESIZE);
+		if (pmap_init_bootpdir(pmap_bootpdir) == NULL)
+			KERN_PANIC("Failed to initialize bootstrap page structures.\n");
 	}
 
 	/* enable global pages (Sec 4.10.2.4, Intel ASDM Vol3) */
@@ -289,7 +283,7 @@ pmap_init()
 	lcr4(cr4);
 
 	/* load page table */
-	pmap_install(kern_ptab);
+	pmap_install(pmap_bootpdir);
 
 	/* turn on paging */
 	uint32_t cr0 = CR0_PE|CR0_PG|CR0_AM|CR0_WP|CR0_NE|CR0_TS|CR0_MP;
@@ -310,8 +304,8 @@ pmap_new(void)
 	if (pmap == NULL)
 		return NULL;
 
-	/* initialize it from the kernel page table */
-	memcpy(pmap, kern_ptab, PAGESIZE);
+	/* initialize it from the bootstrap page structure */
+	memcpy(pmap, pmap_bootpdir, PAGESIZE);
 
 	return pmap;
 }
