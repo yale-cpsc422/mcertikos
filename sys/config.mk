@@ -88,3 +88,8 @@ endif
 ifdef REDIRECT_GUEST_SERIAL
 KERN_CFLAGS	+= -DREDIRECT_GUEST_SERIAL
 endif
+
+# If set, enable debugging hypercalls
+ifdef DEBUG_HYPERCALL
+KERN_CFLAGS	+= -DDEBUG_HYPERCALL
+endif

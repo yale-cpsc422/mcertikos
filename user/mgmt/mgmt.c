@@ -1,3 +1,4 @@
+#include <hypercall_svm.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -7,7 +8,9 @@
 
 typedef
 enum {
-	CMD_CPUSTAT, CMD_LOAD, CMD_START, CMD_STOP, CMD_STARTVM, __CMD_DUMMY
+	CMD_CPUSTAT, CMD_LOAD, CMD_START, CMD_STOP, CMD_STARTVM,
+	CMD_SAFE_BITAND, CMD_SAFE_BITOR, CMD_SAFE_BITXOR, CMD_SAFE_BITNOT,
+	__CMD_DUMMY
 } cmd_t;
 
 typedef
@@ -26,46 +29,24 @@ struct cmd_table_t {
 
 	int	nargs;
 	type_t	arg_type[ARGS_NUM];
-} cmd_table[__CMD_DUMMY];
+};
 
-struct {
+struct cmd_table_t cmd_table[__CMD_DUMMY] = {
+	{CMD_CPUSTAT, "status", 0, {TYPE_INVAL, TYPE_INVAL}},
+	{CMD_LOAD, "load", 2, {TYPE_INT, TYPE_INT}},
+	{CMD_START, "start", 1, {TYPE_INT, TYPE_INVAL}},
+	{CMD_STOP, "stop", 1, {TYPE_INT, TYPE_INVAL}},
+	{CMD_STARTVM, "vm", 0, {TYPE_INVAL, TYPE_INVAL}},
+	{CMD_SAFE_BITAND, "bitand", 2, {TYPE_INT, TYPE_INT}},
+	{CMD_SAFE_BITOR, "bitor", 2, {TYPE_INT, TYPE_INT}},
+	{CMD_SAFE_BITXOR, "bitxor", 2, {TYPE_INT, TYPE_INT}},
+	{CMD_SAFE_BITNOT, "bitnot", 1, {TYPE_INT, TYPE_INVAL}}
+};
+
+static struct {
 	cmd_t	cmd;
 	uint8_t	arg[ARGS_NUM][ARG_SIZE];
 } parse_result;
-
-static void
-init_cmd_table()
-{
-	int i, j;
-
-	for (i = 0; i < __CMD_DUMMY; i++)
-		for (j = 0; j < ARGS_NUM; j++)
-			cmd_table[i].arg_type[j] = TYPE_INVAL;
-
-	cmd_table[CMD_CPUSTAT].cmd = CMD_CPUSTAT;
-	strncpy(cmd_table[CMD_CPUSTAT].cmd_string, "status", CMD_LEN);
-	cmd_table[CMD_CPUSTAT].nargs = 0;
-
-	cmd_table[CMD_LOAD].cmd = CMD_LOAD;
-	strncpy(cmd_table[CMD_LOAD].cmd_string, "load", CMD_LEN);
-	cmd_table[CMD_LOAD].nargs = 2;
-	cmd_table[CMD_LOAD].arg_type[0] = TYPE_INT;
-	cmd_table[CMD_LOAD].arg_type[1] = TYPE_INT;
-
-	cmd_table[CMD_START].cmd = CMD_START;
-	strncpy(cmd_table[CMD_START].cmd_string, "start", CMD_LEN);
-	cmd_table[CMD_START].nargs = 1;
-	cmd_table[CMD_START].arg_type[0] = TYPE_INT;
-
-	cmd_table[CMD_STOP].cmd = CMD_STOP;
-	strncpy(cmd_table[CMD_STOP].cmd_string, "stop", CMD_LEN);
-	cmd_table[CMD_STOP].nargs = 1;
-	cmd_table[CMD_STOP].arg_type[0] = TYPE_INT;
-
-	cmd_table[CMD_STARTVM].cmd = CMD_STARTVM;
-	strncpy(cmd_table[CMD_STARTVM].cmd_string, "vm", CMD_LEN);
-	cmd_table[CMD_STARTVM].nargs = 0;
-}
 
 static const char *
 skip_blanks(const char *buf, const char *end)
@@ -119,7 +100,7 @@ parse_cmd(const char *buf)
 	/* parse the command */
 	ptr = skip_blanks(ptr, &buf[BUFSIZE]);
 
-	if (ptr == NULL)
+	if (ptr == NULL || ptr[0] == '\n')
 		goto parse_err;
 
 	for (i = 0; i < __CMD_DUMMY; i++) {
@@ -215,6 +196,37 @@ exec_cmd()
 		printf("Not implement yet.\n");
 		break;
 
+	case CMD_SAFE_BITAND: {
+		uint32_t a0 = *(uint32_t *) parse_result.arg[0];
+		uint32_t a1 = *(uint32_t *) parse_result.arg[1];
+		uint32_t b = hypercall_bitand(a0, a1);
+		printf("0x%08x & 0x%08x => 0x%08x\n", a0, a1, b);
+		break;
+	}
+
+	case CMD_SAFE_BITOR: {
+		uint32_t a0 = *(uint32_t *) parse_result.arg[0];
+		uint32_t a1 = *(uint32_t *) parse_result.arg[1];
+		uint32_t b = hypercall_bitor(a0, a1);
+		printf("0x%08x | 0x%08x => 0x%08x\n", a0, a1, b);
+		break;
+	}
+
+	case CMD_SAFE_BITXOR: {
+		uint32_t a0 = *(uint32_t *) parse_result.arg[0];
+		uint32_t a1 = *(uint32_t *) parse_result.arg[1];
+		uint32_t b = hypercall_bitxor(a0, a1);
+		printf("0x%08x ^ 0x%08x => 0x%08x\n", a0, a1, b);
+		break;
+	}
+
+	case CMD_SAFE_BITNOT: {
+		uint32_t a0 = *(uint32_t *) parse_result.arg[0];
+		uint32_t b = hypercall_bitnot(a0);
+		printf("~0x%08x => 0x%08x\n", a0, b);
+		break;
+	}
+
 	default:
 		break;
 	}
@@ -227,8 +239,6 @@ int main()
 	memset(buf, 0x0, sizeof(char) * BUFSIZE);
 
 	printf("Management shell starts.\n");
-
-	init_cmd_table();
 
 	while (1) {
 		printf("# ");

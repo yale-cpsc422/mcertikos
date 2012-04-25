@@ -32,6 +32,13 @@ typedef enum {
 	SZ32	/* 4 byte */
 } data_sz_t;
 
+typedef enum {
+	HYPERCALL_BITAND,
+	HYPERCALL_BITOR,
+	HYPERCALL_BITXOR,
+	HYPERCALL_BITNOT
+} hypercall_t;
+
 typedef void (*iodev_read_func_t)(struct vm *,
 				  void *iodev, uint32_t port, void *data);
 typedef void (*iodev_write_func_t)(struct vm *,
