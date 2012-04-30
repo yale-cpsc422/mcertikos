@@ -13,20 +13,14 @@ volatile static bool intr_inited = FALSE;
 void
 intr_init(void)
 {
-//	if (intr_inited == TRUE)
-//		return;
-
-//	KERN_INFO("(Legacy PIC) ");
 	pic_init();
 
-#if 1
 	uint32_t dummy, edx;
 	cpuid(0x00000001, &dummy, &dummy, &dummy, &edx);
 	using_apic = (edx & CPUID_FEATURE_APIC) ? TRUE : FALSE;
-#endif
 
 	if (using_apic == TRUE) {
-//		KERN_INFO(" Is MP, using (APIC) ");
+		KERN_INFO(" Is MP, using (APIC) ");
 
 	//init ioapic on boot cpu
 		if (pcpu_onboot()){

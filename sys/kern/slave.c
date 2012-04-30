@@ -79,7 +79,7 @@ uint32_t sl_syscall(context_t* ctx) {
 //	cprintf("slave system call\n");
     switch (cmd) {
 	case SYSCALL_CLIENT_PUTS:
-	    if (copy_from_user(cbuf,&arg, PAGESIZE) == 0)
+	    if (copy_from_user(cbuf,(char * )arg, PAGESIZE) == 0)
 				syscall_fail(ctx);
 	    cbuf[PAGESIZE-1] = 0;
 	    cprintf("%s", cbuf);
@@ -143,9 +143,19 @@ uint32_t spgflt(context_t* ctx) {
 //	mqueue_enqueue((char*)sig, sizeof(sigbuf));
 
 	// stop the CPU
-	cpus[mycpu].running = 0;
+/*	cpus[mycpu].running = 0;
 	cpus[mycpu].stop = 0;
 	wait_to_start();
+*/
+	pmap_t *user_pmap = pcpu_cur()->proc->pmap;
+
+        if (!pmap_reserve(user_pmap, (uintptr_t) PGADDR(fault),
+                          PTE_W | PTE_U | PTE_P)) {
+                KERN_DEBUG("Cannot allocate physical memory for 0x%x\n",
+                           fault);
+                KERN_PANIC("Stop here.\n");
+                return 1;
+        }
 
 
 //	cprintf("Slave Page Fault at %x, cpu %d, reserving new page\n", fault, mp_curcpu());
