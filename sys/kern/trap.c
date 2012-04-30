@@ -33,10 +33,15 @@ trap(tf_t *tf)
 
 	asm volatile("cld" ::: "cc");
 
-	context_t *ctx = NULL;
+        if (tf->trapno < T_IRQ0)
+                trap_dump(tf);
 
-//	if (rcr3() != (uint32_t) kern_ptab) {
- 	if (tf->eip >= VM_USERLO) {
+	context_t *ctx = NULL;
+/*
+	if (rcr3() != (uint32_t) kern_ptab) {
+		pmap_install(kern_ptab);
+*/
+	if (tf->eip >= VM_USERLO) {
 
 		ctx = context_cur();
 		KERN_ASSERT(ctx != NULL);

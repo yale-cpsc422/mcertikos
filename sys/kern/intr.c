@@ -22,7 +22,6 @@ intr_init(void)
 	if (using_apic == TRUE) {
 		KERN_INFO(" Is MP, using (APIC) ");
 
-	//init ioapic on boot cpu
 		if (pcpu_onboot()){
 			ioapic_init(); 
 		}
