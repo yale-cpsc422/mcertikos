@@ -11,9 +11,11 @@ int main() {
 		t = gettime();
 		pid = getpid();
 		cpu = getcpu();
-		//if ((t - prevt) >= 100) {//for qemu
-		if ((t - prevt) >= 2) {//for simnow
+		if (1) {
+	//	if ((t - prevt) >= 100) {//for qemu
+	//	if ((t - prevt) >= 2) {//for simnow
 			prevt = t;
+			printf("Client 1, running%d\n", prevt);
 			printf("Client 1, pid %d, cpu %d, I am still here\n", pid, cpu);
 		}
 	}

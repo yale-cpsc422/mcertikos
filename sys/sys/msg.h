@@ -32,6 +32,9 @@ struct {
 	msg_t	msgs[NMSG];
 } mqueue_t;
 
+
+//static mqueue_t mgmt_msg;
+
 static void gcc_inline
 mqueue_init(mqueue_t *mq)
 {

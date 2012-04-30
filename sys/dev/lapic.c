@@ -63,7 +63,6 @@ lapic_init()
 	// Enable local APIC; set spurious interrupt vector.
 	lapic_write(LAPIC_SVR, LAPIC_SVR_ENABLE | (T_IRQ0 + IRQ_SPURIOUS));
 
-#if 0
 	// The timer repeatedly counts down at bus frequency
 	// from lapic[TICR] and then issues an interrupt.
 	// If we cared more about precise timekeeping,
@@ -71,10 +70,9 @@ lapic_init()
 	lapic_write(LAPIC_TDCR, LAPIC_TIMER_X1);
 	lapic_write(LAPIC_TIMER, LAPIC_TIMER_PERIODIC | (T_IRQ0 + IRQ_TIMER) | 0x10000);
 	lapic_write(LAPIC_TICR, 10000000);
-#else
+
 	/* Disable internal timer of lapic. */
-	lapic_write(LAPIC_TIMER, LAPIC_TIMER_MASKED);
-#endif
+//	lapic_write(LAPIC_TIMER, LAPIC_TIMER_MASKED);
 
 	// Disable logical interrupt lines.
 	lapic_write(LAPIC_LINT0, LAPIC_LINT_MASKED);

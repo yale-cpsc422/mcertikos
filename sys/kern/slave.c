@@ -28,8 +28,12 @@
 extern volatile cpu_use cpus[];
 void wait_to_start(void);
 
-static char cbuf[PAGESIZE];
+static uint8_t cbuf[PAGESIZE];
 extern uint32_t time;
+
+
+char sigbuf[PAGESIZE-12];
+sig_t * sig = (sig_t*)&sigbuf;
 
 //bool as_checkrange (as_t* as, uint32_t addr, size_t size);
 //uint32_t usercopy(uint32_t dest, uint32_t src, size_t size);
@@ -76,14 +80,20 @@ uint32_t sl_syscall(context_t* ctx) {
     uint32_t arg = context_arg2(ctx);
    // uint32_t arg2 = context_arg3(ctx);
    // uint32_t arg3 = context_arg4(ctx);
-//	cprintf("slave system call\n");
+	cprintf("slave system call: trapno:%x\n", ctx->tf.trapno);
+	cprintf("arg:%x\n", cmd);
     switch (cmd) {
-	case SYSCALL_CLIENT_PUTS:
-	    if (copy_from_user(cbuf,&arg, PAGESIZE) == 0)
+		case SYSCALL_CLIENT_PUTS:
+	    		if (copy_from_user(cbuf,(void * )arg, PAGESIZE) == 0)
 				syscall_fail(ctx);
-	    cbuf[PAGESIZE-1] = 0;
-	    cprintf("%s", cbuf);
-	    break;
+	    		cbuf[PAGESIZE-1] = 0;
+			cprintf("slave system call puts\n");
+	    		cprintf("OUT:%s\n", cbuf);
+	    		cprintf("USER:%s\n", arg);
+	    		cprintf("USER:%s\n", &arg);
+	    		cprintf("finish puts");
+			memset(cbuf, 0, sizeof(char));
+	    		break;
 		case SYSCALL_CLIENT_GETC:
 	//		if (!as_checkrange(as_current(), arg, sizeof(uint32_t)))
 	//			syscall_fail(ctx);
@@ -93,6 +103,7 @@ uint32_t sl_syscall(context_t* ctx) {
 	//		if (!as_checkrange(as_current(), arg, sizeof(uint32_t)))
 	//			syscall_fail(ctx);
 			*(uint32_t*)arg = time;
+			//cprintf("slave system call time %d\n", time);
 			break;
 		case SYSCALL_CLIENT_PID:
 	//		if (!as_checkrange(as_current(), arg, sizeof(uint32_t)))
@@ -128,32 +139,42 @@ uint32_t stimer(context_t* ctx) {
 }
 
 uint32_t spgflt(context_t* ctx) {
-	//static uint32_t prevfault=0;
+//	static uint32_t prevfault=0;
 
 	uint8_t mycpu = pcpu_cur_idx();
 	uint32_t fault = rcr2();
 	KERN_ASSERT (cpus[mycpu].running);
-//	sig->type = SIGNAL_PGFLT;
-//	((signal_pgflt*)&sig->data)->cpu = mycpu;
-//	((signal_pgflt*)&sig->data)->procid = cpus[mycpu].running;
-//	((signal_pgflt*)&sig->data)->fault_addr = fault;
-	cprintf("slave#Signalling page fault at addr %08x\n", fault);
+/*	sig->type = SIGNAL_PGFLT;
+	((signal_pgflt_t*)&sig->data)->cpu = mycpu;
+	((signal_pgflt_t*)&sig->data)->procid = cpus[mycpu].running;
+	((signal_pgflt_t*)&sig->data)->fault_addr = fault;
+	cprintf("slave %d# Signalling page fault at addr %08x\n", mycpu, fault);
 	//msgqueue_add((char*)sig, sizeof(sigbuf));
 	//msgqueue_add((char*)sig, sizeof(sigbuf));
-//	mqueue_enqueue((char*)sig, sizeof(sigbuf));
+	mqueue_enqueue((char*)sig, sizeof(sigbuf));
 
 	// stop the CPU
 	cpus[mycpu].running = 0;
 	cpus[mycpu].stop = 0;
 	wait_to_start();
 
+*/
+	pmap_t *user_pmap = pcpu_cur()->proc->pmap;
+
+        if (!pmap_reserve(user_pmap, (uintptr_t) PGADDR(fault),
+                          PTE_W | PTE_U | PTE_P)) {
+                KERN_DEBUG("Cannot allocate physical memory for 0x%x\n",
+                           fault);
+                KERN_PANIC("Stop here.\n");
+                return 1;
+        }    
 
 //	cprintf("Slave Page Fault at %x, cpu %d, reserving new page\n", fault, mp_curcpu());
 //	if (as_reserve(as_current(), PGADDR(fault), PTE_W | PTE_U | PTE_P) == NULL) {
 //		 cprintf("New page can not be reserved\n");
 //	}
 //
-//	prevfault = fault;
+	//prevfault = fault;
 return 0;
 }
 
@@ -170,9 +191,9 @@ void wait_to_start() {
 	//int i=0;
 	//pid_t pid;
 	KERN_ASSERT(cpus[mycpu].running == FALSE);
-	cprintf("slave#:CPU %d, waiting to start\n, addr cpu = %x", mycpu, &cpus[mycpu]); 
+	cprintf("slave %d# waiting to start\n, addr cpu = %x", mycpu, &cpus[mycpu]); 
 	while(cpus[mycpu].start == 0);
-	cprintf("slave#CPU %d, starting process %d\n", mycpu, cpus[mycpu].start);
+	cprintf("slave %d# starting process %d\n", mycpu, cpus[mycpu].start);
 //	cprintf("cpustacks@%x, esp:@%x\n",pcpu_stacks[mycpu],read_esp());
 	cpus[mycpu].running = cpus[mycpu].start;
 	cpus[mycpu].start=0;
@@ -183,13 +204,13 @@ void wait_to_start() {
 void slave_kernel() {
 	int mycpu;
 	mycpu = pcpu_cur_idx();
-	cprintf("slave#* current cpu is : %d\n",mycpu); 
+	cprintf("slave %d# current cpu is : %d\n",mycpu, mycpu); 
 	intr_enable(IRQ_TIMER, mycpu);
 	context_register_handler(T_IRQ0+IRQ_TIMER,&stimer);
 	context_register_handler(T_CLIENT_SYSCALL,&sl_syscall);
 	context_register_handler(T_PGFLT,&spgflt);
 //	as_init();
 	// enable_amd_svm();
-	cprintf("slave#I am alive on cpu number %d!!!\n", mycpu);
+	cprintf("slave %d# I am alive on cpu number %d!!!\n", mycpu, mycpu);
 	wait_to_start();
 }
