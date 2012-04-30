@@ -17,6 +17,7 @@
 
 #include <machine/pmap.h>
 
+#include <dev/pci.h>
 #include <dev/tsc.h>
 #include <dev/timer.h>
 
@@ -132,6 +133,11 @@ kern_init(mboot_info_t *mbi)
 	/* Initialize timer */
 	KERN_INFO("Initialize timer event list ... ");
 	timer_init();
+	KERN_INFO("done.\n");
+
+	/* Initialize PCI bus */
+	KERN_INFO("Initialize PCI ... ");
+	pci_init();
 	KERN_INFO("done.\n");
 
 	/* Initialize process module. */
