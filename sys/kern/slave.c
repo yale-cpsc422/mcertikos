@@ -80,18 +80,12 @@ uint32_t sl_syscall(context_t* ctx) {
     uint32_t arg = context_arg2(ctx);
    // uint32_t arg2 = context_arg3(ctx);
    // uint32_t arg3 = context_arg4(ctx);
-	cprintf("slave system call: trapno:%x\n", ctx->tf.trapno);
-	cprintf("arg:%x\n", cmd);
     switch (cmd) {
 		case SYSCALL_CLIENT_PUTS:
 	    		if (copy_from_user(cbuf,(void * )arg, PAGESIZE) == 0)
 				syscall_fail(ctx);
 	    		cbuf[PAGESIZE-1] = 0;
-			cprintf("slave system call puts\n");
-	    		cprintf("OUT:%s\n", cbuf);
-	    		cprintf("USER:%s\n", arg);
-	    		cprintf("USER:%s\n", &arg);
-	    		cprintf("finish puts");
+	    		cprintf("%s\n", cbuf);
 			memset(cbuf, 0, sizeof(char));
 	    		break;
 		case SYSCALL_CLIENT_GETC:
@@ -153,7 +147,7 @@ uint32_t spgflt(context_t* ctx) {
 	//msgqueue_add((char*)sig, sizeof(sigbuf));
 	mqueue_enqueue((char*)sig, sizeof(sigbuf));
 
-	// stop the CPU
+*/	// stop the CPU
 /*	cpus[mycpu].running = 0;
 	cpus[mycpu].stop = 0;
 	wait_to_start();
@@ -168,16 +162,6 @@ uint32_t spgflt(context_t* ctx) {
                 return 1;
         }
 
-*/
-	pmap_t *user_pmap = pcpu_cur()->proc->pmap;
-
-        if (!pmap_reserve(user_pmap, (uintptr_t) PGADDR(fault),
-                          PTE_W | PTE_U | PTE_P)) {
-                KERN_DEBUG("Cannot allocate physical memory for 0x%x\n",
-                           fault);
-                KERN_PANIC("Stop here.\n");
-                return 1;
-        }    
 
 //	cprintf("Slave Page Fault at %x, cpu %d, reserving new page\n", fault, mp_curcpu());
 //	if (as_reserve(as_current(), PGADDR(fault), PTE_W | PTE_U | PTE_P) == NULL) {
