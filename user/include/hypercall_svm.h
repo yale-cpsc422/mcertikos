@@ -8,7 +8,8 @@ typedef enum {
 	HYPERCALL_BITAND,
 	HYPERCALL_BITOR,
 	HYPERCALL_BITXOR,
-	HYPERCALL_BITNOT
+	HYPERCALL_BITNOT,
+	HYPERCALL_GETC,
 } hypercall_t;
 
 /*
@@ -82,6 +83,19 @@ hypercall_bitnot(uint32_t a)
 		     : "=c" (c)
 		     : "a" (HYPERCALL_BITNOT),
 		       "b" (a)
+		     : "cc", "memory");
+
+	return c;
+}
+
+static char gcc_inline
+hypercall_getc(void)
+{
+	char c;
+
+	asm volatile("vmmcall"
+		     : "=b" (c)
+		     : "a" (HYPERCALL_GETC)
 		     : "cc", "memory");
 
 	return c;

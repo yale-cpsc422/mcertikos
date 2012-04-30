@@ -10,6 +10,7 @@ typedef
 enum {
 	CMD_CPUSTAT, CMD_LOAD, CMD_START, CMD_STOP, CMD_STARTVM,
 	CMD_SAFE_BITAND, CMD_SAFE_BITOR, CMD_SAFE_BITXOR, CMD_SAFE_BITNOT,
+	CMD_SAFE_GETC,
 	__CMD_DUMMY
 } cmd_t;
 
@@ -40,7 +41,8 @@ struct cmd_table_t cmd_table[__CMD_DUMMY] = {
 	{CMD_SAFE_BITAND, "bitand", 2, {TYPE_INT, TYPE_INT}},
 	{CMD_SAFE_BITOR, "bitor", 2, {TYPE_INT, TYPE_INT}},
 	{CMD_SAFE_BITXOR, "bitxor", 2, {TYPE_INT, TYPE_INT}},
-	{CMD_SAFE_BITNOT, "bitnot", 1, {TYPE_INT, TYPE_INVAL}}
+	{CMD_SAFE_BITNOT, "bitnot", 1, {TYPE_INT, TYPE_INVAL}},
+	{CMD_SAFE_GETC, "getc", 0, {TYPE_INVAL, TYPE_INVAL}},
 };
 
 static struct {
@@ -224,6 +226,12 @@ exec_cmd()
 		uint32_t a0 = *(uint32_t *) parse_result.arg[0];
 		uint32_t b = hypercall_bitnot(a0);
 		printf("~0x%08x => 0x%08x\n", a0, b);
+		break;
+	}
+
+	case CMD_SAFE_GETC: {
+		char c = hypercall_getc();
+		printf("[echo] %x\n", c);
 		break;
 	}
 

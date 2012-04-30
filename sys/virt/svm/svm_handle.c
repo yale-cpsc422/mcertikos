@@ -632,6 +632,10 @@ svm_handle_vmmcall(struct vm *vm)
 		a1 = ~a0;
 		break;
 
+	case HYPERCALL_GETC:
+		while ((a0 = (uint64_t) getchar()) == 0);
+		break;
+
 	default:
 #ifdef DEBUG_HYPERCALL
 		KERN_DEBUG("Invalid hypercall: nr=%llx.\n", call_nr);

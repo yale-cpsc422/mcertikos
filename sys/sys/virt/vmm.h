@@ -36,7 +36,8 @@ typedef enum {
 	HYPERCALL_BITAND,
 	HYPERCALL_BITOR,
 	HYPERCALL_BITXOR,
-	HYPERCALL_BITNOT
+	HYPERCALL_BITNOT,
+	HYPERCALL_GETC,
 } hypercall_t;
 
 typedef void (*iodev_read_func_t)(struct vm *,
