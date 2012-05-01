@@ -122,7 +122,6 @@ uint32_t sl_syscall(context_t* ctx) {
 
 uint32_t stimer(context_t* ctx) {
 	intr_eoi();
-		cprintf("slave#slave timer!\n");
 	int mycpu = pcpu_cur_idx();
 	if (cpus[mycpu].running && cpus[mycpu].stop) {
 		cpus[mycpu].running = 0;

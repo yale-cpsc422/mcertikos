@@ -506,7 +506,7 @@ master_spurious_handler(context_t *ctx)
 static uint32_t
 master_timer_handler(context_t *ctx)
 {
-	KERN_DEBUG("master_timer_handler\n"); 
+	//KERN_DEBUG("master_timer_handler\n"); 
 	//cprintf("master_timer_handler\n"); 
 
 	time++;
