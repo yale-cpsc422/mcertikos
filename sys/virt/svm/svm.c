@@ -636,6 +636,15 @@ svm_handle_exit(struct vm *vm)
 		handled = svm_handle_rdtscp(vm);
 		break;
 
+	case SVM_EXIT_VMMCALL:
+#ifdef DEBUG_HYPERCALL
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
+		dprintf("VMEXIT for VMMCALL.\n");
+#endif
+		handled = svm_handle_vmmcall(vm);
+		break;
+
 	case SVM_EXIT_ERR:
 		KERN_DEBUG("[%x:%llx] ",
 			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);

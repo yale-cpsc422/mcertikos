@@ -587,6 +587,74 @@ svm_handle_rdtscp(struct vm *vm)
 }
 
 /*
+ * Handle VMMCALL.
+ *  %rax: call number/return value
+ *  %rbx: the 1st parameter
+ *  %rcx: the 2nd parameter
+ *  %rdx: the 3rd parameter
+ *  %rsi: the 4th parameter
+ */
+bool
+svm_handle_vmmcall(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct svm *svm = (struct svm *) vm->cookie;
+	struct vmcb *vmcb = svm->vmcb;
+	struct vmcb_save_area *save = &vmcb->save;
+
+	uint64_t call_nr = save->rax;
+	uint64_t a0 = svm->g_rbx;
+	uint64_t a1 = svm->g_rcx;
+	uint64_t a2 = svm->g_rdx;
+	uint64_t a3 = svm->g_rsi;
+	uint64_t ret = 0;
+
+#ifdef DEBUG_HYPERCALL
+	KERN_DEBUG("HYPERCALL: nr=%llx, param1=%llx, param2=%llx, param3=%llx, param4=%llx.\n",
+		   call_nr, a0, a1, a2, a3);
+#endif
+
+	switch (call_nr) {
+	case HYPERCALL_BITAND:
+		a2 = a0 & a1;
+		break;
+
+	case HYPERCALL_BITOR:
+		a2 = a0 | a1;
+		break;
+
+	case HYPERCALL_BITXOR:
+		a2 = a0 ^ a1;
+		break;
+
+	case HYPERCALL_BITNOT:
+		a1 = ~a0;
+		break;
+
+	case HYPERCALL_GETC:
+		while ((a0 = (uint64_t) getchar()) == 0);
+		break;
+
+	default:
+#ifdef DEBUG_HYPERCALL
+		KERN_DEBUG("Invalid hypercall: nr=%llx.\n", call_nr);
+#endif
+		ret = 1;
+		break;
+	}
+
+	save->rax = ret;
+	svm->g_rbx = a0;
+	svm->g_rcx = a1;
+	svm->g_rdx = a2;
+	svm->g_rsi = a3;
+	save->rip += 3;
+
+	return TRUE;
+}
+
+/*
  * Check the errors of VMCB. (Sec 15.5.1, APM Vol2 r3.19)
  */
 bool
