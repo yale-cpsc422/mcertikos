@@ -11,8 +11,6 @@
 // Page directory entries and page table entries are 32-bit integers.
 typedef uintptr_t pmap_t;
 
-pmap_t *kern_ptab;
-
 void pmap_init(void);
 
 pmap_t *pmap_new(void);
@@ -34,4 +32,5 @@ bool pmap_checkrange(pmap_t *, uintptr_t, size_t);
 
 uintptr_t pmap_la2pa(pmap_t *, uintptr_t la);
 
+pmap_t pmap_bootpdir[NPDENTRIES] gcc_aligned(PAGESIZE);
 #endif /* !_MACHINE_PMAP_H_ */

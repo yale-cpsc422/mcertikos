@@ -93,13 +93,14 @@ vmm_iodev_read_port(struct vm *vm, uint32_t port, void *data, data_sz_t size)
 	KERN_ASSERT(port < MAX_IOPORT);
 
 	if (vm->iodev[port].dev == NULL) {
-		KERN_DEBUG("No IO device was registered on port %x.\n", port);
+		KERN_DEBUG("No IO device was registered on port %x, %d bytes.\n",
+			   port, 1<<size);
 		return 1;
 	}
 
 	if (vm->iodev[port].read_func[size] == NULL) {
-		KERN_DEBUG("No read function was registered on port %x.\n",
-			   port);
+		KERN_DEBUG("No read function was registered on port %x, %d bytes.\n",
+			   port, 1<<size);
 		return 1;
 	}
 
@@ -125,13 +126,14 @@ vmm_iodev_write_port(struct vm *vm, uint32_t port, void *data, data_sz_t size)
 	KERN_ASSERT(port < MAX_IOPORT);
 
 	if (vm->iodev[port].dev == NULL) {
-		KERN_DEBUG("No IO device was registered on port %x.\n", port);
+		KERN_DEBUG("No IO device was registered on port %x, %d bytes.\n",
+			   port, 1<<size);
 		return 1;
 	}
 
 	if (vm->iodev[port].write_func[size] == NULL) {
-		KERN_DEBUG("No write function was registered on port %x.\n",
-			   port);
+		KERN_DEBUG("No write function was registered on port %x, %d bytes.\n",
+			   port, 1<<size);
 		return 1;
 	}
 

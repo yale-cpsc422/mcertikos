@@ -1,5 +1,5 @@
 /*
- * QEMU 8259 interrupt controller emulation
+ * QEMU 8253/8254 interval timer emulation
  *
  * Copyright (c) 2003-2004 Fabrice Bellard
  *
@@ -26,61 +26,57 @@
  * Adapted for CertiKOS by Haozhong Zhang at Yale University.
  */
 
-#ifndef _SYS_VIRT_PIC_H_
-#define _SYS_VIRT_PIC_H_
+#ifndef _SYS_VIRT_DEV_PIT_H_
+#define _SYS_VIRT_DEV_PIT_H_
 
 #ifdef _KERN_
 
+#include <sys/spinlock.h>
+#ifdef USE_KERN_TIMER
+#include <sys/timer.h>
+#endif
 #include <sys/types.h>
 
 #include <sys/virt/vmm.h>
 
-struct i8259 {
-	struct vpic	*vpic;
+/* virtualized i8254 */
 
-	bool		master;
+struct vpit;
 
-	bool		single_mode;
+/* structures of i8254 counter channles */
+struct vpit_channel {
+	spinlock_t	lk;
+	struct vpit	*pit;
 
-	uint8_t		init_state;
-	bool		init4;
+	int32_t		count; /* XXX: valid value range 0x0 ~ 0x10000 */
+	uint16_t	latched_count;
+	uint8_t		count_latched;
+	uint8_t		status_latched;
+	uint8_t		status;
+	uint8_t		read_state;
+	uint8_t		write_state;
+	uint8_t		write_latch;
+	uint8_t		rw_mode;
+	uint8_t		mode;
+	uint8_t		bcd; /* XXX: not implemented yet  */
+	uint8_t		gate;
+	uint64_t	count_load_time;
 
-	uint8_t		lowest_priority;
+	uint64_t	last_intr_time;
+	bool		last_intr_time_valid;
 
-	uint8_t		irq_base;
-	uint8_t		last_irr;
-	uint8_t		irr;
-	uint8_t		isr;
-	uint8_t		imr;
-	uint8_t		int_out;
-
-	bool		select_isr;
-	bool		poll;
-	bool		auto_eoi_mode;
-	bool		rotate_on_auto_eoi;
-	bool		special_mask_mode;
-	bool		fully_nested_mode;
-	bool		special_fully_nested_mode;
-
-	uint8_t		elcr;
-	uint8_t		elcr_mask;
-
-	bool		ready;
+	bool		enabled;
 };
 
-struct vpic {
-	uint8_t		int_out;
-	struct i8259	master;
-	struct i8259	slave;
+/* structure of the virtualized i8254 */
+struct vpit {
+	struct vm		*vm;
+	struct vpit_channel	channels[3];
 };
 
-void vpic_init(struct vpic *, struct vm *);
-bool vpic_has_irq(struct vpic *);
-int vpic_read_irq(struct vpic *);
-int vpic_get_irq(struct vpic *);
-void vpic_set_irq(struct vpic *, int irq, int level);
-bool vpic_is_ready(struct vpic *);
+void vpit_init(struct vpit *, struct vm *);
+void vpit_update(struct vm *);
 
 #endif /* _KERN_ */
 
-#endif /* !_SYS_VIRT_PIC_H_ */
+#endif /* !_SYS_VIRT_DEV_PIT_H_ */

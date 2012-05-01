@@ -1,5 +1,7 @@
 # -*-Makefile-*-
 
+OBJDIRS		+= $(KERN_OBJDIR)/virt/vmx
+
 KERN_SRCFILES	+= $(KERN_DIR)/virt/vmx/vmx.c
 
 # Targets

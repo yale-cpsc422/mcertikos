@@ -16,6 +16,8 @@
 #include <sys/gcc.h>
 #include <sys/types.h>
 
+#include <sys/virt/vmm.h>
+
 enum {
 	INTERCEPT_INTR,
 	INTERCEPT_NMI,
@@ -323,11 +325,16 @@ struct vmcb {
 #define SEG_TYPE_TSS		0xb
 
 #define SVM_INTR_CTRL_VTPR		0xff
-#define SVM_INTR_CTRL_VIRQ		(1 << 8)
-#define SVM_INTR_CTRL_PRIO		(0xf << 16)
-#define SVM_INTR_CTRL_IGN_VTPR		(1 << 20)
-#define SVM_INTR_CTRL_VINTR_MASK	(1 << 24)
-#define SVM_INTR_CTRL_VINTR_VEC		(0xff << 32)
+#define SVM_INTR_CTRL_VIRQ_SHIFT	8
+#define SVM_INTR_CTRL_VIRQ		(1 << SVM_INTR_CTRL_VIRQ_SHIFT)
+#define SVM_INTR_CTRL_PRIO_SHIFT	16
+#define SVM_INTR_CTRL_PRIO		(0xf << SVM_INTR_CTRL_PRIO_SHIFT)
+#define SVM_INTR_CTRL_IGN_VTPR_SHIFT	20
+#define SVM_INTR_CTRL_IGN_VTPR		(1 << SVM_INTR_CTRL_IGN_VTPR_SHIFT)
+#define SVM_INTR_CTRL_VINTR_MASK_SHIFT	24
+#define SVM_INTR_CTRL_VINTR_MASK	(1 << SVM_INTR_CTRL_VINTR_MASK_SHIFT)
+#define SVM_INTR_CTRL_VINTR_VEC_SHIFT	32
+#define SVM_INTR_CTRL_VINTR_VEC		(0xff << SVM_INTR_CTRL_VINTR_VEC_SHIFT)
 
 /* EXITINFO1 for IOIO interception */
 #define SVM_EXITINFO1_PORT_SHIFT	16
@@ -386,17 +393,20 @@ struct svm {
 	 * to do that by ourself.
 	 */
 	uint64_t	g_rbx, g_rcx, g_rdx, g_rsi, g_rdi, g_rbp;
+	uint64_t	enter_tsc;
+	uint64_t	exit_tsc;
 
 	struct vmcb	*vmcb;		/* VMCB */
 
 	bool		single_step;
 	int		skip_intercept;
+	int		pending_vintr;
 };
 
 /* defined in svm_asm.S */
 extern void svm_run(struct svm *);
 
-void set_intercept_ioio(struct vmcb *, uint32_t port, bool enable);
+void set_intercept_ioio(struct vmcb *, uint32_t port, data_sz_t, bool enable);
 void set_intercept_rdmsr(struct vmcb *, uint64_t msr, bool enable);
 void set_intercept_wrmsr(struct vmcb *, uint64_t msr, bool enable);
 void set_intercept(struct vmcb *, int bit, bool enable);

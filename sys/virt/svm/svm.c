@@ -20,15 +20,8 @@
 
 #include "svm.h"
 #include "svm_handle.h"
+#include "svm_intr.h"
 #include "svm_utils.h"
-
-/* struct vcpu { */
-/* 	uint64_t	flags; */
-/* 	int 		h_cpu; */
-/* 	uint64_t	g_msrs[SVM_MSR_NUM]; */
-/* 	struct vlapic	*vlapic; */
-/* 	int		vcpuid; */
-/* }; */
 
 struct {
 	struct svm 	svms[4];
@@ -205,19 +198,25 @@ alloc_permission_map(size_t size)
 }
 
 void
-set_intercept_ioio(struct vmcb *vmcb, uint32_t port, bool enable)
+set_intercept_ioio(struct vmcb *vmcb, uint32_t port, data_sz_t size, bool enable)
 {
 	KERN_ASSERT(vmcb != NULL);
 
 	uint32_t *iopm = (uint32_t *)(uintptr_t) vmcb->control.iopm_base_pa;
 
-	int entry = port / 32;
-	int bit = port - entry * 32;
+	int i;
+	int port1, entry, bit;
 
-	if (enable)
-		iopm[entry] |= (1 << bit);
-	else
-		iopm[entry] &= ~(1 << bit);
+	for (i = 0; i <= size; i++) {
+		port1 = port + i;
+		entry = port1 / 32;
+		bit = port1 - entry *32;
+
+		if (enable == TRUE)
+			iopm[entry] |= (1 << bit);
+		else
+			iopm[entry] |= ~(1 << bit);
+	}
 }
 
 void
@@ -274,7 +273,7 @@ setup_intercept(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
 
-	int i;
+	int i, j;
 
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
@@ -291,9 +290,11 @@ setup_intercept(struct vm *vm)
 
 	/* setup IOIO intercept */
 	for (i = 0 ; i < MAX_IOPORT; i++)
-		if (vm->iodev[i].dev != NULL) {
-			set_intercept_ioio(vmcb, i, TRUE);
-		}
+		if (vm->iodev[i].dev != NULL)
+			for (j = 0; j < 3; j++)
+				if (vm->iodev[i].read_func[j] != NULL ||
+				    vm->iodev[i].write_func[j] != NULL)
+					set_intercept_ioio(vmcb, i, j, TRUE);
 
 	/* create MSRPM */
 	vmcb->control.msrpm_base_pa = alloc_permission_map(SVM_MSRPM_SIZE);
@@ -315,7 +316,8 @@ setup_intercept(struct vm *vm)
 	set_intercept(vmcb, INTERCEPT_CPUID, TRUE);
 	/* set_intercept(vmcb, INTERCEPT_INTn, TRUE); */
 	/* set_intercept(vmcb, INTERCEPT_VINTR, TRUE); */
-	/* set_intercept(vmcb, INTERCEPT_RDTSC, TRUE); */
+	set_intercept(vmcb, INTERCEPT_RDTSC, TRUE);
+	set_intercept(vmcb, INTERCEPT_RDTSCP, TRUE);
 
 	/* setup exception intercept */
 	set_intercept_exception(vmcb, T_DEBUG, TRUE);
@@ -456,6 +458,13 @@ vm_init(struct vm *vm)
 	/* Sec 15.21.1, APM Vol2 r3.19 */
 	svm->vmcb->control.int_ctl = (SVM_INTR_CTRL_VINTR_MASK |
 				      (0x0 & SVM_INTR_CTRL_VTPR));
+	vm->exit_for_intr = FALSE;
+
+	/* initialize TSC */
+	svm->enter_tsc = 0x0;
+	svm->exit_tsc = 0xffffffffffffffff;
+
+	svm->pending_vintr = -1;
 
 	return 0;
 }
@@ -469,6 +478,11 @@ vm_run(struct vm *vm)
 	KERN_ASSERT(vm != NULL);
 
 	struct svm *svm = (struct svm *) vm->cookie;
+	struct vmcb *vmcb = svm->vmcb;
+	struct vmcb_control_area *ctrl = &vmcb->control;
+
+	/* KERN_DEBUG("[%x:%llx] Enter guest.\n", */
+	/* 	   svm->vmcb->save.cs.selector, svm->vmcb->save.rip); */
 
 	SVM_CLGI();
 
@@ -476,8 +490,51 @@ vm_run(struct vm *vm)
 	svm_run(svm);
 	intr_local_disable();
 
-	if(svm->vmcb->control.exit_code == SVM_EXIT_INTR)
+	if(ctrl->exit_code == SVM_EXIT_INTR) {
 		vm->exit_for_intr = TRUE;
+	}
+
+	if (ctrl->exit_int_info & SVM_EXITINTINFO_VALID) {
+		uint32_t exit_int_info = ctrl->exit_int_info;
+		uint32_t errcode = ctrl->exit_int_info_err;
+		uint32_t int_type = exit_int_info & SVM_EXITINTINFO_TYPE_MASK;
+
+		switch (int_type) {
+		case SVM_EXITINTINFO_TYPE_INTR:
+#ifdef DEBUG_GUEST_INTR
+			KERN_DEBUG("Pending INTR: vec=%x.\n",
+				   exit_int_info & SVM_EXITINTINFO_VEC_MASK);
+#endif
+			ctrl->event_inj = exit_int_info;
+			ctrl->event_inj_err = errcode;
+			break;
+
+		case SVM_EXITINTINFO_TYPE_NMI:
+#ifdef DEBUG_GUEST_INTR
+			KERN_DEBUG("Pending NMI.\n");
+#endif
+			ctrl->event_inj = exit_int_info;
+			ctrl->event_inj_err = errcode;
+			break;
+
+		case SVM_EXITINTINFO_TYPE_EXEPT:
+#ifdef DEBUG_GUEST_INTR
+			KERN_DEBUG("Pending exception: vec=%x, errcode=%x.\n",
+				   exit_int_info & SVM_EXITINTINFO_VEC_MASK,
+				   errocde);
+#endif
+			break;
+
+		case SVM_EXITINTINFO_TYPE_SOFT:
+#ifdef DEBUG_GUEST_INTR
+			KERN_DEBUG("Pending soft INTR.\n");
+#endif
+			break;
+
+		default:
+			KERN_PANIC("Invalid event type: %x.\n", int_type);
+		}
+	}
 
 	SVM_STGI();
 
@@ -495,59 +552,109 @@ svm_handle_exit(struct vm *vm)
 
 	bool handled = FALSE;
 
-	if (ctrl->exit_code != SVM_EXIT_IOIO &&
-	    ctrl->exit_code != SVM_EXIT_CPUID)
-		KERN_DEBUG("[%x:%llx] ",
-			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
-
 	switch (ctrl->exit_code) {
 	case SVM_EXIT_EXCP_BASE ... (SVM_EXIT_INTR-1):
+#ifdef DEBUG_GUEST_EXCEPT
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for EXCP ");
+#endif
 		handled = svm_handle_exception(vm);
 		break;
 
 	case SVM_EXIT_INTR:
 		/* kernel interrupt handlers should come before here */
-		dprintf("VMEXIT for INTR.\n");
+#ifdef DEBUG_GUEST_INTR
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
+		dprintf("VMEXIT for INTR (post).\n");
+#endif
+		KERN_ASSERT(vm->exit_for_intr == FALSE);
 		handled = svm_handle_intr(vm);
 		break;
 
 	case SVM_EXIT_VINTR:
+#ifdef DEBUG_GUEST_VINTR
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for VINTR.\n");
+#endif
 		handled = svm_handle_vintr(vm);
 		break;
 
 	case SVM_EXIT_IOIO:
-		/* dprintf("VMEXIT for IO"); */
+#ifdef DEBUG_GUEST_IOIO
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
+		dprintf("VMEXIT for IO");
+#endif
 		handled = svm_handle_ioio(vm);
 		break;
 
 	case SVM_EXIT_NPF:
+#ifdef DEBUG_GUEST_NPF
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for NPF");
+#endif
 		handled = svm_handle_npf(vm);
 		break;
 
 	case SVM_EXIT_CPUID:
-		/* dprintf("VMEXIT for cpuid"); */
+#ifdef DEBUG_GUEST_CPUID
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
+		dprintf("VMEXIT for cpuid");
+#endif
 		handled = svm_handle_cpuid(vm);
 		break;
 
 	case SVM_EXIT_SWINT:
+#ifdef DEBUG_GUEST_SWINT
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for INTn.\n");
+#endif
 		handled = svm_handle_swint(vm);
 		break;
 
 	case SVM_EXIT_RDTSC:
+#ifdef DEBUG_GUEST_TSC
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for RDTSC.\n");
+#endif
 		handled = svm_handle_rdtsc(vm);
 		break;
 
+	case SVM_EXIT_RDTSCP:
+#ifdef DEBUG_GUEST_TSC
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
+		dprintf("VMEXIT for RDTSCP.\n");
+#endif
+		handled = svm_handle_rdtscp(vm);
+		break;
+
+	case SVM_EXIT_VMMCALL:
+#ifdef DEBUG_HYPERCALL
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
+		dprintf("VMEXIT for VMMCALL.\n");
+#endif
+		handled = svm_handle_vmmcall(vm);
+		break;
+
 	case SVM_EXIT_ERR:
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for invalid guest state in VMCB.\n");
 		handled = svm_handle_err(vm);
 		break;
 
 	default:
+		KERN_DEBUG("[%x:%llx] ",
+			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		KERN_PANIC("Unhandled VMEXIT: exit_code = %x.\n",
 			   ctrl->exit_code);
 	}
@@ -560,12 +667,29 @@ svm_handle_exit(struct vm *vm)
 			   ctrl->exit_code);
 	}
 
-	if (vpic_has_irq(&vm->vpic) == TRUE) {
-		int irq = vpic_read_irq(&vm->vpic);
-		svm_inject_event(vmcb, SVM_EVTINJ_TYPE_INTR, irq, FALSE, 0);
-	}
+	svm_intr_assist(vm);
 
 	return 0;
+}
+
+static uint64_t
+svm_get_start_tsc(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct svm *svm = (struct svm *) vm->cookie;
+
+	return svm->enter_tsc;
+}
+
+static uint64_t
+svm_get_exit_tsc(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct svm *svm = (struct svm *) vm->cookie;
+
+	return svm->exit_tsc;
 }
 
 struct vmm_ops vmm_ops_amd = {
@@ -573,5 +697,7 @@ struct vmm_ops vmm_ops_amd = {
 	.vm_init	= vm_init,
 	.vm_run		= vm_run,
 	.vm_exit_handle	= svm_handle_exit,
-	.vm_intr_handle	= svm_guest_intr_handler
+	.vm_intr_handle	= svm_guest_intr_handler,
+	.vm_enter_tsc	= svm_get_start_tsc,
+	.vm_exit_tsc	= svm_get_exit_tsc,
 };

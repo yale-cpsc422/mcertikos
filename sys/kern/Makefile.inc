@@ -1,5 +1,7 @@
 # -*-Makefile-*-
 
+OBJDIRS		+= $(KERN_OBJDIR)/kern
+
 KERN_SRCFILES	+= $(KERN_DIR)/kern/init.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/console.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/pcpu.c
@@ -10,6 +12,7 @@ KERN_SRCFILES	+= $(KERN_DIR)/kern/proc.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/intr.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/master.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/slave.c
+KERN_SRCFILES	+= $(KERN_DIR)/kern/timer.c
 
 # Targets
 

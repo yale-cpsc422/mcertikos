@@ -7,6 +7,7 @@
 #include <sys/virt/dev/serial.h>
 
 #include <dev/serial.h>
+#include <dev/video.h>
 
 static uint8_t
 vserial_ioport_read(uint32_t port)
@@ -23,7 +24,7 @@ vserial_ioport_write(uint32_t port, uint8_t data)
 	KERN_ASSERT(port == COM1 || port == COM2 ||
 		    port == COM3 || port == COM4);
 
-	dprintf("%c", port, (char) data);
+	video_putc((char) data);
 }
 
 static void
@@ -33,7 +34,11 @@ _vserial_ioport_read(struct vm *vm, void *vserial, uint32_t port, void *data)
 	KERN_ASSERT(port == COM1 || port == COM2 ||
 		    port == COM3 || port == COM4);
 
+#if 0
 	*(uint8_t *) data = vserial_ioport_read(port);
+#else
+	*(uint8_t *) data = 0xff;
+#endif
 }
 
 static void

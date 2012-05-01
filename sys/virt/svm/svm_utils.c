@@ -79,7 +79,7 @@ get_guest_instruction(struct vmcb *vmcb)
 void
 load_bios(uintptr_t ncr3)
 {
-	/* load BIOS */
+	/* load BIOS ROM */
 	extern uint8_t _binary___misc_bios_bin_start[],
 		_binary___misc_bios_bin_size[];
 
@@ -88,18 +88,16 @@ load_bios(uintptr_t ncr3)
 	uintptr_t bios_addr = 0x100000 - (size_t) _binary___misc_bios_bin_size;
 
 	pmap_copy((pmap_t *) ncr3, bios_addr,
-		  kern_ptab, (uintptr_t) _binary___misc_bios_bin_start,
+		  (pmap_t *) rcr3(), (uintptr_t) _binary___misc_bios_bin_start,
 		  (size_t) _binary___misc_bios_bin_size);
 
-#if 1
-	/* load VGA BIOS */
+	/* load VGA BIOS ROM */
 	extern uint8_t _binary___misc_vgabios_bin_start[],
 		_binary___misc_vgabios_bin_size[];
 
 	/* KERN_ASSERT((size_t) _binary___misc_vgabios_bin_size <= 0x8000); */
 
 	pmap_copy((pmap_t *) ncr3, 0xc0000,
-		  kern_ptab, (uintptr_t) _binary___misc_vgabios_bin_start,
+		  (pmap_t *) rcr3(), (uintptr_t) _binary___misc_vgabios_bin_start,
 		  (size_t) _binary___misc_vgabios_bin_size);
-#endif
 }

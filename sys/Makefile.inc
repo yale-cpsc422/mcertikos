@@ -3,11 +3,14 @@
 KERN_DIR	:= sys
 KERN_OBJDIR	:= $(OBJDIR)/sys
 
+OBJDIRS		+= $(KERN_OBJDIR)
+
 # Arch-independent compiling and linking options
-KERN_CFLAGS	:= $(CFLAGS) -D_KERN_ -O1 -I$(KERN_DIR) -I.
+KERN_CFLAGS	:= $(CFLAGS) -D_KERN_ -O2 -I$(KERN_DIR) -I.
 KERN_LDFLAGS	:= $(LDFLAGS) -e start
 
 # Sub-makefiles
+include		$(KERN_DIR)/config.mk
 include		$(KERN_DIR)/arch/Makefile.inc
 include		$(KERN_DIR)/dev/Makefile.inc
 include		$(KERN_DIR)/kern/Makefile.inc

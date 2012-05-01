@@ -52,7 +52,7 @@
  * Frequency of all three count-down timers; (TIMER_FREQ/freq) is the
  * appropriate count to generate a frequency of freq hz.
  */
-#define	TIMER_FREQ	1193182
+#define	TIMER_FREQ	1193181.182
 #define TIMER_DIV(x)	((TIMER_FREQ+(x)/2)/(x))
 
 /*
@@ -77,7 +77,11 @@
 #define		TIMER_16BIT	0x30	/* r/w counter 16 bits, LSB first */
 #define		TIMER_BCD	0x01	/* count in BCD */
 
-void timer_init(void);
+#define CAL_MS		10
+#define CAL_LATCH	(TIMER_FREQ / (1000 / CAL_MS))
+#define CAL_PIT_LOOPS	1000
+
+void timer_hw_init(void);
 uint64_t timer_read(void);
 
 #endif /* !_KERN_DEV_TIMER_H_ */

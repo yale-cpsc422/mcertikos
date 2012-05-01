@@ -3,11 +3,12 @@
 #include <sys/spinlock.h>
 #include <sys/string.h>
 #include <sys/types.h>
-#include <sys/x86.h>
 
 #include <sys/virt/vmm.h>
 
 #include <machine/pcpu.h>
+
+#include <dev/tsc.h>
 
 static bool vmm_inited = FALSE;
 
@@ -29,6 +30,31 @@ static bool gcc_inline
 is_amd(void)
 {
 	return (strncmp(cpuinfo.vendor, "AuthenticAMD", 20) == 0);
+}
+
+static void
+vmm_pre_time_update(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	/* empty currently */
+}
+
+static void
+vmm_post_time_update(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	/* update guest TSC */
+	uint64_t enter_host_tsc = vmm_ops->vm_enter_tsc(vm);
+	uint64_t exit_host_tsc = vmm_ops->vm_exit_tsc(vm);
+	KERN_ASSERT(enter_host_tsc < exit_host_tsc);
+	uint64_t delta = exit_host_tsc - enter_host_tsc;
+	uint64_t incr = (delta * VM_TSC_FREQ) / (tsc_per_ms * 1000);
+	vm->tsc += (incr - VM_TSC_ADJUST);
+
+	/* update guest PIT */
+	vpit_update(vm);
 }
 
 int
@@ -96,12 +122,23 @@ vmm_init_vm(void)
 
 	vm->exit_for_intr = FALSE;
 
+	vm->tsc = 0;
+
 	/* initializa virtualized devices */
+	/* XXX: there is no order requirement right now. */
 	vpic_init(&vm->vpic, vm);
 	vkbd_init(&vm->vkbd, vm);
 	vpci_init(&vm->vpci, vm);
-	/* vserial_init(&vm->vserial, vm); */
 	vnvram_init(&vm->vnvram, vm);
+	vpit_init(&vm->vpit, vm);
+
+#ifdef REDIRECT_GUEST_SERIAL
+	vserial_init(&vm->vserial, vm);
+#endif
+
+#ifdef GUEST_DEBUG_DEV
+	guest_debug_dev_init(&vm->debug_dev, vm);
+#endif
 
 	/* machine-dependent VM initialization */
 	if (vmm_ops->vm_init(vm) != 0) {
@@ -121,7 +158,12 @@ vmm_run_vm(struct vm *vm)
 	cur_vm = vm;
 
 	while (1) {
+		vmm_pre_time_update(vm);
+
 		vmm_ops->vm_run(vm);
+
+		vmm_post_time_update(vm);
+
 		/*
 		 * If VM exits for interrupts, then enable interrupts in the
 		 * host in order to let host interrupt handlers come in.
@@ -149,6 +191,9 @@ vmm_run_vm(struct vm *vm)
 		 *         }
 		 *      , which will halt the whole kernel when the if condition
 		 *      is satisfied.
+		 * XXX: Another solution is to declare exit_for_intr as volatile.
+		 *      CertiKOS uses both to prevent compilers doing
+		 *      unnecessary optimizations.
 		 */
 		while (vm->exit_for_intr == TRUE)
 			pause();
@@ -178,6 +223,13 @@ void
 vmm_handle_intr(struct vm *vm, uint8_t irqno)
 {
 	KERN_ASSERT(vm != NULL);
-
 	vmm_ops->vm_intr_handle(vm, irqno);
+}
+
+uint64_t
+vmm_rdtsc(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	return vm->tsc;
 }

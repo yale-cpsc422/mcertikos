@@ -25,7 +25,9 @@ cons_init()
 
 	cons.kbd_enabled = FALSE;
 
+#ifdef SERIAL_DEBUG
 	serial_init();
+#endif
 	video_init();
 	kbd_init();
 }
@@ -54,7 +56,9 @@ cons_getc(void)
 	// poll for any pending input characters,
 	// so that this function works even when interrupts are disabled
 	// (e.g., when called from the kernel monitor).
+#ifdef SERIAL_DEBUG
 	serial_intr();
+#endif
 	kbd_intr();
 
 	// grab the next character from the input buffer.
@@ -73,6 +77,8 @@ cons_getc(void)
 void
 cons_putc(char c)
 {
+#ifdef SERIAL_DEBUG
 	serial_putc(c);
+#endif
 	video_putc(c);
 }

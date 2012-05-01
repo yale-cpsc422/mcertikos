@@ -9,11 +9,19 @@
 #include <sys/virt/dev/nvram.h>
 #include <sys/virt/dev/pci.h>
 #include <sys/virt/dev/pic.h>
+#include <sys/virt/dev/pit.h>
 #include <sys/virt/dev/serial.h>
+#include <sys/virt/dev/debug_dev.h>
 
 #include <machine/trap.h>
 
-#define VM_PHY_MEMORY_SIZE	(64 * 1024 * 1024)
+#define VM_PHY_MEMORY_SIZE	(128 * 1024 * 1024)
+
+#define VM_TIME_SCALE		1
+#define VM_TSC_ADJUST		0
+
+#define VM_PIT_FREQ		(1193182)
+#define VM_TSC_FREQ		(800 * 1000 * 1000 / VM_TIME_SCALE)
 
 #define MAX_IOPORT		0x10000
 #define MAX_EXTINTR		0x100
@@ -24,6 +32,14 @@ typedef enum {
 	SZ32	/* 4 byte */
 } data_sz_t;
 
+typedef enum {
+	HYPERCALL_BITAND,
+	HYPERCALL_BITOR,
+	HYPERCALL_BITXOR,
+	HYPERCALL_BITNOT,
+	HYPERCALL_GETC,
+} hypercall_t;
+
 typedef void (*iodev_read_func_t)(struct vm *,
 				  void *iodev, uint32_t port, void *data);
 typedef void (*iodev_write_func_t)(struct vm *,
@@ -33,7 +49,7 @@ typedef void (*intr_handle_t)(struct vm *);
 struct vm {
 	void		*cookie;	/* processor-specific data */
 
-	bool		exit_for_intr;	/* VMEXIT for interrupts */
+	volatile bool	exit_for_intr;	/* VMEXIT for interrupts */
 
 	struct {
 		void			*dev;
@@ -46,11 +62,16 @@ struct vm {
 		intr_handle_t	handle;
 	} extintr[MAX_EXTINTR];
 
+	uint64_t	tsc;		/* TSC read by guests */
+
 	struct vpic	vpic;		/* virtual PIC (i8259) */
 	struct vpci	vpci;		/* virtual PCI host */
-	struct vkbd	vkbd;		/* virtual keyboard */
+	struct vkbd	vkbd;		/* virtual keyboard controller (i8042) */
 	struct vserial	vserial;	/* virtual serial ports */
 	struct vnvram	vnvram;		/* virtual NVRAM */
+	struct vpit	vpit;		/* virtual PIT (i8254) */
+
+	struct guest_debug_dev debug_dev;
 
 	bool		used;
 };
@@ -84,11 +105,25 @@ typedef int (*vm_run_func_t)(struct vm *);
 typedef int (*vm_exit_handle_func_t)(struct vm *);
 
 /*
- * Arch-dependent function that handle interrupts in the guest.
+ * Arch-dependent function that handles interrupts in the guest.
  *
  * @return 0 if no errors happen
  */
 typedef int (*vm_intr_handle_func_t)(struct vm *, uint8_t irqno);
+
+/*
+ * Arch-dependent function that gets last TSC when entering the guest
+ *
+ * @return TSC
+ */
+typedef uint64_t (*vm_enter_tsc_func_t)(struct vm *);
+
+/*
+ * Arch-dependent function that gets last TSC when exiting the gueste
+ *
+ * @return TSC
+ */
+typedef uint64_t (*vm_exit_tsc_func_t)(struct vm *);
 
 typedef enum {EVENT_INT, EVENT_NMI, EVENT_EXPT, EVENT_SWINT} event_t;
 
@@ -118,6 +153,8 @@ struct vmm_ops {
 	vm_exit_handle_func_t	vm_exit_handle;
 	vm_intr_handle_func_t	vm_intr_handle;
 	vm_inject_func_t	vm_inject;
+	vm_enter_tsc_func_t	vm_enter_tsc;
+	vm_exit_tsc_func_t	vm_exit_tsc;
 };
 
 /*
@@ -141,14 +178,26 @@ int vmm_run_vm(struct vm *);
 struct vm *vmm_cur_vm(void);
 
 /*
- * Assert/Deassert an IRQ to VM.
+ * Set the level of an IRQ of the virtualized PIC/APIC.
+ * XXX: It's to set the level of an IRQ line, other than to trigger or
+ *      untrigger an interrupt, e.g. for an edge-triggered interrupt IRQ1,
+ *        vmm_set_vm_irq(vm, IRQ1, 1);
+ *      does not trigger IRQ1 if the level of IRQ1 is already 1;
+ *        vmm_set_vm_irq(vm, IRQ1, 0);
+ *        vmm_set_vm_irq(vm, IRQ1, 1);
+ *      emulate the edge trigger and conseqently do trigger the interrupt.
  */
 void vmm_set_vm_irq(struct vm *, int irq, int level);
 
 /*
- *
+ * VMM stage of interrupt handling.
  */
 void vmm_handle_intr(struct vm *, uint8_t irqno);
+
+/*
+ * Read TSC of a VM.
+ */
+uint64_t vmm_rdtsc(struct vm *);
 
 #endif /* _KERN_ */
 

@@ -33,16 +33,13 @@ trap(tf_t *tf)
 
 	asm volatile("cld" ::: "cc");
 
-        if (tf->trapno < T_IRQ0)
-                trap_dump(tf);
+
+	if (tf->trapno < T_IRQ0)
+		trap_dump(tf);
 
 	context_t *ctx = NULL;
-/*
-	if (rcr3() != (uint32_t) kern_ptab) {
-		pmap_install(kern_ptab);
-*/
-	if (tf->eip >= VM_USERLO) {
 
+	if (tf->eip >= VM_USERLO) {
 		ctx = context_cur();
 		KERN_ASSERT(ctx != NULL);
 		context_set_cur(NULL);
@@ -63,6 +60,7 @@ trap(tf_t *tf)
 			  handler for it, just let VMM handle the interrupt. */
 			struct vm *vm = vmm_cur_vm();
 			int irq = tf->trapno - T_IRQ0;
+			KERN_DEBUG("vm=%x, irq=%d, eip=%x.\n", vm, irq, tf->eip);
 			KERN_ASSERT(vm != NULL && irq >= 0);
 			vmm_handle_intr(vm, irq);
 		}

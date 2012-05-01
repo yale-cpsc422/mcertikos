@@ -3,3 +3,6 @@ cscope.*
 *~
 obj
 obj/*
+*.DS_Store
+misc/qemu
+misc/qemu/*

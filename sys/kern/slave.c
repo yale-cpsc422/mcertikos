@@ -30,6 +30,7 @@ void wait_to_start(void);
 
 static uint8_t cbuf[PAGESIZE];
 extern uint32_t time;
+//extern pmap_t pmap_bootpdir[];
 
 
 char sigbuf[PAGESIZE-12];
@@ -64,7 +65,7 @@ copy_from_user(void *dest, void *src, size_t size)
                 return NULL;
         }
 
-        pmap_copy(kern_ptab, (uintptr_t) dest, user_pmap, (uintptr_t) src, size);
+        pmap_copy(pmap_bootpdir, (uintptr_t) dest, user_pmap, (uintptr_t) src, size);
 
         return dest;
 }
@@ -121,6 +122,7 @@ uint32_t sl_syscall(context_t* ctx) {
 
 uint32_t stimer(context_t* ctx) {
 	intr_eoi();
+		cprintf("slave#slave timer!\n");
 	int mycpu = pcpu_cur_idx();
 	if (cpus[mycpu].running && cpus[mycpu].stop) {
 		cpus[mycpu].running = 0;

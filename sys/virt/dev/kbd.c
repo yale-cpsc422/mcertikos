@@ -1,4 +1,33 @@
+/*
+ * QEMU PC keyboard emulation
+ *
+ * Copyright (c) 2003 Fabrice Bellard
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+/*
+ * Adapted for CertiKOS by Haozhong Zhang at Yale University.
+ */
+
 #include <sys/debug.h>
+#include <sys/gcc.h>
 #include <sys/string.h>
 #include <sys/types.h>
 #include <sys/trap.h>
@@ -10,6 +39,21 @@
 #include <sys/virt/dev/ps2.h>
 
 #include <dev/kbd.h>
+
+#ifdef DEUBG_VKBD
+
+#define vkbd_debug vkbd_debug
+
+#else
+
+static gcc_inline void
+vkbd_debug_foo(const char *fmt, ...)
+{
+}
+
+#define vkbd_debug vkbd_debug_foo
+
+#endif
 
 /* Keyboard Controller Commands */
 #define KBD_CCMD_READ_MODE	0x20	/* Read mode bits */
@@ -186,10 +230,10 @@ vkbd_queue(struct vkbd *vkbd, int b, int aux)
 	KERN_ASSERT(vkbd != NULL);
 
 	if (aux) {
-		KERN_DEBUG("Enqueue %x to AUX.\n", (uint8_t) b);
+		vkbd_debug("Enqueue %x to AUX.\n", (uint8_t) b);
 		ps2_queue(&vkbd->mouse.common, b);
 	} else {
-		KERN_DEBUG("Enqueue %x to KBD.\n", (uint8_t) b);
+		vkbd_debug("Enqueue %x to KBD.\n", (uint8_t) b);
 		ps2_queue(&vkbd->kbd.common, b);
 	}
 }
@@ -383,7 +427,7 @@ _vkbd_ioport_read(struct vm *vm, void *vkbd, uint32_t port, void *data)
 	else
 		*(uint8_t *) data = vkbd_read_data(vkbd);
 
-	/* KERN_DEBUG("port=%x, data=%x.\n", port, *(uint8_t *) data); */
+	/* vkbd_debug("Read port=%x, data=%x.\n", port, *(uint8_t *) data); */
 }
 
 static void
@@ -392,7 +436,7 @@ _vkbd_ioport_write(struct vm *vm, void *vkbd, uint32_t port, void *data)
 	KERN_ASSERT(vm != NULL && vkbd != NULL && data != NULL);
 	KERN_ASSERT(port == KBCMDP || port == KBDATAP);
 
-	/* KERN_DEBUG("port=%x, data=%x.\n", port, *(uint8_t *) data); */
+	/* vkbd_debug("Write port=%x, data=%x.\n", port, *(uint8_t *) data); */
 
 	if (port == KBDATAP)
 		vkbd_write_data(vkbd, *(uint8_t *) data);
@@ -418,6 +462,11 @@ vkbd_sync_kbd(struct vm *vm)
 		int c = inb(KBDATAP);
 		vkbd_queue(&vm->vkbd, c, 0);
 	}
+}
+
+void inject_vkbd_queue(struct vkbd *vkbd, int b, int aux)
+{
+  	vkbd_queue(vkbd, b, aux);
 }
 
 void

@@ -18,14 +18,17 @@ static uint16_t last;		// Last timer count read
 
 // Initialize the programmable interval timer.
 void
-timer_init(void)
+timer_hw_init(void)
 {
 	if (pcpu_onboot() == FALSE)
 		return;
 
 	spinlock_init(&lock);
 
-	// Initialize 8253 clock 0 to the maximum counter value, 65535.
+	base = 0;
+	last = 0;
+
+	/* initialize i8254 to generate an interrupt per tick */
 	outb(TIMER_MODE, TIMER_SEL0 | TIMER_RATEGEN | TIMER_16BIT);
 	outb(IO_TIMER1, 0xff);
 	outb(IO_TIMER1, 0xff);

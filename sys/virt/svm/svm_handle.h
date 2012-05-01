@@ -10,7 +10,6 @@
 void svm_inject_event(struct vmcb *,
 		      uint32_t type, uint8_t vector, bool ev, uint32_t errcode);
 
-void svm_guest_handle_gpf(struct vm *, tf_t *);
 int svm_guest_intr_handler(struct vm *, uint8_t irq);
 
 bool svm_handle_exception(struct vm *);
@@ -21,7 +20,11 @@ bool svm_handle_npf(struct vm *);
 bool svm_handle_cpuid(struct vm *);
 bool svm_handle_swint(struct vm *);
 bool svm_handle_rdtsc(struct vm *);
+bool svm_handle_rdtscp(struct vm *);
+bool svm_handle_vmmcall(struct vm *);
 bool svm_handle_err(struct vm *);
+
+void svm_inject_vintr(struct vmcb *, uint8_t, uint8_t);
 
 #endif /* _KERN_ */
 

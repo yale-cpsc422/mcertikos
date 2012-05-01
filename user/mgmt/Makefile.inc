@@ -1,5 +1,7 @@
 # -*-Makefile-*-
 
+OBJDIRS		+= $(USER_OBJDIR)/mgmt
+
 USER_MGMT_SRC	+= $(USER_DIR)/mgmt/mgmt_asm.S
 USER_MGMT_SRC	+= $(USER_DIR)/mgmt/mgmt.c
 

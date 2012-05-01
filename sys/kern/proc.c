@@ -22,6 +22,8 @@ struct {
 
 static bool proc_inited;
 
+//extern pmap_t* pmap_bootpdir;
+//extern pmap_t  pmap_bootpdir[];
 /*
  * Check whether a proc structure is in ptable.proc[].
  *
@@ -213,16 +215,18 @@ proc_new(uintptr_t binary)
 		return NULL;
 	}
 	
-	pmap_t *cur_cr3= (pmap_t *) rcr3();
+	
+	proc_t *mgmt=pcpu_cur()->proc;
+	pmap_t *mgmt_pmap= (pcpu_cur())->proc->pmap;
+	/*pmap_t *cur_cr3= (pmap_t *) rcr3();
 	pmap_t *cur_pmap= (pcpu_cur())->pmap;
 	proc_t *mgmt=pcpu_cur()->proc;
 	pmap_t *mgmt_pmap= (pcpu_cur())->proc->pmap;
-
 	KERN_DEBUG("cr3_ptab:%x\n",cur_cr3);
 	KERN_DEBUG("kern_ptab:%x\n",kern_ptab);
 	KERN_DEBUG("cur_ptab_pcpu:%x\n",cur_pmap);
 	KERN_DEBUG("mgmt_ptab:%x\n",mgmt_pmap);
-
+*/
 	if (mgmt!=NULL){
 		KERN_DEBUG("binary:%x\n",binary);
 		//binary=pmap_la2pa(mgmt_pmap,binary);
@@ -234,7 +238,8 @@ proc_new(uintptr_t binary)
 		context_new((void (*)(void)) elf_entry(binary_in_mgmt),
 			    VM_STACKHI - PAGESIZE);
 	} else {
-		load_elf(kern_ptab,binary,proc->pmap);
+		//load_elf(kern_ptab,binary,proc->pmap);
+		load_elf(pmap_bootpdir,binary,proc->pmap);
 		//elf_load(kern_ptab,binary,proc);
 		proc->normal_ctx =
 		context_new((void (*)(void)) elf_entry(binary),

@@ -1,5 +1,7 @@
 # -*-Makefile-*-
 
+OBJDIRS		+= $(KERN_OBJDIR)/dev
+
 KERN_SRCFILES	+= $(KERN_DIR)/dev/video.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/kbd.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/serial.c
@@ -8,6 +10,7 @@ KERN_SRCFILES	+= $(KERN_DIR)/dev/pic.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/lapic.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/ioapic.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/timer.c
+KERN_SRCFILES	+= $(KERN_DIR)/dev/tsc.c
 
 # Targets
 

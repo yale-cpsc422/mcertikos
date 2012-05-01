@@ -1,0 +1,29 @@
+Installation Guide
+
+There are three different ways to setup CertiKOS on disk/disk images.
+
+1 Grub2 + CertiKOS
+This is the recommended way to setup CertiKOS.
+
+1.1 Prerequisite
+Grub2, dd (only needed when installing CertiKOS on real disks)
+
+1.2 Installation
+(1) Change current work directory to the root directory of CertiKOS, and type following command
+
+      make iso
+
+    . This command creates a disk image file certikos.img in directory obj/. It can be used in
+    QEMU and BOCHS.
+
+(2) (optional) Suppose the disk device where you want to install CertiKOS is /dev/sdb. Type following command to install the disk image to the disk
+
+      dd if=obj/certikos.img of=/dev/sdb bs=4096
+
+    . (NOTE: this command will break original data (MBR, partition table, file system, etc.) on the disk.) Set this disk as the first boot device and then start to play with CertiKOS.
+
+2 Grub + CertiKOS
+TO BE COMPLETED
+
+3 Tiny bootloader + CertiKOS
+TO BE COMPLETED

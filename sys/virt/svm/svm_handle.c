@@ -14,6 +14,7 @@
 #include "svm.h"
 #include "svm_handle.h"
 #include "svm_utils.h"
+#include "svm_intr.h"
 
 /*
  * Inject an event to the guest. (Sec 15.20, APM Vol2 r3.19)
@@ -37,6 +38,8 @@ svm_inject_event(struct vmcb *vmcb,
 
 	struct vmcb_control_area *ctrl = &vmcb->control;
 
+	KERN_ASSERT((ctrl->event_inj & SVM_EVTINJ_VALID) == 0);
+
 	ctrl->event_inj =
 		SVM_EVTINJ_VALID |
 		((type << SVM_EVTINJ_TYPE_SHIFT) & SVM_EVTINJ_TYPE_MASK) |
@@ -46,22 +49,46 @@ svm_inject_event(struct vmcb *vmcb,
 	if (ev == TRUE)
 		ctrl->event_inj |= SVM_EVTINJ_VALID_ERR;
 
-	KERN_DEBUG("Inject event: type=%x, vec=%x, errcode=%x\n",
-		   type, vector, errcode);
+	switch (type) {
+	case SVM_EVTINJ_TYPE_INTR:
+#ifdef DEBUG_EVT_INJECT
+		KERN_DEBUG("Inject ExtINTR: vec=%x.\n", vector);
+#endif
+		break;
+	case SVM_EVTINJ_TYPE_NMI:
+#ifdef DEBUG_EVT_INJECT
+		KERN_DEBUG("Inject NMI.\n");
+#endif
+		break;
+	case SVM_EVTINJ_TYPE_EXEPT:
+#ifdef DEBUG_EVT_INJECT
+		KERN_DEBUG("Inject exception: vec=%x, ev=%x, errcode=%x.\n",
+			   vector, ev, errcode);
+#endif
+		break;
+	case SVM_EVTINJ_TYPE_SOFT:
+#ifdef DEBUG_EVT_INJECT
+		KERN_DEBUG("Inject INT %x.\n", vector);
+#endif
+		break;
+	}
 }
 
-static void
+void
 svm_inject_vintr(struct vmcb *vmcb, uint8_t vector, uint8_t priority)
 {
 	KERN_ASSERT(vmcb != NULL);
 
 	struct vmcb_control_area *ctrl  = &vmcb->control;
 
-	ctrl->int_ctl =
-		SVM_INTR_CTRL_VIRQ | ((priority << 16) & SVM_INTR_CTRL_PRIO);
+	ctrl->int_ctl |= SVM_INTR_CTRL_VIRQ |
+		((priority << SVM_INTR_CTRL_PRIO_SHIFT) & SVM_INTR_CTRL_PRIO) |
+		SVM_INTR_CTRL_IGN_VTPR;
 	ctrl->int_vector = vector;
 
+#ifdef DEBUG_EVT_INJECT
 	KERN_DEBUG("Inject VINTR: vec=%x, prio=%x.\n", vector, priority);
+#endif
 }
 
 /*
@@ -138,19 +165,6 @@ physical_ioport_write(uint32_t port, void *data, data_sz_t size)
 	}
 }
 
-void
-svm_guest_handle_gpf(struct vm *vm, tf_t *tf)
-{
-	KERN_ASSERT(tf != NULL);
-	KERN_ASSERT(tf->trapno == T_GPFLT);
-
-
-	if (vm == NULL || vm->exit_for_intr == FALSE)
-		KERN_PANIC("General protection fault in kernel.\n");
-	else
-		KERN_PANIC("Trap %x from guest.\n", tf->trapno);
-}
-
 /*
  * Handle interrupts from guest. The default behavior is to inject the interrupt
  * back to the guest.
@@ -160,21 +174,24 @@ svm_guest_intr_handler(struct vm *vm, uint8_t irq)
 {
 	KERN_ASSERT(vm != NULL && vm->exit_for_intr == TRUE);
 
+	KERN_ASSERT(irq >= 0);
+#ifdef DEBUG_GUEST_INTR
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_save_area *save = &vmcb->save;
-
-	KERN_ASSERT(irq >= 0);
-	KERN_DEBUG("INTR%x happened in the guest (gIF=%x, hIF=%x).\n",
+	KERN_DEBUG("INTR %x happened in the guest (gIF=%x, hIF=%x).\n",
 		   irq, (save->rflags & FL_IF), (read_eflags() & FL_IF));
+#endif
 
 	if (vmm_handle_extintr(vm, irq)) {
 		/*
 		 * If there is no handler for this interrupt, then inject the
 		 * interrupt to the guest.
 		 */
-		if (vpic_is_ready(&vm->vpic) == TRUE)
+		if (vpic_is_ready(&vm->vpic) == TRUE) {
+			vpic_set_irq(&vm->vpic, irq, 0);
 			vpic_set_irq(&vm->vpic, irq, 1);
+		}
 	}
 
 	vm->exit_for_intr = FALSE;
@@ -195,7 +212,9 @@ svm_handle_exception(struct vm *vm)
 
 	switch (exit_code) {
 	case SVM_EXIT_EXCP_BASE+T_DEBUG:
+#ifdef DEBUG_GUEST_EXCEPT
 		dprintf("DEBUG.\n");
+#endif
 
 		if (svm->single_step == TRUE) {
 			svm->single_step = FALSE;
@@ -207,8 +226,10 @@ svm_handle_exception(struct vm *vm)
 		break;
 
 	default:
+#ifdef DEBUG_GUEST_EXCEPT
 		KERN_DEBUG("Unhandled expection %x.\n",
 			   exit_code - SVM_EXIT_EXCP_BASE);
+#endif
 		return FALSE;
 	}
 
@@ -219,6 +240,7 @@ bool
 svm_handle_intr(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
+	/* Interrupts should be already handled before. */
 	return TRUE;
 }
 
@@ -230,16 +252,40 @@ svm_handle_vintr(struct vm *vm)
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_control_area *ctrl = &vmcb->control;
+	struct vmcb_save_area *save = &vmcb->save;
 
-	uint8_t v_tpr = ctrl->int_ctl & 0xff;
-	int pending = (ctrl->int_ctl >> 8) & 0x1;
-	uint8_t v_prio = (ctrl->int_ctl >> 16) & 0xf;
-	int ign_tpr = (ctrl->int_ctl >> 20) & 0x1;
-	int mask_vintr = (ctrl->int_ctl >> 24) & 0x1;
+#ifdef DEBUG_GUEST_VINTR
+	uint8_t v_tpr = ctrl->int_ctl & SVM_INTR_CTRL_VTPR;
+	int pending = ctrl->int_ctl & SVM_INTR_CTRL_VIRQ;
+	uint8_t v_prio = ctrl->int_ctl & SVM_INTR_CTRL_PRIO;
+	int ign_tpr = ctrl->int_ctl & SVM_INTR_CTRL_IGN_VTPR;
+	int mask_vintr = ctrl->int_ctl & SVM_INTR_CTRL_VINTR_MASK;
 	uint8_t vector = ctrl->int_vector;
 
 	KERN_DEBUG("VINTR: pending=%d, vector=%x, TPR=%x, ignore TPR=%x, prio=%x, mask=%x.\n",
-		   pending, vector, v_tpr, ign_tpr, v_prio, mask_vintr);
+		   pending >> SVM_INTR_CTRL_VIRQ_SHIFT,
+		   vector, v_tpr,
+		   ign_tpr >> SVM_INTR_CTRL_IGN_VTPR_SHIFT,
+		   v_prio >> SVM_INTR_CTRL_PRIO_SHIFT,
+		   mask_vintr >> SVM_INTR_CTRL_VINTR_MASK_SHIFT);
+#endif
+
+	if (save->rflags) {
+		if (!(save->rflags & FL_IF))
+			/*
+			 * XXX: Is IF bit of EFLAGS always set whenever a
+			 *      virtual interrupt is taken?
+			 * TODO: If so, change this branch to an assertion
+			 *         KERN_ASSERT(save->rflags & FL_IF);
+			 */
+			KERN_WARN("IF FLAG is not set ! \n");
+		else {
+#ifdef DEUBG_GUEST_VINTR
+			KERN_DEBUG("IF FLAG is set ! \n");
+#endif
+			ctrl->int_ctl &= ~SVM_INTR_CTRL_VIRQ;
+		}
+	}
 
 	return TRUE;
 }
@@ -270,37 +316,53 @@ svm_handle_ioio(struct vm *vm)
 	uint32_t data = (uint32_t) save->rax;
 	data_sz_t size = SZ8; /* set the default data size to 1 byte */
 
-	/* dprintf("(port=%x, ", port); */
+#ifdef DEBUG_GUEST_IOIO
+	dprintf("(port=%x, ", port);
+#endif
 
 	if (sz32) {
-		/* dprintf("4 bytes, "); */
+#ifdef DEBUG_GUEST_IOIO
+		dprintf("4 bytes, ");
+#endif
 		data = (uint32_t) data;
 		size = SZ32;
 	} else if (sz16) {
-		/* dprintf("2 bytes, "); */
+#ifdef DEBUG_GUEST_IOIO
+		dprintf("2 bytes, ");
+#endif
 		data = (uint16_t) data;
 		size = SZ16;
 	} else if (sz8) {
-		/* dprintf("1 byte, "); */
+#ifdef DEBUG_GUEST_IOIO
+		dprintf("1 byte, ");
+#endif
 		data = (uint8_t) data;
 		size = SZ8;
 	} else
 		KERN_PANIC("Invalid data length.\n");
 
 	if (type & SVM_EXITINFO1_TYPE_IN) {
-		/* dprintf("in).\n"); */
+#ifdef DEBUG_GUEST_IOIO
+		dprintf("in).\n");
+#endif
 		ret = vmm_iodev_read_port(vm, port, &data, size);
 
 		if (ret) {
-			/* KERN_DEBUG("Passthrough\n"); */
+#ifdef DEBUG_GUEST_IOIO
+			KERN_DEBUG("Passthrough\n");
+#endif
 			physical_ioport_read(port, &data, size);
 		}
 	} else {
-		/* dprintf("out).\n"); */
+#ifdef DEBUG_GUEST_IOIO
+		dprintf("out).\n");
+#endif
 		ret = vmm_iodev_write_port(vm, port, &data, size);
 
 		if (ret) {
-			/* KERN_DEBUG("Passthrough\n"); */
+#ifdef DEBUG_GUEST_IOIO
+			KERN_DEBUG("Passthrough\n");
+#endif
 			physical_ioport_write(port, &data, size);
 		}
 	}
@@ -337,7 +399,9 @@ svm_handle_npf(struct vm *vm)
 	uint64_t errcode = ctrl->exit_info_1;
 	uintptr_t fault_addr = (uintptr_t) PGADDR(ctrl->exit_info_2);
 
+#ifdef DEBUG_GUEST_NPF
 	dprintf("(va=%x, err=%llx).\n", fault_addr, errcode);
+#endif
 
 	KERN_ASSERT(errcode & SVM_EXITINFO1_NFP_U);
 
@@ -362,8 +426,10 @@ svm_handle_npf(struct vm *vm)
 
 	if (pmap_reserve((pmap_t *)(uintptr_t) ctrl->nested_cr3,
 			 fault_addr, PTE_W | PTE_G | PTE_U) == NULL) {
+#ifdef DEBUG_GUEST_NPF
 		KERN_DEBUG("Failed to reserve memory for guest address %x.\n",
 			   fault_addr);
+#endif
 		return FALSE;
 	}
 
@@ -393,7 +459,9 @@ svm_handle_cpuid(struct vm *vm)
 
 	uint32_t rax, rbx, rcx, rdx;
 
-	/* dprintf(" %x.\n", save->rax); */
+#ifdef DEBUG_GUEST_CPUID
+	dprintf(" %x.\n", save->rax);
+#endif
 
 	switch (save->rax) {
 	case 0x40000000:
@@ -412,16 +480,30 @@ svm_handle_cpuid(struct vm *vm)
 						CPUID_FEATURE_AES |
 						CPUID_FEATURE_MONITOR);
 		svm->g_rdx = rdx & ~(uint64_t) (CPUID_FEATURE_HTT |
-						CPUID_FEATURE_APIC);
+						CPUID_FEATURE_MCA |
+						CPUID_FEATURE_MTRR |
+						CPUID_FEATURE_APIC |
+						CPUID_FEATURE_MCE |
+						CPUID_FEATURE_MSR |
+						CPUID_FEATURE_DE);
 		break;
 
 	case 0x80000001:
 		cpuid(save->rax, &rax, &rbx, &rcx, &rdx);
 		save->rax = 0x0; /* empty CPU family, model, step, etc. */
 		svm->g_rbx = rbx;
-		svm->g_rcx = rcx & ~(uint64_t) (CPUID_X_FEATURE_SKINIT |
+		svm->g_rcx = rcx & ~(uint64_t) (CPUID_X_FEATURE_WDT |
+						CPUID_X_FEATURE_SKINIT |
+						CPUID_X_FEATURE_XAPIC |
 						CPUID_X_FEATURE_SVM);
-		svm->g_rdx = rdx & ~(uint64_t) CPUID_FEATURE_APIC;
+		svm->g_rdx = rdx & ~(uint64_t) (CPUID_X_FEATURE_RDTSCP |
+						CPUID_X_FEATURE_NX |
+						CPUID_X_FEATURE_MCA |
+						CPUID_X_FEATURE_MTRR |
+						CPUID_X_FEATURE_APIC |
+						CPUID_X_FEATURE_MCE |
+						CPUID_X_FEATURE_MSR |
+						CPUID_X_FEATURE_DE);
 
 		break;
 
@@ -435,11 +517,13 @@ svm_handle_cpuid(struct vm *vm)
 		break;
 	}
 
-	/* KERN_DEBUG("eax=%x, ebx=%x, ecx=%x, edx=%x\n", */
-	/* 	   (uint32_t) save->rax, (uint32_t) svm->g_rbx, */
-	/* 	   (uint32_t) svm->g_rcx, (uint32_t) svm->g_rdx); */
+#ifdef DEBUG_GUEST_CPUID
+	KERN_DEBUG("eax=%x, ebx=%x, ecx=%x, edx=%x\n",
+		   (uint32_t) save->rax, (uint32_t) svm->g_rbx,
+		   (uint32_t) svm->g_rcx, (uint32_t) svm->g_rdx);
+#endif
 
-	save->rip += 2;		/* cpuid is a two-byte instruction. */
+	save->rip += 2;
 
 	return TRUE;
 }
@@ -474,10 +558,98 @@ svm_handle_rdtsc(struct vm *vm)
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_save_area *save = &vmcb->save;
 
-	uint64_t tsc = rdtsc();
-	svm->g_rdx = (tsc >> 32);
-	save->rax = (tsc & 0xffffffff);
+	svm->g_rdx = vm->tsc >> 32;
+	save->rax = (vm->tsc & 0xffffffff);
+
 	save->rip += 2;
+
+	return TRUE;
+}
+
+/*
+ * CertiKOS does not support RDTSCP instruction in guest, so when it detects the
+ * guest tries to execute RDTSCP instructions, it injects an invalid opcode
+ * exception to the guest.
+ */
+bool
+svm_handle_rdtscp(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct svm *svm = (struct svm *) vm->cookie;
+	struct vmcb *vmcb = svm->vmcb;
+
+	svm_inject_event(vmcb, SVM_EVTINJ_TYPE_EXEPT, T_ILLOP, FALSE, 0);
+
+	/* XXX: Do NOT increase rip since we inject an exception. */
+
+	return 0;
+}
+
+/*
+ * Handle VMMCALL.
+ *  %rax: call number/return value
+ *  %rbx: the 1st parameter
+ *  %rcx: the 2nd parameter
+ *  %rdx: the 3rd parameter
+ *  %rsi: the 4th parameter
+ */
+bool
+svm_handle_vmmcall(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct svm *svm = (struct svm *) vm->cookie;
+	struct vmcb *vmcb = svm->vmcb;
+	struct vmcb_save_area *save = &vmcb->save;
+
+	uint64_t call_nr = save->rax;
+	uint64_t a0 = svm->g_rbx;
+	uint64_t a1 = svm->g_rcx;
+	uint64_t a2 = svm->g_rdx;
+	uint64_t a3 = svm->g_rsi;
+	uint64_t ret = 0;
+
+#ifdef DEBUG_HYPERCALL
+	KERN_DEBUG("HYPERCALL: nr=%llx, param1=%llx, param2=%llx, param3=%llx, param4=%llx.\n",
+		   call_nr, a0, a1, a2, a3);
+#endif
+
+	switch (call_nr) {
+	case HYPERCALL_BITAND:
+		a2 = a0 & a1;
+		break;
+
+	case HYPERCALL_BITOR:
+		a2 = a0 | a1;
+		break;
+
+	case HYPERCALL_BITXOR:
+		a2 = a0 ^ a1;
+		break;
+
+	case HYPERCALL_BITNOT:
+		a1 = ~a0;
+		break;
+
+	case HYPERCALL_GETC:
+		while ((a0 = (uint64_t) getchar()) == 0);
+		break;
+
+	default:
+#ifdef DEBUG_HYPERCALL
+		KERN_DEBUG("Invalid hypercall: nr=%llx.\n", call_nr);
+#endif
+		ret = 1;
+		break;
+	}
+
+	save->rax = ret;
+	svm->g_rbx = a0;
+	svm->g_rcx = a1;
+	svm->g_rdx = a2;
+	svm->g_rsi = a3;
+	save->rip += 3;
 
 	return TRUE;
 }
