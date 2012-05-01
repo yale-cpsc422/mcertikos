@@ -127,7 +127,6 @@ uint32_t stimer(context_t* ctx) {
 		cpus[mycpu].running = 0;
 		cpus[mycpu].stop = 0;
 		// should switch away address space I would think....
-		cprintf("slave#slave timer!\n");
 		wait_to_start();
 	}
 	return 0;

@@ -201,6 +201,7 @@ mgmt_start(context_t *ctx, mgmt_start_t *param)
 //	KERN_PANIC("MGMT_START: Not implemented yet.\n");
 	cprintf("start: %d on CPU: %d\n", param->pid, param->cpu);
 	cpus[param->cpu].start = param->pid;
+	pcpu[param->cpu].stat = PCPU_RUNNING;
 	
 //	proc_lock(param->pid);
 
@@ -229,6 +230,8 @@ mgmt_stop(context_t *ctx, mgmt_stop_t *param)
 	/* TODO: use IPI ot stop AP */
 	//KERN_PANIC("MGMT_STOP: Not implemented yet.\n");
 
+	pcpu[param->cpu].proc->state=PROC_READY;	
+	pcpu[param->cpu].proc=NULL;
         cpus[param->cpu].stop = TRUE;
 
 
@@ -464,24 +467,6 @@ master_syscall_handler(context_t *ctx)
 			memset(master_buf, 0x0, sizeof(mgmt_data_t));
 			return 1;
 		}
-/*
-		mgmt_data_t* data = (mgmt_data_t*) master_buf;
-		switch (data->command) {
-                                case MGMT_START:
-                                        mgmt_start(ctx, (mgmt_start_t*)(&data->params));
-                                        break;
-
-                                case MGMT_STOP:
-                                        mgmt_stop(ctx, (mgmt_stop_t*)(&data->params));
-                                        break;
-                                case MGMT_ALLOCPAGE:
-                                        uint32_t result=mgmt_allocpage(ctx, (mgmt_allocpage_t*)(&data->params));
-                                        break;
-                                default:
-                                        cprintf("Unknown MGMT syscall\n");
-                                        break;
-		}
-*/
 
 		memset(master_buf, 0x0, sizeof(mgmt_data_t));
 
