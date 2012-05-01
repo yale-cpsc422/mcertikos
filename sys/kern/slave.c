@@ -65,7 +65,7 @@ copy_from_user(void *dest, void *src, size_t size)
                 return NULL;
         }
 
-        pmap_copy(pmap_bootpdir, (uintptr_t) dest, user_pmap, (uintptr_t) src, size);
+	memcpy(dest, src, size);
 
         return dest;
 }

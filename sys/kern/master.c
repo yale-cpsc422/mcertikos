@@ -13,7 +13,7 @@
 #include <sys/x86.h>
 #include <sys/master.h>
 
-#include <sys/sys/elf.h>
+#include <sys/elf.h>
 #include <sys/virt/vmm.h>
 
 #include <machine/pmap.h>
