@@ -70,7 +70,7 @@ pcpu_init_cpu()
 
 	spinlock_acquire(&c->lk);
 
-	if (pcpu->inited == TRUE) {
+	if (c->inited == TRUE) {
 		spinlock_release(&c->lk);
 		return;
 	}
