@@ -92,3 +92,15 @@ tsc_init(void)
 		return 0;
 	}
 }
+
+/*
+ * Wait for ms microseconds.
+ */
+void
+delay(uint32_t ms)
+{
+	uint64_t ticks = tsc_per_ms * ms;
+	uint64_t start = rdtscp();
+	while (rdtscp() < start + ticks)
+		pause();
+}
