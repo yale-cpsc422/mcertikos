@@ -19,9 +19,9 @@
 
 typedef
 enum {
-	PCPU_RUNNING,	/* some process is running on this CPU */
 	PCPU_STOP,	/* this CPU is stopped; there maybe or maybe not some
 			   process running on it */
+	PCPU_RUNNING,	/* some process is running on this CPU */
 } pcpu_stat_t;
 
 typedef

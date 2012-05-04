@@ -30,15 +30,10 @@ void wait_to_start(void);
 
 static uint8_t cbuf[PAGESIZE];
 extern uint32_t time;
-//extern pmap_t pmap_bootpdir[];
 
 
 char sigbuf[PAGESIZE-12];
 sig_t * sig = (sig_t*)&sigbuf;
-
-//bool as_checkrange (as_t* as, uint32_t addr, size_t size);
-//uint32_t usercopy(uint32_t dest, uint32_t src, size_t size);
-//uint32_t copy_from_user(uint32_t dest, uint32_t src, size_t size);
 
 /*
  * Copy data from user's virtual address space to kernel's virtual address
@@ -133,7 +128,6 @@ uint32_t stimer(context_t* ctx) {
 }
 
 uint32_t spgflt(context_t* ctx) {
-//	static uint32_t prevfault=0;
 
 	uint8_t mycpu = pcpu_cur_idx();
 	uint32_t fault = rcr2();
@@ -162,14 +156,7 @@ uint32_t spgflt(context_t* ctx) {
                 return 1;
         }
 
-
-//	cprintf("Slave Page Fault at %x, cpu %d, reserving new page\n", fault, mp_curcpu());
-//	if (as_reserve(as_current(), PGADDR(fault), PTE_W | PTE_U | PTE_P) == NULL) {
-//		 cprintf("New page can not be reserved\n");
-//	}
-//
-	//prevfault = fault;
-return 0;
+	return 0;
 }
 
 
@@ -182,13 +169,11 @@ void syscall_fail(context_t* ctx) {
 void wait_to_start() {
 
 	int mycpu = pcpu_cur_idx();
-	//int i=0;
-	//pid_t pid;
 	KERN_ASSERT(cpus[mycpu].running == FALSE);
-	cprintf("slave %d# waiting to start\n, addr cpu = %x", mycpu, &cpus[mycpu]); 
+	cprintf("slave %d# waiting to start\n", mycpu); 
+	pcpu_cur()->stat=PCPU_STOP;
 	while(cpus[mycpu].start == 0);
 	cprintf("slave %d# starting process %d\n", mycpu, cpus[mycpu].start);
-//	cprintf("cpustacks@%x, esp:@%x\n",pcpu_stacks[mycpu],read_esp());
 	cpus[mycpu].running = cpus[mycpu].start;
 	cpus[mycpu].start=0;
 	proc_lock(cpus[mycpu].running);
@@ -203,8 +188,6 @@ void slave_kernel() {
 	context_register_handler(T_IRQ0+IRQ_TIMER,&stimer);
 	context_register_handler(T_CLIENT_SYSCALL,&sl_syscall);
 	context_register_handler(T_PGFLT,&spgflt);
-//	as_init();
-	// enable_amd_svm();
 	cprintf("slave %d# I am alive on cpu number %d!!!\n", mycpu, mycpu);
 	wait_to_start();
 }

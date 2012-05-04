@@ -116,7 +116,7 @@ pcpu_boot_ap(uint32_t cpu_idx, void (*f)(void), uintptr_t stack_addr)
 	lapic_startcpu(pcpu_cpu_lapicid(cpu_idx), (uintptr_t) boot);
 
 	while (pcpu[cpu_idx].booted == FALSE);
-	//	pause();
+		pause();
 
 	return;
 }

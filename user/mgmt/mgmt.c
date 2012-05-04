@@ -10,7 +10,7 @@ typedef
 enum {
 	CMD_CPUSTAT, CMD_LOAD, CMD_START, CMD_STOP, CMD_STARTVM,
 	CMD_SAFE_BITAND, CMD_SAFE_BITOR, CMD_SAFE_BITXOR, CMD_SAFE_BITNOT,
-	CMD_SAFE_GETC,
+	CMD_SAFE_GETC, CMD_LIST,
 	__CMD_DUMMY
 } cmd_t;
 
@@ -42,13 +42,12 @@ struct program {
 struct program programs[] =
 {
         {"client1", _binary___obj_client_client1_client1_start},
-        {"client1", _binary___obj_client_client1_client1_start},
         {"evilclient", _binary___obj_client_evilclient_evilclient_start},
         {"vmclient", _binary___obj_client_vmclient_vmclient_start},
         {"", (char *)0}
 };
 
-static int prog_num = 4;
+static int prog_num = 3;
 //static int waiting_for_input;
 
 struct proc_info {
@@ -71,8 +70,8 @@ struct cmd_table_t {
 
 struct cmd_table_t cmd_table[__CMD_DUMMY] = {
 	{CMD_CPUSTAT, "status", 0, {TYPE_INVAL, TYPE_INVAL}},
-	{CMD_LOAD, "load", 2, {TYPE_INT, TYPE_INT}},
-	{CMD_START, "start", 1, {TYPE_INT, TYPE_INVAL}},
+	{CMD_LOAD, "load", 1, { TYPE_INT}},
+	{CMD_START, "start", 2, {TYPE_INT, TYPE_INT}},
 	{CMD_STOP, "stop", 1, {TYPE_INT, TYPE_INVAL}},
 	{CMD_STARTVM, "vm", 0, {TYPE_INVAL, TYPE_INVAL}},
 	{CMD_SAFE_BITAND, "bitand", 2, {TYPE_INT, TYPE_INT}},
@@ -80,6 +79,7 @@ struct cmd_table_t cmd_table[__CMD_DUMMY] = {
 	{CMD_SAFE_BITXOR, "bitxor", 2, {TYPE_INT, TYPE_INT}},
 	{CMD_SAFE_BITNOT, "bitnot", 1, {TYPE_INT, TYPE_INVAL}},
 	{CMD_SAFE_GETC, "getc", 0, {TYPE_INVAL, TYPE_INVAL}},
+	{CMD_LIST, "list", 0, {TYPE_INVAL, TYPE_INVAL}},
 };
 
 static struct {
@@ -354,6 +354,15 @@ exec_cmd()
 
 		break;
 
+	case CMD_LIST:
+		i=0;
+                printf("The mgmt program can load the following programs:\n");
+                while(programs[i].prog_ptr) {
+                        printf("%02d. %s\n", i, programs[i].progname);
+                        i++;
+                }
+		break;
+
 	case CMD_SAFE_BITAND: {
 		uint32_t a0 = *(uint32_t *) parse_result.arg[0];
 		uint32_t a1 = *(uint32_t *) parse_result.arg[1];
@@ -414,7 +423,7 @@ int main()
 
 	printf("Management shell starts.\n");
 	
-	init_cmd_table();
+//	init_cmd_table();
 
 	while (1) {
 		printf("# ");

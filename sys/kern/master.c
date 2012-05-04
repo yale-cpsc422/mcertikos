@@ -31,7 +31,6 @@ static pid_t mgmt_pid;
 static uint8_t master_buf[PAGE_SIZE];
 uint32_t  time=0;
 
-//volatile kstack stacks[MAX_CPU];
 volatile cpu_use cpus[MAX_CPU];
 
 
@@ -201,9 +200,10 @@ mgmt_start(context_t *ctx, mgmt_start_t *param)
 //	KERN_PANIC("MGMT_START: Not implemented yet.\n");
 	cprintf("start: %d on CPU: %d\n", param->pid, param->cpu);
 	cpus[param->cpu].start = param->pid;
+	
+//	pcpu[param->cpu].proc =proc PCPU_RUNNING;
 	pcpu[param->cpu].stat = PCPU_RUNNING;
 	
-//	proc_lock(param->pid);
 
 	return 0;
 }
@@ -583,11 +583,11 @@ master_kernel(void)
 	KERN_INFO("[MASTER] Enable IDE interrupt.\n");
 	intr_enable(IRQ_IDE, 0);
 
-	/* intr_global_enable(); */
-
 	mgmt_pid = proc_new((uintptr_t) MGMT_START);
 	if (mgmt_pid == 0)
 		KERN_PANIC("[MASTER] Failed to start mgmt.\n ");
+	
+	pcpu_cur()->stat=PCPU_RUNNING;
 	proc_lock(mgmt_pid);
 	proc_start(mgmt_pid);
 
