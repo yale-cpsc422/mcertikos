@@ -197,11 +197,8 @@ mgmt_start(context_t *ctx, mgmt_start_t *param)
 	}
 
 	/* TODO: use IPI to start AP */
-//	KERN_PANIC("MGMT_START: Not implemented yet.\n");
 	cprintf("start: %d on CPU: %d\n", param->pid, param->cpu);
 	cpus[param->cpu].start = param->pid;
-	
-//	pcpu[param->cpu].proc =proc PCPU_RUNNING;
 	pcpu[param->cpu].stat = PCPU_RUNNING;
 	
 
@@ -228,7 +225,6 @@ mgmt_stop(context_t *ctx, mgmt_stop_t *param)
 	}
 
 	/* TODO: use IPI ot stop AP */
-	//KERN_PANIC("MGMT_STOP: Not implemented yet.\n");
 
 	pcpu[param->cpu].proc->state=PROC_READY;	
 	pcpu[param->cpu].proc=NULL;

@@ -215,41 +215,12 @@ proc_new(uintptr_t binary)
 		return NULL;
 	}
 	
-	
-	proc_t *mgmt=pcpu_cur()->proc;
-	pmap_t *mgmt_pmap= (pcpu_cur())->proc->pmap;
-	/*pmap_t *cur_cr3= (pmap_t *) rcr3();
-	pmap_t *cur_pmap= (pcpu_cur())->pmap;
-	proc_t *mgmt=pcpu_cur()->proc;
-	pmap_t *mgmt_pmap= (pcpu_cur())->proc->pmap;
-	KERN_DEBUG("cr3_ptab:%x\n",cur_cr3);
-	KERN_DEBUG("kern_ptab:%x\n",kern_ptab);
-	KERN_DEBUG("cur_ptab_pcpu:%x\n",cur_pmap);
-	KERN_DEBUG("mgmt_ptab:%x\n",mgmt_pmap);
-*/
-	if (mgmt!=NULL){
-		KERN_DEBUG("binary:%x\n",binary);
-		//binary=pmap_la2pa(mgmt_pmap,binary);
-		//KERN_DEBUG("binary:%x\n",binary);
-		load_elf(mgmt_pmap,binary,proc->pmap);
-
-		uintptr_t binary_in_mgmt=pmap_la2pa(mgmt_pmap,binary);
-		proc->normal_ctx =
-		context_new((void (*)(void)) elf_entry(binary_in_mgmt),
-			    VM_STACKHI - PAGESIZE);
-	} else {
-		//load_elf(kern_ptab,binary,proc->pmap);
-		load_elf(pmap_bootpdir,binary,proc->pmap);
-		//elf_load(kern_ptab,binary,proc);
-		proc->normal_ctx =
+	//TODO: move the client binary loading into the user space, make it the same as PIOS to load applications
+	load_elf((pmap_t *)rcr3(),binary,proc->pmap);
+	proc->normal_ctx =
 		context_new((void (*)(void)) elf_entry(binary),
 			    VM_STACKHI - PAGESIZE);
-	}
 
-	/*proc->normal_ctx =
-		context_new((void (*)(void)) elf_entry(binary),
-			    VM_STACKHI - PAGESIZE);
-*/
 	if (proc->normal_ctx == NULL) {
 		KERN_DEBUG("Cannot create normal execution context for process %d\n",
 			   proc->pid);
