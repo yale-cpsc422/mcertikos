@@ -77,7 +77,9 @@ static int ahci_cmd_complete(struct ahci_controller *, int, uint32_t);
 static void ahci_intr_port(struct ahci_controller *, int);
 static int ahci_setup_dma(struct ahci_channel *, int, void *, size_t);
 
+#ifdef DEBUG_AHCI
 static void ahci_test(void);
+#endif
 
 /* XXX: only use one AHCI controller */
 static struct ahci_controller ahci_ctrl;
@@ -462,7 +464,9 @@ ahci_pci_attach(struct pci_func *f)
 			  (uint64_t)(uintptr_t) channel->rfis);
 	}
 
+#ifdef DEBUG_AHCI
 	ahci_test();
+#endif
 
 	return 1;
 }
@@ -684,13 +688,17 @@ ahci_cmd_start(struct ahci_controller *sc, int port,
 	channel->active_slots |= (1<<slot);
 
 	/* polled command */
+	/* TODO: check timeout instead of infinite loop */
 	while (1) {
 		uint32_t ci, is;
+
 		ahci_intr_port(sc, port);
+
 		ci = AHCI_READ(sc->hba, AHCI_P_CI(port), uint32_t);
 		KERN_DEBUG("CI %x.\n", ci);
 		if (!(ci & (1<<slot)))
 			break;
+
 		is = AHCI_READ(sc->hba, AHCI_P_IS(port), uint32_t);
 		KERN_DEBUG("IS %x.\n", is);
 		if (is & AHCI_P_IX_TFES) {
@@ -698,7 +706,8 @@ ahci_cmd_start(struct ahci_controller *sc, int port,
 			ret = 1;
 			goto end;
 		}
-		delay(10);
+
+		/* delay(10); */
 	}
 
 	uint32_t is = AHCI_READ(sc->hba, AHCI_P_IS(port), uint32_t);
@@ -731,22 +740,26 @@ ahci_cmd_complete(struct ahci_controller *sc, int port, uint32_t is)
 	return 0;
 }
 
+#ifdef DEBUG_AHCI
+
 static void
 ahci_test(void)
 {
 	uint8_t buf[PAGE_SIZE];
 	int i;
-	KERN_DEBUG("ahci_test(): read 1 sectors from LBA 0x1, port 0 to mem %x.\n",
+	uint64_t lba = 1;
+
+	AHCI_DEBUG("ahci_test(): read 1 sector from LBA 0x1, port 0 to mem %x.\n",
 		   buf);
-	if (ahci_cmd_start(&ahci_ctrl, 0, 1, 1, buf, FALSE)) {
-		KERN_DEBUG("AHCI READ ERROR.\n");
-		KERN_INFO("AHCI: read test failed.\n");
+	if (ahci_cmd_start(&ahci_ctrl, 0, lba, 1, buf, FALSE)) {
+		AHCI_DEBUG("AHCI READ ERROR.\n");
 		return;
 	}
-
-	for (i = 0; i < PAGE_SIZE; i++) {
-		if (i % 32 == 0)
-			dprintf("\n");
-		dprintf("%02x ", buf[i]);
+	for (i = 0; i < 16*10; i += 2) {
+		if (i % 16 == 0)
+			dprintf("\n%08x:", (uint32_t) lba+i);
+		dprintf(" %02x%02x", buf[i], buf[i+1]);
 	}
 }
+
+#endif

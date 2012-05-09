@@ -147,6 +147,7 @@ rdtscp(void)
 
 	/* TODO: decide to use which one through checking cpuid */
 #if 0
+	/* rdtscp maybe not provided by VirtualBox */
 	__asm __volatile("rdtscp" : "=A" (rv));
 #else
 	__asm __volatile("lfence;rdtsc" : "=A" (rv));

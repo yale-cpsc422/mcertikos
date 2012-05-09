@@ -12,7 +12,11 @@ KERN_SRCFILES	+= $(KERN_DIR)/dev/ioapic.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/timer.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/tsc.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/pci.c
+
+ifdef ENABLE_AHCI_SATA
 KERN_SRCFILES	+= $(KERN_DIR)/dev/ahci.c
+KERN_CFLAGS	+= -DENABLE_AHCI_SATA
+endif
 
 # Targets
 
