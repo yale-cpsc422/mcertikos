@@ -31,7 +31,6 @@ void wait_to_start(void);
 static uint8_t cbuf[PAGESIZE];
 extern uint32_t time;
 
-
 char sigbuf[PAGESIZE-12];
 sig_t * sig = (sig_t*)&sigbuf;
 
@@ -106,9 +105,21 @@ uint32_t sl_syscall(context_t* ctx) {
 			*(uint32_t*)arg = pcpu_cur_idx();
 			break;
 		case SYSCALL_CLIENT_SETUPVM:
-		//	 if (!as_checkrange(as_current(), arg, sizeof(uint32_t)))
-		//		syscall_fail(ctx);
-		//		start_vm_with_interception();
+		/*
+                 * Setup and start a VM.
+                 */
+                	;
+			vmm_init_on_ap();
+                	struct vm *vm = vmm_init_vm();
+                	if (vm == NULL) {
+                        KERN_DEBUG("SYSCALL_SETUPVM: Cannot initialize a VM.\n");
+                        return 1;
+                	}
+			cprintf("SYSCALL_CLIENT_SETUPVM\n");
+                	vmm_run_vm(vm);
+
+               		KERN_DEBUG("SYSCALL_SETUPVM: ended.\n");
+		
 			break;
 
     }

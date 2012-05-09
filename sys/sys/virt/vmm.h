@@ -163,6 +163,13 @@ struct vmm_ops {
 int vmm_init(void);
 
 /*
+*  vm enable on Application Processor
+*
+*/
+int vmm_init_on_ap(void);
+
+
+/*
  * Top-level VM initialization function.
  */
 struct vm *vmm_init_vm(void);

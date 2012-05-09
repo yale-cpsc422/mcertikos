@@ -98,6 +98,17 @@ vmm_init(void)
 	return 0;
 }
 
+
+int vmm_init_on_ap(void){
+
+        if (vmm_ops->vmm_init == NULL || vmm_ops->vmm_init() != 0) {
+                KERN_DEBUG("Machine-dependent vmm_init() failed.\n");
+                return 1;
+        } else 
+		return 0;
+
+}
+
 struct vm *
 vmm_init_vm(void)
 {

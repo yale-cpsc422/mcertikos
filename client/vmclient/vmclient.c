@@ -2,7 +2,7 @@
 #include <stdio.h>
 
 int main() {
-	printf("Vm is going to run...\n");
+	printf("Vm client is going to run...\n");
 	start_vm_client();
 	return 0;
 }
