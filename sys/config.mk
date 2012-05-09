@@ -93,3 +93,8 @@ endif
 ifdef DEBUG_HYPERCALL
 KERN_CFLAGS	+= -DDEBUG_HYPERCALL
 endif
+
+# If set, enable debugging AHCI driver
+ifdef DEBUG_AHCI
+KERN_CFLAGS	+= -DDEBUG_AHCI
+endif

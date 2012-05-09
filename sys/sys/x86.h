@@ -145,7 +145,12 @@ rdtscp(void)
 {
 	uint64_t rv;
 
+	/* TODO: decide to use which one through checking cpuid */
+#if 0
 	__asm __volatile("rdtscp" : "=A" (rv));
+#else
+	__asm __volatile("lfence;rdtsc" : "=A" (rv));
+#endif
 	return (rv);
 }
 

@@ -136,7 +136,7 @@ kern_init(mboot_info_t *mbi)
 	KERN_INFO("done.\n");
 
 	/* Initialize PCI bus */
-	KERN_INFO("Initialize PCI ... ");
+	KERN_INFO("Initialize PCI ... \n");
 	pci_init();
 	KERN_INFO("done.\n");
 

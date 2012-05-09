@@ -15,11 +15,12 @@
 #include <sys/types.h>
 #include <sys/x86.h>
 
+#include <dev/ahci.h>
 #include <dev/pci.h>
 
 // Flag to do "lspci" at bootup
-static int pci_show_devs = 1;
-static int pci_show_addrs = 1;
+static int pci_show_devs = 0;
+static int pci_show_addrs = 0;
 
 // PCI "configuration mechanism one"
 static uint32_t pci_conf1_addr_ioport = 0x0cf8;
@@ -36,6 +37,7 @@ struct pci_driver {
 
 struct pci_driver pci_attach_class[] = {
 	{ PCI_CLASS_BRIDGE, PCI_SUBCLASS_BRIDGE_PCI, &pci_bridge_attach },
+	{ PCI_CLASS_MASS_STORAGE, PCI_SUBCLASS_MASS_STORAGE_SATA, &ahci_pci_attach},
 	{ 0, 0, 0 },
 };
 
@@ -61,9 +63,6 @@ pci_conf1_set_addr(uint32_t bus,
 	uint32_t v = (1 << 31) |		// config-space
 		(bus << 16) | (dev << 11) | (func << 8) | (offset);
 	outl(pci_conf1_addr_ioport, v);
-
-	KERN_DEBUG("PCI ctrl: bus=%x,dev=%x,func=%x,offset=%x.\n",
-		   bus, dev, func, offset);
 }
 
 uint32_t
