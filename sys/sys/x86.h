@@ -134,10 +134,25 @@ xchg(volatile uint32_t *addr, uint32_t newval)
 static gcc_inline uint64_t
 rdtsc(void)
 {
-        uint64_t rv;
+	uint64_t rv;
 
-        __asm __volatile("rdtsc" : "=A" (rv));
-        return (rv);
+	__asm __volatile("rdtsc" : "=A" (rv));
+	return (rv);
+}
+
+static gcc_inline uint64_t
+rdtscp(void)
+{
+	uint64_t rv;
+
+	/* TODO: decide to use which one through checking cpuid */
+#if 0
+	/* rdtscp maybe not provided by VirtualBox */
+	__asm __volatile("rdtscp" : "=A" (rv));
+#else
+	__asm __volatile("lfence;rdtsc" : "=A" (rv));
+#endif
+	return (rv);
 }
 
 #endif /* !_KERN_X86_H_ */

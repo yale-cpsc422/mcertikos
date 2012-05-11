@@ -10,8 +10,9 @@ USER_LDFLAGS	:= $(LDFLAGS) -m elf_i386 -Ttext=0x40000000
 
 include $(USER_DIR)/lib/Makefile.inc
 include $(USER_DIR)/mgmt/Makefile.inc
+include $(USER_DIR)/demo/Makefile.inc
 
-user: lib mgmt
+user: lib mgmt demo
 	@echo All targets of user are done.
 
 install_user:

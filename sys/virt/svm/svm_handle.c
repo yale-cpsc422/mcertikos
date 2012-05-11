@@ -473,7 +473,7 @@ svm_handle_cpuid(struct vm *vm)
 
 	case 0x00000001:
 		cpuid(save->rax, &rax, &rbx, &rcx, &rdx);
-		save->rax = 0x0; /* empty CPU family, model, step, etc. */
+		save->rax = (6 << 8) | (2 << 4) | (3);
 		svm->g_rbx = /* only 1 processor/core */
 			(rbx & ~(uint64_t) (0xf << 16)) | (uint64_t) (1 << 16);
 		svm->g_rcx = rcx & ~(uint64_t) (CPUID_FEATURE_AVX |
@@ -490,7 +490,7 @@ svm_handle_cpuid(struct vm *vm)
 
 	case 0x80000001:
 		cpuid(save->rax, &rax, &rbx, &rcx, &rdx);
-		save->rax = 0x0; /* empty CPU family, model, step, etc. */
+		save->rax = (6 << 8) | (2 << 4) | (3);
 		svm->g_rbx = rbx;
 		svm->g_rcx = rcx & ~(uint64_t) (CPUID_X_FEATURE_WDT |
 						CPUID_X_FEATURE_SKINIT |
