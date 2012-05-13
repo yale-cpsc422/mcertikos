@@ -654,6 +654,10 @@ svm_handle_vmmcall(struct vm *vm)
 	}
 
 	save->rax = ret;
+	svm->g_rbx = a0;
+	svm->g_rcx = a1;
+	svm->g_rdx = a2;
+	svm->g_rsi = a3;
 	save->rip += 3;
 
 	return TRUE;
