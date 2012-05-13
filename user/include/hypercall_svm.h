@@ -21,84 +21,59 @@ typedef enum {
  *    %edx/%rdx: the 3rd parameter
  *    %esi/%rsi: the 4th parameter
  * - Output
- *    If the number of the parameters of a hypercall is less than 4, the first
- *    unused parameter register are used to store the return value. Otherwise,
- *    the last parameter register, i.e. %esi/%rsi, is used to store the return
- *    value.
- *    If the hypercall succeeds, %eax/%rax is set to 0; otherwise, it's set to
- *    1.
+ *    %eax/%rax: the retturn value
+ *    others   : unmodified
  */
 
-static uint32_t gcc_inline
-hypercall_bitand(uint32_t a, uint32_t b)
-{
-	uint32_t c;
+/* helper macros*/
+#define DEF_HYPERCALL_HEAD(name) static uint32_t gcc_inline hypercall_##name
+#define DEF_HYPERCALL_BODY(nr)			\
+	{					\
+	uint32_t c;				\
+	asm volatile("vmmcall"			\
+	: "=a" (c)				\
+	: "a" (nr)
+#define DEF_HYPERCALL_RET			\
+	: "cc", "memory");			\
+	return c;				\
+	}
+#define DEF_HYPERCALL_0(name, nr)		\
+	DEF_HYPERCALL_HEAD(name)(void)		\
+	DEF_HYPERCALL_BODY(nr)			\
+	DEF_HYPERCALL_RET
+#define DEF_HYPERCALL_1(name, nr)		\
+	DEF_HYPERCALL_HEAD(name)(uint32_t a0)	\
+	DEF_HYPERCALL_BODY(nr)			\
+	, "b" (a0)				\
+	DEF_HYPERCALL_RET
+#define DEF_HYPERCALL_2(name, nr)				\
+	DEF_HYPERCALL_HEAD(name)(uint32_t a0, uint32_t a1)	\
+	DEF_HYPERCALL_BODY(nr)					\
+	, "b" (a0), "c" (a1)					\
+	DEF_HYPERCALL_RET
+#define DEF_HYPERCALL_3(name, nr)					\
+	DEF_HYPERCALL_HEAD(name)(uint32_t a0, uint32_t a1, uint32_t a2)	\
+	DEF_HYPERCALL_BODY(nr)						\
+	, "b" (a0), "c" (a1), "d" (a2)					\
+	DEF_HYPERCALL_RET
+#define DEF_HYPERCALL_4(name, nr)					\
+	DEF_HYPERCALL_HEAD(name)(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3) \
+	DEF_HYPERCALL_BODY(nr)						\
+	, "b" (a0), "c" (a1), "d" (a2), "S" (a3)			\
+	DEF_HYPERCALL_RET
 
-	asm volatile("vmmcall"
-		     : "=d" (c)
-		     : "a" (HYPERCALL_BITAND),
-		       "b" (a),
-		       "c" (b)
-		     : "cc", "memory");
-
-	return c;
-}
-
-static uint32_t gcc_inline
-hypercall_bitor(uint32_t a, uint32_t b)
-{
-	uint32_t c;
-
-	asm volatile("vmmcall"
-		     : "=d" (c)
-		     : "a" (HYPERCALL_BITOR),
-		       "b" (a),
-		       "c" (b)
-		     : "cc", "memory");
-
-	return c;
-}
-
-static uint32_t gcc_inline
-hypercall_bitxor(uint32_t a, uint32_t b)
-{
-	uint32_t c;
-
-	asm volatile("vmmcall"
-		     : "=d" (c)
-		     : "a" (HYPERCALL_BITXOR),
-		       "b" (a),
-		       "c" (b)
-		     : "cc", "memory");
-
-	return c;
-}
-
-static uint32_t gcc_inline
-hypercall_bitnot(uint32_t a)
-{
-	uint32_t c;
-
-	asm volatile("vmmcall"
-		     : "=c" (c)
-		     : "a" (HYPERCALL_BITNOT),
-		       "b" (a)
-		     : "cc", "memory");
-
-	return c;
-}
-
-static char gcc_inline
-hypercall_getc(void)
-{
-	char c;
-
-	asm volatile("vmmcall"
-		     : "=b" (c)
-		     : "a" (HYPERCALL_GETC)
-		     : "cc", "memory");
-
-	return c;
-}
+/*
+ * Define hypercalls.
+ *
+ * DEF_HYPERCALL_#(name, nr) defines such a function
+ * - it's for the hypercall nr (defined as hypercall_t)
+ * - its name is hypercall_##name
+ * - it requires # parameters
+ */
+DEF_HYPERCALL_2(bitand, HYPERCALL_BITAND)
+DEF_HYPERCALL_2(bitor, HYPERCALL_BITOR)
+DEF_HYPERCALL_2(bitxor, HYPERCALL_BITXOR)
+DEF_HYPERCALL_1(bitnot, HYPERCALL_BITNOT)
+DEF_HYPERCALL_0(getc, HYPERCALL_GETC)
 
 #endif /* _USER_HYPERCALL_SVM_H_ */
