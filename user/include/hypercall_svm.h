@@ -1,8 +1,8 @@
 #ifndef _USER_HYPERCALL_SVM_H_
 #define _USER_HYPERCALL_SVM_H_
 
-#include <gcc.h>
-#include <types.h>
+#define gcc_inline	__inline __attribute__((always_inline))
+typedef unsigned int	uint32_t;
 
 typedef enum {
 	HYPERCALL_BITAND,
@@ -13,7 +13,7 @@ typedef enum {
 } hypercall_t;
 
 /*
- * CertiKOS hypercall format
+ * CertiKOS hypercall calling convention
  * - Input
  *    %eax/%rax: hypercall number (defined in hypercall_t)
  *    %ebx/%rbx: the 1st parameter
