@@ -16,7 +16,7 @@ typedef pmap_t pde_t;
 typedef pmap_t pte_t;
 
 //static pde_t pmap_bootpdir[NPDENTRIES] gcc_aligned(PAGESIZE);
-//static pmap_t pmap_bootpdir[NPDENTRIES] gcc_aligned(PAGESIZE);
+static pmap_t pmap_bootpdir[NPDENTRIES] gcc_aligned(PAGESIZE);
 
 #define PTE_INV		(~((pte_t) 0))
 #define PTE_NULL	((pte_t) NULL)

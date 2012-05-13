@@ -32,5 +32,5 @@ bool pmap_checkrange(pmap_t *, uintptr_t, size_t);
 
 uintptr_t pmap_la2pa(pmap_t *, uintptr_t la);
 
-pmap_t pmap_bootpdir[NPDENTRIES] gcc_aligned(PAGESIZE);
+//pmap_t pmap_bootpdir[NPDENTRIES] gcc_aligned(PAGESIZE);
 #endif /* !_MACHINE_PMAP_H_ */
