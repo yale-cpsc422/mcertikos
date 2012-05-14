@@ -30,7 +30,7 @@
 #        DEBUG_MSG=1 DEBUG_GUEST_CPUID=1 make
 #
 # 6. Enable AHCI-SATA driver,
-#        ENABLE_AHCI_SATA make
+#        ENABLE_AHCI_SATA=1 make
 #
 
 #
