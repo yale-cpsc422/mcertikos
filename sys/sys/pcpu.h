@@ -17,11 +17,45 @@
 
 /* typedef struct context_t context_t; */
 
+/*
+ * States of the physical processor core.
+ *
+ * PCPU_WAIT    : the processor core is waiting for the task (processes or VMs)
+ *                to be loaded on it. Once the processor core is initialized, it
+ *                should be in this state.
+ * PCPU_READY   : the task is loaded on this processor core and the processor is
+ *                ready to be scheduled to run.
+ * PCPU_RUNNING : the processor core is running some task.
+ * PCPU_STOPPING: the processor is being stopped.
+ *
+ *
+ * All allowable transitions are shown in the following figure. Each transition
+ * should be done atomically.
+ *
+ *         the process or the                a process or a VM
+ *           VM is stopped   +-----------+    is loaded on it
+ *         +---------------> | PCPU_WAIT | --------------------+
+ *         |                 +-----------+                     |
+ *         |                                                   |
+ *         |                                                   |
+ *         |           someone decides to stop the             V
+ * +---------------+        process or the VM           +------------+
+ * | PCPU_STOPPING | <--------------------------------- | PCPU_READY |
+ * +---------------+                                    +------------+
+ *         ^                                                   |
+ *         |                                                   |
+ *         |                +--------------+                   |
+ *         +--------------- | PCPU_RUNNING | <-----------------+
+ *          someone decides +--------------+  the process or the VM
+ *        to stop the process                  is scheduled to run
+ *              or the VM
+ */
 typedef
 enum {
-	PCPU_STOP,	/* this CPU is stopped; there maybe or maybe not some
-			   process running on it */
-	PCPU_RUNNING,	/* some process is running on this CPU */
+	PCPU_WAIT,
+	PCPU_READY,
+	PCPU_RUNNING,
+	PCPU_STOPPING
 } pcpu_stat_t;
 
 typedef
@@ -48,10 +82,10 @@ struct pcpu_t {
 	volatile bool	booted;
 
 	/* Which process is running on this cpu? */
-	proc_t		*proc;
+	pid_t		proc;
 
 	/* cpu status */
-	pcpu_stat_t	stat;
+	volatile pcpu_stat_t stat;
 
 	/*
 	 * Magic verification tag (CPU_MAGIC) to help detect corruption,

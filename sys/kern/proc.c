@@ -214,7 +214,7 @@ proc_new(uintptr_t binary)
 
 		return NULL;
 	}
-	
+
 	//TODO: move the client binary loading into the user space, make it the same as PIOS to load applications
 	load_elf((pmap_t *)rcr3(),binary,proc->pmap);
 	proc->normal_ctx =
@@ -239,12 +239,27 @@ proc_new(uintptr_t binary)
 	mqueue_init(&proc->mqueue);
 
 	proc->state = PROC_READY;
+	proc->cpu = NULL;
 
 	return proc->pid;
 }
 
 /*
- * Start executing process proc.
+ * Start executing a process whose PID is pid.
+ *
+ * XXX: The proc_t structure of the process should be locked before entering
+ *      this function.
+ *      The pcpu_t structure of the processor where the process will be should
+ *      be locked before entering this function.
+ *
+ * XXX: If succeeding, this function changes the state of the processor where the
+ *      the process is from PCPU_READY to PCPU_RUNNING. Otherwise, the state is
+ *      not changed.
+ *      If succeeding, this function changes the state of the process from
+ *      PROC_READY to PROC_RUN. Otherwise, the state is not changed.
+ *
+ * XXX: If succeeding, this function changes the state of the process from
+ *      to PROC_RUN.
  *
  * @param proc the process to be executed
  */
@@ -256,28 +271,93 @@ proc_start(pid_t pid)
 	KERN_ASSERT(proc_is_valid(proc) == TRUE);
 	spinlock_release(&ptable.lk);
 
+	/* check the process */
 	KERN_ASSERT(spinlock_holding(&proc->lk) == TRUE);
-
 	KERN_ASSERT(proc->state == PROC_READY);
 	KERN_ASSERT(proc->pmap != NULL);
 	KERN_ASSERT(proc->normal_ctx != NULL);
+	KERN_ASSERT(proc->cpu == NULL);
 
 	pcpu_t *c = pcpu_cur();
-	spinlock_acquire(&c->lk);
-	c->proc = proc;
-	c->pmap = proc->pmap;
-	spinlock_release(&c->lk);
 
+	/* check the processor */
+	KERN_ASSERT(spinlock_holding(&c->lk));
+	KERN_ASSERT(c->proc == pid);
+	KERN_ASSERT(c->stat == PCPU_READY);
+
+	/* update the pcpu_t structure of the processor */
+	c->pmap = proc->pmap;
+	c->stat = PCPU_RUNNING;
+
+	/* update the proc_t structure of the process */
+	proc->cpu = c;
 	proc->state = PROC_RUN;
 
+	/* update the page tables */
 	pmap_install(proc->pmap);
 	KERN_DEBUG("proc->pmap:%x\n",proc->pmap);
-	KERN_DEBUG("pmap_check:%x, %d\n",proc->normal_ctx, pmap_checkrange(proc->pmap, (uintptr_t) proc->normal_ctx, sizeof( struct context_t)));
+	KERN_DEBUG("pmap_check:%x, %d\n",
+		   proc->normal_ctx,
+		   pmap_checkrange(proc->pmap, (uintptr_t) proc->normal_ctx,
+				   sizeof( struct context_t)));
 
+	/* it's safe to release locks on the process and the processor(?) */
+	spinlock_release(&c->lk);
 	spinlock_release(&proc->lk);
 
-	/* XXX: release proc->lk in context_start()? */
+	KERN_DEBUG("proc_start(): start process %d on CPU %d.\n",
+		   pid, pcpu_cur_idx());
+
 	context_start(proc->normal_ctx);
+}
+
+/*
+ * Stop a process whose PID is pid.
+ *
+ * XXX: The proc_t structure of the process should be locked before entering
+ *      this function.
+ *      The pcpu_t structure of the processor where the process will be should
+ *      be locked before entering this function.
+ *
+ * XXX: If succeeding, this function changes the state of the processor where the
+ *      the process is from PCPU_STOPPING to PCPU_WAIT. Otherwise, the state is
+ *      not changed.
+ *      If succeeding, this function changes the state of the process from
+ *      PROC_RUN to PROC_READY. Otherwise, the state is not changed.
+ *
+ * XXX: If succeeding, this function changes the state of the process from
+ *      PROC_RUN to PROC_READY.
+ */
+void
+proc_stop(pid_t pid)
+{
+	spinlock_acquire(&ptable.lk);
+	proc_t *proc = pid2proc(pid);
+	KERN_ASSERT(proc_is_valid(proc) == TRUE);
+	spinlock_release(&ptable.lk);
+
+	/* check the process */
+	KERN_ASSERT(spinlock_holding(&proc->lk) == TRUE);
+	KERN_ASSERT(proc->state == PROC_RUN);
+	KERN_ASSERT(proc->cpu == pcpu_cur());
+
+	pcpu_t *c = pcpu_cur();
+
+	/* check the processor */
+	KERN_ASSERT(spinlock_holding(&c->lk));
+	KERN_ASSERT(c->stat == PCPU_STOPPING);
+	KERN_ASSERT(c->proc == pid);
+
+	/* update the pcpu_t structure of the processor */
+	c->proc = 0;
+	c->stat = PCPU_WAIT;
+
+	/* update the proc_t structure of the process */
+	proc->cpu = NULL;
+	proc->state = PROC_READY;
+
+	KERN_DEBUG("proc_stop(): stop process %d on CPU %d.\n",
+		   pid, pcpu_cur_idx());
 }
 
 /*
@@ -346,6 +426,42 @@ proc_pmap(pid_t pid)
 	KERN_ASSERT(spinlock_holding(&proc->lk) == TRUE);
 
 	return proc->pmap;
+}
+
+/*
+ * Get the state of the process whose PID is pid.
+ */
+proc_state_t
+proc_state(pid_t pid)
+{
+	proc_t *proc;
+
+	spinlock_acquire(&ptable.lk);
+	proc = pid2proc(pid);
+	KERN_ASSERT(proc_is_valid(proc) == TRUE);
+	spinlock_release(&ptable.lk);
+
+	KERN_ASSERT(spinlock_holding(&proc->lk) == TRUE);
+
+	return proc->state;
+}
+
+/*
+ * Get the pcpu_t structure of the processor where the process pid is.
+ */
+pcpu_t *
+proc_cpu(pid_t pid)
+{
+	proc_t *proc;
+
+	spinlock_acquire(&ptable.lk);
+	proc = pid2proc(pid);
+	KERN_ASSERT(proc_is_valid(proc) == TRUE);
+	spinlock_release(&ptable.lk);
+
+	KERN_ASSERT(spinlock_holding(&proc->lk) == TRUE);
+
+	return proc->cpu;
 }
 
 void

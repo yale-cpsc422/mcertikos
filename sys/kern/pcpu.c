@@ -48,8 +48,8 @@ pcpu_init()
 	for (i = 0; i < MAX_CPU; ++i) {
 		spinlock_init(&pcpu[i].lk);
 		pcpu[i].inited = FALSE;
-		pcpu[i].stat = PCPU_STOP;
-		pcpu[i].proc = NULL;
+		pcpu[i].stat = PCPU_WAIT;
+		pcpu[i].proc = 0;
 	}
 
 	__pcpu_init();
@@ -105,7 +105,7 @@ pcpu_boot_ap(uint32_t cpu_idx, void (*f)(void), uintptr_t stack_addr)
 	KERN_ASSERT(f != NULL);
 
 	pcpu[cpu_idx].booted = FALSE;
-	
+
 //	KERN_DEBUG("PCPU:%x\n", &pcpu_stack);
 //	KERN_DEBUG("cpu# %d, stack: %x\n",cpu_idx, stack_addr+PAGE_SIZE);
 //	KERN_DEBUG("pcpu:%x, pcpu_booted:%x\n", &pcpu_stack[cpu_idx], &pcpu[cpu_idx].booted);
@@ -117,6 +117,8 @@ pcpu_boot_ap(uint32_t cpu_idx, void (*f)(void), uintptr_t stack_addr)
 
 	while (pcpu[cpu_idx].booted == FALSE)
 		pause();
+
+	pcpu[cpu_idx].stat = PCPU_WAIT;
 
 	return;
 }

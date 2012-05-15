@@ -1,6 +1,7 @@
 #include <sys/context.h>
 #include <sys/debug.h>
 #include <sys/intr.h>
+#include <sys/master.h>
 #include <sys/mgmt.h>
 #include <sys/mmu.h>
 #include <sys/pcpu.h>
@@ -11,7 +12,6 @@
 #include <sys/types.h>
 #include <sys/vm.h>
 #include <sys/x86.h>
-#include <sys/master.h>
 
 #include <sys/elf.h>
 #include <sys/virt/vmm.h>
@@ -29,10 +29,6 @@ extern uint8_t _binary___obj_user_mgmt_mgmt_size[];
 static pid_t mgmt_pid;
 
 static uint8_t master_buf[PAGE_SIZE];
-uint32_t  time=0;
-
-volatile cpu_use cpus[MAX_CPU];
-
 
 /*
  * Copy data from user's virtual address space to kernel's virtual address
@@ -53,21 +49,39 @@ copy_from_user(void *dest, void *src, size_t size)
 	    (uintptr_t) dest + size > VM_USERLO || (uintptr_t) src < VM_USERLO)
 		return NULL;
 
-	pmap_t *user_pmap = pcpu_cur()->proc->pmap;
+	pcpu_t *c;
+	pid_t user_proc;
+	pmap_t *user_pmap;
+
+	c = pcpu_cur();
+
+	spinlock_acquire(&c->lk);
+	user_proc = c->proc;
+	spinlock_release(&c->lk);
+	KERN_ASSERT(user_proc != 0);
+
+	proc_lock(user_proc);
+
+	user_pmap = proc_pmap(user_proc);
+	KERN_ASSERT(user_pmap == (pmap_t *) rcr3());
 
 	if (pmap_checkrange(user_pmap, (uintptr_t) dest, size) == FALSE) {
 		KERN_DEBUG("%x ~ %x do not fit in the kernel address space.\n",
 			   dest, dest+size);
+		proc_unlock(user_proc);
 		return NULL;
 	}
 
 	if (pmap_checkrange(user_pmap, (uintptr_t) src, size) == FALSE) {
 		KERN_DEBUG("%x ~ %x do not fit in the user address space.\n",
 			   src, src+size);
+		proc_unlock(user_proc);
 		return NULL;
 	}
 
 	memcpy(dest, src, size);
+
+	proc_unlock(user_proc);
 
 	return dest;
 }
@@ -90,23 +104,39 @@ copy_to_user(void *dest, void *src, size_t size)
 	    (uintptr_t) dest < VM_USERLO || (uintptr_t) src + size > VM_USERLO)
 		return NULL;
 
-	pmap_t *user_pmap = pcpu_cur()->proc->pmap;
+	pcpu_t *c;
+	pid_t user_proc;
+	pmap_t *user_pmap;
+
+	c = pcpu_cur();
+
+	spinlock_acquire(&c->lk);
+	user_proc = c->proc;
+	spinlock_release(&c->lk);
+	KERN_ASSERT(user_proc != 0);
+
+	proc_lock(user_proc);
+
+	user_pmap = proc_pmap(user_proc);
+	KERN_ASSERT(user_pmap == (pmap_t *) rcr3());
 
 	if (pmap_checkrange(user_pmap, (uintptr_t) src, size) == FALSE) {
 		KERN_DEBUG("%x ~ %x do not fit in the kernel address space.\n",
 			   src, src+size);
+		proc_unlock(user_proc);
 		return NULL;
 	}
-	
-
 
 	if (pmap_checkrange(user_pmap, (uintptr_t) dest, size) == FALSE) {
 		KERN_DEBUG("%x ~ %x do not fit in the user address space.\n",
 			   dest, dest+size);
+		proc_unlock(user_proc);
 		return NULL;
 	}
 
 	memcpy(dest, src, size);
+
+	proc_unlock(user_proc);
 
 	return dest;
 }
@@ -146,7 +176,6 @@ master_pgf_handler(context_t *ctx)
 	KERN_DEBUG("CR2:%x\n",rcr2());
 	KERN_DEBUG("CR3:%x\n",rcr3());
 	KERN_ASSERT(ctx != NULL);
-	
 
 	uint32_t errno = context_errno(ctx);
 	uintptr_t fault_va = rcr2();
@@ -163,7 +192,21 @@ master_pgf_handler(context_t *ctx)
 
 	KERN_DEBUG("Page fault at 0x%x in userspace.\n", fault_va);
 
-	pmap_t *user_pmap = pcpu_cur()->proc->pmap;
+	pcpu_t *c;
+	pid_t user_proc;
+	pmap_t *user_pmap;
+
+	c = pcpu_cur();
+
+	spinlock_acquire(&c->lk);
+	user_proc = c->proc;
+	spinlock_release(&c->lk);
+	KERN_ASSERT(user_proc != 0);
+
+	proc_lock(user_proc);
+
+	user_pmap = proc_pmap(user_proc);
+	KERN_ASSERT(user_pmap == (pmap_t *) rcr3());
 
 	if (!pmap_reserve(user_pmap, (uintptr_t) PGADDR(fault_va),
 			  PTE_W | PTE_U | PTE_P)) {
@@ -172,6 +215,8 @@ master_pgf_handler(context_t *ctx)
 		KERN_PANIC("Stop here.\n");
 		return 1;
 	}
+
+	proc_unlock(user_proc);
 
 	return 0;
 }
@@ -182,25 +227,57 @@ master_syscall_fail(context_t *ctx)
 	KERN_DEBUG("System call 0x%x failed.\n", context_arg1(ctx));
 }
 
+/*
+ * Start a process on an AP.
+ *
+ * XXX: After this function succeeds (returns 0), the proc_t structure of the
+ *      process is locked.
+ */
 static uint32_t
 mgmt_start(context_t *ctx, mgmt_start_t *param)
 {
+	KERN_ASSERT(ctx != NULL && param != NULL);
+
+	pcpu_t *c;
+
 	if (param->cpu >= pcpu_ncpu()) {
 		KERN_INFO("MGMT_START: CPU%d is out of range.\n", param->cpu);
 		return 1;
 	}
 
-	if (pcpu[param->cpu].proc != NULL) {
-		KERN_INFO("MGMT_START: process %d is running on CPU%d.\n",
-			  pcpu[param->cpu].proc->pid, param->cpu);
+	c = &pcpu[param->cpu];
+
+	/* lock the pcpu_t structure of the processor */
+	spinlock_acquire(&c->lk);
+
+	/* check if the CPU is available */
+	if (c->stat != PCPU_WAIT) {
+		KERN_INFO("MGMT_START: CPU %d is not available.\n", param->cpu);
+		spinlock_release(&c->lk);
+		return 1;
+	}
+
+	/* lock the proc_t structure of the process */
+	proc_lock(param->pid);
+
+	/* check if the process is already launched */
+	if (proc_state(param->pid) != PROC_READY ||
+	    proc_cpu(param->pid) != NULL) {
+		KERN_INFO("MGMT_START: process %d is already launched.\n",
+			  param->pid);
+		proc_unlock(param->pid);
+		spinlock_release(&c->lk);
 		return 1;
 	}
 
 	/* TODO: use IPI to start AP */
-	cprintf("start: %d on CPU: %d\n", param->pid, param->cpu);
-	cpus[param->cpu].start = param->pid;
-	pcpu[param->cpu].stat = PCPU_RUNNING;
-	
+	KERN_INFO("MGMT_START: Start process %d on CPU %d...\n",
+		  param->pid, param->cpu);
+	/* update the pcpu_t structure of the processor */
+	c->proc = param->pid;
+	c->stat = PCPU_READY;
+
+	spinlock_release(&c->lk);
 
 	return 0;
 }
@@ -208,6 +285,10 @@ mgmt_start(context_t *ctx, mgmt_start_t *param)
 static uint32_t
 mgmt_stop(context_t *ctx, mgmt_stop_t *param)
 {
+	KERN_ASSERT(ctx != NULL && param != NULL);
+
+	pcpu_t *c;
+
 	if (param->cpu == 0) {
 		KERN_INFO("MGMT_STOP: CPU0 is running management shell; cannot stop it.\n");
 		return 1;
@@ -218,18 +299,24 @@ mgmt_stop(context_t *ctx, mgmt_stop_t *param)
 		return 1;
 	}
 
-	if (pcpu[param->cpu].stat == PCPU_STOP) {
-		KERN_INFO("MGMT_STOP: CPU%d is already stopped.\n",
+	c = &pcpu[param->cpu];
+
+	/* lock the pcpu_t structure of the processor */
+	spinlock_acquire(&c->lk);
+
+	if (c->stat != PCPU_RUNNING && c->stat != PCPU_READY) {
+		KERN_INFO("MGMT_STOP: No activity on CPU %d.\n",
 			  param->cpu);
+		spinlock_release(&c->lk);
 		return 1;
 	}
 
+	KERN_ASSERT(c->proc != NULL);
+
 	/* TODO: use IPI ot stop AP */
+	c->stat = PCPU_STOPPING;
 
-	pcpu[param->cpu].proc->state=PROC_READY;	
-	pcpu[param->cpu].proc=NULL;
-        cpus[param->cpu].stop = TRUE;
-
+	spinlock_release(&c->lk);
 
 	return 0;
 }
@@ -303,7 +390,7 @@ master_syscall_handler(context_t *ctx)
 			memset(master_buf, 0, sizeof(char));
 			return 1;
 		}
-	
+
 		master_buf[PAGE_SIZE-1]=0;
 		//cprintf("%c", *(char *) master_buf);
 		cprintf("%s", master_buf);
@@ -319,7 +406,7 @@ master_syscall_handler(context_t *ctx)
 		 * args[0]: none;
 		 *         the address where the character would be stored.
 		 */
-		*(char *) master_buf = getchar(); 
+		*(char *) master_buf = getchar();
 		if (copy_to_user((char *) args[0],
 				 master_buf, sizeof(char)) == NULL) {
 			master_syscall_fail(ctx);
@@ -487,10 +574,8 @@ master_spurious_handler(context_t *ctx)
 static uint32_t
 master_timer_handler(context_t *ctx)
 {
-	//KERN_DEBUG("master_timer_handler\n"); 
-	//cprintf("master_timer_handler\n"); 
-
-	time++;
+	//KERN_DEBUG("master_timer_handler\n");
+	//cprintf("master_timer_handler\n");
 
 	/* timer_handle_timeout(); */
 
@@ -582,8 +667,12 @@ master_kernel(void)
 	mgmt_pid = proc_new((uintptr_t) MGMT_START);
 	if (mgmt_pid == 0)
 		KERN_PANIC("[MASTER] Failed to start mgmt.\n ");
-	
-	pcpu_cur()->stat=PCPU_RUNNING;
+
+	pcpu_t *c = pcpu_cur();
+	spinlock_acquire(&c->lk);
+	c->stat = PCPU_READY;
+	c->proc = mgmt_pid;
+
 	proc_lock(mgmt_pid);
 	proc_start(mgmt_pid);
 
