@@ -521,7 +521,7 @@ vm_run(struct vm *vm)
 #ifdef DEBUG_GUEST_INTR
 			KERN_DEBUG("Pending exception: vec=%x, errcode=%x.\n",
 				   exit_int_info & SVM_EXITINTINFO_VEC_MASK,
-				   errocde);
+				   errcode);
 #endif
 			break;
 

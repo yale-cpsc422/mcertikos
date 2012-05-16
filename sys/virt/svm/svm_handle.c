@@ -611,29 +611,38 @@ svm_handle_vmmcall(struct vm *vm)
 	uint64_t ret = 0;
 
 #ifdef DEBUG_HYPERCALL
-	KERN_DEBUG("HYPERCALL: nr=%llx, param1=%llx, param2=%llx, param3=%llx, param4=%llx.\n",
-		   call_nr, a0, a1, a2, a3);
+	static char *hypercall_dmesg[] =
+		{
+			[HYPERCALL_BITAND] = "BIT_AND",
+			[HYPERCALL_BITOR]  = "BIT_OR",
+			[HYPERCALL_BITXOR] = "BIT_XOR",
+			[HYPERCALL_BITNOT] = "BIT_NOT",
+			[HYPERCALL_GETC]   = "GETC",
+			[HYPERCALL_NULL]   = "INVALID",
+		};
+	KERN_DEBUG("HYPERCALL: nr=%llx (%s), param1=%llx, param2=%llx, param3=%llx, param4=%llx.\n",
+		   call_nr, hypercall_dmesg[call_nr], a0, a1, a2, a3);
 #endif
 
 	switch (call_nr) {
 	case HYPERCALL_BITAND:
-		a2 = a0 & a1;
+		ret = a0 & a1;
 		break;
 
 	case HYPERCALL_BITOR:
-		a2 = a0 | a1;
+		ret = a0 | a1;
 		break;
 
 	case HYPERCALL_BITXOR:
-		a2 = a0 ^ a1;
+		ret = a0 ^ a1;
 		break;
 
 	case HYPERCALL_BITNOT:
-		a1 = ~a0;
+		ret = ~a0;
 		break;
 
 	case HYPERCALL_GETC:
-		while ((a0 = (uint64_t) getchar()) == 0);
+		while ((ret = (uint64_t) getchar()) == 0);
 		break;
 
 	default:
