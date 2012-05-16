@@ -258,9 +258,6 @@ proc_new(uintptr_t binary)
  *      If succeeding, this function changes the state of the process from
  *      PROC_READY to PROC_RUN. Otherwise, the state is not changed.
  *
- * XXX: If succeeding, this function changes the state of the process from
- *      to PROC_RUN.
- *
  * @param proc the process to be executed
  */
 void gcc_noreturn
@@ -324,9 +321,6 @@ proc_start(pid_t pid)
  *      not changed.
  *      If succeeding, this function changes the state of the process from
  *      PROC_RUN to PROC_READY. Otherwise, the state is not changed.
- *
- * XXX: If succeeding, this function changes the state of the process from
- *      PROC_RUN to PROC_READY.
  */
 void
 proc_stop(pid_t pid)

@@ -32,7 +32,10 @@
  * All allowable transitions are shown in the following figure. Each transition
  * should be done atomically.
  *
- *         the process or the                a process or a VM
+ *                         after initialization
+ *                                 |
+ *                                 |
+ *         the process or the      V         a process or a VM
  *           VM is stopped   +-----------+    is loaded on it
  *         +---------------> | PCPU_WAIT | --------------------+
  *         |                 +-----------+                     |
