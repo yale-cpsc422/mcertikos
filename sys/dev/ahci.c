@@ -672,6 +672,7 @@ ahci_pci_attach(struct pci_func *f)
 		dprintf("\n");
 	}
 
+	memset(buf, 0, ATA_SECTOR_SIZE);
 	if (ahci_disk_write(sc, 0, 0, 1, buf)) {
 		AHCI_DEBUG("write test failed.\n");
 		goto test_end;
@@ -745,12 +746,13 @@ ahci_disk_rw(struct ahci_controller *sc, int port, int write,
 	fis->countl = (uint8_t) nsects & 0xff;
 
 	ret = ahci_command(sc, port, 0, 0, buf, nsects * ATA_SECTOR_SIZE);
-	AHCI_DEBUG("port %d, %s %d sectors %s LBA %llx to %x, ",
+	AHCI_DEBUG("port %d, %s %d sectors %s LBA %llx %s %x, ",
 		   port,
 		   write ? "write" : "read",
 		   nsects,
 		   write ? "to" : "from",
 		   lba,
+		   write ? "from" : "to",
 		   buf);
 	if (ret) {
 		dprintf("failed.\n");
