@@ -365,16 +365,9 @@ ahci_detect_drive(struct ahci_controller *sc, int port)
 	cmd |= AHCI_P_CMD_ST;
 	AHCI_WRITE(sc->hba, AHCI_P_CMD(port), cmd, uint32_t);
 
-	/* ATA or ATAPI */
-	ahci_prepare_sata_command(sc, port, ATA_ATAPI_IDENTIFY);
-	ret = ahci_command(sc, port, 0, 0, buf, sizeof(buf));
-	if (ret == 0) {
-		channel->atapi = 1;
-
-		KERN_INFO("AHCI: ATAPI drive detected on port %d.\n", port);
-	} else {
-		channel->atapi = 0;
-
+	channel->atapi = 0;
+	switch (channel->sig) {
+	case AHCI_P_SIG_ATA:
 		ahci_prepare_sata_command(sc, port, ATA_ATA_IDENTIFY);
 		ret = ahci_command(sc, port, 0, 0, buf, sizeof(buf));
 
@@ -391,8 +384,27 @@ ahci_detect_drive(struct ahci_controller *sc, int port)
 
 		KERN_INFO("AHCI: ATA drive detected on port %d, size %d MB.\n",
 			  port, channel->nsectors * ATA_SECTOR_SIZE >> 20);
-	}
 
+		break;
+
+	case AHCI_P_SIG_ATAPI:
+		channel->atapi = 1;
+		KERN_INFO("AHCI: ATAPI drive detected on port %d.\n", port);
+		break;
+
+	case AHCI_P_SIG_SEMB:
+		KERN_INFO("AHCI: SEMB drive detected on port %d.\n", port);
+		break;
+
+	case AHCI_P_SIG_PM:
+		KERN_INFO("AHCI: SEMB drive detected on port %d.\n", port);
+		break;
+
+	default:
+		KERN_INFO("AHCI: Unknown drive (sig %x) detect on port %d.\n",
+			  channel->sig, port);
+		break;
+	}
 }
 
 static void
@@ -488,6 +500,15 @@ ahci_command(struct ahci_controller *sc, int port, int write, int atapi,
 				if (!(status & ATA_S_BUSY))
 					break;
 			}
+
+			if (is & AHCI_P_IX_SDBS) {
+				status = rfis->rfis_sdbfis[2];
+#ifdef DEBUG_AHCI
+				error = rfis->rfis_sdbfis[3];
+#endif
+				if (!(status & ATA_S_BUSY))
+					break;
+			}
 		}
 
 		delay(1000);
@@ -554,7 +575,7 @@ ahci_command(struct ahci_controller *sc, int port, int write, int atapi,
 static int
 ahci_init_port(struct ahci_controller *sc, int port)
 {
-	uint32_t cmd, serr, sctl, ssts;
+	uint32_t cmd, serr, sctl, ssts, sig;
 	uint8_t ipm, det;
 
 	KERN_ASSERT(sc != NULL);
@@ -603,6 +624,8 @@ ahci_init_port(struct ahci_controller *sc, int port)
 		KERN_INFO("AHCI: port %d link up.\n", port);
 
 	/* detect drive */
+	sig = AHCI_READ(sc->hba, AHCI_P_SIG(port), uint32_t);
+	sc->channels[port].sig = sig;
 	ahci_detect_drive(sc, port);
 
 	sc->channels[port].present = TRUE;
@@ -803,7 +826,6 @@ ahci_disk_read(int port,
  * @param nsects the number of sectors that we want to write
  * @param buf    the source memory buffer
  * @return 0 if succssful; otherwise, non-zero
- */
  */
 int
 ahci_disk_write(int port,
