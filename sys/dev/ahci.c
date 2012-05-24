@@ -611,7 +611,7 @@ ahci_init_port(struct ahci_controller *sc, int port)
 }
 
 /*
- * Initialize AHCI controller and SATA drive.
+ * Initialize AHCI controller and drives attached to it.
  *
  * @return 1 when sucessful; otherwise, 0.
  */
@@ -771,6 +771,14 @@ ahci_disk_rw(struct ahci_controller *sc, int port, int write,
 
 /*
  * Read nsects sectors from LBA lba to addr buf.
+ *
+ * XXX: always use the first AHCI controller and drives attached to it
+ *
+ * @param port   the AHCI port where the hard disk is attached
+ * @param lba    the LBA48 address of the sector where we start to read
+ * @param nsects the number of sectors that we want to read
+ * @param buf    the target memory buffer
+ * @return 0 if succssful; otherwise, non-zero
  */
 int
 ahci_disk_read(int port,
@@ -787,6 +795,15 @@ ahci_disk_read(int port,
 
 /*
  * Write nsects sectors to LBA lba from addr buf.
+ *
+ * XXX: always use the first AHCI controller and drives attached to it
+ *
+ * @param port   the AHCI port where the hard disk is attached
+ * @param lba    the LBA48 address of the sector where we start to write
+ * @param nsects the number of sectors that we want to write
+ * @param buf    the source memory buffer
+ * @return 0 if succssful; otherwise, non-zero
+ */
  */
 int
 ahci_disk_write(int port,
