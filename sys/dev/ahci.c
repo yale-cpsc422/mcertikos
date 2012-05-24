@@ -32,6 +32,7 @@
 /* support only one AHCI controller */
 static struct ahci_controller ahci_ctrl;
 static bool ahci_inited = FALSE;
+static spinlock_t ahci_lk;
 
 static int ahci_reset(struct ahci_controller *);
 static int ahci_init(struct ahci_controller *);
@@ -656,10 +657,13 @@ ahci_pci_attach(struct pci_func *f)
 			AHCI_DEBUG("failed to initialize port %d.\n", port);
 	}
 
+	ahci_inited = TRUE;
+	spinlock_init(&ahci_lk);
+
 #ifdef DEBUG_AHCI
 	uint8_t buf[ATA_SECTOR_SIZE];
 
-	if (ahci_disk_read(sc, 0, 0, 1, buf)) {
+	if (ahci_disk_read(0, 0, 1, buf)) {
 		AHCI_DEBUG("read test failed.\n");
 		goto test_end;
 	} else {
@@ -674,12 +678,12 @@ ahci_pci_attach(struct pci_func *f)
 
 #if 0
 	memset(buf, 0, ATA_SECTOR_SIZE);
-	if (ahci_disk_write(sc, 0, 0, 1, buf)) {
+	if (ahci_disk_write(0, 0, 1, buf)) {
 		AHCI_DEBUG("write test failed.\n");
 		goto test_end;
 	}
 
-	if (ahci_disk_read(sc, 0, 0, 1, buf)) {
+	if (ahci_disk_read(0, 0, 1, buf)) {
 		AHCI_DEBUG("read test failed.\n");
 		goto test_end;
 	} else {
@@ -769,18 +773,30 @@ ahci_disk_rw(struct ahci_controller *sc, int port, int write,
  * Read nsects sectors from LBA lba to addr buf.
  */
 int
-ahci_disk_read(struct ahci_controller *sc, int port,
+ahci_disk_read(int port,
 	       uint64_t lba, uint16_t nsects, void *buf)
 {
-	return ahci_disk_rw(sc, port, 0, lba, nsects, buf);
+	int ret;
+
+	spinlock_acquire(&ahci_lk);
+	ret = ahci_disk_rw(&ahci_ctrl, port, 0, lba, nsects, buf);
+	spinlock_release(&ahci_lk);
+
+	return ret;
 }
 
 /*
  * Write nsects sectors to LBA lba from addr buf.
  */
 int
-ahci_disk_write(struct ahci_controller *sc, int port,
-	       uint64_t lba, uint16_t nsects, void *buf)
+ahci_disk_write(int port,
+		uint64_t lba, uint16_t nsects, void *buf)
 {
-	return ahci_disk_rw(sc, port, 1, lba, nsects, buf);
+	int ret;
+
+	spinlock_acquire(&ahci_lk);
+	ret = ahci_disk_rw(&ahci_ctrl, port, 1, lba, nsects, buf);
+	spinlock_release(&ahci_lk);
+
+	return ret;
 }

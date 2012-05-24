@@ -411,9 +411,9 @@ struct ahci_controller {
 };
 
 int ahci_pci_attach(struct pci_func *);
-int ahci_disk_read(struct ahci_controller *, int port,
+int ahci_disk_read(int port,
 		   uint64_t lba, uint16_t nsects, void *buf);
-int ahci_disk_write(struct ahci_controller *, int port,
+int ahci_disk_write(int port,
 		    uint64_t lba, uint16_t nsects, void *buf);
 
 #endif /* _KERN_ */
