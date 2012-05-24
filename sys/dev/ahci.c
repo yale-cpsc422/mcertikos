@@ -672,6 +672,7 @@ ahci_pci_attach(struct pci_func *f)
 		dprintf("\n");
 	}
 
+#if 0
 	memset(buf, 0, ATA_SECTOR_SIZE);
 	if (ahci_disk_write(sc, 0, 0, 1, buf)) {
 		AHCI_DEBUG("write test failed.\n");
@@ -690,6 +691,7 @@ ahci_pci_attach(struct pci_func *f)
 		}
 		dprintf("\n");
 	}
+#endif
 
  test_end:
 #endif
