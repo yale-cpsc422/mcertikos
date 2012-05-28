@@ -142,6 +142,11 @@ ifneq "$(strip $(DEBUG_VPIT) $(DEBUG_ALL) $(DEBUG_VIRT))" ""
 KERN_CFLAGS	+= -DDEBUG_VPIT
 endif
 
+# If set, enable debugging virtualized PIT
+ifneq "$(strip $(DEBUG_VPCI) $(DEBUG_ALL) $(DEBUG_VIRT))" ""
+KERN_CFLAGS	+= -DDEBUG_VPCI
+endif
+
 # If set, enable debugging hypercalls
 ifneq "$(strip $(DEBUG_HYPERCALL) $(DEBUG_ALL) $(DEBUG_VIRT))" ""
 KERN_CFLAGS	+= -DDEBUG_HYPERCALL

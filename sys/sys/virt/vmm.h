@@ -26,7 +26,7 @@
 #define MAX_IOPORT		0x10000
 #define MAX_EXTINTR		0x100
 
-typedef enum {
+typedef enum data_sz_t {
 	SZ8, 	/* 1 byte */
 	SZ16, 	/* 2 byte */
 	SZ32	/* 4 byte */
@@ -65,12 +65,12 @@ struct vm {
 
 	uint64_t	tsc;		/* TSC read by guests */
 
-	struct vpic	vpic;		/* virtual PIC (i8259) */
-	struct vpci	vpci;		/* virtual PCI host */
-	struct vkbd	vkbd;		/* virtual keyboard controller (i8042) */
-	struct vserial	vserial;	/* virtual serial ports */
-	struct vnvram	vnvram;		/* virtual NVRAM */
-	struct vpit	vpit;		/* virtual PIT (i8254) */
+	struct vpic		vpic;	/* virtual PIC (i8259) */
+	struct vpci_host	vpci;	/* virtual PCI host */
+	struct vkbd		vkbd;	/* virtual keyboard controller (i8042) */
+	struct vserial		vserial;/* virtual serial ports */
+	struct vnvram		vnvram;	/* virtual NVRAM */
+	struct vpit		vpit;	/* virtual PIT (i8254) */
 
 	struct guest_debug_dev debug_dev;
 
