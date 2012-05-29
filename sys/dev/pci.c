@@ -21,7 +21,7 @@
 #include <dev/pci.h>
 
 // Flag to do "lspci" at bootup
-static int pci_show_devs = 0;
+static int pci_show_devs = 1;
 static int pci_show_addrs = 0;
 
 // PCI "configuration mechanism one"
@@ -304,9 +304,6 @@ pci_init(void)
 
 	static struct pci_bus root_bus;
 	memset(&root_bus, 0, sizeof(root_bus));
-
-	if (pci_show_devs == 1 || pci_show_addrs == 1)
-		KERN_INFO("\n");
 
 	return pci_scan_bus(&root_bus);
 }

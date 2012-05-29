@@ -153,6 +153,7 @@ struct ahci_r_fis {
 #define		AHCI_CAP_IS	0x00f00000 /* Interface speed */
 #define		AHCI_CAP_IS_GEN1	0x00100000 /* 1.5 GB/s */
 #define		AHCI_CAP_IS_GEN2	0x00200000 /* 1.5 and 3 GB/s */
+#define		AHCI_CAP_IS_GEN3	0x00300000 /* 6 GB/s */
 #define		AHCI_CAP_CLO	0x01000000 /* Command list override */
 #define		AHCI_CAP_AL	0x02000000 /* Single Activitly LED */
 #define		AHCI_CAP_ALP	0x04000000 /* Agressive link power management */
@@ -208,6 +209,9 @@ struct ahci_r_fis {
 #define		AHCI_EMC_MR	0x00000001 /* Message received */
 
 #define AHCI_CAP2	0x24 /* extended capabilities */
+#define		AHCI_CAP2_APST	0x00000004
+#define		AHCI_CAP2_NVMP	0x00000002
+#define		AHCI_CAP2_BOH	0x00000001
 
 /* Per-port registers */
 #define AHCI_P_OFFSET(port) (0x80 * (port))
@@ -311,6 +315,7 @@ struct ahci_r_fis {
 #define		AHCI_P_SCTL_SPD_SHIFT	4
 #define		AHCI_P_SCTL_DET_MASK	0x0000000f
 #define		AHCI_P_SCTL_DET_SHIFT	0
+#define		AHCI_P_SCTL_COMRESET	0x00000001
 
 #define AHCI_P_SERR(p)	(0x130 + AHCI_P_OFFSET(p)) /* Serial ATA error */
 #define		AHCI_P_SERR_DIAG_X	(1<<26)
@@ -341,35 +346,45 @@ struct ahci_r_fis {
 #define AHCI_P_FNTF(p)	(0x13c + AHCI_P_OFFSET(p)) /* SNotification */
 	/* one bit per port */
 
-#define AHCI_READ(dev, offset, type)			\
-	({						\
-		uintptr_t _dev = (uintptr_t) dev;	\
-		uintptr_t _offset = (uintptr_t) offset;	\
-		uintptr_t _reg = _dev + _offset;	\
-		*(type *) _reg;				\
+#define AHCI_READ(dev, offset, type)				\
+	({							\
+		uintptr_t _dev = (uintptr_t) dev;		\
+		uintptr_t _offset = (uintptr_t) offset;		\
+		uintptr_t _reg = _dev + _offset;		\
+		AHCI_DEBUG("read %08x\n", _reg, _offset);	\
+		*(type *) _reg;					\
 	})
 
-#define AHCI_WRITE(dev, offset, val, type)		\
-	({						\
-		uintptr_t _dev = (uintptr_t) dev;	\
-		uintptr_t _offset = (uintptr_t) offset;	\
-		uintptr_t _reg = _dev + _offset;	\
-		*(volatile type *) _reg = (type) val;	\
+#define AHCI_WRITE(dev, offset, val, type)				\
+	({								\
+		uintptr_t _dev = (uintptr_t) dev;			\
+		uintptr_t _offset = (uintptr_t) offset;			\
+		uintptr_t _reg = _dev + _offset;			\
+		AHCI_DEBUG("write %08x, val %08x\n", _reg, val);	\
+		*(volatile type *) _reg = (type) val;			\
 	})
 
 /* ATA command */
-#define ATA_CMD_READ		0x20
-#define ATA_CMD_READ_DMA	0xc8
-#define ATA_CMD_READ_DMA_EXT	0x25
-#define ATA_CMD_WRITE		0x30
-#define ATA_CMD_WRITE_DMA	0xca
-#define ATA_CMD_WRITE_DMA_EXT	0x35
-#define ATA_CMD_FLUSH_CACHE	0xe7
-#define ATA_CMD_ATANTIFY	0xec
-#define ATA_CMD_SETFEATURES	0xef
+#define ATA_READ_DMA48			0x25	/* read DMA 48bit LBA */
+#define ATA_WRITE_DMA48			0x35	/* write DMA 48bit LBA */
+#define ATA_ATAPI_IDENTIFY		0xa1	/* get ATAPI params*/
+#define ATA_READ_DMA			0xc8	/* read DMA */
+#define ATA_WRITE_DMA			0xca	/* write DMA */
+#define ATA_ATA_IDENTIFY		0xec	/* get ATA params */
 
-#define	WDCE_CRC		0x80	/* CRC error (Ultra-DMA only) */
-#define	WDCS_ERR		0x01    /* error */
+/* ATA status */
+#define ATA_STATUS			10	/* (R) status */
+#define ATA_ALTSTAT			11	/* (R) alternate status */
+#define		ATA_S_ERROR		0x01	/* error */
+#define		ATA_S_INDEX		0x02	/* index */
+#define		ATA_S_CORR		0x04	/* data corrected */
+#define		ATA_S_DRQ		0x08	/* data request */
+#define		ATA_S_DSC		0x10	/* drive seek completed */
+#define		ATA_S_SERVICE		0x10	/* drive needs service */
+#define		ATA_S_DWF		0x20	/* drive write fault */
+#define		ATA_S_DMA		0x20	/* DMA ready */
+#define		ATA_S_READY		0x40	/* drive ready */
+#define		ATA_S_BUSY		0x80	/* busy */
 
 #define ATA_SECTOR_SIZE		512	/* 512 bytes */
 
@@ -378,8 +393,14 @@ struct ahci_controller {
 	uint32_t cap1, cap2;
 	int nchannels;
 	int ncmds;
+	uint32_t revision;
 	struct ahci_channel {
 		bool present;
+
+		bool atapi;
+		bool lba48;
+		uint64_t nsectors;
+
 		struct ahci_cmd_header *cmd_header_list;
 		struct ahci_r_fis *rfis;
 		int active_slots;
@@ -390,6 +411,10 @@ struct ahci_controller {
 };
 
 int ahci_pci_attach(struct pci_func *);
+int ahci_disk_read(int port,
+		   uint64_t lba, uint16_t nsects, void *buf);
+int ahci_disk_write(int port,
+		    uint64_t lba, uint16_t nsects, void *buf);
 
 #endif /* _KERN_ */
 
