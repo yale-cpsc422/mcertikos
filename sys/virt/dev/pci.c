@@ -36,194 +36,403 @@ vpci_find_device(struct vpci_host *vpci_host, uint32_t addr)
 
 	dev_id = (addr >> 11) & 0x1f;
 
+#if defined (DEBUG_VPCI) && defined (DEBUG_VIRTIO_BLK)
+	if (bus_id == 0 && dev_id == 0)
+#endif
+
+	VPCI_DEBUG("bus %02x, dev %02x, func %1x, reg %02x.\n",
+		   bus_id, dev_id, (addr >> 8) & 0x7, addr & 0xff);
+
 	return vpci_host->dev[dev_id];
 }
 
-static gcc_inline uint32_t
-vpci_read_config_addr(struct vpci_host *vpci_host)
-{
-	KERN_ASSERT(vpci_host != NULL);
-	return vpci_host->config_addr;
-}
-
-static gcc_inline void
-vpci_write_config_addr(struct vpci_host *vpci_host, uint32_t val)
-{
-	KERN_ASSERT(vpci_host != NULL);
-	vpci_host->config_addr = val;
-}
-
-static uint32_t
-vpci_read_config_data(struct vpci_host *vpci_host, data_sz_t size)
-{
-	KERN_ASSERT(vpci_host != NULL);
-
-	struct vpci_device *dev;
-
-	if ((dev = vpci_find_device(vpci_host, vpci_host->config_addr)) == NULL)
-		return 0xffffffff;
-
-	return dev->conf_read(dev->dev, vpci_host->config_addr, size);
-}
-
 static void
-vpci_write_config_data(struct vpci_host *vpci_host, uint32_t val, data_sz_t size)
-{
-	KERN_ASSERT(vpci_host != NULL);
-
-	struct vpci_device *dev;
-
-	if ((dev = vpci_find_device(vpci_host, vpci_host->config_addr)) == NULL)
-		return;
-
-	dev->conf_write(dev->dev, vpci_host->config_addr, val, size);
-}
-
-static void
-vpci_ioport_readb(struct vm *vm, void *dev, uint32_t port, void *data)
+vpci_config_addr_readb(struct vm *vm, void *dev, uint32_t port, void *data)
 {
 	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
-	KERN_ASSERT(PCI_CONFIG_ADDR <= port && port < PCI_CONFIG_DATA+4);
+	KERN_ASSERT(PCI_CONFIG_ADDR <= port && port < PCI_CONFIG_ADDR+4);
 
-	uint32_t val;
-	struct vpci_host *vpci_host = (struct vpci_host *) dev;
+	struct vpci_host *host;
+	int shift;
+	uint32_t mask;
 
-	if (port < PCI_CONFIG_DATA) {
-		val = vpci_read_config_addr(vpci_host);
-		*(uint8_t *) data = val >> ((port - PCI_CONFIG_ADDR) * 8);
-	} else {
-		val = vpci_read_config_data(vpci_host, SZ8);
-		*(uint8_t *) data = val >> ((port - PCI_CONFIG_DATA) * 8);
-	}
+	host = (struct vpci_host *) dev;
 
-	VPCI_DEBUG("readb port %x, val %08x.\n", port, val);
+	shift = (port - PCI_CONFIG_ADDR) * 8;
+	mask = (uint32_t) 0xff << shift;
+
+	*(uint8_t *) data = (host->config_addr & mask) >> shift;
+
+#if defined (DEBUG_VPCI) && defined (DEBUG_VIRTIO_BLK)
+	if (((host->config_addr >> 16) & 0xff) == 0 &&
+	    ((host->config_addr >> 11) & 0x1f) == 0)
+#endif
+
+	VPCI_DEBUG("readb port %x (PCI_CONFIG_ADDR), val %02x.\n",
+		   port, *(uint8_t *) data);
 }
 
 static void
-vpci_ioport_readw(struct vm *vm, void *dev, uint32_t port, void *data)
+vpci_config_addr_readw(struct vm *vm, void *dev, uint32_t port, void *data)
 {
 	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
-	KERN_ASSERT(PCI_CONFIG_ADDR <= port && port < PCI_CONFIG_DATA+3);
+	KERN_ASSERT(PCI_CONFIG_ADDR <= port && port < PCI_CONFIG_ADDR+3);
 
-	VPCI_DEBUG("readw port %x.\n", port);
+	struct vpci_host *host;
+	int shift;
+	uint32_t mask;
 
-	uint32_t val;
-	struct vpci_host *vpci_host = (struct vpci_host *) dev;
+	host = (struct vpci_host *) dev;
 
-	if (port < PCI_CONFIG_DATA - 1) {
-		val = vpci_read_config_addr(vpci_host);
-		*(uint16_t *) data = val >> ((port - PCI_CONFIG_ADDR) * 8);
-	} else if (port >= PCI_CONFIG_DATA) {
-		val = vpci_read_config_data(vpci_host, SZ16);
-		*(uint16_t *) data = val >> ((port - PCI_CONFIG_DATA) * 8);
-	} else {
-		uint16_t _addr, _data;
-		_addr = vpci_read_config_addr(vpci_host) >> 24;
-		_data = vpci_read_config_data(vpci_host, SZ8) << 8;
-		val = _data | _addr;
-		*(uint16_t *) data = val;
-	}
+	shift = (port - PCI_CONFIG_ADDR) * 8;
+	mask = (uint32_t) 0xffff << shift;
 
-	VPCI_DEBUG("readw port %x, val %08x.\n", port, val);
+	*(uint16_t *) data = (host->config_addr & mask) >> shift;
+
+#if defined (DEBUG_VPCI) && defined (DEBUG_VIRTIO_BLK)
+	if (((host->config_addr >> 16) & 0xff) == 0 &&
+	    ((host->config_addr >> 11) & 0x1f) == 0)
+#endif
+
+	VPCI_DEBUG("readw port %x (PCI_CONFIG_ADDR), val %04x.\n",
+		   port, *(uint16_t *) data);
 }
 
 static void
-vpci_ioport_readl(struct vm *vm, void *dev, uint32_t port, void *data)
+vpci_config_addr_readl(struct vm *vm, void *dev, uint32_t port, void *data)
 {
 	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
-	KERN_ASSERT(PCI_CONFIG_ADDR <= port && port <= PCI_CONFIG_DATA);
+	KERN_ASSERT(port == PCI_CONFIG_ADDR);
 
-	uint32_t val;
-	struct vpci_host *vpci_host = (struct vpci_host *) dev;
+	struct vpci_host *host;
 
-	if (port == PCI_CONFIG_ADDR) {
-		val = vpci_read_config_addr(vpci_host);
-		*(uint32_t *) data = val;
-	} else if (port == PCI_CONFIG_DATA) {
-		val = vpci_read_config_data(vpci_host, SZ32);
-		*(uint32_t *) data = val;
-	} else {
-		uint32_t _addr, _data;
-		int addr_bytes;
-		addr_bytes = PCI_CONFIG_DATA - port;
-		_addr = vpci_read_config_addr(vpci_host) >> (4 - addr_bytes);
-		_data = vpci_read_config_data(vpci_host, SZ32) << addr_bytes;
-		val = _data | _addr;
-		*(uint32_t *) data = val;
-	}
+	host = (struct vpci_host *) dev;
 
-	VPCI_DEBUG("readl port %x, val %08x.\n", port, val);
+	*(uint32_t *) data = host->config_addr;
+
+#if defined (DEBUG_VPCI) && defined (DEBUG_VIRTIO_BLK)
+	if (((host->config_addr >> 16) & 0xff) == 0 &&
+	    ((host->config_addr >> 11) & 0x1f) == 0)
+#endif
+
+	VPCI_DEBUG("readl port %x (PCI_CONFIG_ADDR), val %04x.\n",
+		   port, *(uint32_t *) data);
 }
 
 static void
-vpci_ioport_writeb(struct vm *vm, void *dev, uint32_t port, void *data)
+vpci_config_addr_writeb(struct vm *vm, void *dev, uint32_t port, void *data)
 {
 	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
-	KERN_ASSERT(PCI_CONFIG_ADDR <= port && port < PCI_CONFIG_DATA+4);
+	KERN_ASSERT(PCI_CONFIG_ADDR <= port && port < PCI_CONFIG_ADDR+4);
 
-	uint32_t val;
-	struct vpci_host *vpci_host = (struct vpci_host *) dev;
+	struct vpci_host *host;
+	int shift;
+	uint32_t mask;
 
-	if (port == PCI_CONFIG_ADDR) {
-		val = vpci_read_config_addr(vpci_host) & ~0xff;
-		val |= *(uint8_t *) data;
-		vpci_write_config_addr(vpci_host, val);
-	} else if (port == PCI_CONFIG_DATA) {
-		val = *(uint8_t *) data;
-		vpci_write_config_data(vpci_host, val, SZ8);
-	} else {
-		VPCI_DEBUG("writeb, invalid port %x.\n", port);
-		return;
-	}
+	host = (struct vpci_host *) dev;
 
-	VPCI_DEBUG("writeb port %x, val %08x.\n", port, val);
+	shift = (port - PCI_CONFIG_ADDR) * 8;
+	mask = (uint32_t) 0xff << shift;
+
+	host->config_addr =
+		(host->config_addr & ~mask) | (*(uint8_t *) data << shift);
+
+#if defined (DEBUG_VPCI) && defined (DEBUG_VIRTIO_BLK)
+	if (((host->config_addr >> 16) & 0xff) == 0 &&
+	    ((host->config_addr >> 11) & 0x1f) == 0)
+#endif
+
+	VPCI_DEBUG("writeb port %x (PCI_CONFIG_ADDR), val %08x.\n",
+		   port, host->config_addr);
 }
 
 static void
-vpci_ioport_writew(struct vm *vm, void *dev, uint32_t port, void *data)
+vpci_config_addr_writew(struct vm *vm, void *dev, uint32_t port, void *data)
 {
 	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
-	KERN_ASSERT(PCI_CONFIG_ADDR <= port && port < PCI_CONFIG_DATA+3);
+	KERN_ASSERT(PCI_CONFIG_ADDR <= port && port < PCI_CONFIG_ADDR+3);
 
-	uint32_t val;
-	struct vpci_host *vpci_host = (struct vpci_host *) dev;
+	struct vpci_host *host;
+	int shift;
+	uint32_t mask;
 
-	if (port == PCI_CONFIG_ADDR) {
-		val = vpci_read_config_addr(vpci_host) & ~0xffff;
-		val |= *(uint16_t *) data;
-		vpci_write_config_addr(vpci_host, val);
-	} else if (port == PCI_CONFIG_DATA) {
-		val = *(uint16_t *) data;
-		vpci_write_config_data(vpci_host, val, SZ16);
-	} else {
-		VPCI_DEBUG("writew, invalid port %x.\n", port);
-		return;
-	}
+	host = (struct vpci_host *) dev;
 
-	VPCI_DEBUG("writew port %x, val %08x.\n", port, val);
+	shift = (port - PCI_CONFIG_ADDR) * 8;
+	mask = (uint32_t) 0xffff << shift;
+
+	host->config_addr =
+		(host->config_addr & ~mask) | (*(uint16_t *) data << shift);
+
+#if defined (DEBUG_VPCI) && defined (DEBUG_VIRTIO_BLK)
+	if (((host->config_addr >> 16) & 0xff) == 0 &&
+	    ((host->config_addr >> 11) & 0x1f) == 0)
+#endif
+
+	VPCI_DEBUG("writew port %x (PCI_CONFIG_ADDR), val %08x.\n",
+		   port, host->config_addr);
 }
 
 static void
-vpci_ioport_writel(struct vm *vm, void *dev, uint32_t port, void *data)
+vpci_config_addr_writel(struct vm *vm, void *dev, uint32_t port, void *data)
 {
 	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
-	KERN_ASSERT(PCI_CONFIG_ADDR <= port && port <= PCI_CONFIG_DATA);
+	KERN_ASSERT(port == PCI_CONFIG_ADDR);
 
-	uint32_t val;
-	struct vpci_host *vpci_host = (struct vpci_host *) dev;
+	struct vpci_host *host;
 
-	if (port == PCI_CONFIG_ADDR) {
-		val = *(uint32_t *) data;
-		vpci_write_config_addr(vpci_host, val);
-	} else if (port == PCI_CONFIG_DATA) {
-		val = *(uint32_t *) data;
-		vpci_write_config_data(vpci_host, val, SZ32);
-	} else {
-		VPCI_DEBUG("writel, invalid port %x.\n", port);
-		return;
+	host = (struct vpci_host *) dev;
+	host->config_addr = *(uint32_t *) data;
+
+#if defined (DEBUG_VPCI) && defined (DEBUG_VIRTIO_BLK)
+	if (((host->config_addr >> 16) & 0xff) == 0 &&
+	    ((host->config_addr >> 11) & 0x1f) == 0)
+#endif
+
+	VPCI_DEBUG("writew port %x (PCI_CONFIG_ADDR), val %08x.\n",
+		   port, host->config_addr);
+}
+
+static void
+vpci_config_data_readb(struct vm *vm, void *dev, uint32_t port, void *data)
+{
+	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
+	KERN_ASSERT(PCI_CONFIG_DATA <= port && port < PCI_CONFIG_DATA+4);
+
+	struct vpci_host *host;
+	struct vpci_device *pci_dev;
+	int shift;
+	uint32_t mask;
+
+	host = (struct vpci_host *) dev;
+
+	if ((pci_dev = vpci_find_device(host, host->config_addr)) == NULL) {
+		*(uint8_t *) data = 0xff;
+		goto ret;
 	}
 
-	VPCI_DEBUG("writel port %x, val %08x.\n", port, val);
+	shift = (port - PCI_CONFIG_DATA) * 8;
+	mask = (uint32_t) 0xff << shift;
+
+	*(uint8_t *) data =
+		(pci_dev->conf_read(pci_dev->dev, host->config_addr, SZ8) &
+		 mask) >> shift;
+
+ ret:
+#if defined (DEBUG_VPCI) && defined (DEBUG_VIRTIO_BLK)
+	if (((host->config_addr >> 16) & 0xff) == 0 &&
+	    ((host->config_addr >> 11) & 0x1f) == 0)
+#endif
+
+	VPCI_DEBUG("readb port %x (PCI_CONFIG_DATA), val %02x.\n",
+		   port, *(uint8_t *) data);
+}
+
+static void
+vpci_config_data_readw(struct vm *vm, void *dev, uint32_t port, void *data)
+{
+	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
+	KERN_ASSERT(PCI_CONFIG_DATA <= port && port < PCI_CONFIG_DATA+3);
+
+	struct vpci_host *host;
+	struct vpci_device *pci_dev;
+	int shift;
+	uint32_t mask;
+
+	host = (struct vpci_host *) dev;
+
+	if ((pci_dev = vpci_find_device(host, host->config_addr)) == NULL) {
+		*(uint16_t *) data = 0xffff;
+		goto ret;
+	}
+
+	shift = (port - PCI_CONFIG_DATA) * 8;
+	mask = (uint32_t) 0xffff << shift;
+
+	*(uint16_t *) data =
+		(pci_dev->conf_read(pci_dev->dev, host->config_addr, SZ16) &
+		 mask) >> shift;
+
+ ret:
+#if defined (DEBUG_VPCI) && defined (DEBUG_VIRTIO_BLK)
+	if (((host->config_addr >> 16) & 0xff) == 0 &&
+	    ((host->config_addr >> 11) & 0x1f) == 0)
+#endif
+
+	VPCI_DEBUG("readw port %x (PCI_CONFIG_DATA), val %04x.\n",
+		   port, *(uint16_t *) data);
+}
+
+static void
+vpci_config_data_readl(struct vm *vm, void *dev, uint32_t port, void *data)
+{
+	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
+	KERN_ASSERT(port == PCI_CONFIG_DATA);
+
+	struct vpci_host *host;
+	struct vpci_device *pci_dev;
+
+	host = (struct vpci_host *) dev;
+
+	if ((pci_dev = vpci_find_device(host, host->config_addr)) == NULL) {
+		*(uint32_t *) data = 0xffffffff;
+		goto ret;
+	}
+
+	*(uint32_t *) data =
+		pci_dev->conf_read(pci_dev->dev, host->config_addr, SZ32);
+
+ ret:
+#if defined (DEBUG_VPCI) && defined (DEBUG_VIRTIO_BLK)
+	if (((host->config_addr >> 16) & 0xff) == 0 &&
+	    ((host->config_addr >> 11) & 0x1f) == 0)
+#endif
+
+	VPCI_DEBUG("readl port %x (PCI_CONFIG_DATA), val %08x.\n",
+		   port, *(uint32_t *) data);
+}
+
+static void
+vpci_config_data_writeb(struct vm *vm, void *dev, uint32_t port, void *data)
+{
+	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
+	KERN_ASSERT(PCI_CONFIG_DATA <= port && port < PCI_CONFIG_DATA+4);
+
+	struct vpci_host *host;
+	struct vpci_device *pci_dev;
+	int shift;
+	uint32_t mask, val;
+
+	host = (struct vpci_host *) dev;
+
+	if ((pci_dev = vpci_find_device(host, host->config_addr)) == NULL)
+		goto ret;
+
+	shift = (port - PCI_CONFIG_DATA) * 8;
+
+	if (shift == 0) {
+		pci_dev->conf_write(pci_dev->dev, host->config_addr,
+				    *(uint8_t *) data, SZ8);
+		goto ret;
+	}
+
+	mask = (uint32_t) 0xff << shift;
+
+	val = pci_dev->conf_read(pci_dev->dev, host->config_addr, SZ32);
+	val = (val & ~mask) | ((uint32_t) (*(uint8_t *) data) << shift);
+
+	pci_dev->conf_write(pci_dev->dev, host->config_addr, val, SZ32);
+
+ ret:
+#if defined (DEBUG_VPCI) && defined (DEBUG_VIRTIO_BLK)
+	if (((host->config_addr >> 16) & 0xff) == 0 &&
+	    ((host->config_addr >> 11) & 0x1f) == 0)
+#endif
+
+	VPCI_DEBUG("writeb port %x (PCI_CONFIG_DATA), val %02x.\n",
+		   port, *(uint8_t *) data);
+}
+
+static void
+vpci_config_data_writew(struct vm *vm, void *dev, uint32_t port, void *data)
+{
+	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
+	KERN_ASSERT(PCI_CONFIG_DATA <= port && port < PCI_CONFIG_DATA+3);
+
+	struct vpci_host *host;
+	struct vpci_device *pci_dev;
+	int shift;
+	uint32_t mask, val;
+
+	host = (struct vpci_host *) dev;
+
+	if ((pci_dev = vpci_find_device(host, host->config_addr)) == NULL)
+		goto ret;
+
+	shift = (port - PCI_CONFIG_DATA) * 8;
+
+	if (shift == 0) {
+		pci_dev->conf_write(pci_dev->dev, host->config_addr,
+				    *(uint16_t *) data, SZ16);
+		goto ret;
+	}
+
+	mask = (uint32_t) 0xffff << shift;
+
+	val = pci_dev->conf_read(pci_dev->dev, host->config_addr, SZ32);
+	val = (val & ~mask) | ((uint32_t) (*(uint16_t *) data) << shift);
+
+	pci_dev->conf_write(pci_dev->dev, host->config_addr, val, SZ32);
+
+ ret:
+#if defined (DEBUG_VPCI) && defined (DEBUG_VIRTIO_BLK)
+	if (((host->config_addr >> 16) & 0xff) == 0 &&
+	    ((host->config_addr >> 11) & 0x1f) == 0)
+#endif
+
+	VPCI_DEBUG("writew port %x (PCI_CONFIG_DATA), val %04x.\n",
+		   port, *(uint16_t *) data);
+}
+
+static void
+vpci_config_data_writel(struct vm *vm, void *dev, uint32_t port, void *data)
+{
+	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
+	KERN_ASSERT(port == PCI_CONFIG_DATA);
+
+	struct vpci_host *host;
+	struct vpci_device *pci_dev;
+
+	host = (struct vpci_host *) dev;
+
+	if ((pci_dev = vpci_find_device(host, host->config_addr)) == NULL)
+		goto ret;
+
+	pci_dev->conf_write(pci_dev->dev,
+			    host->config_addr, *(uint32_t *) data, SZ32);
+
+ ret:
+#if defined (DEBUG_VPCI) && defined (DEBUG_VIRTIO_BLK)
+	if (((host->config_addr >> 16) & 0xff) == 0 &&
+	    ((host->config_addr >> 11) & 0x1f) == 0)
+#endif
+
+	VPCI_DEBUG("writel port %x (PCI_CONFIG_DATA), val %08x.\n",
+		   port, *(uint32_t *) data);
+}
+
+static void
+vpci_default_ioport_readw(struct vm *vm, void *dev, uint32_t port, void *data)
+{
+	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
+
+	VPCI_DEBUG("readw port %x, invalid.\n", port);
+}
+
+static void
+vpci_default_ioport_readl(struct vm *vm, void *dev, uint32_t port, void *data)
+{
+	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
+
+	VPCI_DEBUG("readl port %x, invalid.\n", port);
+}
+
+static void
+vpci_default_ioport_writew(struct vm *vm, void *dev, uint32_t port, void *data)
+{
+	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
+
+	VPCI_DEBUG("writew port %x, val %04x, invalid.\n",
+		   port, *(uint16_t *) data);
+}
+
+static void
+vpci_default_ioport_writel(struct vm *vm, void *dev, uint32_t port, void *data)
+{
+	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
+
+	VPCI_DEBUG("writel port %x, val %08x, invalid.\n",
+		   port, *(uint32_t *) data);
 }
 
 void
@@ -231,28 +440,69 @@ vpci_init(struct vpci_host *vpci_host, struct vm *vm)
 {
 	KERN_ASSERT(vpci_host != NULL && vm != NULL);
 
-	uint16_t port;
+	uint32_t port;
 
 	memset(vpci_host, 0x0, sizeof(struct vpci_host));
 
-	for (port = PCI_CONFIG_ADDR; port < PCI_CONFIG_DATA + 4; port++) {
+	for (port = PCI_CONFIG_ADDR; port < PCI_CONFIG_ADDR+4; port++) {
 		vmm_iodev_register_read(vm, vpci_host, port, SZ8,
-					vpci_ioport_readb);
+					vpci_config_addr_readb);
 		vmm_iodev_register_write(vm, vpci_host, port, SZ8,
-					 vpci_ioport_writeb);
+					 vpci_config_addr_writeb);
+
+		if (PCI_CONFIG_ADDR + 4 - port > 1) {
+			vmm_iodev_register_read(vm, vpci_host, port, SZ16,
+						vpci_config_addr_readw);
+			vmm_iodev_register_write(vm, vpci_host, port, SZ16,
+						 vpci_config_addr_writew);
+		} else {
+			vmm_iodev_register_read(vm, vpci_host, port, SZ16,
+						vpci_default_ioport_readw);
+			vmm_iodev_register_write(vm, vpci_host, port, SZ16,
+						 vpci_default_ioport_writew);
+		}
+
+		if (port == PCI_CONFIG_ADDR) {
+			vmm_iodev_register_read(vm, vpci_host, port, SZ32,
+						vpci_config_addr_readl);
+			vmm_iodev_register_write(vm, vpci_host, port, SZ32,
+						 vpci_config_addr_writel);
+		} else {
+			vmm_iodev_register_read(vm, vpci_host, port, SZ32,
+						vpci_default_ioport_readl);
+			vmm_iodev_register_write(vm, vpci_host, port, SZ32,
+						 vpci_default_ioport_writel);
+		}
+	}
+
+	for (port = PCI_CONFIG_DATA; port < PCI_CONFIG_DATA+4; port++) {
+		vmm_iodev_register_read(vm, vpci_host, port, SZ8,
+					vpci_config_data_readb);
+		vmm_iodev_register_write(vm, vpci_host, port, SZ8,
+					 vpci_config_data_writeb);
 
 		if (PCI_CONFIG_DATA + 4 - port > 1) {
 			vmm_iodev_register_read(vm, vpci_host, port, SZ16,
-						vpci_ioport_readw);
+						vpci_config_data_readw);
 			vmm_iodev_register_write(vm, vpci_host, port, SZ16,
-						 vpci_ioport_writew);
+						 vpci_config_data_writew);
+		} else {
+			vmm_iodev_register_read(vm, vpci_host, port, SZ16,
+						vpci_default_ioport_readw);
+			vmm_iodev_register_write(vm, vpci_host, port, SZ16,
+						 vpci_default_ioport_writew);
 		}
 
-		if (PCI_CONFIG_DATA + 4 - port >= 4) {
+		if (port == PCI_CONFIG_DATA) {
 			vmm_iodev_register_read(vm, vpci_host, port, SZ32,
-						vpci_ioport_readl);
+						vpci_config_data_readl);
 			vmm_iodev_register_write(vm, vpci_host, port, SZ32,
-						 vpci_ioport_writel);
+						 vpci_config_data_writel);
+		} else {
+			vmm_iodev_register_read(vm, vpci_host, port, SZ32,
+						vpci_default_ioport_readl);
+			vmm_iodev_register_write(vm, vpci_host, port, SZ32,
+						 vpci_default_ioport_writel);
 		}
 	}
 }

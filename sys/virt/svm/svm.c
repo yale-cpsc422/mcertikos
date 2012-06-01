@@ -219,6 +219,17 @@ set_intercept_ioio(struct vmcb *vmcb, uint32_t port, data_sz_t size, bool enable
 	}
 }
 
+static void
+svm_set_intercept_ioio(struct vm *vm, uint32_t port, data_sz_t size, bool enable)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct svm *svm = (struct svm *) vm->cookie;
+	struct vmcb *vmcb = svm->vmcb;
+
+	set_intercept_ioio(vmcb, port, size, enable);
+}
+
 void
 set_intercept_rdmsr(struct vmcb *vmcb, uint64_t msr, bool enable)
 {
@@ -692,12 +703,25 @@ svm_get_exit_tsc(struct vm *vm)
 	return svm->exit_tsc;
 }
 
+static uintptr_t
+svm_translate_gp2hp(struct vm *vm, uintptr_t gp)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct svm *svm = (struct svm *) vm->cookie;
+	struct vmcb *vmcb = svm->vmcb;
+
+	return glinear_2_gphysical(vmcb, gp);
+}
+
 struct vmm_ops vmm_ops_amd = {
-	.vmm_init	= svm_init,
-	.vm_init	= vm_init,
-	.vm_run		= vm_run,
-	.vm_exit_handle	= svm_handle_exit,
-	.vm_intr_handle	= svm_guest_intr_handler,
-	.vm_enter_tsc	= svm_get_start_tsc,
-	.vm_exit_tsc	= svm_get_exit_tsc,
+	.vmm_init		= svm_init,
+	.vm_init		= vm_init,
+	.vm_run			= vm_run,
+	.vm_exit_handle		= svm_handle_exit,
+	.vm_intr_handle		= svm_guest_intr_handler,
+	.vm_enter_tsc		= svm_get_start_tsc,
+	.vm_exit_tsc		= svm_get_exit_tsc,
+	.vm_intercept_ioio	= svm_set_intercept_ioio,
+	.vm_translate_gp2hp	= svm_translate_gp2hp,
 };

@@ -16,6 +16,9 @@ int vmm_iodev_register_write(struct vm *,
 int vmm_register_extintr(struct vm *, void *iodev,
 			 uint8_t intr_no, intr_handle_t);
 
+void vmm_iodev_unregister_read(struct vm *, uint16_t port, data_sz_t);
+void vmm_iodev_unregister_write(struct vm *, uint16_t port, data_sz_t);
+
 int vmm_iodev_read_port(struct vm *, uint32_t port, void *data, data_sz_t size);
 int vmm_iodev_write_port(struct vm *, uint32_t port, void *data, data_sz_t size);
 int vmm_handle_extintr(struct vm *, uint8_t intr_no);

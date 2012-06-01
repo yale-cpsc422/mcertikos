@@ -14,6 +14,7 @@ enum data_sz_t;
 
 struct vpci_device {
 	void *dev;
+
 	uint32_t (*conf_read)(void *dev,
 			      uint32_t addr, enum data_sz_t);
 	void (*conf_write)(void *dev,

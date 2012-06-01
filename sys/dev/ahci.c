@@ -477,7 +477,7 @@ ahci_command(struct ahci_controller *sc, int port, int write, int atapi,
 	AHCI_DEBUG("port %d, issue command %x.\n", port, fis->command);
 
 	/* wait up to 31 sec */
-	for (i = 0; i < 31; i++) {
+	for (i = 0; i < 3100; i++) {
 		is = AHCI_READ(sc->hba, AHCI_P_IS(port), uint32_t);
 
 		if (is) {
@@ -511,10 +511,10 @@ ahci_command(struct ahci_controller *sc, int port, int write, int atapi,
 			}
 		}
 
-		delay(1000);
+		delay(10);
 	}
 
-	if (i == 31) {
+	if (i == 3100) {
 		AHCI_DEBUG("port %d, timeout.\n", port);
 		return 1;
 	}
@@ -689,14 +689,6 @@ ahci_pci_attach(struct pci_func *f)
 	if (ahci_disk_read(0, 0, 1, buf)) {
 		AHCI_DEBUG("read test failed.\n");
 		goto test_end;
-	} else {
-		int i;
-		for (i = 0; i < ATA_SECTOR_SIZE; i++) {
-			if (i % 16 == 0)
-				dprintf("\n%08x:", i);
-			dprintf(" %02x", buf[i]);
-		}
-		dprintf("\n");
 	}
 
 #if 0
@@ -709,14 +701,6 @@ ahci_pci_attach(struct pci_func *f)
 	if (ahci_disk_read(0, 0, 1, buf)) {
 		AHCI_DEBUG("read test failed.\n");
 		goto test_end;
-	} else {
-		int i;
-		for (i = 0; i < ATA_SECTOR_SIZE; i++) {
-			if (i % 16 == 0)
-				dprintf("\n%08x:", i);
-			dprintf(" %02x", buf[i]);
-		}
-		dprintf("\n");
 	}
 #endif
 
@@ -778,7 +762,7 @@ ahci_disk_rw(struct ahci_controller *sc, int port, int write,
 	AHCI_DEBUG("port %d, %s %d sectors %s LBA %llx %s %x, ",
 		   port,
 		   write ? "write" : "read",
-		   nsects,
+		   (uint32_t) nsects,
 		   write ? "to" : "from",
 		   lba,
 		   write ? "from" : "to",
@@ -813,6 +797,21 @@ ahci_disk_read(int port,
 	ret = ahci_disk_rw(&ahci_ctrl, port, 0, lba, nsects, buf);
 	spinlock_release(&ahci_lk);
 
+#ifdef DEBUG_AHCI
+	if (ret)
+		goto err;
+	int i;
+	uint8_t *p;
+	AHCI_DEBUG("read sector 0x%llx:\n", lba);
+	for (i = 0, p = buf; i < ATA_SECTOR_SIZE; i++, p++) {
+		if (i % 16 == 0)
+			dprintf("\n%08x:", i);
+		dprintf(" %02x", *p);
+	}
+	dprintf("\n\n");
+ err:
+#endif
+
 	return ret;
 }
 
@@ -838,4 +837,20 @@ ahci_disk_write(int port,
 	spinlock_release(&ahci_lk);
 
 	return ret;
+}
+
+uint64_t
+ahci_disk_capacity(int port)
+{
+	struct ahci_channel *channel;
+
+	if (port >= ahci_ctrl.nchannels)
+		return 0;
+
+	channel = &ahci_ctrl.channels[port];
+
+	if (channel->present == TRUE)
+		return channel->nsectors;
+	else
+		return 0;
 }

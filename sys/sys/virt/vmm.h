@@ -11,6 +11,7 @@
 #include <sys/virt/dev/pic.h>
 #include <sys/virt/dev/pit.h>
 #include <sys/virt/dev/serial.h>
+#include <sys/virt/dev/virtio_blk.h>
 #include <sys/virt/dev/debug_dev.h>
 
 #include <machine/trap.h>
@@ -71,6 +72,9 @@ struct vm {
 	struct vserial		vserial;/* virtual serial ports */
 	struct vnvram		vnvram;	/* virtual NVRAM */
 	struct vpit		vpit;	/* virtual PIT (i8254) */
+
+	struct virtio_blk	vio_hdd;
+	struct vpci_device	vio_blk_dev;
 
 	struct guest_debug_dev debug_dev;
 
@@ -144,18 +148,35 @@ typedef int (*vm_inject_func_t)(struct vm *,
 				bool ev, uint32_t errcode);
 
 /*
+ * Machine-dependent function that enables/disables the interception on I/O
+ * port.
+ */
+typedef void (*vm_intercept_ioio_func_t)(struct vm *,
+					 uint32_t port, data_sz_t, bool enable);
+
+/*
+ * Machine-dependent function that translates guest physical address to host
+ * physical address.
+ */
+typedef uintptr_t (*vm_translate_gp2hp_func_t)(struct vm *, uintptr_t);
+
+/*
  * Each machine-dependent HVM implementation should define such a structure.
  */
 struct vmm_ops {
-	vmm_init_func_t		vmm_init;
+	vmm_init_func_t			vmm_init;
 
-	vm_init_func_t		vm_init;
-	vm_run_func_t		vm_run;
-	vm_exit_handle_func_t	vm_exit_handle;
-	vm_intr_handle_func_t	vm_intr_handle;
-	vm_inject_func_t	vm_inject;
-	vm_enter_tsc_func_t	vm_enter_tsc;
-	vm_exit_tsc_func_t	vm_exit_tsc;
+	vm_init_func_t			vm_init;
+	vm_run_func_t			vm_run;
+	vm_exit_handle_func_t		vm_exit_handle;
+	vm_intr_handle_func_t		vm_intr_handle;
+	vm_inject_func_t		vm_inject;
+	vm_enter_tsc_func_t		vm_enter_tsc;
+	vm_exit_tsc_func_t		vm_exit_tsc;
+
+	vm_intercept_ioio_func_t	vm_intercept_ioio;
+
+	vm_translate_gp2hp_func_t	vm_translate_gp2hp;
 };
 
 /*
@@ -199,6 +220,16 @@ void vmm_handle_intr(struct vm *, uint8_t irqno);
  * Read TSC of a VM.
  */
 uint64_t vmm_rdtsc(struct vm *);
+
+/*
+ * Update the interception setup.
+ */
+void vmm_update(struct vm *);
+
+/*
+ * Translate the guest physical address to the host physical address.
+ */
+uintptr_t vmm_translate_gp2hp(struct vm *, uintptr_t);
 
 #endif /* _KERN_ */
 

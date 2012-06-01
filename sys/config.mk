@@ -142,9 +142,14 @@ ifneq "$(strip $(DEBUG_VPIT) $(DEBUG_ALL) $(DEBUG_VIRT))" ""
 KERN_CFLAGS	+= -DDEBUG_VPIT
 endif
 
-# If set, enable debugging virtualized PIT
+# If set, enable debugging virtualized PCI
 ifneq "$(strip $(DEBUG_VPCI) $(DEBUG_ALL) $(DEBUG_VIRT))" ""
 KERN_CFLAGS	+= -DDEBUG_VPCI
+endif
+
+# If set, enable debugging virtio block device
+ifneq "$(strip $(DEBUG_VIRTIO_BLK) $(DEBUG_ALL) $(DEBUG_VIRT))" ""
+KERN_CFLAGS	+= -DDEBUG_VIRTIO_BLK
 endif
 
 # If set, enable debugging hypercalls
