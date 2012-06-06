@@ -215,7 +215,7 @@ vpci_config_data_readb(struct vm *vm, void *dev, uint32_t port, void *data)
 	mask = (uint32_t) 0xff << shift;
 
 	*(uint8_t *) data =
-		(pci_dev->conf_read(pci_dev->dev, host->config_addr, SZ8) &
+		(pci_dev->conf_read(pci_dev->dev, host->config_addr, SZ32) &
 		 mask) >> shift;
 
  ret:
@@ -250,7 +250,7 @@ vpci_config_data_readw(struct vm *vm, void *dev, uint32_t port, void *data)
 	mask = (uint32_t) 0xffff << shift;
 
 	*(uint16_t *) data =
-		(pci_dev->conf_read(pci_dev->dev, host->config_addr, SZ16) &
+		(pci_dev->conf_read(pci_dev->dev, host->config_addr, SZ32) &
 		 mask) >> shift;
 
  ret:
@@ -306,14 +306,21 @@ vpci_config_data_writeb(struct vm *vm, void *dev, uint32_t port, void *data)
 	host = (struct vpci_host *) dev;
 
 	if ((pci_dev = vpci_find_device(host, host->config_addr)) == NULL)
-		goto ret;
+		return;
 
 	shift = (port - PCI_CONFIG_DATA) * 8;
 
 	if (shift == 0) {
+#if defined (DEBUG_VPCI) && defined (DEBUG_VIRTIO_BLK)
+		if (((host->config_addr >> 16) & 0xff) == 0 &&
+		    ((host->config_addr >> 11) & 0x1f) == 0)
+#endif
+
+		VPCI_DEBUG("writeb port %x (PCI_CONFIG_DATA), val %02x.\n",
+			   port, *(uint8_t *) data);
 		pci_dev->conf_write(pci_dev->dev, host->config_addr,
 				    *(uint8_t *) data, SZ8);
-		goto ret;
+		return;
 	}
 
 	mask = (uint32_t) 0xff << shift;
@@ -321,9 +328,6 @@ vpci_config_data_writeb(struct vm *vm, void *dev, uint32_t port, void *data)
 	val = pci_dev->conf_read(pci_dev->dev, host->config_addr, SZ32);
 	val = (val & ~mask) | ((uint32_t) (*(uint8_t *) data) << shift);
 
-	pci_dev->conf_write(pci_dev->dev, host->config_addr, val, SZ32);
-
- ret:
 #if defined (DEBUG_VPCI) && defined (DEBUG_VIRTIO_BLK)
 	if (((host->config_addr >> 16) & 0xff) == 0 &&
 	    ((host->config_addr >> 11) & 0x1f) == 0)
@@ -331,6 +335,8 @@ vpci_config_data_writeb(struct vm *vm, void *dev, uint32_t port, void *data)
 
 	VPCI_DEBUG("writeb port %x (PCI_CONFIG_DATA), val %02x.\n",
 		   port, *(uint8_t *) data);
+
+	pci_dev->conf_write(pci_dev->dev, host->config_addr, val, SZ32);
 }
 
 static void
@@ -347,14 +353,21 @@ vpci_config_data_writew(struct vm *vm, void *dev, uint32_t port, void *data)
 	host = (struct vpci_host *) dev;
 
 	if ((pci_dev = vpci_find_device(host, host->config_addr)) == NULL)
-		goto ret;
+		return;
 
 	shift = (port - PCI_CONFIG_DATA) * 8;
 
 	if (shift == 0) {
+#if defined (DEBUG_VPCI) && defined (DEBUG_VIRTIO_BLK)
+		if (((host->config_addr >> 16) & 0xff) == 0 &&
+		    ((host->config_addr >> 11) & 0x1f) == 0)
+#endif
+
+		VPCI_DEBUG("writew port %x (PCI_CONFIG_DATA), val %04x.\n",
+			   port, *(uint16_t *) data);
 		pci_dev->conf_write(pci_dev->dev, host->config_addr,
 				    *(uint16_t *) data, SZ16);
-		goto ret;
+		return;
 	}
 
 	mask = (uint32_t) 0xffff << shift;
@@ -362,9 +375,6 @@ vpci_config_data_writew(struct vm *vm, void *dev, uint32_t port, void *data)
 	val = pci_dev->conf_read(pci_dev->dev, host->config_addr, SZ32);
 	val = (val & ~mask) | ((uint32_t) (*(uint16_t *) data) << shift);
 
-	pci_dev->conf_write(pci_dev->dev, host->config_addr, val, SZ32);
-
- ret:
 #if defined (DEBUG_VPCI) && defined (DEBUG_VIRTIO_BLK)
 	if (((host->config_addr >> 16) & 0xff) == 0 &&
 	    ((host->config_addr >> 11) & 0x1f) == 0)
@@ -372,6 +382,8 @@ vpci_config_data_writew(struct vm *vm, void *dev, uint32_t port, void *data)
 
 	VPCI_DEBUG("writew port %x (PCI_CONFIG_DATA), val %04x.\n",
 		   port, *(uint16_t *) data);
+
+	pci_dev->conf_write(pci_dev->dev, host->config_addr, val, SZ32);
 }
 
 static void
@@ -386,12 +398,8 @@ vpci_config_data_writel(struct vm *vm, void *dev, uint32_t port, void *data)
 	host = (struct vpci_host *) dev;
 
 	if ((pci_dev = vpci_find_device(host, host->config_addr)) == NULL)
-		goto ret;
+		return;
 
-	pci_dev->conf_write(pci_dev->dev,
-			    host->config_addr, *(uint32_t *) data, SZ32);
-
- ret:
 #if defined (DEBUG_VPCI) && defined (DEBUG_VIRTIO_BLK)
 	if (((host->config_addr >> 16) & 0xff) == 0 &&
 	    ((host->config_addr >> 11) & 0x1f) == 0)
@@ -399,6 +407,9 @@ vpci_config_data_writel(struct vm *vm, void *dev, uint32_t port, void *data)
 
 	VPCI_DEBUG("writel port %x (PCI_CONFIG_DATA), val %08x.\n",
 		   port, *(uint32_t *) data);
+
+	pci_dev->conf_write(pci_dev->dev,
+			    host->config_addr, *(uint32_t *) data, SZ32);
 }
 
 static void

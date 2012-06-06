@@ -550,11 +550,6 @@ master_kernel(void)
 	KERN_INFO("[MASTER] Enable KBD interrupt.\n");
 	kbd_intenable();
 
-	KERN_INFO("[MASTER] Enable IDE interrupt.\n");
-	intr_enable(IRQ_IDE, 0);
-
-	/* intr_global_enable(); */
-
 	mgmt_pid = proc_new((uintptr_t) MGMT_START);
 	if (mgmt_pid == 0)
 		KERN_PANIC("[MASTER] Failed to start mgmt.\n ");

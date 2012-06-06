@@ -730,7 +730,7 @@ ahci_disk_rw(struct ahci_controller *sc, int port, int write,
 		return 1;
 	}
 
-	if (lba + nsects >= channel->nsectors) {
+	if (lba + nsects > channel->nsectors) {
 		AHCI_DEBUG("port %d, out of range.\n", port);
 		return 1;
 	}
@@ -768,10 +768,14 @@ ahci_disk_rw(struct ahci_controller *sc, int port, int write,
 		   write ? "from" : "to",
 		   buf);
 	if (ret) {
+#ifdef DEBUG_AHCI
 		dprintf("failed.\n");
+#endif
 		return 1;
 	} else {
+#ifdef DEBUG_AHCI
 		dprintf("OK.\n");
+#endif
 		return 0;
 	}
 }
@@ -798,18 +802,21 @@ ahci_disk_read(int port,
 	spinlock_release(&ahci_lk);
 
 #ifdef DEBUG_AHCI
-	if (ret)
-		goto err;
-	int i;
-	uint8_t *p;
-	AHCI_DEBUG("read sector 0x%llx:\n", lba);
-	for (i = 0, p = buf; i < ATA_SECTOR_SIZE; i++, p++) {
-		if (i % 16 == 0)
-			dprintf("\n%08x:", i);
-		dprintf(" %02x", *p);
-	}
-	dprintf("\n\n");
- err:
+ /* 	if (ret) */
+ /* 		goto err; */
+ /* 	int i; */
+ /* 	uint16_t sector; */
+ /* 	uint8_t *p = buf; */
+ /* 	for (sector = 0; sector < nsects; sector++) { */
+ /* 		dprintf("sector 0x%llx:\n", lba+sector); */
+ /* 		for (i = 0; i < ATA_SECTOR_SIZE; i++, p++) { */
+ /* 			if (i % 16 == 0) */
+ /* 				dprintf("\n%08x:", i); */
+ /* 			dprintf(" %02x", *p); */
+ /* 		} */
+ /* 		dprintf("\n\n"); */
+ /* 	} */
+ /* err: */
 #endif
 
 	return ret;

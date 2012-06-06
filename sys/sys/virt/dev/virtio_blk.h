@@ -41,6 +41,7 @@ struct virtio_blk_outhdr {
 #define VIRTIO_BLK_T_OUT		0x00000001
 #define VIRTIO_BLK_T_SCSI_CMD		0x00000002
 #define VIRTIO_BLK_T_FLUSH		0x00000004
+#define VIRTIO_BLK_T_GET_ID		0x00000008
 #define VIRTIO_BLK_T_BARRIER		0x80000000
 	uint32_t ioprio;
 	uint64_t sector;
@@ -50,7 +51,11 @@ struct virtio_blk_outhdr {
 #define VIRTIO_BLK_S_IOERR		0x00000001
 #define VIRTIO_BLK_S_UNSUPP		0x00000002
 
-#define VIRTIO_BLK_QUEUE_SIZE		8
+#define VIRTIO_BLK_QUEUE_SIZE		4
+
+#define VIRTIO_BLK_DEVICE_NAME		"virtio block device"
+#define VIRTIO_BLK_DEVICE_NAME_LEN				\
+	(sizeof(VIRTIO_BLK_DEVICE_NAME) / sizeof(char) - 1)
 
 struct virtio_blk {
 	struct pci_general pci_conf;

@@ -22,6 +22,11 @@
 #define VIRTIO_PCI_SUBDEV_SCSI		0x8
 #define VIRTIO_PCI_SUBDEV_9P		0x9
 
+/* reserved features bits */
+#define VIRTIO_F_NOTIFY_ON_EMPTY	(1 << 24)
+#define VIRTIO_F_RING_INDIRECT_DESC	(1 << 28)
+#define VIRTIO_F_RING_EVENT_IDX		(1 << 29)
+
 /*
  * PCI BAR0 ----> +---------------+  offset: 0x0
  *                |               |

@@ -30,16 +30,78 @@
 
 #endif
 
+static void
+virtio_blk_dump_avail_ring(struct vm *vm, struct virtio_blk *blk, uint16_t ring)
+{
+#ifdef DEBUG_VIRTIO_BLK
+	KERN_ASSERT(vm != NULL && blk != NULL);
+
+	uint16_t cur;
+	struct vring_desc *desc;
+	struct virtio_blk_outhdr *req;
+
+	dprintf("=== dump start ===\n");
+
+	cur = ring;
+	desc = (struct vring_desc *)
+		vmm_translate_gp2hp(vm, blk->vring.desc_guest_addr +
+				    sizeof(struct vring_desc) * cur);
+	dprintf("Ring %d, addr %llx, len %d, flags %04x, next %04x.\n",
+		cur, desc->addr, desc->len, desc->flags, desc->next);
+
+	req = (struct virtio_blk_outhdr *) vmm_translate_gp2hp(vm, desc->addr);
+	if (req->type == VIRTIO_BLK_T_IN)
+		dprintf("  read sector 0x%x", req->sector);
+	else if (req->type == VIRTIO_BLK_T_OUT)
+		dprintf("  write sector 0x%x", req->sector);
+	else if (req->type == VIRTIO_BLK_T_FLUSH)
+		dprintf("  flush");
+	else if (req->type == VIRTIO_BLK_T_GET_ID)
+		dprintf("  get id");
+	else if (req->type == VIRTIO_BLK_T_BARRIER)
+		dprintf("  barrier");
+	else
+		dprintf("  command %08x", req->type);
+	dprintf(".\n");
+
+	cur = desc->next;
+	desc = (struct vring_desc *)
+		vmm_translate_gp2hp(vm, blk->vring.desc_guest_addr +
+				    sizeof(struct vring_desc) * cur);
+	dprintf("Ring %d, addr %llx, len %08x, flags %04x, next %04x.\n",
+		cur, desc->addr, desc->len, desc->flags, desc->next);
+
+	dprintf("  buf addr %llx, len %d", desc->addr, desc->len);
+	if (req->type == VIRTIO_BLK_T_IN || req->type == VIRTIO_BLK_T_OUT)
+		dprintf(", %d sectors", desc->len / ATA_SECTOR_SIZE);
+	dprintf(".\n");
+
+	cur = desc->next;
+	desc = (struct vring_desc *)
+		vmm_translate_gp2hp(vm, blk->vring.desc_guest_addr +
+				    sizeof(struct vring_desc) * cur);
+	dprintf("Ring %d, addr %llx, len %08x, flags %04x, next %04x.\n",
+		cur, desc->addr, desc->len, desc->flags, desc->next);
+	dprintf("  status addr %llx.\n", desc->addr);
+
+	dprintf("=== dump end ===\n");
+#endif
+}
+
 static int
 virtio_blk_read_disk(uint64_t lba, uint64_t nsectors, void *buf)
 {
 	KERN_ASSERT(buf != NULL);
 
-	VIO_BLK_DEBUG("read %d sectors from lba %llx to buf %x.\n",
-		      (uint32_t) nsectors, lba, buf);
-
-
 	int ret = ahci_disk_read(0, lba, nsectors, buf);
+
+#ifdef DEBUG_VIRTIO_BLK
+	VIO_BLK_DEBUG("read ");
+	if (ret)
+		dprintf("failed.\n");
+	else
+		dprintf("OK.\n");
+#endif
 
 	return ret;
 }
@@ -51,7 +113,50 @@ virtio_blk_write_disk(uint64_t lba, uint64_t nsectors, void *buf)
 
 	int ret = ahci_disk_write(0, lba, nsectors, buf);
 
+#ifdef DEBUG_VIRTIO_BLK
+	VIO_BLK_DEBUG("write ");
+	if (ret)
+		dprintf("failed.\n");
+	else
+		dprintf("OK.\n");
+#endif
+
 	return ret;
+}
+
+static void
+virtio_blk_get_id(void *buf, uint32_t len)
+{
+	KERN_ASSERT(buf != NULL);
+
+	char *p;
+	uint32_t size;
+
+	if (len == 0)
+		return;
+
+	p = (char *) buf;
+	size = MIN(VIRTIO_BLK_DEVICE_NAME_LEN, len-1);
+
+	strncpy(p, VIRTIO_BLK_DEVICE_NAME, size);
+	p[size] = '\0';
+}
+
+static void
+virtio_blk_notify(struct vm *vm, struct virtio_blk *blk)
+{
+	KERN_ASSERT(vm != NULL && blk != NULL);
+
+	VIO_BLK_DEBUG("raise IRQ_IDE (%x).\n", blk->pci_conf.intr_line);
+
+	/* int isr = blk->virtio_header.isr_status; */
+
+	blk->virtio_header.isr_status = 1;
+
+	blk->pci_conf.header.status |= (1 << 3);
+
+	vmm_set_vm_irq(vm, blk->pci_conf.intr_line, 0);
+	vmm_set_vm_irq(vm, blk->pci_conf.intr_line, 1);
 }
 
 static void
@@ -70,52 +175,30 @@ virtio_blk_handle_vring(struct vm *vm, struct virtio_blk *blk, uint16_t ring)
 	desc = (struct vring_desc *)
 		vmm_translate_gp2hp(vm, blk->vring.desc_guest_addr +
 				    sizeof(struct vring_desc) * cur_ring);
+
 	KERN_ASSERT(!(desc->flags & VRING_DESC_F_WRITE));
 	KERN_ASSERT(desc->flags & VRING_DESC_F_NEXT);
+
 	req = (struct virtio_blk_outhdr *)
 		vmm_translate_gp2hp(vm, desc->addr);
-
-	VIO_BLK_DEBUG("Ring %d, addr %llx, len %d, flags %04x, next ring %d.\n",
-		      cur_ring, desc->addr, desc->len, desc->flags, desc->next);
-	VIO_BLK_DEBUG("");
-#ifdef DEBUG_VIRTIO_BLK
-	if (req->type == VIRTIO_BLK_T_IN)
-		dprintf("read sector 0x%x", req->sector);
-	else if (req->type == VIRTIO_BLK_T_OUT)
-		dprintf("write sector 0x%x", req->sector);
-	else if (req->type == VIRTIO_BLK_T_FLUSH)
-		dprintf("flush");
-	else if (req->type == VIRTIO_BLK_T_BARRIER)
-		dprintf("barrier");
-	else
-		dprintf("command %08x", req->type);
-	dprintf(".\n");
-#endif
 
 	cur_ring = desc->next;
 	desc = (struct vring_desc *)
 		vmm_translate_gp2hp(vm, blk->vring.desc_guest_addr +
 				    sizeof(struct vring_desc) * cur_ring);
-	KERN_ASSERT(desc->flags & VRING_DESC_F_NEXT);
-	buf = (uint8_t *) vmm_translate_gp2hp(vm, desc->addr);
-	KERN_ASSERT(desc->len >= ATA_SECTOR_SIZE);
-	nsectors = desc->len / ATA_SECTOR_SIZE;
 
-	VIO_BLK_DEBUG("Ring %d, addr %llx, len %d, flags %04x, next ring %d.\n",
-		      cur_ring, desc->addr, desc->len, desc->flags, desc->next);
-	VIO_BLK_DEBUG("buffer address %llx (host %08x), len %d (%d sectors).\n",
-		      desc->addr, (uintptr_t) buf, desc->len, nsectors);
+	KERN_ASSERT(desc->flags & VRING_DESC_F_NEXT);
+
+	buf = (uint8_t *) vmm_translate_gp2hp(vm, desc->addr);
+	if (req->type == VIRTIO_BLK_T_IN || req->type == VIRTIO_BLK_T_OUT)
+		KERN_ASSERT(desc->len >= ATA_SECTOR_SIZE);
+	nsectors = desc->len / ATA_SECTOR_SIZE;
 
 	cur_ring = desc->next;
 	desc = (struct vring_desc *)
 		vmm_translate_gp2hp(vm, blk->vring.desc_guest_addr +
 				    sizeof(struct vring_desc) * cur_ring);
 	status = (uint8_t *) vmm_translate_gp2hp(vm, desc->addr);
-
-	VIO_BLK_DEBUG("Ring %d, addr %llx, len %d, flags %04x, next ring %d.\n",
-		      cur_ring, desc->addr, desc->len, desc->flags, desc->next);
-	VIO_BLK_DEBUG("status address %llx (host %08x), len %d.\n",
-		      desc->addr, (uintptr_t) status, desc->len);
 
 	switch (req->type) {
 	case VIRTIO_BLK_T_IN:
@@ -131,11 +214,13 @@ virtio_blk_handle_vring(struct vm *vm, struct virtio_blk *blk, uint16_t ring)
 			*status = VIRTIO_BLK_S_OK;
 		break;
 	case VIRTIO_BLK_T_FLUSH:
-		VIO_BLK_DEBUG("flush\n");
+		*status = VIRTIO_BLK_S_OK;
+		break;
+	case VIRTIO_BLK_T_GET_ID:
+		virtio_blk_get_id(buf, desc->len);
 		*status = VIRTIO_BLK_S_OK;
 		break;
 	case VIRTIO_BLK_T_BARRIER:
-		VIO_BLK_DEBUG("barrier\n");
 		*status = VIRTIO_BLK_S_OK;
 		break;
 	default:
@@ -145,11 +230,19 @@ virtio_blk_handle_vring(struct vm *vm, struct virtio_blk *blk, uint16_t ring)
 
 	used = (struct vring_used *)
 		vmm_translate_gp2hp(vm, blk->vring.used_guest_addr);
-	used_ring = used->idx;
+	used_ring = used->idx % blk->vring.queue_size;
 	used->ring[used_ring].id = ring;
-	used->ring[used_ring].len = 3;
-	used->idx = (used_ring + 1) % (blk->vring.queue_size);
+	used->ring[used_ring].len =
+		(req->type == VIRTIO_BLK_T_IN) ? nsectors * ATA_SECTOR_SIZE : 0;
+	used->idx += 1/* (used_ring + 1) % (blk->vring.queue_size) */;
 	smp_wmb();
+#ifdef DEBUG_VIRTIO_BLK
+	dprintf("used.ring[%d]={id %d, nsect %d}, used.idx %d\n",
+		used_ring,
+		used->ring[used_ring].id,
+		used->ring[used_ring].len/ATA_SECTOR_SIZE,
+		used->idx);
+#endif
 }
 
 static void
@@ -160,6 +253,9 @@ virtio_blk_handle_vrings(struct vm *vm, struct virtio_blk *blk)
 
 	struct vring_avail *avail;
 	uint16_t avail_idx, qsz, i;
+	int no_int;
+
+	VIO_BLK_DEBUG("\n");
 
 	qsz = blk->vring.queue_size;
 
@@ -169,16 +265,42 @@ virtio_blk_handle_vrings(struct vm *vm, struct virtio_blk *blk)
 	avail = (struct vring_avail *)
 		vmm_translate_gp2hp(vm, blk->vring.avail_guest_addr);
 	avail_idx = avail->idx;
+	no_int = avail->flags & VRING_AVAIL_F_NO_INTERRUPT;
+
+#ifdef DEBUG_VIRTIO_BLK
+	dprintf("avail.idx %d, flags %04x, last avail %d.\n",
+		avail->idx, avail->flags, blk->vring.last_avail_idx);
+#endif
 
 	KERN_ASSERT(blk->vring.last_avail_idx <= avail_idx);
 
-	if (blk->vring.last_avail_idx == avail_idx)
+	if (blk->vring.last_avail_idx == avail_idx) {
+		virtio_blk_dump_avail_ring(vm, blk,
+					   avail->ring[avail_idx % qsz]);
+		if (!no_int)
+			virtio_blk_notify(vm, blk);
+
+#ifdef DEBUG_VIRTIO_BLK
+		dprintf("\n");
+#endif
+
 		return;
+	}
 
-	for (i = blk->vring.last_avail_idx; i < avail_idx; i++)
+	for (i = blk->vring.last_avail_idx; i < avail_idx; i++) {
+		virtio_blk_dump_avail_ring(vm, blk, avail->ring[i % qsz]);
 		virtio_blk_handle_vring(vm, blk, avail->ring[i % qsz]);
+		if (!no_int) {
+			virtio_blk_notify(vm, blk);
+			break;
+		}
+	}
 
-	blk->vring.last_avail_idx = avail_idx;
+	blk->vring.last_avail_idx = (i == avail_idx) ? avail_idx : (i+1);
+
+#ifdef DEBUG_VIRTIO_BLK
+	dprintf("\n");
+#endif
 }
 
 static void
@@ -397,8 +519,10 @@ virtio_blk_get_isr_status(struct vm *vm,
 	KERN_ASSERT(port == blk->iobase+0x13);
 
 	uint8_t isr = blk->virtio_header.isr_status;
-	if (isr)
+	if (isr) {
 		blk->virtio_header.isr_status = 0;
+		blk->pci_conf.header.status &= ~(uint16_t) (1 << 3);
+	}
         *(uint8_t *) data = isr;
 
 	VIO_BLK_DEBUG("ISR %02x.\n", *(uint8_t *) data);
@@ -421,7 +545,8 @@ virtio_blk_conf_readb(struct vm *vm, void *dev, uint32_t port, void *data)
 
 	*(uint8_t *) data = conf[port-iobase];
 
-	VIO_BLK_DEBUG("readb port %x, val %02x.\n", port, *(uint8_t *) data);
+	VIO_BLK_DEBUG("readb reg %x, val %02x.\n",
+		      port - blk->iobase, *(uint8_t *) data);
 }
 
 static void
@@ -442,7 +567,8 @@ virtio_blk_conf_readw(struct vm *vm, void *dev, uint32_t port, void *data)
 	*(uint16_t *) data =
 		conf[port-iobase] | ((uint16_t) conf[port-iobase+1] << 8);
 
-	VIO_BLK_DEBUG("readw port %x, val %04x.\n", port, *(uint16_t *) data);
+	VIO_BLK_DEBUG("readw reg %x, val %04x.\n",
+		      port - blk->iobase, *(uint16_t *) data);
 }
 
 static void
@@ -465,7 +591,8 @@ virtio_blk_conf_readl(struct vm *vm, void *dev, uint32_t port, void *data)
 		((uint32_t) conf[port-iobase+2] << 16) |
 		((uint32_t) conf[port-iobase+3] << 24);
 
-	VIO_BLK_DEBUG("readw port %x, val %08x.\n", port, *(uint32_t *) data);
+	VIO_BLK_DEBUG("readw reg %x, val %08x.\n",
+		      port - blk->iobase, *(uint32_t *) data);
 }
 
 static void
@@ -484,7 +611,7 @@ virtio_blk_ioport_readb(struct vm *vm, void *dev, uint32_t port, void *data)
 
 	*(uint8_t *) data = 0;
 
-	VIO_BLK_DEBUG("readb port %x, nop.\n", port);
+	VIO_BLK_DEBUG("readb reg %x, nop.\n", port - blk->iobase);
 }
 
 static void
@@ -503,7 +630,7 @@ virtio_blk_ioport_readw(struct vm *vm, void *dev, uint32_t port, void *data)
 
 	*(uint16_t *) data = 0;
 
-	VIO_BLK_DEBUG("readw port %x, nop.\n", port);
+	VIO_BLK_DEBUG("readw reg %x, nop.\n", port - blk->iobase);
 }
 
 static void
@@ -522,7 +649,7 @@ virtio_blk_ioport_readl(struct vm *vm, void *dev, uint32_t port, void *data)
 
 	*(uint32_t *) data = 0;
 
-	VIO_BLK_DEBUG("readl port %x, nop.\n", port);
+	VIO_BLK_DEBUG("readl reg %x, nop.\n", port - blk->iobase);
 }
 
 static void
@@ -539,8 +666,8 @@ virtio_blk_ioport_writeb(struct vm *vm, void *dev, uint32_t port, void *data)
 
 	KERN_ASSERT(iobase <= port && port < iobase+iosize);
 
-	VIO_BLK_DEBUG("writeb port %x, val %02x, nop.\n",
-		      port, *(uint8_t *) data);
+	VIO_BLK_DEBUG("writeb reg %x, val %02x, nop.\n",
+		      port - blk->iobase, *(uint8_t *) data);
 }
 
 static void
@@ -557,8 +684,8 @@ virtio_blk_ioport_writew(struct vm *vm, void *dev, uint32_t port, void *data)
 
 	KERN_ASSERT(iobase <= port && port < iobase+iosize-1);
 
-	VIO_BLK_DEBUG("writew port %x, val %04x, nop.\n",
-		      port, *(uint16_t *) data);
+	VIO_BLK_DEBUG("writew reg %x, val %04x, nop.\n",
+		      port - blk->iobase, *(uint16_t *) data);
 }
 
 static void
@@ -575,8 +702,8 @@ virtio_blk_ioport_writel(struct vm *vm, void *dev, uint32_t port, void *data)
 
 	KERN_ASSERT(iobase <= port && port < iobase+iosize-3);
 
-	VIO_BLK_DEBUG("writel port %x, val %08x, nop.\n",
-		      port, *(uint32_t *) data);
+	VIO_BLK_DEBUG("writel reg %x, val %08x, nop.\n",
+		      port - blk->iobase, *(uint32_t *) data);
 }
 
 static void
@@ -590,7 +717,7 @@ virtio_blk_perform_pci_command(struct virtio_blk *blk)
 	static uint16_t unsupported_command;
 
 	unsupported_command = 0xf880 /* reserved bits */ |
-		PCI_COMMAND_MEM_ENABLE | PCI_COMMAND_MASTER_ENABLE |
+		PCI_COMMAND_MEM_ENABLE |
 		PCI_COMMAND_SPECIAL_ENABLE | PCI_COMMAND_INVALIDATE_ENABLE |
 		PCI_COMMAND_PALETTE_ENABLE | PCI_COMMAND_PARITY_ENABLE |
 		PCI_COMMAND_SERR_ENABLE | PCI_COMMAND_BACKTOBACK_ENABLE;
@@ -601,6 +728,10 @@ virtio_blk_perform_pci_command(struct virtio_blk *blk)
 	if (command == 0) {
 		VIO_BLK_DEBUG("logically disconnected.\n");
 		blk->disconnected = 1;
+		blk->vring.desc_guest_addr = 0;
+		blk->vring.avail_guest_addr = 0;
+		blk->vring.used_guest_addr = 0;
+		blk->vring.last_avail_idx = 0;
 	}
 
 	if (command & unsupported_command) {
@@ -819,7 +950,8 @@ virtio_blk_pci_conf_write(void *dev,
 	len = sizeof(blk->pci_conf);
 
 	if (reg >= len || reg == PCI_ID_REG || reg == PCI_CLASS_REG ||
-	    reg == PCI_BHLC_REG || (0x2c <= reg && reg <= 0x3c))
+	    (PCI_MAPREG_START+4 <= reg && reg < PCI_MAPREG_END) ||
+	    (0x2c <= reg && reg <= 0x3c))
 		return;
 
 	pci_conf = (uint8_t *) &blk->pci_conf;
@@ -853,6 +985,8 @@ virtio_blk_pci_conf_write(void *dev,
 			/* set BAR0 address */
 			if (blk->iobase != 0xffff)
 				virtio_blk_unregister_port_handlers(blk);
+			blk->pci_conf.bar[0] =
+				(blk->pci_conf.bar[0] & ~(uint32_t) 0x3) | 0x1;
 			blk->iobase = blk->pci_conf.bar[0] & 0xfffc;
 			virtio_blk_register_port_handlers(blk);
 		}
@@ -876,16 +1010,16 @@ virtio_blk_init(struct vm *vm, struct vpci_device *pci_dev,
 	virtio_blk->pci_conf.header.subclass = PCI_SUBCLASS_MASS_STORAGE_IDE;
 	virtio_blk->pci_conf.header.header_type = PCI_HDRTYPE_DEVICE;
 	virtio_blk->pci_conf.sub_id = VIRTIO_PCI_SUBDEV_BLK;
+	virtio_blk->pci_conf.sub_vendor = VIRTIO_PCI_VENDOR_ID;
 	virtio_blk->pci_conf.intr_line = IRQ_IDE;
+	virtio_blk->pci_conf.intr_pin = PCI_INTERRUPT_PIN_A;
 
 	virtio_blk->iobase = 0xffff;
 
-	virtio_blk->virtio_header.device_features =
-		VIRTIO_BLK_F_BARRIER | VIRTIO_BLK_F_SIZE_MAX |
-		VIRTIO_BLK_F_SEG_MAX | VIRTIO_BLK_F_BLK_SIZE |
-		VIRTIO_BLK_F_FLUSH;
+	virtio_blk->virtio_header.device_features = VIRTIO_BLK_F_SIZE_MAX
+		| VIRTIO_BLK_F_SEG_MAX | VIRTIO_BLK_F_BLK_SIZE;
 	virtio_blk->virtio_blk_header.capacity = ahci_disk_capacity(0);
-	virtio_blk->virtio_blk_header.size_max = 512;
+	virtio_blk->virtio_blk_header.size_max = 4096;
 	virtio_blk->virtio_blk_header.seg_max = 1;
 	virtio_blk->virtio_blk_header.blk_size = 512;
 
