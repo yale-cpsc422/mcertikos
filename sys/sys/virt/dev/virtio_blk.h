@@ -51,7 +51,7 @@ struct virtio_blk_outhdr {
 #define VIRTIO_BLK_S_IOERR		0x00000001
 #define VIRTIO_BLK_S_UNSUPP		0x00000002
 
-#define VIRTIO_BLK_QUEUE_SIZE		4
+#define VIRTIO_BLK_QUEUE_SIZE		128
 
 #define VIRTIO_BLK_DEVICE_NAME		"virtio block device"
 #define VIRTIO_BLK_DEVICE_NAME_LEN				\
@@ -65,10 +65,14 @@ struct virtio_blk {
 	int disconnected;
 	uint16_t iobase, iosize;
 
+	bool pending_req;
+
 	struct vring vring;
 };
 
 void virtio_blk_init(struct vm *, struct vpci_device *, struct virtio_blk *);
+void virtio_blk_handle_vrings(struct vm *, struct virtio_blk *);
+bool virtio_blk_has_pending_req(struct vm *, struct virtio_blk *);
 
 #endif /* _KERN_ */
 

@@ -35,6 +35,7 @@ kern: arch_headers $(KERN_OBJDIR)/kernel
 install_kern: $(KERN_OBJDIR)/kernel $(CERTIKOS_IMG)
 	@echo + copy kernel to /boot/kernel
 	$(V)$(UTILSDIR)/mount.sh
+	$(V)sudo mkdir -p /mnt/boot
 	$(V)sudo cp -f $(KERN_OBJDIR)/kernel /mnt/boot/kernel
 	$(V)$(UTILSDIR)/umount.sh
 
