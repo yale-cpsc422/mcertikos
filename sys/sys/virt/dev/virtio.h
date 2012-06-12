@@ -1,3 +1,8 @@
+/*
+ * virtio.h and virtio.c define the common interface to implement a virtio
+ * device.
+ */
+
 #ifndef _SYS_VIRT_DEV_VIRTIO_H_
 #define _SYS_VIRT_DEV_VIRTIO_H_
 
@@ -6,9 +11,12 @@
 #include <sys/gcc.h>
 #include <sys/types.h>
 
+#include <sys/virt/vmm.h>
+
 #include <dev/pci.h>
 
 #define VIRTIO_PCI_VENDOR_ID		0x1af4
+/* NOTE: SeaBIOS requires the device ID of a VirtIO block device be 0x1001. */
 #define VIRTIO_PCI_DEVICE_BLK		0x1001
 #define VIRTIO_PCI_REVISION		0x0
 
@@ -28,22 +36,83 @@
 #define VIRTIO_F_RING_EVENT_IDX		(1 << 29)
 
 /*
+ * A VirtIO device is recognized as a PCI device with vendor ID 0x1af4 and
+ * device ID 0x1000 ~ 0x103f. BAR0 of a VirtIO device points to a VirtIO header
+ * which describes the basic inforamtion of this device.
+ *
+ *                Device Configuration
  * PCI BAR0 ----> +---------------+  offset: 0x0
  *                |               |
- *                | VirtIO Header |  struct virtio_header
- *                |               |
- *                +---------------+  offset: 0x14
- *                |               |
- *                |   MSI Header  |  struct virtio_ms_header
- *                |   (optional)  |
- *                |               |
- *                +---------------+  offset: 0x18/0x14
- *                |               |
- *                | Device Header |  strcut virtio_blk_config, ...
- *                |               |
- *                +---------------+
+ *                | VirtIO Header |  (struct virtio_header) -------------------+
+ *                |               |                                            |
+ *                +---------------+  offset: 0x14                              |
+ *                |               |                                            |
+ *                |   MSI Header  |  (struct virtio_ms_header)                 |
+ *                |   (optional)  |  (not implemented in CertiKOS)             |
+ *                |               |                                            |
+ *                +---------------+  offset: 0x18/0x14                         |
+ *                |               |                                            |
+ *                | Device Header |  (strcut virtio_blk_config, ...)           |
+ *                |               |                                            |
+ *                +---------------+                                            |
+ *                                                                             |
+ * VirtIO Header (struct virtio_header)                                        V
+ * 0x14  0x13     0x12     0x10      0xe     0xc       0x8        0x4        0x0
+ * +--------+--------+--------+--------+-------+---------+----------+----------+
+ * |  ISR   | Device | Queue  | Queue  | Queue |  Queue  |  Guest   |  Device  |
+ * | Status | Status | Notify | Select |  Size | Address | Features | Features |
+ * +--------+--------+--------+--------+-------+---------+----------+----------+
+ *                                                  |
+ *              VRing (struct vring)                | x 4096
+ *              +----------------------+ <----------+
+ *          +-- |   VRing Descriptor0  | (struct vring_desc)
+ *          |   :         ...          :
+ *          |   |   VRing DescriptorN  |
+ *          |   +----------------------+
+ *       +--^-- | Available Rings Info | (struct vring_avail)
+ *       |  |   +----------------------+
+ *       |  |   :                      : Padding to the next 4096 boundary
+ *       |  |   +----------------------+
+ *    +--^--^-- |    Used Rings Info   | (struct vring_used)
+ *    |  |  |   +----------------------+
+ *    |  |  |
+ *    |  |  +-------------------------------------+
+ *    |  |                                        |
+ *    |  |      VRing Descriptor 0                V
+ *    |  |      0x10 0xe     0xc      0x8       0x0
+ *    |  |      +------+-------+--------+---------+
+ *    |  |      | next | flags | length | address |
+ *    |  |      +------+-------+--------+---------+
+ *    |  |          |
+ *    |  |          +-----------------------------+
+ *    |  |                                        |
+ *    |  |      VRing Descriptor 1                V
+ *    |  |      0x10 0xe     0xc      0x8       0x0
+ *    |  |      +------+-------+--------+---------+
+ *    |  |      | next | flags | length | address |
+ *    |  |      +------+-------+--------+---------+
+ *    |  |
+ *    |  |                     ...
+ *    |  |
+ *    |  +-------------------------------------------------------------+
+ *    |                                                                |
+ *    |         Available Rings Info (struct vring_avail)              V
+ *    |                                      0x6     0x4     0x2     0x0
+ *    |         +------------+-------+---------+-------+-------+-------+
+ *    |         | Used Event | RingN |   ...   | Ring0 | index | flags |
+ *    |         +------------+-------+---------+-------+-------+-------+
+ *    |
+ *    +-----------------------------------------------------------------------+
+ *                                                                            |
+ *              Used Rings Info (struct vring_used)                           V
+ *                                               0xc        0x4     0x2     0x0
+ *              +-------------+----------+---------+----------+-------+-------+
+ *              | Avail Event | idN,lenN |   ...   | id0,len0 | index | flags |
+ *              +-------------+----------+---------+----------+-------+-------+
+ *
  */
 
+/* VirtIO Header */
 struct virtio_header {
 	uint32_t device_features;	/* R */
 	uint32_t guest_features;	/* RW */
@@ -59,15 +128,13 @@ struct virtio_header {
 	uint8_t isr_status;		/* R */
 };
 
+/* VirtIO MSI Header (optional, not implemented in CertiKOS) */
 struct virtio_msi_header {
 	uint16_t config_vector;		/* RW */
 	uint16_t queue_vector;		/* RW */
 };
 
-/*
- * VirtIO Rings
- */
-
+/* VRing Descriptor */
 struct vring_desc {
 	uint64_t addr;
 	uint32_t len;
@@ -78,6 +145,7 @@ struct vring_desc {
 	uint16_t next;
 } gcc_packed;
 
+/* Available Rings Info */
 struct vring_avail {
 	uint16_t flags;
 #define VRING_AVAIL_F_NO_INTERRUPT	(1 << 0)
@@ -85,6 +153,7 @@ struct vring_avail {
 	uint16_t ring[0];
 } gcc_packed;
 
+/* Used Rings Info */
 struct vring_used {
 	uint16_t flags;
 #define VRING_USED_F_NO_NOTIFY		(1 << 0)
@@ -95,13 +164,137 @@ struct vring_used {
 	} ring[0];
 } gcc_packed;
 
+/* VRing */
 struct vring {
 	uint16_t queue_size;
 	uintptr_t desc_guest_addr;
 	uintptr_t avail_guest_addr;
 	uintptr_t used_guest_addr;
 	uint16_t last_avail_idx;
+	bool need_notify;
 };
+
+/*
+ * There are three things a concrete virtio device MUST do.
+ *
+ * A concrete virtio device (e.g. a virtio block device) should put an object
+ * of type struct virtio_device in the beginning of its structure. (See the
+ * comments of struct virtio_device below)
+ *
+ * Another structure a concrete virtio device should provide is an object of
+ * type struct virtio_device_ops. A concrete virtio device provides hooks for
+ * the device-specific operations. (See the comments of struct virtio_device_ops
+ * below.)
+ *
+ * The initialization function of a concrete virtio device should call
+ * virtio_device_init().
+ *
+ * (You may check virtio_blk.h and virtio_blk.c as an example.)
+ */
+
+struct virtio_device;
+
+struct virtio_device_ops {
+	/*
+	 * I/O port handlers for reading/writing the PCI configuration.
+	 *
+	 * CertiKOS does not provide a framework for PCI emulation, so each PCI
+	 * device has to handle the PCI reading/writing operations by itself.
+	 *
+	 * @param dev      point to a virtio_device structure
+	 * @param pci_addr the 32 bits value in PCI address port (default 0xcf8)
+	 * @param val      the value to be written in (for pci_conf_Write()); it
+	 *                 will be truncated according to parameter sz
+	 * @param sz       the width of the data to be accessed
+	 */
+	uint32_t (*pci_conf_read)(void *dev, uint32_t pci_addr,
+				  enum data_sz_t sz);
+	void (*pci_conf_write)(void *dev, uint32_t pci_addr,
+			       uint32_t val, enum data_sz_t sz);
+
+	/*
+	 * I/O port handlers for reading/writing the device header.
+	 */
+	void (*update_ioport_handlers)(struct virtio_device *);
+
+	/* get the amount of virtqueues/vrings of the virtio device */
+	uint8_t (*get_vrings_amount)(struct virtio_device *);
+
+	/*
+	 * Get virtqueue/vring #vq_idx.
+	 *
+	 * @return NULL if the virtqueue/vring does not exist
+	 */
+	struct vring * (*get_vring)(struct virtio_device *, uint8_t vq_idx);
+
+	/*
+	 * Handle the request which is described by the descriptor #desc_idx in
+	 * virtqueue/vring #vq_idx.
+	 *
+	 * XXX: It's this function's duty to update the used index.
+	 *
+	 * @return 0 if no errors happen
+	 */
+	int (*handle_req)(struct virtio_device *,
+			  uint8_t vq_idx, uint16_t desc_idx);
+};
+
+/*
+ * Common virtio device header.
+ *
+ * XXX: It should be put in the beginning of the data structure of concrete
+ *      virtio devices, e.g. the data structure of a virtio block is like
+ *              struct virtio_blk {
+ *                      struct virtio_device common_header;
+ *                      ...
+ *              };
+ */
+struct virtio_device {
+	struct vm *vm;				/* VM the device is bound to */
+
+	struct pci_general pci_conf;		/* PCI header */
+	struct vpci_device pci_dev;		/* vPCI device */
+
+	struct virtio_header virtio_header;	/* VirtIO header */
+
+	uint16_t iobase;			/* base of I/O ports */
+	uint16_t iosize;			/* size in byte of I/O ports */
+
+	struct virtio_device_ops *ops;		/* device-specific operations */
+};
+
+/*
+ * Get the descriptor #idx of virtqueue/vring #ring.
+ */
+struct vring_desc *
+vring_get_desc(struct vm *, struct vring *ring, uint16_t idx);
+
+/*
+ * Get the avail structure of virtqueue/vring #ring.
+ */
+struct vring_avail *vring_get_avail(struct vm *, struct vring *ring);
+
+/*
+ * Get the used structure of virtqueue/vring #ring.
+ */
+struct vring_used *vring_get_used(struct vm *, struct vring *ring);
+
+/*
+ * Do the common intialization for a virtio device.
+ */
+int virtio_device_init(struct virtio_device *,
+		       struct vm *, struct virtio_device_ops *);
+
+/*
+ * Reregister I/O port handlers for reading/writing the device configuration
+ * The device-specific function (virtio_device_ops.update_ioport_handlers) is
+ * called at the end.
+ *
+ * XXX: It's recommeneded to call this function each time BAR0 of the virtio
+ *      device is changed.
+ */
+void virtio_device_update_ioport_handlers(struct virtio_device *,
+					  uint16_t new_iobase);
 
 #endif /* _KERN_ */
 

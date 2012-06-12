@@ -132,7 +132,7 @@ vmm_init_vm(void)
 	vpci_init(&vm->vpci, vm);
 	vnvram_init(&vm->vnvram, vm);
 	vpit_init(&vm->vpit, vm);
-	virtio_blk_init(vm, &vm->vio_blk_dev, &vm->vio_hdd);
+	virtio_blk_init(&vm->blk, vm);
 
 #ifdef REDIRECT_GUEST_SERIAL
 	vserial_init(&vm->vserial, vm);
@@ -202,10 +202,6 @@ vmm_run_vm(struct vm *vm)
 		/* assertion that makes sure that interrupts are disabled */
 		KERN_ASSERT((read_eflags() & FL_IF) == 0x0);
 		vmm_ops->vm_exit_handle(vm);
-
-		/* handle pending virtio_blk dev requests */
-		if (virtio_blk_has_pending_req(vm, &vm->vio_hdd) == TRUE)
-			virtio_blk_handle_vrings(vm, &vm->vio_hdd);
 	}
 
 	return 0;

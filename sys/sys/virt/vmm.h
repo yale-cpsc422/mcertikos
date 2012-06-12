@@ -73,8 +73,7 @@ struct vm {
 	struct vnvram		vnvram;	/* virtual NVRAM */
 	struct vpit		vpit;	/* virtual PIT (i8254) */
 
-	struct virtio_blk	vio_hdd;
-	struct vpci_device	vio_blk_dev;
+	struct virtio_blk	blk;	/* virtio block device - hard drive */
 
 	struct guest_debug_dev debug_dev;
 

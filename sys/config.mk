@@ -147,9 +147,14 @@ ifneq "$(strip $(DEBUG_VPCI) $(DEBUG_ALL) $(DEBUG_VIRT))" ""
 KERN_CFLAGS	+= -DDEBUG_VPCI
 endif
 
+# If set, enable common virtio device debug
+ifneq "$(strip $(DEBUG_VIRTIO) $(DEBUG_ALL) $(DEBUG_VIRT))" ""
+KERN_CFLAGS	+= -DDEBUG_VIRTIO
+endif
+
 # If set, enable debugging virtio block device
 ifneq "$(strip $(DEBUG_VIRTIO_BLK) $(DEBUG_ALL) $(DEBUG_VIRT))" ""
-KERN_CFLAGS	+= -DDEBUG_VIRTIO_BLK
+KERN_CFLAGS	+= -DDEBUG_VIRTIO -DDEBUG_VIRTIO_BLK
 endif
 
 # If set, enable debugging hypercalls

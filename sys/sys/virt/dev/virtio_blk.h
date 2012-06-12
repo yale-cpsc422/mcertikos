@@ -8,8 +8,6 @@
 #include <sys/virt/vmm.h>
 #include <sys/virt/dev/virtio.h>
 
-#include <dev/pci.h>
-
 /* VirtIO block device features */
 #define VIRTIO_BLK_F_BARRIER	(1 << 0)
 #define VIRTIO_BLK_F_SIZE_MAX	(1 << 1)
@@ -53,26 +51,25 @@ struct virtio_blk_outhdr {
 
 #define VIRTIO_BLK_QUEUE_SIZE		128
 
-#define VIRTIO_BLK_DEVICE_NAME		"virtio block device"
+#define VIRTIO_BLK_DEVICE_NAME		"virtio block drive"
 #define VIRTIO_BLK_DEVICE_NAME_LEN				\
 	(sizeof(VIRTIO_BLK_DEVICE_NAME) / sizeof(char) - 1)
 
 struct virtio_blk {
-	struct pci_general pci_conf;
-	struct virtio_header virtio_header;
-	struct virtio_blk_config virtio_blk_header;
+	/* common virtio device header */
+	struct virtio_device common_header;
 
-	int disconnected;
-	uint16_t iobase, iosize;
+	/* specific header of virtio block device */
+	struct virtio_blk_config blk_header;
 
-	bool pending_req;
-
+	/* virtqueue/vring of the virtio block device */
 	struct vring vring;
+
+	/* are there unhandled requests in the virtqueue? */
+	bool pending_req;
 };
 
-void virtio_blk_init(struct vm *, struct vpci_device *, struct virtio_blk *);
-void virtio_blk_handle_vrings(struct vm *, struct virtio_blk *);
-bool virtio_blk_has_pending_req(struct vm *, struct virtio_blk *);
+int virtio_blk_init(struct virtio_blk *, struct vm *);
 
 #endif /* _KERN_ */
 
