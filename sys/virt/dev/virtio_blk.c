@@ -12,6 +12,7 @@
 
 #include <dev/ahci.h>
 #include <dev/pci.h>
+#include <dev/tsc.h>
 
 #include <machine/trap.h>
 
@@ -59,6 +60,8 @@ virtio_blk_perform_pci_command(struct virtio_blk *blk)
 		command &= ~unsupported_command;
 		blk->common_header.pci_conf.header.command = command;
 	}
+
+	smp_wmb();
 }
 
 static uint32_t
@@ -184,6 +187,8 @@ virtio_blk_conf_readb(struct vm *vm, void *dev, uint32_t port, void *data)
 
 	virtio_blk_debug("readb blk reg %x, val %02x.\n",
 			 port - iobase, *(uint8_t *) data);
+
+	smp_wmb();
 }
 
 static void
@@ -206,6 +211,8 @@ virtio_blk_conf_readw(struct vm *vm, void *dev, uint32_t port, void *data)
 
 	virtio_blk_debug("readw blk reg %x, val %04x.\n",
 			 port - iobase, *(uint16_t *) data);
+
+	smp_wmb();
 }
 
 static void
@@ -230,6 +237,8 @@ virtio_blk_conf_readl(struct vm *vm, void *dev, uint32_t port, void *data)
 
 	virtio_blk_debug("readw blk reg %x, val %08x.\n",
 			 port - iobase, *(uint32_t *) data);
+
+	smp_wmb();
 }
 
 static gcc_inline void
@@ -288,6 +297,8 @@ virtio_blk_read_disk(uint64_t lba, uint64_t nsectors, void *buf)
 
 	virtio_blk_debug("read %s.\n", ret ? "failed" : "OK");
 
+	smp_wmb();
+
 	return ret;
 }
 
@@ -299,6 +310,8 @@ virtio_blk_write_disk(uint64_t lba, uint64_t nsectors, void *buf)
 	int ret = ahci_disk_write(0, lba, nsectors, buf);
 
 	virtio_blk_debug("write %s.\n", ret ? "failed" : "OK");
+
+	smp_wmb();
 
 	return ret;
 }
@@ -319,6 +332,8 @@ virtio_blk_get_id(void *buf, uint32_t len)
 
 	strncpy(p, VIRTIO_BLK_DEVICE_NAME, size);
 	p[size] = '\0';
+
+	smp_wmb();
 }
 
 static void
@@ -466,6 +481,8 @@ virtio_blk_handle_req(struct virtio_device *dev,
 		: 0;
 	used->idx += 1;
 
+	smp_wmb();
+
 	return 0;
 }
 
@@ -510,6 +527,8 @@ virtio_blk_init(struct virtio_blk *blk, struct vm *vm)
 	blk->blk_header.blk_size = 512;
 
 	blk->vring.queue_size = VIRTIO_BLK_QUEUE_SIZE;
+
+	smp_wmb();
 
 	return 0;
 }

@@ -434,7 +434,7 @@ ahci_command(struct ahci_controller *sc, int port, int write, int atapi,
 	     void *buffer, size_t bsize)
 {
 	int i;
-	uint32_t is, status, cmd, serr, tfd, sctl;
+	uint32_t ci, is, status, cmd, serr, tfd, sctl;
 #ifdef DEBUG_AHCI
 	uint32_t error;
 #endif
@@ -523,6 +523,11 @@ ahci_command(struct ahci_controller *sc, int port, int write, int atapi,
 	if ((status & ATA_S_READY) &&
 	    !(status & (ATA_S_ERROR | ATA_S_DWF | ATA_S_BUSY))) {
 		AHCI_DEBUG("port %d, status %x, OK.\n", port, status);
+
+		do {
+			ci = AHCI_READ(sc->hba, AHCI_P_CI(port), uint32_t);
+			smp_wmb();
+		} while (ci & 0x1);
 
 		return 0;
 	} else {
@@ -758,7 +763,7 @@ ahci_disk_rw(struct ahci_controller *sc, int port, int write,
 	fis->dev = (uint8_t) ((lba >> 24) & 0xf) | 0x40;
 	fis->countl = (uint8_t) nsects & 0xff;
 
-	ret = ahci_command(sc, port, 0, 0, buf, nsects * ATA_SECTOR_SIZE);
+	ret = ahci_command(sc, port, write, 0, buf, nsects * ATA_SECTOR_SIZE);
 	AHCI_DEBUG("port %d, %s %d sectors %s LBA %llx %s %x, ",
 		   port,
 		   write ? "write" : "read",
@@ -804,6 +809,7 @@ ahci_disk_read(int port,
 #ifdef DEBUG_AHCI
  /* 	if (ret) */
  /* 		goto err; */
+
  /* 	int i; */
  /* 	uint16_t sector; */
  /* 	uint8_t *p = buf; */
