@@ -29,9 +29,6 @@
 # 5. Enable debug messages relevant to the guest CPUID instructions,
 #        DEBUG_MSG=1 DEBUG_GUEST_CPUID=1 make
 #
-# 6. Enable AHCI-SATA driver,
-#        ENABLE_AHCI_SATA=1 make
-#
 
 #
 # Add new building parameters
@@ -162,11 +159,7 @@ ifneq "$(strip $(DEBUG_HYPERCALL) $(DEBUG_ALL) $(DEBUG_VIRT))" ""
 KERN_CFLAGS	+= -DDEBUG_HYPERCALL
 endif
 
-# If set, enable AHCI-SATA driver
-ifdef ENABLE_AHCI_SATA
-KERN_CFLAGS	+= -DENABLE_AHCI_SATA
 # If set, enable debugging AHCI driver
 ifneq "$(strip $(DEBUG_AHCI) $(DEBUG_ALL))" ""
 KERN_CFLAGS	+= -DDEBUG_AHCI
-endif
 endif
