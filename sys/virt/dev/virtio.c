@@ -145,10 +145,12 @@ virtio_handle_req(struct virtio_device *dev, int vq_idx)
 		return 1;
 	}
 
-	if ((desc_idx = vring_dequeue_req(dev->vm, vring)) == -1) {
+	if ((rc = vring_dequeue_req(dev->vm, vring)) == -1) {
 		virtio_debug("no request in queue %d.\n", vq_idx);
 		return 1;
 	}
+
+	desc_idx = (uint16_t) rc;
 
 	rc = dev->ops->handle_req(dev, vq_idx, desc_idx);
 
