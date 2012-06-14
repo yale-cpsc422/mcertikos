@@ -49,5 +49,6 @@ sects: $(OBJDIR)/boot/boot1 $(CERTIKOS_IMG)
 kern_loader: $(OBJDIR)/boot/loader $(CERTIKOS_IMG)
 	@echo + copy loader to /boot/loader
 	$(V)$(UTILSDIR)/mount.sh
+	$(V)sudo mkdir -p /mnt/boot
 	$(V)sudo cp -f $(OBJDIR)/boot/loader /mnt/boot/loader
 	$(V)$(UTILSDIR)/umount.sh

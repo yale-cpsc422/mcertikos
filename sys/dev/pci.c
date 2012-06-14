@@ -37,7 +37,7 @@ struct pci_driver {
 	int (*attachfn) (struct pci_func *pcif);
 };
 
-struct pci_driver pci_attach_class[] = {
+static struct pci_driver pci_attach_class[] = {
 	{ PCI_CLASS_BRIDGE, PCI_SUBCLASS_BRIDGE_PCI, &pci_bridge_attach },
 #ifdef ENABLE_AHCI_SATA
 	{ PCI_CLASS_MASS_STORAGE, PCI_SUBCLASS_MASS_STORAGE_SATA, &ahci_pci_attach},
@@ -45,7 +45,7 @@ struct pci_driver pci_attach_class[] = {
 	{ 0, 0, 0 },
 };
 
-struct pci_driver pci_attach_vendor[] = {
+static struct pci_driver pci_attach_vendor[] = {
 #if LAB >= 5		// was SOL >= 5
 	{ 0x8086, 0x1209, &e100_attach },
 #endif

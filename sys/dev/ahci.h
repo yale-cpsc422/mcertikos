@@ -415,6 +415,7 @@ int ahci_disk_read(int port,
 		   uint64_t lba, uint16_t nsects, void *buf);
 int ahci_disk_write(int port,
 		    uint64_t lba, uint16_t nsects, void *buf);
+uint64_t ahci_disk_capacity(int port);
 
 #endif /* _KERN_ */
 

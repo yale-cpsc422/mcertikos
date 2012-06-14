@@ -434,7 +434,7 @@ ahci_command(struct ahci_controller *sc, int port, int write, int atapi,
 	     void *buffer, size_t bsize)
 {
 	int i;
-	uint32_t is, status, cmd, serr, tfd, sctl;
+	uint32_t ci, is, status, cmd, serr, tfd, sctl;
 #ifdef DEBUG_AHCI
 	uint32_t error;
 #endif
@@ -477,7 +477,7 @@ ahci_command(struct ahci_controller *sc, int port, int write, int atapi,
 	AHCI_DEBUG("port %d, issue command %x.\n", port, fis->command);
 
 	/* wait up to 31 sec */
-	for (i = 0; i < 31; i++) {
+	for (i = 0; i < 3100; i++) {
 		is = AHCI_READ(sc->hba, AHCI_P_IS(port), uint32_t);
 
 		if (is) {
@@ -511,10 +511,10 @@ ahci_command(struct ahci_controller *sc, int port, int write, int atapi,
 			}
 		}
 
-		delay(1000);
+		delay(10);
 	}
 
-	if (i == 31) {
+	if (i == 3100) {
 		AHCI_DEBUG("port %d, timeout.\n", port);
 		return 1;
 	}
@@ -523,6 +523,11 @@ ahci_command(struct ahci_controller *sc, int port, int write, int atapi,
 	if ((status & ATA_S_READY) &&
 	    !(status & (ATA_S_ERROR | ATA_S_DWF | ATA_S_BUSY))) {
 		AHCI_DEBUG("port %d, status %x, OK.\n", port, status);
+
+		do {
+			ci = AHCI_READ(sc->hba, AHCI_P_CI(port), uint32_t);
+			smp_wmb();
+		} while (ci & 0x1);
 
 		return 0;
 	} else {
@@ -689,14 +694,6 @@ ahci_pci_attach(struct pci_func *f)
 	if (ahci_disk_read(0, 0, 1, buf)) {
 		AHCI_DEBUG("read test failed.\n");
 		goto test_end;
-	} else {
-		int i;
-		for (i = 0; i < ATA_SECTOR_SIZE; i++) {
-			if (i % 16 == 0)
-				dprintf("\n%08x:", i);
-			dprintf(" %02x", buf[i]);
-		}
-		dprintf("\n");
 	}
 
 #if 0
@@ -709,14 +706,6 @@ ahci_pci_attach(struct pci_func *f)
 	if (ahci_disk_read(0, 0, 1, buf)) {
 		AHCI_DEBUG("read test failed.\n");
 		goto test_end;
-	} else {
-		int i;
-		for (i = 0; i < ATA_SECTOR_SIZE; i++) {
-			if (i % 16 == 0)
-				dprintf("\n%08x:", i);
-			dprintf(" %02x", buf[i]);
-		}
-		dprintf("\n");
 	}
 #endif
 
@@ -746,7 +735,7 @@ ahci_disk_rw(struct ahci_controller *sc, int port, int write,
 		return 1;
 	}
 
-	if (lba + nsects >= channel->nsectors) {
+	if (lba + nsects > channel->nsectors) {
 		AHCI_DEBUG("port %d, out of range.\n", port);
 		return 1;
 	}
@@ -774,20 +763,24 @@ ahci_disk_rw(struct ahci_controller *sc, int port, int write,
 	fis->dev = (uint8_t) ((lba >> 24) & 0xf) | 0x40;
 	fis->countl = (uint8_t) nsects & 0xff;
 
-	ret = ahci_command(sc, port, 0, 0, buf, nsects * ATA_SECTOR_SIZE);
+	ret = ahci_command(sc, port, write, 0, buf, nsects * ATA_SECTOR_SIZE);
 	AHCI_DEBUG("port %d, %s %d sectors %s LBA %llx %s %x, ",
 		   port,
 		   write ? "write" : "read",
-		   nsects,
+		   (uint32_t) nsects,
 		   write ? "to" : "from",
 		   lba,
 		   write ? "from" : "to",
 		   buf);
 	if (ret) {
+#ifdef DEBUG_AHCI
 		dprintf("failed.\n");
+#endif
 		return 1;
 	} else {
+#ifdef DEBUG_AHCI
 		dprintf("OK.\n");
+#endif
 		return 0;
 	}
 }
@@ -812,6 +805,25 @@ ahci_disk_read(int port,
 	spinlock_acquire(&ahci_lk);
 	ret = ahci_disk_rw(&ahci_ctrl, port, 0, lba, nsects, buf);
 	spinlock_release(&ahci_lk);
+
+#ifdef DEBUG_AHCI
+ /* 	if (ret) */
+ /* 		goto err; */
+
+ /* 	int i; */
+ /* 	uint16_t sector; */
+ /* 	uint8_t *p = buf; */
+ /* 	for (sector = 0; sector < nsects; sector++) { */
+ /* 		dprintf("sector 0x%llx:\n", lba+sector); */
+ /* 		for (i = 0; i < ATA_SECTOR_SIZE; i++, p++) { */
+ /* 			if (i % 16 == 0) */
+ /* 				dprintf("\n%08x:", i); */
+ /* 			dprintf(" %02x", *p); */
+ /* 		} */
+ /* 		dprintf("\n\n"); */
+ /* 	} */
+ /* err: */
+#endif
 
 	return ret;
 }
@@ -838,4 +850,20 @@ ahci_disk_write(int port,
 	spinlock_release(&ahci_lk);
 
 	return ret;
+}
+
+uint64_t
+ahci_disk_capacity(int port)
+{
+	struct ahci_channel *channel;
+
+	if (port >= ahci_ctrl.nchannels)
+		return 0;
+
+	channel = &ahci_ctrl.channels[port];
+
+	if (channel->present == TRUE)
+		return channel->nsectors;
+	else
+		return 0;
 }

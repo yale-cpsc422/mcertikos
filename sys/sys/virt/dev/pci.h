@@ -3,15 +3,32 @@
 
 #ifdef _KERN_
 
-#define PCI_CMD_PORT	0x0cf8
-#define PCI_DATA_PORT	0x0cfc
+#include <sys/types.h>
 
 #include <sys/virt/vmm.h>
 
-struct vpci {
+#define PCI_CONFIG_ADDR	0x0cf8
+#define PCI_CONFIG_DATA	0x0cfc
+
+enum data_sz_t;
+
+struct vpci_device {
+	void *dev;
+
+	uint32_t (*conf_read)(void *dev,
+			      uint32_t addr, enum data_sz_t);
+	void (*conf_write)(void *dev,
+			   uint32_t addr, uint32_t data, enum data_sz_t);
 };
 
-void vpci_init(struct vpci *, struct vm *);
+struct vpci_host {
+	int bus_id;
+	uint32_t config_addr;
+	struct vpci_device *dev[32];
+};
+
+void vpci_init(struct vpci_host *, struct vm *);
+int vpci_attach_device(struct vpci_host *, struct vpci_device *);
 
 #endif /* _KERN_ */
 

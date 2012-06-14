@@ -155,4 +155,16 @@ rdtscp(void)
 	return (rv);
 }
 
+static gcc_inline void
+smp_wmb(void)
+{
+	__asm __volatile("":::"memory");
+}
+
+static gcc_inline void
+smp_rmb(void)
+{
+	__asm __volatile("":::"memory");
+}
+
 #endif /* !_KERN_X86_H_ */

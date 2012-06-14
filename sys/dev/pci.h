@@ -13,6 +13,7 @@
 #ifndef _KERN_DEV_PCI_H_
 #define _KERN_DEV_PCI_H_
 
+#include <sys/gcc.h>
 #include <sys/types.h>
 
 /*
@@ -474,6 +475,35 @@ typedef uint8_t pci_intr_line_t;
 #define   PCI_BRIDGE_CONTROL_DISC_TIMER_SERR	(1 << 11)
 /* Reserved					(1 << 12) - (1 << 15) */
 
+struct pci_common_header {
+	uint16_t vendor;
+	uint16_t device;
+	uint16_t command;
+	uint16_t status;
+	uint8_t revision;
+	uint8_t func;
+	uint8_t subclass;
+	uint8_t class;
+	uint8_t cache_line_size;
+	uint8_t latency_timer;
+	uint8_t header_type;
+	uint8_t bist;
+} gcc_packed;
+
+struct pci_general {
+	struct pci_common_header header;
+	uint32_t bar[6];
+	uint32_t cardbus_cis_pointer;
+	uint16_t sub_vendor;
+	uint16_t sub_id;
+	uint32_t expansion_rom_base;
+	uint8_t cap_pointer;
+	uint8_t _pad[7];
+	uint8_t intr_line;
+	uint8_t intr_pin;
+	uint8_t min_grant;
+	uint8_t max_latency;
+} gcc_packed;
 
 // PCI subsystem interface
 enum { pci_res_bus, pci_res_mem, pci_res_io, pci_res_max };

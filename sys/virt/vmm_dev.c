@@ -189,3 +189,21 @@ vmm_handle_extintr(struct vm *vm, uint8_t intr_no)
 
 	return 0;
 }
+
+void
+vmm_iodev_unregister_read(struct vm *vm, uint16_t port, data_sz_t size)
+{
+	KERN_ASSERT(vm != NULL);
+
+	vm->iodev[port].dev = NULL;
+	vm->iodev[port].read_func[size] = NULL;
+}
+
+void
+vmm_iodev_unregister_write(struct vm *vm, uint16_t port, data_sz_t size)
+{
+	KERN_ASSERT(vm != NULL);
+
+	vm->iodev[port].dev = NULL;
+	vm->iodev[port].write_func[size] = NULL;
+}

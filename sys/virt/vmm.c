@@ -5,6 +5,7 @@
 #include <sys/types.h>
 
 #include <sys/virt/vmm.h>
+#include <sys/virt/dev/virtio_blk.h>
 
 #include <machine/pcpu.h>
 
@@ -142,6 +143,7 @@ vmm_init_vm(void)
 	vpci_init(&vm->vpci, vm);
 	vnvram_init(&vm->vnvram, vm);
 	vpit_init(&vm->vpit, vm);
+	virtio_blk_init(&vm->blk, vm);
 
 #ifdef REDIRECT_GUEST_SERIAL
 	vserial_init(&vm->vserial, vm);
@@ -243,4 +245,32 @@ vmm_rdtsc(struct vm *vm)
 	KERN_ASSERT(vm != NULL);
 
 	return vm->tsc;
+}
+
+void
+vmm_update(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	uint32_t port;
+
+	for (port = 0; port < MAX_IOPORT; port++) {
+		if (vm->iodev[port].dev == NULL)
+			continue;
+		int i;
+		for (i = 0; i < 3; i++) {
+			if (vm->iodev[port].read_func[i] == NULL &&
+			    vm->iodev[port].write_func[i] == NULL)
+				continue;
+			vmm_ops->vm_intercept_ioio(vm, port, i, TRUE);
+		}
+	}
+}
+
+uintptr_t
+vmm_translate_gp2hp(struct vm *vm, uintptr_t gp)
+{
+	KERN_ASSERT(vm != NULL);
+
+	return vmm_ops->vm_translate_gp2hp(vm, gp);
 }
