@@ -91,7 +91,6 @@ vring_dequeue_req(struct vm *vm, struct vring *vring)
 	avail = vring_get_avail(vm, vring);
 
 	KERN_ASSERT(avail != NULL);
-	KERN_ASSERT(vring->last_avail_idx <= avail->idx);
 
 	if (vring->last_avail_idx == avail->idx) {
 		virtio_debug("queue is empty.\n");
@@ -361,7 +360,7 @@ virtio_set_queue_notify(struct vm *vm, void *opaque, uint32_t reg, void *data)
 
 	do {
 		virtio_handle_req(dev, queue_idx);
-	} while (vring->last_avail_idx < avail->idx);
+	} while (vring->last_avail_idx != avail->idx);
 }
 
 static void
