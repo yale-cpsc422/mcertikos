@@ -97,7 +97,6 @@ cscope:
 include boot/Makefile.inc
 include user/Makefile.inc
 include sys/Makefile.inc
-include client/Makefile.inc
 
 deps: $(OBJDIR)/.deps
 

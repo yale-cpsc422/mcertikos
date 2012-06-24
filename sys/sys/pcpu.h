@@ -5,7 +5,9 @@
 
 #include <sys/context.h>
 #include <sys/proc.h>
+#include <sys/queue.h>
 #include <sys/spinlock.h>
+#include <sys/trap.h>
 #include <sys/types.h>
 
 #include <machine/pcpu.h>
@@ -13,82 +15,84 @@
 
 #define PCPU_AP_START_ADDR	0x8000
 
-/* typedef uint32_t (*callback_t) (struct context_t *); */
-
-/* typedef struct context_t context_t; */
-
 /*
- * States of the physical processor core.
+ * States and state transitions of a physical processor core.
  *
- * PCPU_WAIT    : the processor core is waiting for the task (processes or VMs)
- *                to be loaded on it. Once the processor core is initialized, it
- *                should be in this state.
- * PCPU_READY   : the task is loaded on this processor core and the processor is
- *                ready to be scheduled to run.
- * PCPU_RUNNING : the processor core is running some task.
- * PCPU_STOPPING: the processor is being stopped.
+ * PCPU_SHUTDOWN: the processor core is not initialized or shut down
+ * PCPU_BOOTUP  : the processor core boots up but is not initialized
+ * PCPU_READY   : the processor core is initialized and ready for the workload
+ * PCPU_RUNNING : the processor core is running some workload
  *
  *
- * All allowable transitions are shown in the following figure. Each transition
- * should be done atomically.
- *
- *                         after initialization
- *                                 |
- *                                 |
- *         the process or the      V         a process or a VM
- *           VM is stopped   +-----------+    is loaded on it
- *         +---------------> | PCPU_WAIT | --------------------+
- *         |                 +-----------+                     |
- *         |                                                   |
- *         |                                                   |
- *         |           someone decides to stop the             V
- * +---------------+        process or the VM           +------------+
- * | PCPU_STOPPING | <--------------------------------- | PCPU_READY |
- * +---------------+                                    +------------+
- *         ^                                                   |
- *         |                                                   |
- *         |                +--------------+                   |
- *         +--------------- | PCPU_RUNNING | <-----------------+
- *          someone decides +--------------+  the process or the VM
- *        to stop the process                  is scheduled to run
- *              or the VM
+ *     after        +---------------+   encounter errors / shutdown
+ *   power on /     | PCPU_SHUTDOWN | <-------------------+
+ *     reset        +---------------+                     |
+ *                     ^    |                             |
+ *                     |    |                             |
+ *               +-----+    V                             |
+ *               |   +-------------+  initialize   +------------+
+ *               |   | PCPU_BOOTUP | ------------> | PCPU_READY | <--------+
+ *               |   +-------------+               +------------+          |
+ *               |                                         |       remove  |
+ *               |                         start workload  |      workload |
+ *               |                                         V               |
+ *               |                                  +--------------+       |
+ *               +--------------------------------- | PCPU_RUNNING | ------+
+ *                  encounter errors / shutdown     +--------------+
  */
+
 typedef
-enum {
-	PCPU_WAIT,
+volatile enum {
+	PCPU_SHUTDOWN,
+	PCPU_BOOTUP,
 	PCPU_READY,
-	PCPU_RUNNING,
-	PCPU_STOPPING
+	PCPU_RUNNING
 } pcpu_stat_t;
 
-typedef
-struct pcpu_t {
+struct sched {
+	/*
+	 * Schedule information
+	 *
+	 * - cur_proc: the currently running process on this processor.
+	 *             There is at most one runnig process per processor. If no
+	 *             process is running on this processor, cur_proc == NULL.
+	 *
+	 * - ready_queue: queue of processes that can be scheduled to run on
+	 *                this processor.
+	 *
+	 * - sleeping_queue: queue of processes that are waiting for resources.
+	 *
+	 * - dead_queue: queue of processes that are waiting for being recycled.
+	 */
+	struct proc			*cur_proc;
+	TAILQ_HEAD(readyq, proc)	ready_queue;
+	TAILQ_HEAD(sleepingq, proc)	sleeping_queue;
+	TAILQ_HEAD(deadq, proc)		dead_queue;
+
+	spinlock_t cur_lk, ready_lk, sleeping_lk, dead_lk;
+};
+
+struct pcpu {
 	/* pcpu_t strcuture should be accessed mutually. */
 	spinlock_t	lk;
-
-	/*
-	 * After calling pcpu_init_cpu() on a pcpu_t structure, this field
-	 * should be TRUE.
-	 */
-	bool		inited;
 
 	/* machine-dependent fields */
 	__pcpu_t	*_pcpu;
 
+	/* state */
+	pcpu_stat_t	state;
+
 	/* page table used on this processor */
 	pmap_t		*pmap;
 
-	/* interrupt handlers */
-	callback_t	*registered_callbacks;
+	/* trap handlers */
+	trap_cb_t	*trap_cb;
 
-	/* Is this cpu booted?  */
-	volatile bool	booted;
+	/* schedule info */
+	struct sched	sched;
 
-	/* Which process is running on this cpu? */
-	pid_t		proc;
-
-	/* cpu status */
-	volatile pcpu_stat_t stat;
+	/* buffer for handleing system calls */
+	void		*sys_buf;
 
 	/*
 	 * Magic verification tag (CPU_MAGIC) to help detect corruption,
@@ -101,20 +105,20 @@ struct pcpu_t {
 
 	/* High end (starting point) of the kernel stack. */
 	uint8_t		kstackhi[0] gcc_aligned(PAGE_SIZE);
-} pcpu_t;
+};
 
 #define PCPU_MAGIC	0x98765432
 
-pcpu_t *pcpu;
+struct pcpu *pcpu;
 
 void pcpu_init(void);
 
 void pcpu_mp_init(void);
 void pcpu_init_cpu(void);
 
-void pcpu_boot_ap(uint32_t, void (*f)(void), uintptr_t);
+int pcpu_boot_ap(uint32_t, void (*f)(void), uintptr_t);
 
-pcpu_t * pcpu_cur(void);
+struct pcpu * pcpu_cur(void);
 int pcpu_cur_idx(void);
 
 uint32_t pcpu_ncpu(void);
@@ -124,6 +128,9 @@ bool pcpu_onboot();
 bool pcpu_is_smp(void);
 
 lapicid_t pcpu_cpu_lapicid(uint32_t idx);
+
+void pcpu_lock(struct pcpu *);
+void pcpu_unlock(struct pcpu *);
 
 #endif /* _KERN_ */
 

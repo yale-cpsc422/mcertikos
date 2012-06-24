@@ -163,3 +163,18 @@ endif
 ifneq "$(strip $(DEBUG_AHCI) $(DEBUG_ALL))" ""
 KERN_CFLAGS	+= -DDEBUG_AHCI
 endif
+
+# If set, enable debugging processes
+ifneq "$(strip $(DEBUG_PROC) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_PROC
+endif
+
+# if set, enable debugging syscalls
+ifneq "$(strip $(DEBUG_SYSCALL) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_SYSCALL
+endif
+
+# if set, enable debugging message queues
+ifneq "$(strip $(DEBUG_MQUEUE) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_MQUEUE
+endif

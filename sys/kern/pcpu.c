@@ -3,6 +3,7 @@
 #include <sys/gcc.h>
 #include <sys/mmu.h>
 #include <sys/pcpu.h>
+#include <sys/queue.h>
 #include <sys/spinlock.h>
 #include <sys/string.h>
 #include <sys/x86.h>
@@ -14,12 +15,12 @@
 #include <dev/lapic.h>
 #include <dev/pic.h>
 
-bool pcpu_inited = FALSE;
+static bool pcpu_inited = FALSE;
 
-extern uint8_t pcpu_stack[];
+extern uint8_t pcpu_stack[];	/* defined in sys/kern/init.c */
 
 static bool
-pcpu_valid(pcpu_t *c)
+pcpu_valid(struct pcpu *c)
 {
 	KERN_ASSERT(c != NULL);
 
@@ -33,23 +34,21 @@ pcpu_valid(pcpu_t *c)
 /*
  * Initialize the pcpu module.
  *
- * XXX: pcpu_init() must be running before enabling SMP.
+ * XXX: pcpu_init() must be called before SMP could be enabled.
  */
 void
-pcpu_init()
+pcpu_init(void)
 {
 	int i;
 
 	if (pcpu_inited == TRUE)
 		return;
 
-	pcpu = (pcpu_t *) pcpu_stack;
+	pcpu = (struct pcpu *) pcpu_stack;
 
 	for (i = 0; i < MAX_CPU; ++i) {
 		spinlock_init(&pcpu[i].lk);
-		pcpu[i].inited = FALSE;
-		pcpu[i].stat = PCPU_WAIT;
-		pcpu[i].proc = 0;
+		pcpu[i].state = PCPU_SHUTDOWN;
 	}
 
 	__pcpu_init();
@@ -60,20 +59,23 @@ pcpu_init()
 
 /*
  * Initialize a pcpu_t structure.
+ *
+ * XXX: PCPU_BOOTUP --> PCPU_READY
  */
 void
-pcpu_init_cpu()
+pcpu_init_cpu(void)
 {
-	pcpu_t *c = pcpu_cur();
+	struct pcpu *c = pcpu_cur();
 
-	KERN_ASSERT(pcpu_valid(c) == TRUE);
+	KERN_ASSERT(c != NULL);
 
 	spinlock_acquire(&c->lk);
 
-	if (c->inited == TRUE) {
-		spinlock_release(&c->lk);
-		return;
-	}
+	if (c->state == PCPU_READY)
+		goto ret;
+
+	KERN_ASSERT(pcpu_valid(c) == TRUE);
+	KERN_ASSERT(c->state == PCPU_BOOTUP);
 
 	/* machine-dependent initialization */
 	uintptr_t stack_pointer = get_stack_pointer();
@@ -81,46 +83,47 @@ pcpu_init_cpu()
 	__pcpu_init_cpu(pcpu_cur_idx(), &c->_pcpu, stack_pointer);
 
 	c->pmap = (pmap_t *) NULL;
-
-	pageinfo_t *pi = mem_page_alloc();
-	KERN_ASSERT(pi != NULL);
-	c->registered_callbacks = (callback_t *) mem_pi2ptr(pi);
-	memset(c->registered_callbacks, 0x0 , PAGE_SIZE);
-
 	c->magic = PCPU_MAGIC;
 
-	c->inited = TRUE;
+	/* initialize memory for trap handlers */
+	pageinfo_t *pi = mem_page_alloc();
+	KERN_ASSERT(pi != NULL);
+	c->trap_cb = (trap_cb_t *) mem_pi2ptr(pi);
+	memset(c->trap_cb, 0x0 , PAGE_SIZE);
 
+	/* initialize memory for the process scheduler */
+	proc_sched_init(&c->sched);
+
+	c->state = PCPU_READY;
+ ret:
 	spinlock_release(&c->lk);
 }
 
-extern void kern_init_ap(void);
+extern void kern_init_ap(void);	/* defined in sys/kern/init.c */
 
-void
+/*
+ * XXX: PCPU_SHUTDOWN --> PCPU_BOOTUP
+ */
+int
 pcpu_boot_ap(uint32_t cpu_idx, void (*f)(void), uintptr_t stack_addr)
 {
+	KERN_ASSERT(pcpu_inited == TRUE);
 	/* is AP */
 	KERN_ASSERT(cpu_idx > 0 && cpu_idx < pcpu_ncpu());
+	KERN_ASSERT(pcpu[cpu_idx].state == PCPU_SHUTDOWN);
 	/* start function f is avalid */
 	KERN_ASSERT(f != NULL);
 
-	pcpu[cpu_idx].booted = FALSE;
-
-//	KERN_DEBUG("PCPU:%x\n", &pcpu_stack);
-//	KERN_DEBUG("cpu# %d, stack: %x\n",cpu_idx, stack_addr+PAGE_SIZE);
-//	KERN_DEBUG("pcpu:%x, pcpu_booted:%x\n", &pcpu_stack[cpu_idx], &pcpu[cpu_idx].booted);
 	uint8_t *boot = (uint8_t *) PCPU_AP_START_ADDR;
 	*(uintptr_t *) (boot - 4) = stack_addr + PAGE_SIZE;
 	*(uintptr_t *) (boot - 8) = (uintptr_t) f;
 	*(uintptr_t *) (boot - 12) = (uintptr_t) kern_init_ap;
 	lapic_startcpu(pcpu_cpu_lapicid(cpu_idx), (uintptr_t) boot);
 
-	while (pcpu[cpu_idx].booted == FALSE)
+	while (pcpu[cpu_idx].state == PCPU_SHUTDOWN)
 		pause();
 
-	pcpu[cpu_idx].stat = PCPU_WAIT;
-
-	return;
+	return 0;
 }
 
 /*
@@ -128,7 +131,7 @@ pcpu_boot_ap(uint32_t cpu_idx, void (*f)(void), uintptr_t stack_addr)
  *
  * @return the pointer to the pcpu_t structure, or NULL if error happens.
  */
-pcpu_t *
+struct pcpu *
 pcpu_cur(void)
 {
 	uintptr_t pstack = get_stack_pointer();

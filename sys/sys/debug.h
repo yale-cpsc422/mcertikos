@@ -36,4 +36,8 @@ void debug_normal(const char *, int, const char *, ...);
 void debug_warn(const char*, int, const char*, ...);
 void debug_panic(const char*, int, const char*, ...);
 
+void debug_init(void);
+void debug_lock(void);
+void debug_unlock(void);
+
 #endif /* !_KERN_DEBUG_H_ */

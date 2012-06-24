@@ -13,6 +13,9 @@
 
 #define gcc_noreturn            __attribute__((noreturn))
 
+#define likely(x)		__builtin_expect((x),1)
+#define unlikely(x)		__builtin_expect((x),0)
+
 #endif /* _KERN_ */
 
 #endif /* !_KERN_GCC_H_ */

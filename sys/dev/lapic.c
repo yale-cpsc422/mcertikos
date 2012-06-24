@@ -8,7 +8,7 @@
 #include <dev/lapic.h>
 #include <dev/timer.h>
 
-#define LAPIC_TIMER_INTR_FREQ	100
+#define LAPIC_TIMER_INTR_FREQ	50
 
 volatile lapic_t *lapic;
 
@@ -141,6 +141,9 @@ lapic_init()
 	uint32_t ticr = lapic_ticks_per_ms * 1000 / LAPIC_TIMER_INTR_FREQ;
 	KERN_DEBUG("Set LAPIC TICR = %x.\n", ticr);
 	lapic_write(LAPIC_TICR, ticr);
+
+	/* disable lapic timer */
+	/* lapic_write(LAPIC_TIMER, LAPIC_TIMER_MASKED); */
 
 	// Disable logical interrupt lines.
 	lapic_write(LAPIC_LINT0, LAPIC_LINT_MASKED);

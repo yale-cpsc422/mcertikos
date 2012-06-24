@@ -5,64 +5,179 @@
 
 #include <sys/context.h>
 #include <sys/gcc.h>
-#include <sys/msg.h>
+#include <sys/mqueue.h>
 #include <sys/pcpu.h>
+#include <sys/queue.h>
 #include <sys/signal.h>
 #include <sys/spinlock.h>
 #include <sys/types.h>
 
 #include <machine/pmap.h>
+#include <machine/trap.h>
 
-#define NMSG	8
+#define MAX_PID		64
+#define MAX_MSG		8
+
+#define PID_INV		(~(pid_t) 0)
+
+/*
+ * States and state transitions of a process:
+ *
+ * PROC_RUNNING   : the process is running and a currently running process on a
+ *                  processor
+ * PROC_READY     : the process is ready to be scheduled to run
+ * PROC_SLEEPING  : the process is sleeping, usually for waiting for some
+ *                  resource
+ * PROC_DEAD      : the process is dead and waiting for recycle, usually for
+ *                  being killed or terminating normally
+ *
+ *                          +---------------+
+ *                          | PROC_UNINITED |
+ *                          +---------------+
+ *                                  |
+ *                                  | a process is created
+ *                                  V
+ *                           +-------------+
+ *                           | PROC_INITED |
+ *                           +-------------+
+ *                                  | put in a ready queue
+ *                                  |
+ *           be scheduled           V         some resource
+ *             or yield      +------------+     unavailable
+ *       +-----------------> | PROC_READY | ------------------+
+ *       |  +--------------- +------------+ <--------------+  |
+ *       |  |                       |                      |  |
+ *       |  | be scheduled          |        some resource |  |
+ *       |  |                       |          available   |  |
+ *       |  V        some resource  |                      |  V
+ * +--------------+   unavailable   |                +---------------+
+ * | PROC_RUNNING | ----------------(--------------> | PROC_SLEEPING |
+ * +--------------+                 |                +---------------+
+ *         \                        |                        /
+ *          |                       |                       |
+ *           \----------------------+----------------------/
+ *                                  | terminate normally
+ *                                  |    or be killed
+ *                                  V
+ *                             +-----------+
+ *                             | PROC_DEAD |
+ *                             +-----------+
+ */
 
 typedef
-enum {
-	PROC_STOP,	/* process is stopped, such as interrupted or waiting
-			   for some signals */
-	PROC_READY,	/* process can run but not run */
-	PROC_RUN,	/* process is running */
-	PROC_INSIG,	/* process is handling signals */
-	PROC_DEAD	/* process is dead and waiting for cleared */
+volatile enum {
+	PROC_UNINITED,	/* process is not created */
+	PROC_INITED,	/* process is created */
+	PROC_READY,	/* process can run but not running now */
+	PROC_RUNNING,	/* process is running */
+	PROC_SLEEPING,	/* process is sleeping for some resource */
+	PROC_DEAD	/* process is killed or terminates normally */
 } proc_state_t;
 
-typedef struct pcpu_t pcpu_t;
+struct proc;
 
-typedef
-struct proc_t {
+typedef int (*wake_cb_t) (struct proc *);
+
+struct proc {
+	pid_t		pid;	/* process id */
+	pmap_t		*pmap;	/* page table */
+	proc_state_t	state;	/* state of process */
+
+	struct pcpu	*cpu;	/* which CPU I'm on */
+	struct context	ctx;	/* process context */
+
+	spinlock_t	*waiting_for;
+	wake_cb_t	wake_cb;
+
+	uint64_t	start_time;	/* when did this process start
+					   running? */
+
+	struct mqueue	mqueue;	/* message queue */
+
 	spinlock_t	lk;	/* must be acquired before accessing this
 				   structure */
 
-	pid_t		pid;	/* process id */
+	struct vm	*vm;
 
-	volatile proc_state_t state;	/* state of process */
+	/*
+	 * A process can be in either of the free processes list, the ready
+	 * processes list, the sleeping processes list or the dead processes
+	 * list.
+	 */
+	TAILQ_ENTRY(proc) entry;
+};
 
-	pcpu_t		*cpu;	/* which CPU I'm on */
+struct sched;
 
-	pmap_t		*pmap;	/* page table */
+/*
+ * Initialize the process module.
+ *
+ * @return 0 for success
+ */
+int proc_init(void);
 
-	struct context_t  *normal_ctx;	/* context for normal execution */
-	struct context_t  *signal_ctx;	/* context for handling interrupts */
+/*
+ * Initialize a process scheduler.
+ */
+int proc_sched_init(struct sched *);
 
-	mqueue_t	mqueue;	/* message queue */
+/*
+ * Acquire/Release the spinlock of a process. It's recommended to use them in
+ * pairs.
+ *
+ * XXX: They are blocking operations, i.e. they are blocked until the operation
+ *      succeeds.
+ */
+void proc_lock(struct proc *proc);
+void proc_unlock(struct proc *proc);
 
-	struct proc_t	*next;	/* next process of the same state */
-} proc_t;
+/*
+ * Create a new process.
+ *
+ * @param start the start address of the code to execute in this process
+ *
+ * @return a pointer to the structure of the process; NULL if failed.
+ */
+struct proc *proc_create(uintptr_t start);
 
-void proc_init(void);
+/*
+ * Put a process p on the ready queue of the cpu c.
+ */
+int proc_ready(struct proc *p, struct pcpu *c);
 
-pid_t proc_new(uintptr_t);
-void proc_start(pid_t) gcc_noreturn;
-void proc_stop(pid_t);
+/*
+ * Let a process p sleep to wait for the spinlock lk.
+ */
+int proc_sleep(struct proc *p, spinlock_t *lk, wake_cb_t);
 
-int proc_send_msg(pid_t, msg_type_t, void *data, size_t);
-msg_t *proc_recv_msg(pid_t);
+/*
+ * Wake up a sleeping process.
+ */
+int proc_wake(struct proc * p);
 
-pmap_t *proc_pmap(pid_t);
-proc_state_t proc_state(pid_t);
-pcpu_t *proc_cpu(pid_t);
+/*
+ * Yield a running process p.
+ */
+int proc_yield(struct proc *p);
 
-void proc_lock(pid_t);
-void proc_unlock(pid_t);
+/*
+ * Per-cpu process scheduler.
+ */
+int proc_sched(struct pcpu *c);
+
+/*
+ * Start running process p.
+ */
+void proc_run(void) gcc_noreturn;
+
+/* Get the current process. */
+struct proc *proc_cur(void);
+
+/* save the context of the process */
+void proc_save(struct proc *, tf_t *);
+
+/* get the process by its process id */
+struct proc *proc_pid2proc(pid_t);
 
 #endif /* _KERN_ */
 

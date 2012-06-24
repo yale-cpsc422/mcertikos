@@ -103,25 +103,27 @@ trap_dump(tf_t *tf)
 	uintptr_t base = (uintptr_t) tf;
 
 	KERN_DEBUG("trapframe at %x\n", base);
-	KERN_INFO("\t%08x:\tedi:   \t\t%08x\n", &tf->regs.edi, tf->regs.edi);
-	KERN_INFO("\t%08x:\tesi:   \t\t%08x\n", &tf->regs.esi, tf->regs.esi);
-	KERN_INFO("\t%08x:\tebp:   \t\t%08x\n", &tf->regs.ebp, tf->regs.ebp);
-	KERN_INFO("\t%08x:\tesp:   \t\t%08x\n", &tf->regs.oesp, tf->regs.oesp);
-	KERN_INFO("\t%08x:\tebx:   \t\t%08x\n", &tf->regs.ebx, tf->regs.ebx);
-	KERN_INFO("\t%08x:\tedx:   \t\t%08x\n", &tf->regs.edx, tf->regs.edx);
-	KERN_INFO("\t%08x:\tecx:   \t\t%08x\n", &tf->regs.ecx, tf->regs.ecx);
-	KERN_INFO("\t%08x:\teax:   \t\t%08x\n", &tf->regs.eax, tf->regs.eax);
-	/* KERN_INFO("\t%08x:\tgs:    \t\t%08x\n", &tf->gs, tf->gs); */
-	/* KERN_INFO("\t%08x:\tfs:    \t\t%08x\n", &tf->fs, tf->fs); */
-	KERN_INFO("\t%08x:\tes:    \t\t%08x\n", &tf->es, tf->es);
-	KERN_INFO("\t%08x:\tds:    \t\t%08x\n", &tf->ds, tf->ds);
-	KERN_INFO("\t%08x:\ttrapno:\t\t%08x\n", &tf->trapno, tf->trapno);
-	KERN_INFO("\t%08x:\terr:   \t\t%08x\n", &tf->err, tf->err);
-	KERN_INFO("\t%08x:\teip:   \t\t%08x\n", &tf->eip, tf->eip);
-	KERN_INFO("\t%08x:\tcs:    \t\t%08x\n", &tf->cs, tf->cs);
-	KERN_INFO("\t%08x:\teflags:\t\t%08x\n", &tf->eflags, tf->eflags);
-	KERN_INFO("\t%08x:\tesp:   \t\t%08x\n", &tf->esp, tf->esp);
-	KERN_INFO("\t%08x:\tss:    \t\t%08x\n", &tf->ss, tf->ss);
+	debug_lock();
+	dprintf("\t%08x:\tedi:   \t\t%08x\n", &tf->regs.edi, tf->regs.edi);
+	dprintf("\t%08x:\tesi:   \t\t%08x\n", &tf->regs.esi, tf->regs.esi);
+	dprintf("\t%08x:\tebp:   \t\t%08x\n", &tf->regs.ebp, tf->regs.ebp);
+	dprintf("\t%08x:\tesp:   \t\t%08x\n", &tf->regs.oesp, tf->regs.oesp);
+	dprintf("\t%08x:\tebx:   \t\t%08x\n", &tf->regs.ebx, tf->regs.ebx);
+	dprintf("\t%08x:\tedx:   \t\t%08x\n", &tf->regs.edx, tf->regs.edx);
+	dprintf("\t%08x:\tecx:   \t\t%08x\n", &tf->regs.ecx, tf->regs.ecx);
+	dprintf("\t%08x:\teax:   \t\t%08x\n", &tf->regs.eax, tf->regs.eax);
+	/* dprintf("\t%08x:\tgs:    \t\t%08x\n", &tf->gs, tf->gs); */
+	/* dprintf("\t%08x:\tfs:    \t\t%08x\n", &tf->fs, tf->fs); */
+	dprintf("\t%08x:\tes:    \t\t%08x\n", &tf->es, tf->es);
+	dprintf("\t%08x:\tds:    \t\t%08x\n", &tf->ds, tf->ds);
+	dprintf("\t%08x:\ttrapno:\t\t%08x\n", &tf->trapno, tf->trapno);
+	dprintf("\t%08x:\terr:   \t\t%08x\n", &tf->err, tf->err);
+	dprintf("\t%08x:\teip:   \t\t%08x\n", &tf->eip, tf->eip);
+	dprintf("\t%08x:\tcs:    \t\t%08x\n", &tf->cs, tf->cs);
+	dprintf("\t%08x:\teflags:\t\t%08x\n", &tf->eflags, tf->eflags);
+	dprintf("\t%08x:\tesp:   \t\t%08x\n", &tf->esp, tf->esp);
+	dprintf("\t%08x:\tss:    \t\t%08x\n", &tf->ss, tf->ss);
+	debug_unlock();
 }
 
 #endif /* !_ASSEMBLER__ */
