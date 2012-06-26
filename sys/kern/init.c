@@ -115,12 +115,17 @@ kern_init(mboot_info_t *mbi)
 
 	/*
 	 * Initialize virtual machine monitor module.
+	 *
+	 * XXX: CertiKOS only supports Intel VMX on non-first processor, because
+	 *      Certikos does not provide the emulation for nonpaged mode.
 	 */
-	KERN_INFO("Initialize VMM ... ");
-	if (vmm_init() != 0)
-		KERN_INFO("failed.\n");
-	else
-		KERN_INFO("done.\n");
+	if (strncmp(cpuinfo.vendor, "AuthenticAMD", 20) == 0) {
+		KERN_INFO("Initialize VMM ... ");
+		if (vmm_init() != 0)
+			KERN_INFO("failed.\n");
+		else
+			KERN_INFO("done.\n");
+	}
 
 	/* Start slave kernel on APs */
 	int i;
@@ -162,6 +167,15 @@ kern_init_ap(void (*f)(void))
 	intr_init();
 
 	pmap_init();
+
+	if (strncmp(cpuinfo.vendor, "GenuineIntel", 20) == 0) {
+		KERN_INFO("Initialize VMM ... ");
+		if (vmm_init())
+			KERN_INFO("failed.\n");
+		else
+			KERN_INFO("done.\n");
+	}
+
 	c->booted = TRUE;
 	f();
 }

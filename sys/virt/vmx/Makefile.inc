@@ -3,6 +3,9 @@
 OBJDIRS		+= $(KERN_OBJDIR)/virt/vmx
 
 KERN_SRCFILES	+= $(KERN_DIR)/virt/vmx/vmx.c
+KERN_SRCFILES	+= $(KERN_DIR)/virt/vmx/vmcs.c
+KERN_SRCFILES	+= $(KERN_DIR)/virt/vmx/vmx_msr.c
+KERN_SRCFILES	+= $(KERN_DIR)/virt/vmx/ept.c
 
 # Targets
 
