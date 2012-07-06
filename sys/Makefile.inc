@@ -6,7 +6,7 @@ KERN_OBJDIR	:= $(OBJDIR)/sys
 OBJDIRS		+= $(KERN_OBJDIR)
 
 # Arch-independent compiling and linking options
-KERN_CFLAGS	:= $(CFLAGS) -D_KERN_ -O2 -I$(KERN_DIR) -I.
+KERN_CFLAGS	:= $(CFLAGS) -D_KERN_ -O0 -I$(KERN_DIR) -I.
 KERN_LDFLAGS	:= $(LDFLAGS) -e start
 
 # Sub-makefiles

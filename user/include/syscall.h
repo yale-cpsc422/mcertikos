@@ -10,7 +10,7 @@
 static gcc_inline void
 sys_test(uint32_t a)
 {
-	asm volatile("int %0" :
+	asm volatile("int %1" :
 		     : "i" (T_SYSCALL),
 		       "a" (SYS_test),
 		       "b" (a)
@@ -106,6 +106,34 @@ sys_recv(void *data, size_t *size)
 		       "b" (data),
 		       "c" (size)
 		     : "cc", "memory");
+}
+
+static gcc_inline uint32_t
+sys_allocvm(void)
+{
+	uint32_t rc;
+
+	asm volatile("int %1"
+		     : "=a" (rc)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_allocvm)
+		     : "cc", "memory");
+
+	return rc;
+}
+
+static gcc_inline uint32_t
+sys_execvm(void)
+{
+	uint32_t rc;
+
+	asm volatile("int %1"
+		     : "=a" (rc)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_execvm)
+		     : "cc", "memory");
+
+	return rc;
 }
 
 #endif /* !_USER_SYSCALL_H_ */

@@ -28,6 +28,7 @@ uint32_t ctx_arg1(struct context *);
 uint32_t ctx_arg2(struct context *);
 uint32_t ctx_arg3(struct context *);
 uint32_t ctx_arg4(struct context *);
+void ctx_set_retval(struct context *, uint32_t);
 
 void ctx_dump(struct context *);
 

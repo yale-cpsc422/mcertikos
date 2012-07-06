@@ -136,6 +136,7 @@ pcpu_cur(void)
 {
 	uintptr_t pstack = get_stack_pointer();
 	uint32_t pcpu_idx = (pstack - (uintptr_t) pcpu_stack) / PAGE_SIZE;
+
 	if (pcpu_idx >= MAX_CPU)
 		return NULL;
 	else

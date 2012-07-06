@@ -196,7 +196,7 @@ int vmm_init_on_ap(void);
 struct vm *vmm_init_vm(void);
 
 /*
- * Top-level function launch a VM.
+ * Top-level function that launches a VM.
  */
 int vmm_run_vm(struct vm *);
 

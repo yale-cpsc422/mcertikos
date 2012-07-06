@@ -9,6 +9,8 @@
 #include <sys/vm.h>
 #include <sys/x86.h>
 
+#include <sys/virt/vmm.h>
+
 #include <machine/pmap.h>
 
 #ifdef DEBUG_SYSCALL
@@ -26,6 +28,8 @@ static char *syscall_name[256] =
 		[SYS_getpid]	= "sys_getpid",
 		[SYS_send]	= "sys_send",
 		[SYS_recv]	= "sys_recv",
+		[SYS_allocvm]	= "sys_allocvm",
+		[SYS_execvm]	= "sys_execvm",
 		[SYS_test]	= "sys_test",
 	};
 
@@ -399,6 +403,71 @@ sys_recv(struct pcpu *c, struct proc *p, void *buf, size_t *size)
 	return rc;
 }
 
+static int
+sys_allocvm(struct pcpu *c, struct proc *p)
+{
+	int rc = 0;
+
+	if (pcpu_onboot() != TRUE) {
+		SYSCALL_DEBUG("Only support running the virtual machine on the "
+			      "bootstrap processor.\n");
+		rc = 1;
+		goto ret;
+	}
+
+	proc_lock(p);
+
+	if (p->vm != NULL) {
+		SYSCALL_DEBUG("Cannot create the virtual machine in process %d."
+			      " There is already a virtual machine "
+			      "in this process.\n", p->pid);
+		rc = 2;
+		goto lock_ret;
+	}
+
+	if ((p->vm = vmm_init_vm()) == NULL) {
+		SYSCALL_DEBUG("Cannot create a virtual machine "
+			      "in process %d.\n", p->pid);
+		rc = 3;
+		goto lock_ret;
+	}
+
+ lock_ret:
+	proc_unlock(p);
+ ret:
+	return rc;
+}
+
+static int
+sys_execvm(struct pcpu *c, struct proc *p)
+{
+	int rc = 0;
+
+	if (pcpu_onboot() != TRUE) {
+		SYSCALL_DEBUG("Only support running the virtual machine on the "
+			      "bootstrap processor.\n");
+		rc = 1;
+		goto ret;
+	}
+
+	proc_lock(p);
+
+	if (p->vm == NULL) {
+		SYSCALL_DEBUG("No virtual machine in process %d.\n", p->pid);
+		rc = 2;
+		goto lock_ret;
+	}
+
+	proc_unlock(p);
+	vmm_run_vm(p->vm);
+	goto ret;
+
+ lock_ret:
+	proc_unlock(p);
+ ret:
+	return rc;
+}
+
 int
 syscall_handler(struct context *ctx)
 {
@@ -485,16 +554,32 @@ syscall_handler(struct context *ctx)
 		rc = sys_recv(c, p, (char *) a[0], (size_t *) a[1]);
 		break;
 
+	case SYS_allocvm:
+		/*
+		 * Create a virtual machine in the current process.
+		 */
+		rc = sys_allocvm(c, p);
+		break;
+
+	case SYS_execvm:
+		/*
+		 * Execute the virtual machine in the current process.
+		 */
+		rc = sys_execvm(c, p);
+		break;
+
 	default:
 		rc = 1;
 		break;
 	}
 
+	ctx_set_retval(ctx, rc);
+
 	if (rc) {
 		SYSCALL_DEBUG("Syscall %s (nr %d) from "
-			   "process %d on CPU %d failed, error %d.\n",
-			   (0 <= nr && nr < 256) ? syscall_name[nr] : "unkown",
-			   nr, p->pid, pcpu_cur_idx(), rc);
+			      "process %d on CPU %d failed, error %d.\n",
+			      (0 <= nr && nr < 256) ? syscall_name[nr] : "unkown",
+			      nr, p->pid, pcpu_cur_idx(), rc);
 		memset(c->sys_buf, 0, PAGE_SIZE);
 	}
 

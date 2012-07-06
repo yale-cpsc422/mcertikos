@@ -19,77 +19,57 @@
 void gcc_noreturn
 trap(tf_t *tf)
 {
-	KERN_ASSERT(tf != NULL);
-
-	/* KERN_DEBUG("Trap %d on CPU %d.\n", tf->trapno, pcpu_cur_idx()); */
-
-	static struct context kern_ctx = { .p = NULL };
-	struct context *ctx = NULL;
+	struct proc *p;
+	struct context *ctx;
+	int vmexit;	/* is a virtual machine running? */
+	struct vm *vm;
+	trap_cb_t f;
 
 	asm volatile("cld" ::: "cc");
 
-	/* if (tf->trapno < T_IRQ0) /\* exceptions *\/ */
-	/* 	trap_dump(tf); */
+	KERN_ASSERT(tf != NULL);
+	if (tf->trapno == T_GPFLT)
+		trap_dump(tf);
+	KERN_ASSERT(VM_USERLO <= tf->eip && tf->eip < VM_USERHI);
 
-	if (tf->eip >= VM_USERLO) {
-		/* save the context of the interrupted process */
-		KERN_ASSERT(tf->eip < VM_USERHI);
+	p = proc_cur();
 
-		struct proc *p = proc_cur();
+	proc_lock(p);
 
-		KERN_ASSERT(p != NULL);
+	ctx = &p->ctx;
+	vmexit = (p->vm != NULL && p->vm->exit_for_intr == TRUE);
 
-		proc_lock(p);
-		ctx = &p->ctx;
-		proc_unlock(p);
+	KERN_DEBUG("Trap %d from process %d on CPU %d, vmexit=%d.\n",
+		   tf->trapno, p->pid, pcpu_cur_idx(), vmexit);
 
-		proc_save(p, tf);
-	} else {
-		/*
-		 * The trap is from the kernel space. If a trap happens while a
-		 * virtual machine is running on this processor and CertiKOS
-		 * successfully intercepts the interrupt (and enters the kernel
-		 * space), CertiKOS will temporally enable interrupts on this
-		 * processor (by setting RFLAGS.IF of host) and finally reach
-		 * here. In this way, CertiKOS can know which interrupt it
-		 * intercepted (via the trapframe).
-		 *
-		 * This maybe the only way that CertiKOS can get the detailed
-		 * information of the intercepted interrupts, especially when
-		 * the hardware (e.g. AMD-V, or Intel VMX with acknowledge_
-		 * interrupt_on_exit clear does not provide.
-		 */
-		ctx = &kern_ctx;
-		ctx->tf = *tf;
-	}
+	vm = vmexit ? p->vm : NULL;
+	proc_save(p, tf);
 
-	trap_cb_t f = pcpu_cur()->trap_cb[tf->trapno];
+	proc_unlock(p);
 
-	if (f) { /* a handler is registered for this trap */
+	f = pcpu_cur()->trap_cb[tf->trapno];
+
+	if (f) {
 		f(ctx);
+	} else if (vmexit) {
+		int irq = tf->trapno - T_IRQ0;
+
+		KERN_ASSERT(vm != NULL);
+		KERN_ASSERT(irq >= 0);
+
+		vmm_handle_intr(vm, irq);
 	} else {
-		if (tf->eip >= VM_USERLO) {
-			KERN_WARN("No handler registered for trap %d.\n",
-				  tf->trapno);
-		} else {
-			/*
-			 * If the interrupt is from guest and the host has no
-			 * handler for it, just let VMM handle the interrupt.
-			 */
-			struct vm *vm = vmm_cur_vm();
-			int irq = tf->trapno - T_IRQ0;
-			KERN_ASSERT(vm != NULL && irq >= 0);
-			vmm_handle_intr(vm, irq);
-		}
+		KERN_WARN("NO handler registered for trap %d.\n", tf->trapno);
 	}
 
-	if (tf->eip >= VM_USERLO) {
-		proc_run();
-	} else {
-		/* clear RFLAGS.IF to avoid nesting traps */
-		ctx->tf.eflags &= ~(uint32_t) FL_IF;
-		ctx_start(ctx);
+	if (vmexit) {
+		KERN_DEBUG("Re-enter VM\n");
+		KERN_ASSERT(vm != NULL);
+		vmm_run_vm(vm);
 	}
+
+	ctx->tf.eflags &= ~FL_IF;
+	proc_run();
 }
 
 void
@@ -196,10 +176,15 @@ timer_intr_handler(struct context *ctx)
 	bool from_guest =
 		(vm != NULL && vm->exit_for_intr == TRUE) ? TRUE : FALSE;
 
-	if (from_guest == TRUE)
+	if (from_guest == TRUE) {
 		vmm_handle_intr(vm, IRQ_TIMER);
-
-	proc_sched(pcpu_cur());
+	} else {
+		/*
+		 * XXX: If the current process is running a virtual machine,
+		 *      don't do the process schedule.
+		 */
+		proc_sched(pcpu_cur());
+	}
 
 	intr_eoi();
 

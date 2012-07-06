@@ -97,7 +97,8 @@ struct proc {
 	spinlock_t	lk;	/* must be acquired before accessing this
 				   structure */
 
-	struct vm	*vm;
+	struct vm	*vm;	/* which virtual machine is running in this
+				   process */
 
 	/*
 	 * A process can be in either of the free processes list, the ready
@@ -128,8 +129,20 @@ int proc_sched_init(struct sched *);
  * XXX: They are blocking operations, i.e. they are blocked until the operation
  *      succeeds.
  */
-void proc_lock(struct proc *proc);
-void proc_unlock(struct proc *proc);
+#define proc_lock(p)					\
+	do {						\
+		KERN_ASSERT(p != NULL);			\
+		spinlock_acquire(&p->lk);		\
+	} while (0)
+
+#define proc_unlock(p)							\
+	do {								\
+		KERN_ASSERT(p != NULL);					\
+		if (spinlock_holding(&p->lk) == FALSE)			\
+			KERN_PANIC("Process %d tries to release "	\
+				   "unlocked lock", p->pid);		\
+		spinlock_release(&p->lk);				\
+	} while (0)
 
 /*
  * Create a new process.

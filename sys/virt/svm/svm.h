@@ -401,6 +401,8 @@ struct svm {
 	bool		single_step;
 	int		skip_intercept;
 	int		pending_vintr;
+
+	uint16_t	h_fs, h_gs, h_ldt;
 };
 
 /* defined in svm_asm.S */

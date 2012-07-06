@@ -480,6 +480,16 @@ vm_init(struct vm *vm)
 	return 0;
 }
 
+#define save_host_segment(seg, val)					\
+	__asm __volatile("mov %%" #seg ", %0" : "=r" (val) :: "memory")
+
+#define load_host_segment(seg, val)				\
+	do {							\
+		uint16_t _val = (uint16_t) val;			\
+		__asm __volatile("movl %k0, %%" #seg		\
+				 : "+r" (_val) :: "memory");	\
+	} while (0)
+
 /*
  * Start the VM.
  */
@@ -487,6 +497,8 @@ static int
 vm_run(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
+
+	KERN_DEBUG("vm_run(): vm @ 0x%08x\n", vm);
 
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
@@ -497,9 +509,17 @@ vm_run(struct vm *vm)
 
 	SVM_CLGI();
 
+	save_host_segment(fs, svm->h_fs);
+	save_host_segment(gs, svm->h_gs);
+	svm->h_ldt = rldt();
+
 	intr_local_enable();
 	svm_run(svm);
 	intr_local_disable();
+
+	load_host_segment(fs, svm->h_fs);
+	load_host_segment(gs, svm->h_gs);
+	lldt(svm->h_ldt);
 
 	if(ctrl->exit_code == SVM_EXIT_INTR) {
 		vm->exit_for_intr = TRUE;

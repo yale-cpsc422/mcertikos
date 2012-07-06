@@ -144,29 +144,6 @@ proc_sched_init(struct sched *sched)
 	return 0;
 }
 
-gcc_inline void
-proc_lock(struct proc *p)
-{
-	KERN_ASSERT(proc_inited == TRUE);
-	KERN_ASSERT(p != NULL);
-
-	spinlock_acquire(&p->lk);
-}
-
-gcc_inline void
-proc_unlock(struct proc *p)
-{
-	KERN_ASSERT(proc_inited == TRUE);
-	KERN_ASSERT(p != NULL);
-
-	if (spinlock_holding(&p->lk) == FALSE) {
-		KERN_PANIC("lock of process %d is not acquired.\n", p->pid);
-		return;
-	}
-
-	spinlock_release(&p->lk);
-}
-
 /*
  * XXX: PROC_UNINITED --> PROC_INITED
  */
@@ -533,19 +510,19 @@ proc_run(void)
 	c->pmap = p->pmap;
 	c->state = PCPU_RUNNING;
 
-	ctx = &p->ctx;
-
 	pmap_install(c->pmap);
 
 	if (p->wake_cb) {
+		KERN_DEBUG("Execute wakeup callback 0x%08x\n", p->wake_cb);
 		p->wake_cb(p);
 		p->wake_cb = NULL;
 	}
 
+	ctx = &p->ctx;
+
 	/* it's safe to release all locks here (?) */
 	proc_unlock(p);
 	spinlock_release(&sched->cur_lk);
-
 
 	PROC_DEBUG("Start runnig process %d.\n", p->pid);
 	/* ctx_dump(ctx); */
@@ -556,9 +533,10 @@ proc_run(void)
 struct proc *
 proc_cur(void)
 {
-	KERN_ASSERT(proc_inited == TRUE);
-
 	struct pcpu *c;
+
+	if (proc_inited == FALSE)
+		return NULL;
 
 	c = pcpu_cur();
 	KERN_ASSERT(c != NULL);
@@ -570,10 +548,9 @@ void
 proc_save(struct proc *p, tf_t *tf)
 {
 	KERN_ASSERT(p != NULL && tf != NULL);
+	KERN_ASSERT(spinlock_holding(&p->lk) == TRUE);
 
-	proc_lock(p);
 	p->ctx.tf = *tf;
-	proc_unlock(p);
 }
 
 struct proc *

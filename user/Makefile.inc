@@ -11,9 +11,10 @@ USER_LDFLAGS	:= $(LDFLAGS) -m elf_i386 -Ttext=0x40000000 -e _start
 include $(USER_DIR)/lib/Makefile.inc
 include $(USER_DIR)/idle/Makefile.inc
 include $(USER_DIR)/pingpong/Makefile.inc
+include $(USER_DIR)/guest/Makefile.inc
 include $(USER_DIR)/init/Makefile.inc
 
-user: lib init idle pingpong
+user: lib init idle pingpong guest
 	@echo All targets of user are done.
 
 install_user:

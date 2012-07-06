@@ -91,6 +91,13 @@ ctx_arg4(struct context *ctx)
 	return ctx->tf.regs.edx;
 }
 
+gcc_inline void
+ctx_set_retval(struct context *ctx, uint32_t rc)
+{
+	KERN_ASSERT(ctx != NULL);
+	ctx->tf.regs.eax = rc;
+}
+
 void
 ctx_dump(struct context *ctx)
 {

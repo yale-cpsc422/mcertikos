@@ -476,6 +476,8 @@ pmap_setperm(pmap_t *pmap, uintptr_t va, uint32_t size, int perm)
 void
 pmap_install(pmap_t *pmap)
 {
+	KERN_DEBUG("pmap_install: 0x%08x\n", pmap);
+
 	lcr3((uintptr_t) pmap);
 }
 

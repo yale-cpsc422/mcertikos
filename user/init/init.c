@@ -4,10 +4,12 @@
 
 extern uint8_t _binary___obj_user_idle_idle_start[];
 extern uint8_t _binary___obj_user_pingpong_pingpong_start[];
+extern uint8_t _binary___obj_user_guest_guest_start[];
 
 int
 main(int argc, char **argv)
 {
+#if 0
 	pid_t init, idle, pingpong1, pingpong2, pid;
 	struct msg msg;
 
@@ -45,6 +47,10 @@ main(int argc, char **argv)
 		printf("Send pid %d to process %d.\n", pid, msg.pid);
 		send(msg.pid, &pid, sizeof(pid_t));
 	}
+#endif
+
+	pid_t guest = spawn((uintptr_t) _binary___obj_user_guest_guest_start);
+	printf("guest (pid %d) is created.\n", guest);
 
 	return 0;
 }

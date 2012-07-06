@@ -210,6 +210,14 @@ lldt(uint16_t sel)
 	__asm __volatile("lldt %0" : : "r" (sel));
 }
 
+static gcc_inline uint16_t
+rldt(void)
+{
+	uint16_t ldt;
+	__asm __volatile("sldt %0" : "=g" (ldt));
+	return ldt;
+}
+
 static gcc_inline void
 ltr(uint16_t sel)
 {
