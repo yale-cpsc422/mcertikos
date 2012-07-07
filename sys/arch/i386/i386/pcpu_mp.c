@@ -243,7 +243,7 @@ __pcpu_mp_init(void)
 
 			if (!(lapic_ent->flags & ACPI_APIC_ENABLED)) {
 				/* KERN_DEBUG("CPU is disabled.\n"); */
-				continue;
+				break;
 			}
 
 			KERN_INFO("\tCPU%d: APIC id = %x, ",
