@@ -22,73 +22,6 @@ static pmap_t pmap_bootpdir[NPDENTRIES] gcc_aligned(PAGESIZE);
 #define PTE_NULL	((pte_t) NULL)
 
 /*
- * Check whether the physical address is in ACPI address space (ACPI data or
- * APIC NVS).
- *
- * @param addr the physical address
- *
- * @return TRUE if the address is on ACPI area; otherwise FALSE.
- */
-static bool
-is_in_acpi(uintptr_t addr)
-{
-	pmmap_t *p;
-
-	/* check ACPI data */
-	p = pmmap_acpi;
-	while (p != NULL) {
-		uintptr_t start, end;
-
-		start = ROUNDDOWN(p->start, PAGESIZE);
-		end = ROUNDUP(p->end, PAGESIZE);
-
-		if (start <= addr && addr < end)
-			return TRUE;
-
-		p = p->type_next;
-	}
-
-	/* check ACPI NVS */
-	p = pmmap_nvs;
-	while (p != NULL) {
-		uintptr_t start, end;
-
-		start = ROUNDDOWN(p->start, PAGESIZE);
-		end = ROUNDUP(p->end, PAGESIZE);
-
-		if (start <= addr && addr < end)
-			return TRUE;
-
-		p = p->type_next;
-	}
-
-	return FALSE;
-}
-
-/*
- * Check whether the physical address is in the IOAPIC address space.
- *
- * @param addr the physical address
- *
- * @return TRUE, if the address is in IOAPIC address space; otherwise, FALSE.
- */
-static bool
-is_in_ioapic(uintptr_t addr)
-{
-	int i;
-
-	for (i = 0; i < ioapic_number(); i++) {
-		uintptr_t ioapic;
-
-		ioapic = (uintptr_t) ioapic_get(i);
-		if (ROUNDDOWN(addr, PAGESIZE) == ROUNDDOWN(ioapic, PAGESIZE))
-			return TRUE;
-	}
-
-	return FALSE;
-}
-
-/*
  * Look up the virtual address in the page tables.
  *
  * @param pmap the root page table
@@ -173,38 +106,95 @@ pmap_walk(pde_t *pdir, uintptr_t la, bool write)
 static pmap_t *
 pmap_init_bootpdir(pmap_t *pmap)
 {
+	pmmap_t *e820_ent, *e820_last_ent;
 	uint32_t addr;
-	pmap_t *ret;
+	pmap_t *rc;
 
-	for (addr = 0; addr < MIN(mem_max_phys(), VM_USERLO);
-	     addr += PAGESIZE) {
-		if (is_in_acpi(addr) || is_in_ioapic(addr))
-			continue;
+	for (e820_ent = pmmap, e820_last_ent = NULL;
+	     e820_ent != NULL;
+	     e820_last_ent = e820_ent, e820_ent = e820_ent->next) {
+		uint32_t start, end, type, addr;
+		pmap_t *rc;
 
-		ret = pmap_insert(pmap, mem_phys2pi(addr), addr, PTE_W | PTE_G);
-		if (ret == NULL) {
-			pmap_free(pmap);
-			return NULL;
+		start = e820_ent->start;
+		end = e820_ent->end - 1;
+		type = e820_ent->type;
+
+		if (ROUNDDOWN(start, PAGESIZE) >= 0xf0000000)
+			break;
+
+		if (ROUNDDOWN(end, PAGESIZE) >= 0xf0000000)
+			end = 0xefffffff;
+
+		KERN_DEBUG("0x%08x ~ 0x%08x ==> ", start, end);
+
+		if (e820_last_ent == NULL) {
+			start = ROUNDDOWN(start, PAGESIZE);
+
+			if (type == MEM_RAM)
+				end = ROUNDDOWN(end, PAGESIZE) - 1;
+			else
+				end = ROUNDDOWN(end, PAGESIZE);
+		} else {
+			if (type == MEM_RAM) {
+				start = ROUNDDOWN(start, PAGESIZE);
+				if (e820_last_ent->type != MEM_RAM &&
+				    e820_last_ent->end-1 > start)
+					start += PAGESIZE;
+
+				end = ROUNDDOWN(end, PAGESIZE) - 1;
+			} else {
+				start = ROUNDDOWN(start, PAGESIZE);
+				if (e820_last_ent->type != MEM_RAM &&
+				    e820_last_ent->end-1 > start)
+					start += PAGESIZE;
+
+				end = ROUNDDOWN(end, PAGESIZE);
+			}
 		}
+
+		dprintf("0x%08x ~ 0x%08x", start, end);
+
+		for (addr = start;
+		     addr < ((type == MEM_RAM) ? MIN(end, VM_USERLO) : end);
+		     addr += PAGESIZE) {
+			/* KERN_DEBUG("map 0x%08x\n", addr); */
+
+			rc = pmap_insert(pmap, mem_phys2pi(addr), addr,
+					 PTE_W | PTE_G);
+
+			if (rc == NULL) {
+				pmap_free(pmap);
+				return NULL;
+			}
+		}
+
+		dprintf(" done.\n");
 	}
 
-	/* identically map memory hole above 0xf0000000 */
-	for (addr = 0xf0000000; addr < 0xffffffff; addr += PAGESIZE) {
-		if (is_in_acpi(addr) || is_in_ioapic(addr))
-			continue;
+	/* map the lowest 1MB address */
+	KERN_DEBUG("0x00000000 ~ 0x00100000 ==> 0x00000000 ~ 0x00100000 ");
+	for (addr = 0x00000000; addr < 0x00100000; addr += PAGESIZE)
+		pmap_insert(pmap, mem_phys2pi(addr), addr, PTE_W | PTE_G);
+	dprintf("done.\n");
 
-		ret = pmap_insert(pmap, mem_phys2pi(addr), addr, PTE_W | PTE_G);
-		if (ret == NULL) {
+	/* map the memory hole above 0xf000_0000 */
+	KERN_DEBUG("0xf0000000 ~ 0xffffffff ==> 0xf0000000 ~ 0xffffffff ");
+	for (addr = 0xf0000000; addr < 0xffffffff; addr += PAGESIZE) {
+		rc = pmap_insert(pmap, mem_phys2pi(addr), addr,
+				 PTE_W | PTE_G);
+
+		if (rc == NULL) {
 			pmap_free(pmap);
 			return NULL;
 		}
 
-		/* avoid overflow */
 		if (addr == 0xfffff000)
 			break;
 	}
+	dprintf("done.\n");
 
-	/* identically map address in IOAPIC */
+	/* map address used by IOAPIC */
 	int ioapic_no;
 	ioapic_t *ioapic;
 	for (ioapic_no = 0; ioapic_no < ioapic_number(); ioapic_no++) {
@@ -215,52 +205,17 @@ pmap_init_bootpdir(pmap_t *pmap)
 			continue;
 		}
 
-		ret = pmap_insert(pmap, mem_phys2pi((uintptr_t) ioapic),
-				  (uintptr_t) ioapic, PTE_W | PTE_G);
-		if (ret == NULL) {
-			pmap_free(pmap);
-			return NULL;
-		}
+		KERN_DEBUG("0x%08x ~ 0x%08x ==> 0x%08x ~ 0x%08x ",
+			   (uintptr_t) ioapic, (uintptr_t) ioapic + PAGESIZE,
+			   (uintptr_t) ioapic, (uintptr_t) ioapic + PAGESIZE);
+
+		pmap_insert(pmap, mem_phys2pi((uintptr_t) ioapic),
+			    (uintptr_t) ioapic, PTE_W | PTE_G);
+
+		dprintf("done.\n");
 	}
 
-	/* identically map memory in ACPI reclaimable region */
-	pmmap_t *p;
-	for (p = pmmap_acpi; p != NULL; p = p->type_next) {
-		uint32_t start_addr = ROUNDDOWN(p->start, PAGESIZE);
-		uint32_t end_addr = ROUNDUP(p->end, PAGESIZE);
-
-		for (addr = start_addr; addr < end_addr; addr += PAGESIZE) {
-			ret = pmap_insert(pmap, mem_phys2pi(addr), addr,
-					  PTE_W | PTE_G);
-			if (ret == NULL) {
-				pmap_free(pmap);
-				return NULL;
-			}
-
-			/* avoid overflow */
-			if (addr >= 0xfffff000)
-				break;
-		}
-	}
-
-	/* identically map memory in ACPI NVS region */
-	for (p = pmmap_nvs; p != NULL; p = p->type_next) {
-		uint32_t start_addr = ROUNDDOWN(p->start, PAGESIZE);
-		uint32_t end_addr = ROUNDUP(p->end, PAGESIZE);
-
-		for (addr = start_addr; addr < end_addr; addr += PAGESIZE) {
-			ret = pmap_insert(pmap, mem_phys2pi(addr), addr,
-					  PTE_W | PTE_G);
-			if (ret == NULL) {
-				pmap_free(pmap);
-				return NULL;
-			}
-
-			/* avoid overflow */
-			if (addr >= 0xfffff000)
-				break;
-		}
-	}
+	KERN_DEBUG("bootstrap page structures initialized.\n");
 
 	return pmap;
 }

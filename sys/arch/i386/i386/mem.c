@@ -159,7 +159,8 @@ pmmap_dump(void)
 		uintptr_t end = p->end;
 		uint32_t type = p->type;
 
-		KERN_INFO("\tBIOS-e820: %08x - %08x", start, end);
+		KERN_INFO("\tBIOS-e820: %08x - %08x",
+			  start, (start == end) ? end : end-1);
 		if (type == MEM_RAM)
 			KERN_INFO(" (usable)\n");
 		else if (type == MEM_RESERVED)
@@ -201,16 +202,6 @@ pmmap_init(mboot_info_t *mbi)
 			end = start + p->length_low;
 
 		type = p->type;
-
-		/* KERN_INFO("\tBIOS-e820: %08x - %08x", start, end); */
-		/* if (type == MEM_RAM) */
-		/*	KERN_INFO(" (usable)\n"); */
-		/* else if (type == MEM_RESERVED) */
-		/*	KERN_INFO(" (reserved)\n"); */
-		/* else if (type == MEM_ACPI || type == MEM_NVS) */
-		/*	KERN_INFO(" (ACPI)\n"); */
-		/* else */
-		/*	KERN_INFO(" (unknown)\n"); */
 
 		pmmap_insert(start, end, type);
 
