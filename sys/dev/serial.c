@@ -78,8 +78,6 @@ serial_putc(char c)
 	     i++)
 		delay();
 
-	outb(COM1 + COM_TX, c);
-
 	if (!serial_reformatnewline(c, COM1 + COM_TX))
 		outb(COM1 + COM_TX, c);
 }
