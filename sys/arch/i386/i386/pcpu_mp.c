@@ -194,9 +194,8 @@ __pcpu_mp_init(void)
 	acpi_rsdt_t *rsdt;
 	acpi_xsdt_t *xsdt;
 	acpi_madt_t *madt;
-	uint8_t bsp_apic_id;
 	uint32_t ap_idx = 1;
-	uint32_t cpuinfo[4];
+	bool found_bsp=FALSE;
 
 	if (mp_inited == TRUE)
 		return TRUE;
@@ -227,9 +226,6 @@ __pcpu_mp_init(void)
 
 	ncpu = 0;
 
-	cpuid(0x1, &cpuinfo[0], &cpuinfo[1], &cpuinfo[2], &cpuinfo[3]);
-	bsp_apic_id = cpuinfo[1] >> 24;
-
 	p = (uint8_t *)madt->ent;
 	e = (uint8_t *)madt + madt->length;
 	while (p < e) {
@@ -249,7 +245,10 @@ __pcpu_mp_init(void)
 			KERN_INFO("\tCPU%d: APIC id = %x, ",
 				  ncpu, lapic_ent->lapic_id);
 
-			if (lapic_ent->lapic_id == bsp_apic_id) {
+			//according to acpi p.138, section 5.2.12.1, 
+			//"platform firmware should list the boot processor as the first processor entry in the MADT"
+			if (!found_bsp) {
+				found_bsp=TRUE;	
 				KERN_INFO("BSP\n");
 				__pcpu_mp_init_cpu
 					(0, lapic_ent->lapic_id, TRUE);
