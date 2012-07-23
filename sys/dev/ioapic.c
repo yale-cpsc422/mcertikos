@@ -69,7 +69,7 @@ ioapic_init(void)
 
 		if (id != ioapicid[i])
 			KERN_WARN("ioapicinit: id %d != ioapicid %d\n",
-			     id, ioapicid[i]);
+				  id, ioapicid[i]);
 
 		int maxintr = (ioapic_read(ioapic, IOAPIC_VER) >> 16) & 0xFF;
 
@@ -97,10 +97,8 @@ ioapic_enable(int irq, lapicid_t apicid)
 	for (i = 0; i < ioapic_num; i++) {
 		ioapic_t *ioapic = ioapics[i];
 		int maxintr = (ioapic_read(ioapic, IOAPIC_VER) >> 16) & 0xFF;
-		
 
 		if (irq >= gsi[i] && irq <= gsi[i] + maxintr) {
-			KERN_DEBUG("ioapic_enable:irq:%d @ioapic:%x\n", irq,ioapic);
 			ioapic_write(ioapic,
 				     IOAPIC_TABLE + 2 * (irq - gsi[i]),
 				     T_IRQ0 + irq);

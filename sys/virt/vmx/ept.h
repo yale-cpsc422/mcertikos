@@ -36,10 +36,17 @@
 
 #ifdef _KERN_
 
+#include <sys/mem.h>
+
 #define	EPT_PWLEVELS	4		/* page walk levels */
 #define	EPTP(pml4)	((pml4) | (EPT_PWLEVELS - 1) << 3 | PAT_WRITE_BACK)
 
-int	ept_init(void);
+int       ept_init(void);
+int       ept_create_mappings(uint64_t *, size_t);
+void      ept_invalidate_mappings(uint64_t);
+size_t    ept_copy_to_guest(uint64_t *pml4ept,
+			    uintptr_t dest, uintptr_t src, size_t);
+uintptr_t ept_gpa_to_hpa(uint64_t *pml4ept, uintptr_t gpa);
 
 #endif /* _KERN_ */
 

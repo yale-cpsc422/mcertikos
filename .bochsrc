@@ -1,5 +1,5 @@
 cpu: count=2, ips=10000000
-cpuid: vmx=1
+cpuid: mmx=1, pcid=1, sep=1, x86_64=1, vmx=2
 
 megs: 1024
 
@@ -29,4 +29,4 @@ mouse: enabled=0
 
 # romimage: file=misc/bios.bin
 
-com1: enabled=1, mode=file, dev=log
+com1: enabled=1, mode=file, dev=bochs.log

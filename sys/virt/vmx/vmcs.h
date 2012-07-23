@@ -55,8 +55,19 @@ struct msr_entry {
 	uint64_t	val;
 };
 
-void vmcs_write(uint32_t encoding, uint64_t val);
+int      vmcs_write(uint32_t encoding, uint64_t val);
 uint64_t vmcs_read(uint32_t encoding);
+
+int      vmcs_set_defaults(struct vmcs *,
+			   uint64_t *pml4ept,       uint32_t pinbased_ctls,
+			   uint32_t procbased_ctls, uint32_t procbased_ctls2,
+			   uint32_t exit_ctls,      uint32_t entry_ctls,
+			   char *msr_bitmap,        uint16_t vpid,
+			   uint64_t cr0_ones_mask,  uint64_t cr0_zeros_mask,
+			   uint64_t cr4_ones_mask,  uint64_t cr4_zeros_mask,
+			   uintptr_t host_rip);
+
+
 
 /* int vmcs_set_msr_save(struct vmcs *vmcs, u_long g_area, u_int g_count); */
 /* int	vmcs_set_defaults(struct vmcs *vmcs, u_long host_rip, u_long host_rsp, */
@@ -258,6 +269,12 @@ uint64_t vmcs_read(uint32_t encoding);
  * VM instruction error numbers
  */
 #define	VMRESUME_WITH_NON_LAUNCHED_VMCS	5
+
+/* VMCS_EXIT_REASON fields */
+#define EXIT_REASON_ENTRY_FAIL		(1 << 31)
+#define EXIT_REASON_FROM_ROOT		(1 << 29)
+#define EXIT_REASON_PENDING_MFT		(1 << 28)
+#define EXIT_REASON_MASK		0x0000ffff
 
 /*
  * VMCS exit reasons

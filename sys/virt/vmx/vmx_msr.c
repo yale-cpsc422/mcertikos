@@ -107,19 +107,17 @@ vmx_set_ctlreg(int ctl_reg, int true_ctl_reg, uint32_t ones_mask,
 
 		KERN_ASSERT(one_allowed || zero_allowed);
 
-		if (one_allowed)
-			KERN_DEBUG("1-setting of bit %d is allowed.\n", i);
-
-		if (zero_allowed)
-			KERN_DEBUG("0-setting of bit %d is allowed.\n", i);
-
 		if (zero_allowed && !one_allowed) {		/* b(i),c(i) */
-			if (ones_mask & (1 << i))
+			if (ones_mask & (1 << i)) {
+				KERN_DEBUG("Cannot set bit %d to zero.\n", i);
 				return 1;
+			}
 			*retval &= ~(1 << i);
 		} else if (one_allowed && !zero_allowed) {	/* b(i),c(i) */
-			if (zeros_mask & (1 << i))
+			if (zeros_mask & (1 << i)) {
+				KERN_DEBUG("Cannot set bit %d to one.\n", i);
 				return 2;
+			}
 			*retval |= 1 << i;
 		} else {
 			if (zeros_mask & (1 << i))	/* b(ii),c(ii) */

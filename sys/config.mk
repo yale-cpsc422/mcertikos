@@ -163,3 +163,8 @@ endif
 ifneq "$(strip $(DEBUG_AHCI) $(DEBUG_ALL))" ""
 KERN_CFLAGS	+= -DDEBUG_AHCI
 endif
+
+# If set, enable debugging the extended page table
+ifneq "$(strip $(DEBUG_EPT) $(DEBUG_ALL) $(DEBUG_VIRT) $(DEBUG_VMX))" ""
+KERN_CFLAGS	+= -DDEBUG_EPT
+endif

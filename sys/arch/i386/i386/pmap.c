@@ -321,7 +321,7 @@ pmap_insert(pmap_t *pmap, pageinfo_t *pi, uintptr_t va, int perm)
 		return NULL;
 
 	if (*pte & PTE_P) {
-		KERN_WARN("Virtual address %x is already mapped.\n", va);
+		/* KERN_DEBUG("Virtual address %x is already mapped.\n", va); */
 		return NULL;
 	}
 

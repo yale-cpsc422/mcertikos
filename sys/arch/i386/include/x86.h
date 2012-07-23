@@ -69,6 +69,13 @@
 # define MSR_EFER_LMSLE	(1<<13)
 # define MSR_EFER_FFXSR	(1<<14)
 
+/* Other MSRs */
+#define MSR_IA32_SYSENTER_CS		0x174
+#define MSR_IA32_SYSENTER_ESP		0x175
+#define MSR_IA32_SYSENTER_EIP		0x176
+#define MSR_PAT				0x277
+#define MSR_IA32_PERF_GLOBAL_CTRL	0x38f
+
 /* CPUID */
 /* 0x0000_0001 ECX */
 #define CPUID_FEATURE_F16C		(1<<29)
@@ -180,6 +187,54 @@ read_esp(void)
 	uint32_t esp;
 	__asm __volatile("movl %%esp,%0" : "=rm" (esp));
 	return esp;
+}
+
+static gcc_inline uint32_t
+read_eax(void)
+{
+	uint32_t val;
+	__asm __volatile("movl %%eax,%0" : "=rm" (val));
+	return val;
+}
+
+static gcc_inline uint32_t
+read_ebx(void)
+{
+	uint32_t val;
+	__asm __volatile("movl %%ebx,%0" : "=rm" (val));
+	return val;
+}
+
+static gcc_inline uint32_t
+read_ecx(void)
+{
+	uint32_t val;
+	__asm __volatile("movl %%ecx,%0" : "=rm" (val));
+	return val;
+}
+
+static gcc_inline uint32_t
+read_edx(void)
+{
+	uint32_t val;
+	__asm __volatile("movl %%edx,%0" : "=rm" (val));
+	return val;
+}
+
+static gcc_inline uint32_t
+read_esi(void)
+{
+	uint32_t val;
+	__asm __volatile("movl %%esi,%0" : "=rm" (val));
+	return val;
+}
+
+static gcc_inline uint32_t
+read_edi(void)
+{
+	uint32_t val;
+	__asm __volatile("movl %%edi,%0" : "=rm" (val));
+	return val;
 }
 
 static gcc_inline uintptr_t

@@ -66,14 +66,12 @@ load_elf(pmap_t *pmap_s, uintptr_t exe_s, pmap_t *pmap_d)
 {
 	KERN_ASSERT(pmap_s != NULL);
 	KERN_ASSERT(pmap_d != NULL);
-	KERN_DEBUG("pmap_s:%x,pmap_d:%x \n",pmap_s,pmap_d);
-	
+
 	//get the physical address of binary entry
 	uintptr_t exe_k=pmap_la2pa(pmap_s,exe_s);
 	elfhdr *eh_s = (elfhdr *) exe_s;
 	elfhdr *eh_k = (elfhdr *) exe_k;
 	KERN_ASSERT(eh_k->e_magic == ELF_MAGIC);
-	KERN_DEBUG("eh:%x, \n",eh_k);
 
 	// Load each program segment
 	proghdr *ph = (proghdr *) pmap_la2pa(pmap_s,(uintptr_t) ( exe_s + eh_k->e_phoff));
@@ -91,10 +89,7 @@ load_elf(pmap_t *pmap_s, uintptr_t exe_s, pmap_t *pmap_d)
 		if (ph->p_flags & ELF_PROG_FLAG_WRITE)
 			perm |= PTE_W;
 
-		KERN_DEBUG("ph:%x,zva:%x,eva:%x\n ", ph,zva,eva);
-
 		for(; va < eva; va += PAGESIZE, fa += PAGESIZE) {
-			KERN_DEBUG("va:%x,fa:%x,zva:%x\n",va,fa,zva);
 			pmap_reserve(pmap_d, va, perm);
 			if (va < ROUNDDOWN(zva, PAGESIZE)) // complete page
 				pmap_copy(pmap_d, va,

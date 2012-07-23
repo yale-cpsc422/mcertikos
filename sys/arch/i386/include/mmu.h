@@ -273,5 +273,12 @@ struct gatedesc {
 #define PFE_WR		0x2	/* Page fault caused by a write */
 #define PFE_U		0x4	/* Page fault occured while in user mode */
 
+/* PAT */
+#define	PAT_UNCACHEABLE		0x00
+#define	PAT_WRITE_COMBINING	0x01
+#define	PAT_WRITE_THROUGH	0x04
+#define	PAT_WRITE_PROTECTED	0x05
+#define	PAT_WRITE_BACK		0x06
+#define	PAT_UNCACHED		0x07
 
 #endif /* !_MACHINE_MMU_H_ */

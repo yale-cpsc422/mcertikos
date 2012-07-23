@@ -143,7 +143,6 @@ __pcpu_init_cpu(uint32_t idx, __pcpu_t **_c, uintptr_t kstack_hi)
 	// This "pseudo-descriptor" is needed only by the LIDT instruction,
         // to specify both the size and address of th IDT at once.
         // Load the IDT into this processor's IDT register.
-	KERN_DEBUG("idt_pd@%x\n", &idt_pd);
         asm volatile("lidt %0" : : "m" (idt_pd));
 
 

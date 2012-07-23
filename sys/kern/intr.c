@@ -21,13 +21,13 @@ intr_init(void)
 	using_apic = (edx & CPUID_FEATURE_APIC) ? TRUE : FALSE;
 
 	if (using_apic == TRUE) {
-		KERN_INFO(" Is MP, using (APIC) ");
+		KERN_INFO(" (APIC) ");
 
 		if (pcpu_onboot()){
-			ioapic_init(); 
+			ioapic_init();
 		}
 		lapic_init();
-	} 
+	}
 
 	intr_inited = TRUE;
 }

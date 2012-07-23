@@ -44,6 +44,30 @@
 
 #include "vmcs.h"
 
+#define SEG_TYPE_MASK		0xf
+#define SEG_ATTR_S		(1 << 4)
+#define SEG_DPL_SHIFT		(1 << 5)
+#define SEG_DPL_MASK		0x60
+#define SEG_ATTR_P		(1 << 7)
+#define SEG_ATTR_AVL		(1 << 12)
+#define SEG_ATTR_L		(1 << 13)
+#define SEG_ATTR_D		(1 << 14)
+#define SEG_ATTR_B		(1 << 14)
+#define SEG_ATTR_G		(1 << 15)
+#define SEG_ATTR_UNUSABLE	(1 << 16)
+
+#define SEG_ATTR_A		(1 << 0)
+#define SEG_ATTR_W		(1 << 1)	/* for data segments */
+#define SEG_ATTR_R		(1 << 1)	/* for code segments */
+#define SEG_ATTR_E		(1 << 2)	/* for data segments */
+#define SEG_ATTR_C		(1 << 2)	/* for code segments */
+
+#define SEG_TYPE_CODE		0xa
+#define SEG_TYPE_DATA		0x2
+#define SEG_TYPE_LDT		0x2
+#define SEG_TYPE_TSS_BUSY	0x3
+#define SEG_TYPE_TSS		0xb
+
 /* CPUID 0x1, ECX */
 #define CPUID_FEATURE_VMX	(1<<5)		/* support VMX */
 
@@ -83,7 +107,7 @@ vmxon(char *region)
 
 	addr = (uintptr_t) region | 0ULL;
 
-	__asm __volatile("vmxon %0" : : "m" (addr) : "memory");
+	__asm __volatile("vmxon %0" : : "m" (addr) : "cc", "memory");
 
 	VMX_SET_ERROR_CODE(error);
 	return (error);
@@ -97,7 +121,7 @@ vmclear(struct vmcs *vmcs)
 
 	addr = (uintptr_t) vmcs | 0ULL;
 
-	__asm __volatile("vmclear %0" : : "m" (addr) : "memory");
+	__asm __volatile("vmclear %0" : : "m" (addr) : "cc", "memory");
 
 	VMX_SET_ERROR_CODE(error);
 	if (error)
@@ -111,11 +135,9 @@ vmxoff(void)
 }
 
 static gcc_inline void
-vmptrst(struct vmcs *vmcs)
+vmptrst(uintptr_t *addr)
 {
-	uint64_t addr = (uintptr_t) vmcs | 0ULL;
-
-	__asm __volatile("vmptrst %0" : : "m" (addr) : "memory");
+	__asm __volatile("vmptrst %0" : : "m" (*addr) : "cc", "memory");
 }
 
 static gcc_inline void
@@ -126,7 +148,8 @@ vmptrld(struct vmcs *vmcs)
 
 	addr = (uintptr_t) vmcs | 0ULL;
 
-	__asm __volatile("vmptrld %0" : : "m" (addr) : "memory");
+	__asm __volatile("vmptrld %0" : : "m" (*(uint64_t *) &addr)
+			 : "cc", "memory");
 
 	VMX_SET_ERROR_CODE(error);
 	if (error)
@@ -138,7 +161,8 @@ vmwrite(uint32_t r, uint32_t val)
 {
 	int error;
 
-	__asm __volatile("vmwrite %0, %1" : : "r" (val), "r" (r) : "memory");
+	__asm __volatile("vmwrite %0, %1" : : "r" (val), "r" (r)
+			 : "cc", "memory");
 
 	VMX_SET_ERROR_CODE(error);
 
@@ -146,11 +170,12 @@ vmwrite(uint32_t r, uint32_t val)
 }
 
 static gcc_inline int
-vmread(uint32_t r, uint32_t addr)
+vmread(uint32_t r, uint32_t *addr)
 {
 	int error;
 
-	__asm __volatile("vmread %0, %1" : : "r" (r), "m" (addr) : "memory");
+	__asm __volatile("vmread %0, %1" : : "r" (r), "m" (*addr)
+			 : "cc", "memory");
 
 	VMX_SET_ERROR_CODE(error);
 
@@ -172,7 +197,8 @@ invvpid(uint32_t type, uint16_t vpid, uint64_t la)
 
 	KERN_ASSERT(sizeof(desc) == 16);
 
-	__asm __volatile("invvpid %0, %1" :: "m" (desc), "r" (type) : "memory");
+	__asm __volatile("invvpid %0, %1" :: "m" (desc), "r" (type)
+			 : "cc", "memory");
 
 	VMX_SET_ERROR_CODE(error);
 	if (error)
@@ -193,7 +219,8 @@ invept(uint32_t type, uint64_t eptp)
 
 	KERN_ASSERT(sizeof(desc) == 16);
 
-	__asm __volatile("invept %0, %1" :: "m" (desc), "r" (type) : "memory");
+	__asm __volatile("invept %0, %1" :: "m" (desc), "r" (type)
+			 : "cc", "memory");
 
 	VMX_SET_ERROR_CODE(error);
 	if (error)

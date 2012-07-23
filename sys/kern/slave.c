@@ -232,7 +232,17 @@ wait_to_start(void)
 	KERN_ASSERT(c->stat == PCPU_WAIT);
 	spinlock_release(&c->lk);
 
-	KERN_DEBUG("slave %d# waiting to start\n", pcpu_cur_idx());
+#if 0
+	if (pcpu_cur_idx() == 1) {
+		c->stat = PCPU_RUNNING;
+		struct vm *vm = vmm_init_vm();
+		if (vm == NULL)
+			KERN_PANIC("Cannot initialize a VM.\n");
+		vmm_run_vm(vm);
+	}
+#endif
+
+	/* KERN_DEBUG("slave %d# waiting to start\n", pcpu_cur_idx()); */
 	/* busy waiting for a process */
 	while (1) {
 		spinlock_acquire(&c->lk);
@@ -245,7 +255,7 @@ wait_to_start(void)
 	proc = c->proc;
 	KERN_ASSERT(proc != 0);
 
-	KERN_DEBUG("slave %d# starting process %d\n", pcpu_cur_idx(), proc);
+	/* KERN_DEBUG("slave %d# starting process %d\n", pcpu_cur_idx(), proc); */
 
 	/* start the process */
 	proc_start(proc);
@@ -256,11 +266,11 @@ slave_kernel()
 {
 	int mycpu;
 	mycpu = pcpu_cur_idx();
-	KERN_DEBUG("slave %d# current cpu is : %d\n",mycpu, mycpu);
+	/* KERN_DEBUG("slave %d# current cpu is : %d\n",mycpu, mycpu); */
 	intr_enable(IRQ_TIMER, mycpu);
 	context_register_handler(T_IRQ0+IRQ_TIMER,&stimer);
 	context_register_handler(T_CLIENT_SYSCALL,&sl_syscall);
 	context_register_handler(T_PGFLT,&spgflt);
-	KERN_DEBUG("slave %d# I am alive on cpu number %d!!!\n", mycpu, mycpu);
+	/* KERN_DEBUG("slave %d# I am alive on cpu number %d!!!\n", mycpu, mycpu); */
 	wait_to_start();
 }
