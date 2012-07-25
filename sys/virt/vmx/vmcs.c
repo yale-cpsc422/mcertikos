@@ -151,7 +151,8 @@ vmcs_write(uint32_t encoding, uint64_t val)
 int
 vmcs_set_defaults(struct vmcs *vmcs, uint64_t *pml4ept, uint32_t pinbased_ctls,
 		  uint32_t procbased_ctls, uint32_t procbased_ctls2,
-		  uint32_t exit_ctls, uint32_t entry_ctls, char *msr_bitmap,
+		  uint32_t exit_ctls, uint32_t entry_ctls,
+		  char *msr_bitmap, char *io_bitmap_a, char *io_bitmap_b,
 		  uint16_t vpid, uint64_t cr0_ones_mask, uint64_t cr0_zeros_mask,
 		  uint64_t cr4_ones_mask, uint64_t cr4_zeros_mask,
 		  uintptr_t host_rip)
@@ -353,6 +354,12 @@ vmcs_set_defaults(struct vmcs *vmcs, uint64_t *pml4ept, uint32_t pinbased_ctls,
 	if ((error = vmcs_write(VMCS_CR4_SHADOW, cr4_ones_mask)))
 		goto done;
 
+	/* I/O bitmap */
+	if ((error = vmcs_write(VMCS_IO_BITMAP_A, (uintptr_t) io_bitmap_a)))
+		goto done;
+	if ((error = vmcs_write(VMCS_IO_BITMAP_B, (uintptr_t) io_bitmap_b)))
+		goto done;
+
 	/* others */
 	if ((error = vmcs_write(VMCS_GUEST_ACTIVITY, 0)))
 		goto done;
@@ -362,7 +369,6 @@ vmcs_set_defaults(struct vmcs *vmcs, uint64_t *pml4ept, uint32_t pinbased_ctls,
 		goto done;
 	if ((error = vmcs_write(VMCS_ENTRY_INTR_INFO, 0)))
 		goto done;
-
 
  done:
 	if (error)

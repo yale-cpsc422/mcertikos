@@ -42,7 +42,8 @@
 #define	EPTP(pml4)	((pml4) | (EPT_PWLEVELS - 1) << 3 | PAT_WRITE_BACK)
 
 int       ept_init(void);
-int       ept_create_mappings(uint64_t *, size_t);
+int       ept_create_mappings(uint64_t *pml4ept, size_t);
+int       ept_add_mapping(uint64_t *pml4ept, uintptr_t gpa, uintptr_t hpa);
 void      ept_invalidate_mappings(uint64_t);
 size_t    ept_copy_to_guest(uint64_t *pml4ept,
 			    uintptr_t dest, uintptr_t src, size_t);

@@ -33,7 +33,6 @@ trap(tf_t *tf)
 
 	asm volatile("cld" ::: "cc");
 
-
 	if (tf->trapno < T_IRQ0)
 		trap_dump(tf);
 

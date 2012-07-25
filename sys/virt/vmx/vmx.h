@@ -13,7 +13,7 @@ struct vmx {
 	 * VMCS does not store following registers for guest, so we have
 	 * to do that by ourself.
 	 */
-	uint64_t	g_rax, g_rbx, g_rcx, g_rdx, g_rsi, g_rdi, g_rbp;
+	uint64_t	g_rax, g_rbx, g_rcx, g_rdx, g_rsi, g_rdi, g_rbp, g_rip;
 	uint32_t	g_cr2;
 	uint32_t	g_dr0, g_dr1, g_dr2, g_dr3, g_dr6;
 	uint32_t	enter_tsc[2], exit_tsc[2];
@@ -22,7 +22,11 @@ struct vmx {
 
 	uint16_t	vpid;
 	uint64_t	*pml4ept;
-	char		*msr_bitmap, *ioio_bitmap;
+	char		*msr_bitmap, *io_bitmap;
+
+	uint32_t	exit_reason;
+	uint64_t	exit_qualification;
+	int32_t		pending_intr;
 
 	int		launched;
 	int		failed;

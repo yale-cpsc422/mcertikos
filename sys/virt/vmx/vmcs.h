@@ -62,7 +62,9 @@ int      vmcs_set_defaults(struct vmcs *,
 			   uint64_t *pml4ept,       uint32_t pinbased_ctls,
 			   uint32_t procbased_ctls, uint32_t procbased_ctls2,
 			   uint32_t exit_ctls,      uint32_t entry_ctls,
-			   char *msr_bitmap,        uint16_t vpid,
+			   char *msr_bitmap,
+			   char *io_bitmap_a,       char *io_bitmap_b,
+			   uint16_t vpid,
 			   uint64_t cr0_ones_mask,  uint64_t cr0_zeros_mask,
 			   uint64_t cr4_ones_mask,  uint64_t cr4_zeros_mask,
 			   uintptr_t host_rip);
@@ -338,6 +340,7 @@ int      vmcs_set_defaults(struct vmcs *,
 #define	VMCS_INTERRUPTION_INFO_VALID	(1U << 31)
 #define	VMCS_INTERRUPTION_INFO_HW_INTR	(0 << 8)
 #define	VMCS_INTERRUPTION_INFO_NMI	(2 << 8)
+#define VMCS_INTERRUPTION_INFO_HW_EXCPT	(3 << 8)
 
 /*
  * VMCS Guest interruptibility field
@@ -351,6 +354,21 @@ int      vmcs_set_defaults(struct vmcs *,
  * Exit qualification for EXIT_REASON_INVAL_VMCS
  */
 #define	EXIT_QUAL_NMI_WHILE_STI_BLOCKING	3
+
+/*
+ * Exit qualification for I/O instructions
+ */
+#define EXIT_QUAL_IO_SIZE(q)	((q) & 7)
+# define EXIT_QUAL_IO_ONE_BYTE	0
+# define EXIT_QUAL_IO_TWO_BYTE	1
+# define EXIT_QUAL_IO_FOUR_BYTE	3
+#define EXIT_QUAL_IO_DIR(q)	(((q) >> 3) & 1)
+# define EXIT_QUAL_IO_OUT	0
+# define EXIT_QUAL_IO_IN	1
+#define EXIT_QUAL_IO_STR(q)	(((q) >> 4) & 1)
+#define EXIT_QUAL_IO_REP(q)	(((q) >> 5) & 1)
+#define EXIT_QUAL_IO_IMM(q)	(((q) >> 6) & 1)
+#define EXIT_QUAL_IO_PORT(q)	((uint16_t) (((q) >> 16) & 0xffff))
 
 #endif /* _KERN_ */
 

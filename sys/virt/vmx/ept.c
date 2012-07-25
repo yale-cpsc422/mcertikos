@@ -117,6 +117,8 @@ ept_free_mappings(uint64_t *pml4ept)
 	ept_free_mappings_helper(pml4ept, 0);
 }
 
+#if 0
+
 static int
 ept_create_ptable(uint64_t *ptable, uintptr_t start, size_t len)
 {
@@ -209,6 +211,8 @@ ept_create_pdpt(uint64_t *pdpt, uintptr_t start, size_t len)
 	return 0;
 }
 
+#endif
+
 int
 ept_init(void)
 {
@@ -253,6 +257,8 @@ ept_invalidate_mappings(uint64_t pml4ept)
 	invept(INVEPT_TYPE_SINGLE_CONTEXT, EPTP(pml4ept));
 }
 
+#if 0
+
 int
 ept_create_mappings(uint64_t *pml4ept, size_t mem_size)
 {
@@ -272,6 +278,108 @@ ept_create_mappings(uint64_t *pml4ept, size_t mem_size)
 
 	if (ept_create_pdpt(pdpt, 0, mem_size)) {
 		ept_free_mappings(pml4ept);
+		return 1;
+	}
+
+	return 0;
+}
+
+#endif
+
+int
+ept_create_mappings(uint64_t *pml4ept, size_t mem_size)
+{
+	KERN_ASSERT(pml4ept != NULL);
+	KERN_ASSERT(mem_size != 0);
+
+	pageinfo_t *pi;
+	uintptr_t gpa;
+
+	for (gpa = 0; gpa < mem_size; gpa += PAGESIZE) {
+		if (gpa >= 0xa0000 && gpa <= 0xbffff) {
+			if (ept_add_mapping(pml4ept, gpa, gpa))
+				return 1;
+		} else {
+			if ((pi = mem_page_alloc()) == NULL)
+				return 2;
+			if (ept_add_mapping(pml4ept, gpa, mem_pi2phys(pi)))
+				return 1;
+		}
+	}
+
+	return 0;
+}
+
+int
+ept_add_mapping(uint64_t *pml4ept, uintptr_t gpa, uintptr_t hpa)
+{
+	KERN_ASSERT(pml4ept != NULL);
+
+	uint64_t *pml4e, *pdpte, *pde, *pte;
+	uint64_t *pdpt, *pdt, *ptab;
+	pageinfo_t *pi;
+
+	pml4e = &pml4ept[EPT_PML4_INDEX(gpa)];
+	if (!(*pml4e & (EPT_PG_RD | EPT_PG_WR | EPT_PG_EX))) {
+		/* EPT_DEBUG("Create PDPT for gpa 0x%08x.", gpa); */
+
+		pi = mem_page_alloc();
+		if (pi == NULL)
+			return 1;
+
+		pdpt = (uint64_t *) mem_pi2phys(pi);
+		memset(pdpt, 0, PAGESIZE);
+
+		*pml4e = ((uintptr_t) pdpt & EPT_ADDR_MASK) |
+			EPT_PG_EX | EPT_PG_WR | EPT_PG_RD;
+	} else {
+		pdpt = (uint64_t *)(uintptr_t) (*pml4e & EPT_ADDR_MASK);
+	}
+
+	pdpte = &pdpt[EPT_PDPT_INDEX(gpa)];
+	if (!(*pdpte & (EPT_PG_RD | EPT_PG_WR | EPT_PG_EX))) {
+		/* EPT_DEBUG("Create PDT for gpa 0x%08x.\n", gpa); */
+
+		pi = mem_page_alloc();
+		if (pi == NULL)
+			return 1;
+
+		pdt = (uint64_t *) mem_pi2phys(pi);
+		memset(pdt, 0, PAGESIZE);
+
+		*pdpte = ((uintptr_t) pdt & EPT_ADDR_MASK) |
+			EPT_PG_EX | EPT_PG_WR | EPT_PG_RD;
+	} else {
+		pdt = (uint64_t *)(uintptr_t) (*pdpte & EPT_ADDR_MASK);
+	}
+
+	pde = &pdt[EPT_PDIR_INDEX(gpa)];
+	if (!(*pde & (EPT_PG_RD | EPT_PG_WR | EPT_PG_EX))) {
+		/* EPT_DEBUG("Create page table for gpa 0x%08x.\n", gpa); */
+
+		pi = mem_page_alloc();
+		if (pi == NULL)
+			return 1;
+
+		ptab = (uint64_t *) mem_pi2phys(pi);
+		memset(ptab, 0, PAGESIZE);
+
+		*pde = ((uintptr_t) ptab & EPT_ADDR_MASK) |
+			EPT_PG_EX | EPT_PG_WR | EPT_PG_RD;
+	} else {
+		ptab = (uint64_t *)(uintptr_t) (*pde & EPT_ADDR_MASK);
+	}
+
+	pte = &ptab[EPT_PTAB_INDEX(gpa)];
+	if (!(*pte & (EPT_PG_RD | EPT_PG_WR | EPT_PG_EX))) {
+		*pte = ((uintptr_t) hpa & EPT_ADDR_MASK) |
+			EPT_PG_IGNORE_PAT | EPT_PG_EX | EPT_PG_WR | EPT_PG_RD;
+
+		/* EPT_DEBUG("Add mapping: gpa 0x%08x ==> hpa 0x%08x.\n", */
+		/* 	  gpa, hpa); */
+	} else {
+		EPT_DEBUG("gap 0x%08x is already mapped to hpa 0x%08x.\n",
+			  gpa, (uintptr_t) pte & EPT_ADDR_MASK);
 		return 1;
 	}
 
