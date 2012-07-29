@@ -53,6 +53,48 @@ static int ahci_command(struct ahci_controller *,
 			void *buffer,
 			size_t bsize);
 
+static gcc_inline uint8_t
+ahci_readb(uintptr_t dev, uintptr_t offset)
+{
+	volatile uint8_t val = *(volatile uint8_t *) (dev + offset);
+	return (uint8_t) val;
+}
+
+static gcc_inline uint16_t
+ahci_readw(uintptr_t dev, uintptr_t offset)
+{
+	volatile uint16_t val = *(volatile uint16_t *) (dev + offset);
+	return (uint16_t) val;
+}
+
+static gcc_inline uint32_t
+ahci_readl(uintptr_t dev, uintptr_t offset)
+{
+	volatile uint32_t val = *(volatile uint32_t *) (dev + offset);
+	return (uint32_t) val;
+}
+
+static gcc_inline void
+ahci_writeb(uintptr_t dev, uintptr_t offset, uint8_t val)
+{
+	uintptr_t addr = dev + offset;
+	*(volatile uint8_t *) addr = val;
+}
+
+static gcc_inline void
+ahci_writew(uintptr_t dev, uintptr_t offset, uint16_t val)
+{
+	uintptr_t addr = dev + offset;
+	*(volatile uint16_t *) addr = val;
+}
+
+static gcc_inline void
+ahci_writel(uintptr_t dev, uintptr_t offset, uint32_t val)
+{
+	uintptr_t addr = dev + offset;
+	*(volatile uint32_t *) addr = val;
+}
+
 static void
 ahci_print_info(struct ahci_controller *sc)
 {
@@ -147,20 +189,20 @@ ahci_reset(struct ahci_controller *sc)
 	int i;
 
 	/* enable AHCI mode */
-	AHCI_WRITE(sc->hba, AHCI_GHC, AHCI_GHC_AE, uint32_t);
+	ahci_writel(sc->hba, AHCI_GHC, AHCI_GHC_AE);
 
 	/* reset controller */
-	AHCI_WRITE(sc->hba, AHCI_GHC, AHCI_GHC_AE | AHCI_GHC_HR, uint32_t);
+	ahci_writel(sc->hba, AHCI_GHC, AHCI_GHC_AE | AHCI_GHC_HR);
 	/* wait up to 1s for reset to complete */
 	for (i = 0; i < 1000; i++) {
 		delay(1000);
-		if ((AHCI_READ(sc->hba, AHCI_GHC, uint32_t) & AHCI_GHC_HR) == 0)
+		if ((ahci_readl(sc->hba, AHCI_GHC) & AHCI_GHC_HR) == 0)
 			break;
 	}
-	if ((AHCI_READ(sc->hba, AHCI_GHC, uint32_t) & AHCI_GHC_HR))
+	if ((ahci_readl(sc->hba, AHCI_GHC) & AHCI_GHC_HR))
 		return 1;
 	/* enable ahci mode */
-	AHCI_WRITE(sc->hba, AHCI_GHC, AHCI_GHC_AE, uint32_t);
+	ahci_writel(sc->hba, AHCI_GHC, AHCI_GHC_AE);
 	return 0;
 }
 
@@ -179,11 +221,11 @@ ahci_init(struct ahci_controller *sc)
 	}
 
 	/* setup sc */
-	sc->cap1 = AHCI_READ(sc->hba, AHCI_CAP, uint32_t);
+	sc->cap1 = ahci_readl(sc->hba, AHCI_CAP);
 	sc->nchannels = (sc->cap1 & AHCI_CAP_NPMASK) + 1;
 	sc->ncmds = ((sc->cap1 & AHCI_CAP_NCS) >> 8) + 1;
-	sc->cap2 = AHCI_READ(sc->hba, AHCI_CAP2, uint32_t);
-	sc->revision = AHCI_READ(sc->hba, AHCI_VS, uint32_t);
+	sc->cap2 = ahci_readl(sc->hba, AHCI_CAP2);
+	sc->revision = ahci_readl(sc->hba, AHCI_VS);
 	ahci_print_info(sc);
 
 	return 0;
@@ -200,7 +242,7 @@ ahci_reset_port(struct ahci_controller *sc, int port)
 	KERN_ASSERT(sc != NULL);
 	KERN_ASSERT(0 <= port && port < sc->nchannels);
 
-	cmd = AHCI_READ(sc->hba, AHCI_P_CMD(port), uint32_t);
+	cmd = ahci_readl(sc->hba, AHCI_P_CMD(port));
 	if (!(cmd & (AHCI_P_CMD_ST | AHCI_P_CMD_CR |
 		     AHCI_P_CMD_FR | AHCI_P_CMD_FRE)))
 		/* AHCI port is already ready */
@@ -208,11 +250,11 @@ ahci_reset_port(struct ahci_controller *sc, int port)
 
 	/* reset AHCI port */
 	cmd &= ~(AHCI_P_CMD_ST | AHCI_P_CMD_FRE);
-	AHCI_WRITE(sc->hba, AHCI_P_CMD(port), cmd, uint32_t);
+	ahci_writel(sc->hba, AHCI_P_CMD(port), cmd);
 
 	/* wait for AHCI port ready */
 	delay(500);
-	cmd = AHCI_READ(sc->hba, AHCI_P_CMD(port), uint32_t);
+	cmd = ahci_readl(sc->hba, AHCI_P_CMD(port));
 	if ((cmd & (AHCI_P_CMD_ST | AHCI_P_CMD_CR |
 		    AHCI_P_CMD_FR | AHCI_P_CMD_FRE))) {
 		AHCI_DEBUG("failed to rest port %d (status=%x).\n", port, cmd);
@@ -220,10 +262,10 @@ ahci_reset_port(struct ahci_controller *sc, int port)
 	}
 
 	/* disable AHCI port interrupt */
-	AHCI_WRITE(sc->hba, AHCI_P_IE(port), 0, uint32_t);
-	is = AHCI_READ(sc->hba, AHCI_P_IS(port), uint32_t);
+	ahci_writel(sc->hba, AHCI_P_IE(port), 0);
+	is = ahci_readl(sc->hba, AHCI_P_IS(port));
 	if (is)
-		AHCI_WRITE(sc->hba, AHCI_P_IS(port), is, uint32_t);
+		ahci_writel(sc->hba, AHCI_P_IS(port), is);
 
 	return 0;
 }
@@ -255,25 +297,25 @@ ahci_alloc_port(struct ahci_controller *sc, int port)
 
 	is_64bit = (sizeof(uintptr_t) == 8) && (sc->cap1 & AHCI_CAP_64BIT);
 
-	AHCI_WRITE(sc->hba, AHCI_P_CLB(port), clb & 0xffffffff, uint32_t);
-	AHCI_WRITE(sc->hba, AHCI_P_FB(port), fb & 0xffffffff, uint32_t);
+	ahci_writel(sc->hba, AHCI_P_CLB(port), clb & 0xffffffff);
+	ahci_writel(sc->hba, AHCI_P_FB(port), fb & 0xffffffff);
 
 	if (is_64bit) {
-		AHCI_WRITE(sc->hba, AHCI_P_CLBU(port),
-			   ((uint64_t) clb >> 32) & 0xffffffff, uint32_t);
-		AHCI_WRITE(sc->hba, AHCI_P_FBU(port),
-			   ((uint64_t) fb >> 32) & 0xffffffff, uint32_t);
+		ahci_writel(sc->hba, AHCI_P_CLBU(port),
+			    ((uint64_t) clb >> 32) & 0xffffffff);
+		ahci_writel(sc->hba, AHCI_P_FBU(port),
+			    ((uint64_t) fb >> 32) & 0xffffffff);
 	} else {
-		AHCI_WRITE(sc->hba, AHCI_P_CLBU(port), 0, uint32_t);
-		AHCI_WRITE(sc->hba, AHCI_P_FBU(port), 0, uint32_t);
+		ahci_writel(sc->hba, AHCI_P_CLBU(port), 0);
+		ahci_writel(sc->hba, AHCI_P_FBU(port), 0);
 	}
 
 	AHCI_DEBUG("port %d, clb %08x%08x, fb %08x%08x.\n",
 		   port,
-		   AHCI_READ(sc->hba, AHCI_P_CLBU(port), uint32_t),
-		   AHCI_READ(sc->hba, AHCI_P_CLB(port), uint32_t),
-		   AHCI_READ(sc->hba, AHCI_P_FBU(port), uint32_t),
-		   AHCI_READ(sc->hba, AHCI_P_FB(port), uint32_t));
+		   ahci_readl(sc->hba, AHCI_P_CLBU(port)),
+		   ahci_readl(sc->hba, AHCI_P_CLB(port)),
+		   ahci_readl(sc->hba, AHCI_P_FBU(port)),
+		   ahci_readl(sc->hba, AHCI_P_FB(port)));
 
 	/* allocate memory for command slots */
 	if ((pi = mem_pages_alloc(AHCI_CMDTBL_SIZE * sc->ncmds)) == NULL) {
@@ -314,14 +356,14 @@ ahci_spinup_port(struct ahci_controller *sc, int port)
 	KERN_ASSERT(0 <= port && port < sc->nchannels);
 
 	/* spin up */
-	cmd = AHCI_READ(sc->hba, AHCI_P_CMD(port), uint32_t);
+	cmd = ahci_readl(sc->hba, AHCI_P_CMD(port));
 	cmd |= AHCI_P_CMD_ICC_AC | AHCI_P_CMD_FRE |
 		AHCI_P_CMD_POD | AHCI_P_CMD_SUD;
-	AHCI_WRITE(sc->hba, AHCI_P_CMD(port), cmd, uint32_t);
+	ahci_writel(sc->hba, AHCI_P_CMD(port), cmd);
 
 	/* wait up to 1 sec */
 	delay(1000);
-	ssts = AHCI_READ(sc->hba, AHCI_P_SSTS(port), uint32_t);
+	ssts = ahci_readl(sc->hba, AHCI_P_SSTS(port));
 	det = (ssts & AHCI_P_SSTS_DET_MASK) >> AHCI_P_SSTS_DET_SHIFT;
 	if (det != AHCI_P_SSTS_DET_PRESENT) {
 		AHCI_DEBUG("failed to spin-up, port %d, SSTS.DET %x.\n", port, det);
@@ -329,13 +371,13 @@ ahci_spinup_port(struct ahci_controller *sc, int port)
 	}
 
 	/* clear errors */
-	serr = AHCI_READ(sc->hba, AHCI_P_SERR(port), uint32_t);
-	AHCI_WRITE(sc->hba, AHCI_P_SERR(port), serr, uint32_t);
+	serr = ahci_readl(sc->hba, AHCI_P_SERR(port));
+	ahci_writel(sc->hba, AHCI_P_SERR(port), serr);
 
 	/* wait for 31s */
 	for (i = 0; i < 31; i++) {
 		delay(1000);
-		tfd = AHCI_READ(sc->hba, AHCI_P_TFD(port), uint32_t);
+		tfd = ahci_readl(sc->hba, AHCI_P_TFD(port));
 		sts = (tfd & AHCI_P_TFD_ST) >> AHCI_P_TFD_ST_SHIFT;
 		if (!(sts & (AHCI_P_TFD_ST_BSY |
 			     AHCI_P_TFD_ST_DRQ | AHCI_P_TFD_ST_ERR)))
@@ -361,9 +403,9 @@ ahci_detect_drive(struct ahci_controller *sc, int port)
 	channel = &sc->channels[port];
 
 	/* start the port */
-	cmd = AHCI_READ(sc->hba, AHCI_P_CMD(port), uint32_t);
+	cmd = ahci_readl(sc->hba, AHCI_P_CMD(port));
 	cmd |= AHCI_P_CMD_ST;
-	AHCI_WRITE(sc->hba, AHCI_P_CMD(port), cmd, uint32_t);
+	ahci_writel(sc->hba, AHCI_P_CMD(port), cmd);
 
 	channel->atapi = 0;
 	switch (channel->sig) {
@@ -436,7 +478,7 @@ ahci_command(struct ahci_controller *sc, int port, int write, int atapi,
 	int i;
 	uint32_t ci, is, status, cmd, serr, tfd, sctl;
 #ifdef DEBUG_AHCI
-	uint32_t error;
+	uint32_t error = 0;
 #endif
 	struct ahci_channel *channel;
 	struct ahci_cmd_header *cmdh;
@@ -467,21 +509,21 @@ ahci_command(struct ahci_controller *sc, int port, int write, int atapi,
 	cmdh->cmdh_prdbc = 0;
 
 	/* clear interrupts */
-	is = AHCI_READ(sc->hba, AHCI_P_IS(port), uint32_t);
+	is = ahci_readl(sc->hba, AHCI_P_IS(port));
 	if (is)
-		AHCI_WRITE(sc->hba, AHCI_P_IS(port), is, uint32_t);
+		ahci_writel(sc->hba, AHCI_P_IS(port), is);
 
 	/* issue the command */
-	AHCI_WRITE(sc->hba, AHCI_P_SACT(port), 1, uint32_t);
-	AHCI_WRITE(sc->hba, AHCI_P_CI(port), 1, uint32_t);
+	ahci_writel(sc->hba, AHCI_P_SACT(port), 1);
+	ahci_writel(sc->hba, AHCI_P_CI(port), 1);
 	AHCI_DEBUG("port %d, issue command %x.\n", port, fis->command);
 
 	/* wait up to 31 sec */
 	for (i = 0; i < 3100; i++) {
-		is = AHCI_READ(sc->hba, AHCI_P_IS(port), uint32_t);
+		is = ahci_readl(sc->hba, AHCI_P_IS(port));
 
 		if (is) {
-			AHCI_WRITE(sc->hba, AHCI_P_IS(port), is, uint32_t);
+			ahci_writel(sc->hba, AHCI_P_IS(port), is);
 
 			if (is & AHCI_P_IX_PSS) {
 				status = rfis->rfis_psfis[2];
@@ -525,7 +567,7 @@ ahci_command(struct ahci_controller *sc, int port, int write, int atapi,
 		AHCI_DEBUG("port %d, status %x, OK.\n", port, status);
 
 		do {
-			ci = AHCI_READ(sc->hba, AHCI_P_CI(port), uint32_t);
+			ci = ahci_readl(sc->hba, AHCI_P_CI(port));
 			smp_wmb();
 		} while (ci & 0x1);
 
@@ -537,41 +579,41 @@ ahci_command(struct ahci_controller *sc, int port, int write, int atapi,
 		/* error recovery (sec 6.2.2.1, AHCI v1.3) */
 
 		/* clear PxCMD.ST to reset PxCI */
-		cmd = AHCI_READ(sc->hba, AHCI_P_CMD(port), uint32_t);
+		cmd = ahci_readl(sc->hba, AHCI_P_CMD(port));
 		cmd &= ~AHCI_P_CMD_ST;
-		AHCI_WRITE(sc->hba, AHCI_P_CMD(port), cmd, uint32_t);
+		ahci_writel(sc->hba, AHCI_P_CMD(port), cmd);
 
 		/* wait for PxCMD.CR to clear to 0 */
 		while (1) {
-			cmd = AHCI_READ(sc->hba, AHCI_P_CMD(port), uint32_t);
+			cmd = ahci_readl(sc->hba, AHCI_P_CMD(port));
 			if (!(cmd & AHCI_P_CMD_CR))
 				break;
 		}
 
 		/* clear PxSERR */
-		serr = AHCI_READ(sc->hba, AHCI_P_SERR(port), uint32_t);
+		serr = ahci_readl(sc->hba, AHCI_P_SERR(port));
 		if (serr)
-			AHCI_WRITE(sc->hba, AHCI_P_SERR(port), serr, uint32_t);
+			ahci_writel(sc->hba, AHCI_P_SERR(port), serr);
 
 		/* clear PxIS */
-		is = AHCI_READ(sc->hba, AHCI_P_IS(port), uint32_t);
+		is = ahci_readl(sc->hba, AHCI_P_IS(port));
 		if (is)
-			AHCI_WRITE(sc->hba, AHCI_P_IS(port), is, uint32_t);
+			ahci_writel(sc->hba, AHCI_P_IS(port), is);
 
 		/* issue COMRESET if necessary */
-		tfd = AHCI_READ(sc->hba, AHCI_P_TFD(port), uint32_t);
+		tfd = ahci_readl(sc->hba, AHCI_P_TFD(port));
 		if (tfd & (AHCI_P_TFD_ST_BSY | AHCI_P_TFD_ST_DRQ)) {
-			sctl = AHCI_READ(sc->hba, AHCI_P_SCTL(port), uint32_t);
-			AHCI_WRITE(sc->hba, AHCI_P_SCTL(port),
-				   sctl | AHCI_P_SCTL_COMRESET, uint32_t);
+			sctl = ahci_readl(sc->hba, AHCI_P_SCTL(port));
+			ahci_writel(sc->hba, AHCI_P_SCTL(port),
+				    sctl | AHCI_P_SCTL_COMRESET);
 			delay(1);
-			AHCI_WRITE(sc->hba, AHCI_P_SCTL(port), sctl, uint32_t);
+			ahci_writel(sc->hba, AHCI_P_SCTL(port), sctl);
 		}
 
 		/* set PxCMD.ST=1 */
-		cmd = AHCI_READ(sc->hba, AHCI_P_CMD(port), uint32_t);
+		cmd = ahci_readl(sc->hba, AHCI_P_CMD(port));
 		cmd |= AHCI_P_CMD_ST;
-		AHCI_WRITE(sc->hba, AHCI_P_CMD(port), cmd, uint32_t);
+		ahci_writel(sc->hba, AHCI_P_CMD(port), cmd);
 
 		return 1;
 	}
@@ -595,11 +637,11 @@ ahci_init_port(struct ahci_controller *sc, int port)
 	}
 
 	/* detect drive */
-	serr = AHCI_READ(sc->hba, AHCI_P_SERR(port), uint32_t);
+	serr = ahci_readl(sc->hba, AHCI_P_SERR(port));
 	if (serr)
-		AHCI_WRITE(sc->hba, AHCI_P_SERR(port), serr, uint32_t);
-	sctl = AHCI_READ(sc->hba, AHCI_P_SCTL(port), uint32_t);
-	ssts = AHCI_READ(sc->hba, AHCI_P_SSTS(port), uint32_t);
+		ahci_writel(sc->hba, AHCI_P_SERR(port), serr);
+	sctl = ahci_readl(sc->hba, AHCI_P_SCTL(port));
+	ssts = ahci_readl(sc->hba, AHCI_P_SSTS(port));
 	ipm = (ssts & AHCI_P_SSTS_IPM_MASK) >> AHCI_P_SSTS_IPM_SHIFT;
 	det = (ssts & AHCI_P_SSTS_DET_MASK) >> AHCI_P_SSTS_DET_SHIFT;
 	if ((sctl & AHCI_P_SCTL_DET_MASK) ||
@@ -617,9 +659,13 @@ ahci_init_port(struct ahci_controller *sc, int port)
 	}
 
 	/* FIS receive enable */
-	cmd = AHCI_READ(sc->hba, AHCI_P_CMD(port), uint32_t);
+	cmd = ahci_readl(sc->hba, AHCI_P_CMD(port));
 	cmd |= AHCI_P_CMD_FRE;
-	AHCI_WRITE(sc->hba, AHCI_P_CMD(port), cmd, uint32_t);
+	ahci_writel(sc->hba, AHCI_P_CMD(port), cmd);
+
+	serr = ahci_readl(sc->hba, AHCI_P_SERR(port));
+	if (serr)
+		ahci_writel(sc->hba, AHCI_P_SERR(port), serr);
 
 	/* spin-up port */
 	if (ahci_spinup_port(sc, port)) {
@@ -629,7 +675,7 @@ ahci_init_port(struct ahci_controller *sc, int port)
 		KERN_INFO("AHCI: port %d link up.\n", port);
 
 	/* detect drive */
-	sig = AHCI_READ(sc->hba, AHCI_P_SIG(port), uint32_t);
+	sig = ahci_readl(sc->hba, AHCI_P_SIG(port));
 	sc->channels[port].sig = sig;
 	ahci_detect_drive(sc, port);
 
@@ -676,7 +722,7 @@ ahci_pci_attach(struct pci_func *f)
 	}
 
 	/* Initialize AHCI ports */
-	pi = AHCI_READ(sc->hba, AHCI_PI, uint32_t);
+	pi = ahci_readl(sc->hba, AHCI_PI);
 	for (port = 0; port < MIN(AHCI_MAX_PORTS, sc->nchannels); port++) {
 		if ((pi & (1 << port)) == 0) /* port is not present */
 			continue;

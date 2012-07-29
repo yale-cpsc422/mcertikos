@@ -337,32 +337,32 @@ struct ahci_r_fis {
 #define		AHCI_P_SERR_ERR_I	(1<<0)
 #define		AHCI_P_SERR_CLEAR	0x07ff0f03
 
-#define AHCI_P_SACT(p)	(0x134 + AHCI_P_OFFSET(p)) /* Serial ATA active */
-	/* one bit per tag/command slot */
+/* Serial ATA active: one bit per tag/command slot */
+#define AHCI_P_SACT(p)	(0x134 + AHCI_P_OFFSET(p))
 
-#define AHCI_P_CI(p)	(0x138 + AHCI_P_OFFSET(p)) /* Command issued */
-	/* one bit per tag/command slot */
+/* Command issued: one bit per tag/command slot */
+#define AHCI_P_CI(p)	(0x138 + AHCI_P_OFFSET(p))
 
-#define AHCI_P_FNTF(p)	(0x13c + AHCI_P_OFFSET(p)) /* SNotification */
-	/* one bit per port */
+/* SNotification: one bit per port */
+#define AHCI_P_FNTF(p)	(0x13c + AHCI_P_OFFSET(p))
 
-#define AHCI_READ(dev, offset, type)				\
-	({							\
-		uintptr_t _dev = (uintptr_t) dev;		\
-		uintptr_t _offset = (uintptr_t) offset;		\
-		uintptr_t _reg = _dev + _offset;		\
-		AHCI_DEBUG("read %08x\n", _reg, _offset);	\
-		*(type *) _reg;					\
-	})
+/* #define AHCI_READ(dev, offset, type)				\ */
+/* 	({							\ */
+/* 		uintptr_t _dev = (uintptr_t) dev;		\ */
+/* 		uintptr_t _offset = (uintptr_t) offset;		\ */
+/* 		uintptr_t _reg = _dev + _offset;		\ */
+/* 		AHCI_DEBUG("read %08x\n", _reg, _offset);	\ */
+/* 		*(type *) _reg;					\ */
+/* 	}) */
 
-#define AHCI_WRITE(dev, offset, val, type)				\
-	({								\
-		uintptr_t _dev = (uintptr_t) dev;			\
-		uintptr_t _offset = (uintptr_t) offset;			\
-		uintptr_t _reg = _dev + _offset;			\
-		AHCI_DEBUG("write %08x, val %08x\n", _reg, val);	\
-		*(volatile type *) _reg = (type) val;			\
-	})
+/* #define AHCI_WRITE(dev, offset, val, type)				\ */
+/* 	({								\ */
+/* 		uintptr_t _dev = (uintptr_t) dev;			\ */
+/* 		uintptr_t _offset = (uintptr_t) offset;			\ */
+/* 		uintptr_t _reg = _dev + _offset;			\ */
+/* 		AHCI_DEBUG("write %08x, val %08x\n", _reg, val);	\ */
+/* 		*(volatile type *) _reg = (type) val;			\ */
+/* 	}) */
 
 /* ATA command */
 #define ATA_READ_DMA48			0x25	/* read DMA 48bit LBA */
