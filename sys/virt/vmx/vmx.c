@@ -63,16 +63,14 @@ static struct {
 	/* PROCBASED_NMI_WINDOW_EXITING */
 
 #define PROCBASED_CTLS_ONE_SETTING		\
-	(PROCBASED_TSC_OFFSET		|	\
-	 PROCBASED_IO_BITMAPS		|	\
+	(PROCBASED_IO_BITMAPS		|	\
 	 PROCBASED_MSR_BITMAPS		|	\
 	 PROCBASED_CTLS_WINDOW_SETTING	|	\
 	 PROCBASED_SECONDARY_CONTROLS	|	\
+	 PROCBASED_RDTSC_EXITING	|	\
 	 /* unsupported instructions */		\
 	 PROCBASED_HLT_EXITING		|	\
-	 PROCBASED_INVLPG_EXITING	|	\
 	 PROCBASED_MWAIT_EXITING	|	\
-	 PROCBASED_RDPMC_EXITING	|	\
 	 PROCBASED_MONITOR_EXITING)
 #define PROCBASED_CTLS_ZERO_SETTING		\
 	(PROCBASED_CR3_LOAD_EXITING	|	\
@@ -87,12 +85,12 @@ static struct {
 	(PROCBASED2_ENABLE_EPT		|	\
 	 PROCBASED2_ENABLE_VPID		|	\
 	 PROCBASED2_UNRESTRICTED_GUEST	|	\
+	 PROCBASED2_ENABLE_RDTSCP	|	\
 	 /* unsupported instructions */		\
 	 PROCBASED2_WBINVD_EXITING)
 #define PROCBASED_CTLS2_ZERO_SETTING		\
 	(PROCBASED2_VIRTUALIZE_APIC	|	\
 	 PROCBASED2_DESC_TABLE_EXITING	|	\
-	 PROCBASED2_ENABLE_RDTSCP	|	\
 	 PROCBASED2_VIRTUALIZE_X2APIC	|	\
 	 PROCBASED2_PAUSE_LOOP_EXITING	|	\
 	 PROCBASED2_RDRAND_EXITING	|	\
@@ -870,11 +868,7 @@ vmx_handle_exception(struct vm *vm)
 {
 	KERN_ASSERT(vm);
 
-	struct vmx *vmx;
 	uint32_t intr_info, vec_info;
-
-	vmx  = (struct vmx *) vm->cookie;
-	KERN_ASSERT(vmx != NULL);
 
 	intr_info = vmx_interruption_info();
 	vec_info = vmx_vector_info();
@@ -1052,6 +1046,10 @@ static int
 vmx_handle_invalid_instruction(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
+
+	KERN_DEBUG("Invalid OP: exit_reason 0x%08x.\n",
+		   ((struct vmx *) vm->cookie)->exit_reason);
+
 	vmx_inject_event(VMCS_INTERRUPTION_INFO_HW_EXCPT, T_ILLOP, 0, 0);
 	return 1;
 }
@@ -1172,6 +1170,68 @@ vmx_intr_assist(struct vm *vm)
 		   procbased_ctls & ~PROCBASED_INT_WINDOW_EXITING);
 }
 
+#ifdef DEBUG_VMEXIT
+
+static char *exit_reason_string[60] = {
+	[EXIT_REASON_EXCEPTION] = "Exception/NMI",
+	[EXIT_REASON_EXT_INTR] = "ExtINTR",
+	[EXIT_REASON_TRIPLE_FAULT] = "Triple Fault",
+	[EXIT_REASON_INIT] = "INIT Signal",
+	[EXIT_REASON_SIPI] = "SIPI Signal",
+	[EXIT_REASON_IO_SMI] = "SMI",
+	[EXIT_REASON_SMI] = "Other SMI",
+	[EXIT_REASON_INTR_WINDOW] = "INTR Window",
+	[EXIT_REASON_NMI_WINDOW] = "NMI Window",
+	[EXIT_REASON_TASK_SWITCH] = "Task Switch",
+	[EXIT_REASON_CPUID] = "CPUID",
+	[EXIT_REASON_GETSEC] = "GETSEC",
+	[EXIT_REASON_HLT] = "HLT",
+	[EXIT_REASON_INVD] = "INVD",
+	[EXIT_REASON_INVLPG] = "INVLPG",
+	[EXIT_REASON_RDPMC] = "RDPMC",
+	[EXIT_REASON_RDTSC] = "RDTSC",
+	[EXIT_REASON_RSM] = "RSM",
+	[EXIT_REASON_VMCALL] = "VMCALL",
+	[EXIT_REASON_VMCLEAR] = "VMCLEAR",
+	[EXIT_REASON_VMLAUNCH] = "VMLAUNCH",
+	[EXIT_REASON_VMPTRLD] = "VMPTRLD",
+	[EXIT_REASON_VMPTRST] = "VMPTRST",
+	[EXIT_REASON_VMRESUME] = "VMRESUME",
+	[EXIT_REASON_VMWRITE] = "VMWRITE",
+	[EXIT_REASON_VMREAD] = "VMREAD",
+	[EXIT_REASON_VMXON] = "VMXON",
+	[EXIT_REASON_VMXOFF] = "VMXOFF",
+	[EXIT_REASON_CR_ACCESS] = "CR Access",
+	[EXIT_REASON_DR_ACCESS] = "DR Access",
+	[EXIT_REASON_INOUT] = "I/O",
+	[EXIT_REASON_RDMSR] = "RDMSR",
+	[EXIT_REASON_WRMSR] = "WRMSR",
+	[EXIT_REASON_INVAL_VMCS] = "Invalid Guest State",
+	[EXIT_REASON_INVAL_MSR] = "Invalid Guest MSRs",
+	[EXIT_REASON_MWAIT] = "MWAIT",
+	[EXIT_REASON_MTF] = "Monitor Trap Flag",
+	[EXIT_REASON_MONITOR] = "MONITOR",
+	[EXIT_REASON_PAUSE] = "PAUSE",
+	[EXIT_REASON_MCE] = "MCE",
+	[EXIT_REASON_TPR] = "TPR",
+	[EXIT_REASON_APIC] = "APIC",
+	[EXIT_REASON_GDTR_IDTR] = "GDTR/IDTR",
+	[EXIT_REASON_LDTR_TR] = "LDTR/TR",
+	[EXIT_REASON_EPT_FAULT] = "EPT Voilation",
+	[EXIT_REASON_EPT_MISCONFIG] = "EPT Misconfiguration",
+	[EXIT_REASON_INVEPT] = "INVEPT",
+	[EXIT_REASON_RDTSCP] = "RDTSCP",
+	[EXIT_REASON_VMX_PREEMPT] = "VMX-preemption Timer",
+	[EXIT_REASON_INVVPID] = "INVVPID",
+	[EXIT_REASON_WBINVD] = "WBINVD",
+	[EXIT_REASON_XSETBV] = "XSETBV",
+	[EXIT_REASON_RDRAND] = "RDRAND",
+	[EXIT_REASON_INVPCID] = "INVPCID",
+	[EXIT_REASON_VMFUNC] = "VMFUNC",
+};
+
+#endif
+
 static int
 vmx_handle_exit(struct vm *vm)
 {
@@ -1179,12 +1239,6 @@ vmx_handle_exit(struct vm *vm)
 
 	struct vmx *vmx;
 	int handled;
-
-#ifdef DEBUG_VMEXIT
-	KERN_DEBUG("VMEXIT at 0x%08x:0x%08x\n",
-		   (uintptr_t) vmcs_read(VMCS_GUEST_CS_BASE),
-		   (uintptr_t) vmcs_read(VMCS_GUEST_RIP));
-#endif
 
 	vmx = (struct vmx *) vm->cookie;
 	KERN_ASSERT(vmx != NULL);
@@ -1197,8 +1251,9 @@ vmx_handle_exit(struct vm *vm)
 	}
 
 #ifdef DEBUG_VMEXIT
-	KERN_DEBUG("Exit reason 0x%08x, qualification 0x%llx, eip 0x%08x\n",
-		   vmx->exit_reason, vmx->exit_qualification,
+	KERN_DEBUG("Exit reason %s, qualification 0x%llx, eip 0x%08x\n",
+		   exit_reason_string[vmx->exit_reason & EXIT_REASON_MASK],
+		   vmx->exit_qualification,
 		   (uintptr_t) vmcs_read(VMCS_GUEST_RIP));
 #endif
 
@@ -1231,11 +1286,13 @@ vmx_handle_exit(struct vm *vm)
 	case EXIT_REASON_VMWRITE:
 	case EXIT_REASON_VMXOFF:
 	case EXIT_REASON_VMXON:
-	case EXIT_REASON_RDTSCP:
+	case EXIT_REASON_MWAIT:
+	case EXIT_REASON_MONITOR:
 		handled = vmx_handle_invalid_instruction(vm);
 		break;
 
 	case EXIT_REASON_RDTSC:
+	case EXIT_REASON_RDTSCP:
 		handled = vmx_handle_rdtsc(vm);
 		break;
 
@@ -1321,6 +1378,7 @@ vmx_gpa_2_hpa(struct vm *vm, uintptr_t gpa)
 }
 
 struct vmm_ops vmm_ops_intel = {
+	.signature		= INTEL_VMX,
 	.vmm_init		= vmx_init,
 	.vm_init		= vmx_init_vm,
 	.vm_run			= vmx_run_vm,

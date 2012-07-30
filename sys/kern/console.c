@@ -25,9 +25,7 @@ cons_init()
 
 	cons.kbd_enabled = FALSE;
 
-#ifdef SERIAL_DEBUG
 	serial_init();
-#endif
 	video_init();
 	kbd_init();
 }

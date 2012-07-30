@@ -17,11 +17,19 @@
 
 #define KERN_PANIC(...)		debug_panic(__FILE__, __LINE__, __VA_ARGS__)
 
+#ifdef DEBUG_MSG
+
 #define KERN_ASSERT(x)							\
 	do {								\
 		if (!(x))						\
 			KERN_PANIC("Kernel assertion failed: %s\n", #x); \
 	} while(0)
+
+#else
+
+#define KERN_ASSERT(c)
+
+#endif
 
 #define getchar()	cons_getc()
 

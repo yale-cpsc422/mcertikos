@@ -333,6 +333,9 @@ int      vmcs_set_defaults(struct vmcs *,
 #define EXIT_REASON_INVVPID		53
 #define EXIT_REASON_WBINVD		54
 #define EXIT_REASON_XSETBV		55
+#define EXIT_REASON_RDRAND		57
+#define EXIT_REASON_INVPCID		58
+#define EXIT_REASON_VMFUNC		59
 
 /*
  * VMCS interrupt information fields

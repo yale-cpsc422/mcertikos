@@ -144,7 +144,7 @@ vmx_set_ctlreg(int ctl_reg, int true_ctl_reg, uint32_t ones_mask,
 void
 msr_bitmap_initialize(char *bitmap)
 {
-	memset(bitmap, 0xff, PAGE_SIZE);
+	memset(bitmap, 0x0, PAGE_SIZE);
 }
 
 int

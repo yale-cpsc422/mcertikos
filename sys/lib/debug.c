@@ -33,7 +33,6 @@ debug_normal(const char *file, int line, const char *fmt, ...)
 void
 debug_panic(const char *file, int line, const char *fmt,...)
 {
-#ifdef DEBUG_MSG
 	va_list ap;
 
 	va_start(ap, fmt);
@@ -43,7 +42,6 @@ debug_panic(const char *file, int line, const char *fmt,...)
 		cprintf("<P> %s:%d: ", file, line);
 	vcprintf(fmt, ap);
 	va_end(ap);
-#endif
 	intr_local_disable();
 	halt();
 }

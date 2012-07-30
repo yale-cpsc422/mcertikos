@@ -19,7 +19,7 @@
 #include <dev/pci.h>
 
 // Flag to do "lspci" at bootup
-static int pci_show_devs = 0;
+static int pci_show_devs = 1;
 static int pci_show_addrs = 0;
 
 // PCI "configuration mechanism one"
@@ -37,7 +37,7 @@ struct pci_driver {
 
 static struct pci_driver pci_attach_class[] = {
 	{ PCI_CLASS_BRIDGE, PCI_SUBCLASS_BRIDGE_PCI, &pci_bridge_attach },
-	/* { PCI_CLASS_MASS_STORAGE, PCI_SUBCLASS_MASS_STORAGE_SATA, &ahci_pci_attach}, */
+	{ PCI_CLASS_MASS_STORAGE, PCI_SUBCLASS_MASS_STORAGE_SATA, &ahci_pci_attach},
 	{ 0, 0, 0 },
 };
 

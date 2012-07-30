@@ -715,6 +715,7 @@ svm_translate_gp2hp(struct vm *vm, uintptr_t gp)
 }
 
 struct vmm_ops vmm_ops_amd = {
+	.signature		= AMD_SVM,
 	.vmm_init		= svm_init,
 	.vm_init		= vm_init,
 	.vm_run			= vm_run,

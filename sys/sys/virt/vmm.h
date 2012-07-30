@@ -80,6 +80,11 @@ struct vm {
 	bool		used;
 };
 
+typedef enum vmm_sig {
+	AMD_SVM,
+	INTEL_VMX
+} vmm_sig_t;
+
 /*
  * Arch-dependent VMM initialization function.
  *
@@ -163,6 +168,8 @@ typedef uintptr_t (*vm_translate_gp2hp_func_t)(struct vm *, uintptr_t);
  * Each machine-dependent HVM implementation should define such a structure.
  */
 struct vmm_ops {
+	vmm_sig_t			signature;
+
 	vmm_init_func_t			vmm_init;
 
 	vm_init_func_t			vm_init;

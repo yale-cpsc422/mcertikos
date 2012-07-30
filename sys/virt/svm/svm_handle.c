@@ -396,14 +396,15 @@ svm_handle_npf(struct vm *vm)
 	struct vmcb_control_area *ctrl = &vmcb->control;
 	struct vmcb_save_area *save = &vmcb->save;
 
+#ifdef DEBUG_GUEST_NPF
 	uint64_t errcode = ctrl->exit_info_1;
+#endif
 	uintptr_t fault_addr = (uintptr_t) PGADDR(ctrl->exit_info_2);
 
 #ifdef DEBUG_GUEST_NPF
 	dprintf("(va=%x, err=%llx).\n", fault_addr, errcode);
-#endif
-
 	KERN_ASSERT(errcode & SVM_EXITINFO1_NFP_U);
+#endif
 
 	/*
 	 * When BIOS starts, CS.base = 0xffff_0000 and IP = 0xfff0, so it will

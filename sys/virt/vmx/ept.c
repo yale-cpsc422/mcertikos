@@ -117,102 +117,6 @@ ept_free_mappings(uint64_t *pml4ept)
 	ept_free_mappings_helper(pml4ept, 0);
 }
 
-#if 0
-
-static int
-ept_create_ptable(uint64_t *ptable, uintptr_t start, size_t len)
-{
-	int i;
-	pageinfo_t *pi;
-	uintptr_t addr, page;
-
-	EPT_DEBUG("PTABEPT @ 0x%08x\n", ptable);
-
-	KERN_ASSERT(ptable != NULL);
-
-	EPT_DEBUG("Create EPT page table for 0x%08x ~ 0x%08x\n",
-		  start, start + len);
-
-	for (i = 0, addr = start; addr < start + len; i++, addr += 4096) {
-		if ((pi = mem_page_alloc()) == NULL)
-			return 1;
-
-		page = mem_pi2phys(pi);
-		ptable[i] = (page & EPT_ADDR_MASK) |
-			EPT_PG_IGNORE_PAT | EPT_PG_EX | EPT_PG_WR | EPT_PG_RD;
-
-		/* EPT_DEBUG("\thpa 0x%08x ~ 0x%08x\n", page,  page+PAGESIZE-1); */
-	}
-
-	return 0;
-}
-
-static int
-ept_create_pdt(uint64_t *pdt, uintptr_t start, size_t len)
-{
-	int i;
-	pageinfo_t *pi;
-	uint64_t *ptable;
-	uintptr_t addr;
-	size_t len2;
-
-	EPT_DEBUG("PDTEPT @ 0x%08x\n", pdt);
-
-	KERN_ASSERT(pdt != NULL);
-
-	/* EPT_DEBUG("Create EPT PDT for 0x%08x ~ 0x%08x\n", start, start + len); */
-
-	for (i = 0, addr = start; addr < start + len; i++, addr += 0x200000) {
-		if ((pi = mem_page_alloc()) == NULL)
-			return 1;
-
-		ptable = (uint64_t *) mem_pi2phys(pi);
-		pdt[i] = ((uintptr_t) ptable & EPT_ADDR_MASK) |
-			EPT_PG_EX | EPT_PG_WR | EPT_PG_RD;
-
-		len2 = (len - addr > 0x200000) ? 0x200000 : len - addr;
-
-		if (ept_create_ptable(ptable, addr, len2))
-			return 1;
-	}
-
-	return 0;
-}
-
-static int
-ept_create_pdpt(uint64_t *pdpt, uintptr_t start, size_t len)
-{
-	int i;
-	pageinfo_t *pi;
-	uint64_t *pdt;
-	uintptr_t addr;
-	size_t len2;
-
-	EPT_DEBUG("PDPTEPT @ 0x%08x\n", pdpt);
-
-	KERN_ASSERT(pdpt != NULL);
-
-	EPT_DEBUG("Create EPT PDPT for 0x%08x ~ 0x%08x\n", start, start+len);
-
-	for (i = 0, addr = start; addr < start + len; i++, addr += 0x40000000) {
-		if ((pi = mem_page_alloc()) == NULL)
-			return 1;
-
-		pdt = (uint64_t *) mem_pi2phys(pi);
-		pdpt[i] = ((uintptr_t) pdt & EPT_ADDR_MASK) |
-			EPT_PG_EX | EPT_PG_WR | EPT_PG_RD;
-
-		len2 = (len - addr > 0x40000000) ? 0x40000000 : (len - addr);
-
-		if (ept_create_pdt(pdt, addr, len2))
-			return 1;
-	}
-
-	return 0;
-}
-
-#endif
-
 int
 ept_init(void)
 {
@@ -256,35 +160,6 @@ ept_invalidate_mappings(uint64_t pml4ept)
 {
 	invept(INVEPT_TYPE_SINGLE_CONTEXT, EPTP(pml4ept));
 }
-
-#if 0
-
-int
-ept_create_mappings(uint64_t *pml4ept, size_t mem_size)
-{
-	pageinfo_t *pi;
-	uint64_t *pdpt;
-
-	EPT_DEBUG("PML4EPT @ 0x%08x\n", pml4ept);
-
-	KERN_ASSERT(pml4ept != NULL);
-
-	if ((pi = mem_page_alloc()) == NULL)
-		return 1;
-
-	pdpt = (uint64_t *) mem_pi2phys(pi);
-	pml4ept[0] = ((uintptr_t) pdpt & EPT_ADDR_MASK) |
-		EPT_PG_EX | EPT_PG_WR | EPT_PG_RD;
-
-	if (ept_create_pdpt(pdpt, 0, mem_size)) {
-		ept_free_mappings(pml4ept);
-		return 1;
-	}
-
-	return 0;
-}
-
-#endif
 
 int
 ept_create_mappings(uint64_t *pml4ept, size_t mem_size)

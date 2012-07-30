@@ -46,12 +46,15 @@ vmm_post_time_update(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
 
-	/* update guest TSC */
-	uint64_t enter_host_tsc = vmm_ops->vm_enter_tsc(vm);
-	uint64_t exit_host_tsc = vmm_ops->vm_exit_tsc(vm);
-	KERN_ASSERT(enter_host_tsc < exit_host_tsc);
-	uint64_t delta = exit_host_tsc - enter_host_tsc;
-	uint64_t incr = (delta * VM_TSC_FREQ) / (tsc_per_ms * 1000);
+	uint64_t entry_host_tsc, exit_host_tsc, delta, incr;
+
+	entry_host_tsc = vmm_ops->vm_enter_tsc(vm);
+	exit_host_tsc = vmm_ops->vm_exit_tsc(vm);
+
+	KERN_ASSERT(exit_host_tsc > entry_host_tsc);
+
+	delta = exit_host_tsc - entry_host_tsc;
+	incr = (delta * VM_TSC_FREQ) / (tsc_per_ms * 1000);
 	vm->tsc += (incr - VM_TSC_ADJUST);
 
 	/* update guest PIT */
@@ -143,10 +146,7 @@ vmm_init_vm(void)
 	vnvram_init(&vm->vnvram, vm);
 	vpit_init(&vm->vpit, vm);
 	virtio_blk_init(&vm->blk, vm);
-
-#ifdef REDIRECT_GUEST_SERIAL
-	vserial_init(&vm->vserial, vm);
-#endif
+	/* vserial_init(&vm->vserial, vm); */
 
 #ifdef GUEST_DEBUG_DEV
 	guest_debug_dev_init(&vm->debug_dev, vm);

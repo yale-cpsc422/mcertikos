@@ -44,6 +44,8 @@
 #define COM_LSR_DATA	0x01	//   Data available
 #define COM_LSR_TXRDY	0x20	//   Transmit buffer avail
 #define COM_LSR_TSRE	0x40	//   Transmitter off
+#define COM_MSR		6	// In: Modem Status Register
+#define COM_SRR		7	// In: Shadow Receive Register
 
 void serial_init(void);
 void serial_putc(char c);

@@ -53,6 +53,17 @@
 # building CertiKOS.
 #
 
+ifdef DEBUG_ALL
+KERN_CFLAGS	+= -DDEBUG_ALL
+endif
+
+ifdef DEBUG_VIRT
+KERN_CFLAGS	+= -DDEBUG_VIRT
+endif
+
+ifdef LOW_FREQ
+KERN_CFLAGS	+= -DLOW_FREQ
+endif
 
 # If set, enable printing debug messages
 ifdef DEBUG_MSG
@@ -72,6 +83,11 @@ endif
 # If set, redirect the guest serial port output to stdout
 ifdef REDIRECT_GUEST_SERIAL
 KERN_CFLAGS	+= -DREDIRECT_GUEST_SERIAL
+endif
+
+# If set, enable debugging VMEXIT reason
+ifneq "$(strip $(DEBUG_VMEXIT) $(DEBUG_ALL) $(DEBUG_VIRT))" ""
+KERN_CFLAGS	+= -DDEBUG_VMEXIT
 endif
 
 # If set, enable debugging guest exceptions

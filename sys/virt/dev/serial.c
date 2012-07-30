@@ -9,46 +9,26 @@
 #include <dev/serial.h>
 #include <dev/video.h>
 
-static uint8_t
-vserial_ioport_read(uint32_t port)
-{
-	KERN_ASSERT(port == COM1 || port == COM2 ||
-		    port == COM3 || port == COM4);
-
-	return inb(port);
-}
-
-static void
-vserial_ioport_write(uint32_t port, uint8_t data)
-{
-	KERN_ASSERT(port == COM1 || port == COM2 ||
-		    port == COM3 || port == COM4);
-
-	video_putc((char) data);
-}
-
 static void
 _vserial_ioport_read(struct vm *vm, void *vserial, uint32_t port, void *data)
 {
 	KERN_ASSERT(vm != NULL && vserial != NULL && data != NULL);
-	KERN_ASSERT(port == COM1 || port == COM2 ||
-		    port == COM3 || port == COM4);
+	KERN_ASSERT(COM1 <= port && port < COM1 + 8);
 
-#if 0
-	*(uint8_t *) data = vserial_ioport_read(port);
-#else
-	*(uint8_t *) data = 0xff;
-#endif
+	if (port == COM1 + COM_RX)
+		*(uint8_t *) data = inb(port);
+	else
+		*(uint8_t *) data = 0xff;
 }
 
 static void
 _vserial_ioport_write(struct vm *vm, void *vserial, uint32_t port, void *data)
 {
 	KERN_ASSERT(vm != NULL && vserial != NULL && data != NULL);
-	KERN_ASSERT(port == COM1 || port == COM2 ||
-		    port == COM3 || port == COM4);
+	KERN_ASSERT(COM1 <= port && port < COM1 + 8);
 
-	vserial_ioport_write(port, *(uint8_t *) data);
+	if (port == COM1 + COM_TX)
+		outb(port, *(uint8_t *) data);
 }
 
 void
@@ -56,12 +36,12 @@ vserial_init(struct vserial *vserial, struct vm *vm)
 {
 	KERN_ASSERT(vserial != NULL && vm != NULL);
 
-	vmm_iodev_register_read(vm, vserial, COM1, SZ8, _vserial_ioport_read);
-	vmm_iodev_register_read(vm, vserial, COM2, SZ8, _vserial_ioport_read);
-	vmm_iodev_register_read(vm, vserial, COM3, SZ8, _vserial_ioport_read);
-	vmm_iodev_register_read(vm, vserial, COM4, SZ8, _vserial_ioport_read);
-	vmm_iodev_register_write(vm, vserial, COM1, SZ8, _vserial_ioport_write);
-	vmm_iodev_register_write(vm, vserial, COM2, SZ8, _vserial_ioport_write);
-	vmm_iodev_register_write(vm, vserial, COM3, SZ8, _vserial_ioport_write);
-	vmm_iodev_register_write(vm, vserial, COM4, SZ8, _vserial_ioport_write);
+	int i;
+
+	for (i = 0; i < 8; i++) {
+		vmm_iodev_register_read(vm, vserial, COM1+i, SZ8,
+					_vserial_ioport_read);
+		vmm_iodev_register_write(vm, vserial, COM1+i, SZ8,
+					 _vserial_ioport_write);
+	}
 }
