@@ -232,16 +232,6 @@ wait_to_start(void)
 	KERN_ASSERT(c->stat == PCPU_WAIT);
 	spinlock_release(&c->lk);
 
-#if 0
-	if (pcpu_cur_idx() == 1) {
-		c->stat = PCPU_RUNNING;
-		struct vm *vm = vmm_init_vm();
-		if (vm == NULL)
-			KERN_PANIC("Cannot initialize a VM.\n");
-		vmm_run_vm(vm);
-	}
-#endif
-
 	/* KERN_DEBUG("slave %d# waiting to start\n", pcpu_cur_idx()); */
 	/* busy waiting for a process */
 	while (1) {

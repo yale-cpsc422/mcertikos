@@ -156,30 +156,24 @@ vmptrld(struct vmcs *vmcs)
 		KERN_PANIC("vmptrld error %d", error);
 }
 
-static gcc_inline int
-vmwrite(uint32_t r, uint32_t val)
+static gcc_inline uint32_t
+vmread(uint32_t encoding)
 {
-	int error;
-
-	__asm __volatile("vmwrite %0, %1" : : "r" (val), "r" (r)
-			 : "cc", "memory");
-
-	VMX_SET_ERROR_CODE(error);
-
-	return (error);
+	uint32_t val;
+	__asm __volatile("vmread %1, %0" : "=r" (val) : "r" (encoding) : "cc");
+	return val;
 }
 
-static gcc_inline int
-vmread(uint32_t r, uint32_t *addr)
+static gcc_inline void
+vmwrite(uint32_t encoding, uint32_t val)
 {
-	int error;
-
-	__asm __volatile("vmread %0, %1" : : "r" (r), "m" (*addr)
-			 : "cc", "memory");
-
-	VMX_SET_ERROR_CODE(error);
-
-	return (error);
+	uint8_t error;
+	__asm __volatile("vmwrite %1, %2; setna %0"
+			 : "=q" (error)
+			 : "r" (val), "r" (encoding)
+			 : "cc");
+	if (unlikely(error))
+		KERN_PANIC("vmwrite error\n");
 }
 
 #define	INVVPID_TYPE_ADDRESS		0UL

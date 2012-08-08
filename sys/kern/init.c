@@ -116,7 +116,6 @@ kern_init(mboot_info_t *mbi)
 	/*
 	 * Initialize virtual machine monitor module.
 	 */
-#if 1
 	if (strncmp(cpuinfo.vendor, "AuthenticAMD", 20) == 0 ||
 	    strncmp(cpuinfo.vendor, "GenuineIntel", 20) == 0) {
 		KERN_INFO("Initialize VMM ... ");
@@ -125,15 +124,14 @@ kern_init(mboot_info_t *mbi)
 		else
 			KERN_INFO("done.\n");
 	}
-#endif
 
 	/* Start slave kernel on APs */
-	int i;
-	for (i = 1; i < pcpu_ncpu(); i++) {
-		KERN_INFO("Start slave kernel on CPU%d ... ", i);
-		pcpu_boot_ap(i, slave_kernel, (uintptr_t) &stack[i * PAGE_SIZE]);
-		KERN_INFO("done.\n");
-	}
+	/* int i; */
+	/* for (i = 1; i < pcpu_ncpu(); i++) { */
+	/* 	KERN_INFO("Start slave kernel on CPU%d ... ", i); */
+	/* 	pcpu_boot_ap(i, slave_kernel, (uintptr_t) &stack[i * PAGE_SIZE]); */
+	/* 	KERN_INFO("done.\n"); */
+	/* } */
 
 	/* Initialize timer */
 	KERN_INFO("Initialize timer event list ... ");
@@ -165,18 +163,7 @@ kern_init_ap(void (*f)(void))
 
 	pcpu_init_cpu();
 	intr_init();
-
 	pmap_init();
-
-#if 0
-	if (pcpu_cur_idx() == 1) {
-		KERN_INFO("Initialize VMM ... ");
-		if (vmm_init())
-			KERN_INFO("failed.\n");
-		else
-			KERN_INFO("done.\n");
-	}
-#endif
 
 	c->booted = TRUE;
 	f();

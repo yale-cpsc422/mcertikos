@@ -5,6 +5,9 @@
 #include <sys/types.h>
 
 #include <sys/virt/vmm.h>
+#ifdef TRACE_IOIO
+#include <sys/virt/vmm_dev.h>
+#endif
 #include <sys/virt/dev/virtio_blk.h>
 
 #include <machine/pcpu.h>
@@ -152,6 +155,10 @@ vmm_init_vm(void)
 	guest_debug_dev_init(&vm->debug_dev, vm);
 #endif
 
+#ifdef TRACE_TOTAL_TIME
+	vm->start_tsc = vm->total_tsc = 0;
+#endif
+
 	/* machine-dependent VM initialization */
 	if (vmm_ops->vm_init(vm) != 0) {
 		KERN_DEBUG("Machine-dependent VM initialization failed.\n");
@@ -166,6 +173,10 @@ vmm_run_vm(struct vm *vm)
 {
 	KERN_ASSERT(vmm_inited == TRUE);
 	KERN_ASSERT(vm != NULL);
+
+#if defined (TRACE_IOIO) || defined (TRACE_TOTAL_TIME)
+	static uint64_t last_dump = 0;
+#endif
 
 	cur_vm = vm;
 
@@ -212,6 +223,22 @@ vmm_run_vm(struct vm *vm)
 		/* assertion that makes sure that interrupts are disabled */
 		KERN_ASSERT((read_eflags() & FL_IF) == 0x0);
 		vmm_ops->vm_exit_handle(vm);
+
+#if defined (TRACE_IOIO) || defined (TRACE_TOTAL_TIME)
+		if ((rdtscp() - last_dump) / tsc_per_ms >= 10 * 1000) {
+			last_dump = rdtscp();
+#ifdef TRACE_IOIO
+			dump_ioio_trace_info();
+#endif
+
+#ifdef TRACE_TOTAL_TIME
+			dprintf("%lld ms of 10,000 ms are out of the guest.\n",
+				vm->total_tsc / tsc_per_ms);
+			vm->total_tsc = 0;
+#endif
+		}
+#endif
+
 	}
 
 	return 0;

@@ -85,7 +85,6 @@ static struct {
 	(PROCBASED2_ENABLE_EPT		|	\
 	 PROCBASED2_ENABLE_VPID		|	\
 	 PROCBASED2_UNRESTRICTED_GUEST	|	\
-	 PROCBASED2_ENABLE_RDTSCP	|	\
 	 /* unsupported instructions */		\
 	 PROCBASED2_WBINVD_EXITING)
 #define PROCBASED_CTLS2_ZERO_SETTING		\
@@ -95,6 +94,7 @@ static struct {
 	 PROCBASED2_PAUSE_LOOP_EXITING	|	\
 	 PROCBASED2_RDRAND_EXITING	|	\
 	 PROCBASED2_ENABLE_INVPCID	|	\
+	 PROCBASED2_ENABLE_RDTSCP	|	\
 	 PROCBASED2_ENABLE_VMFUNC)
 
 #define VM_EXIT_CTLS_ONE_SETTING		\
@@ -129,6 +129,128 @@ struct vmx_info {
 
 	void		*vmx_region;
 } vmx_proc_info[MAX_CPU];
+
+#if defined (DEBUG_VMEXIT) || defined (TRACE_VMEXIT)
+
+static char *exit_reason_string[60] = {
+	[EXIT_REASON_EXCEPTION] = "Exception/NMI",
+	[EXIT_REASON_EXT_INTR] = "ExtINTR",
+	[EXIT_REASON_TRIPLE_FAULT] = "Triple Fault",
+	[EXIT_REASON_INIT] = "INIT Signal",
+	[EXIT_REASON_SIPI] = "SIPI Signal",
+	[EXIT_REASON_IO_SMI] = "SMI",
+	[EXIT_REASON_SMI] = "Other SMI",
+	[EXIT_REASON_INTR_WINDOW] = "INTR Window",
+	[EXIT_REASON_NMI_WINDOW] = "NMI Window",
+	[EXIT_REASON_TASK_SWITCH] = "Task Switch",
+	[EXIT_REASON_CPUID] = "CPUID",
+	[EXIT_REASON_GETSEC] = "GETSEC",
+	[EXIT_REASON_HLT] = "HLT",
+	[EXIT_REASON_INVD] = "INVD",
+	[EXIT_REASON_INVLPG] = "INVLPG",
+	[EXIT_REASON_RDPMC] = "RDPMC",
+	[EXIT_REASON_RDTSC] = "RDTSC",
+	[EXIT_REASON_RSM] = "RSM",
+	[EXIT_REASON_VMCALL] = "VMCALL",
+	[EXIT_REASON_VMCLEAR] = "VMCLEAR",
+	[EXIT_REASON_VMLAUNCH] = "VMLAUNCH",
+	[EXIT_REASON_VMPTRLD] = "VMPTRLD",
+	[EXIT_REASON_VMPTRST] = "VMPTRST",
+	[EXIT_REASON_VMRESUME] = "VMRESUME",
+	[EXIT_REASON_VMWRITE] = "VMWRITE",
+	[EXIT_REASON_VMREAD] = "VMREAD",
+	[EXIT_REASON_VMXON] = "VMXON",
+	[EXIT_REASON_VMXOFF] = "VMXOFF",
+	[EXIT_REASON_CR_ACCESS] = "CR Access",
+	[EXIT_REASON_DR_ACCESS] = "DR Access",
+	[EXIT_REASON_INOUT] = "I/O",
+	[EXIT_REASON_RDMSR] = "RDMSR",
+	[EXIT_REASON_WRMSR] = "WRMSR",
+	[EXIT_REASON_INVAL_VMCS] = "Invalid Guest State",
+	[EXIT_REASON_INVAL_MSR] = "Invalid Guest MSRs",
+	[EXIT_REASON_MWAIT] = "MWAIT",
+	[EXIT_REASON_MTF] = "Monitor Trap Flag",
+	[EXIT_REASON_MONITOR] = "MONITOR",
+	[EXIT_REASON_PAUSE] = "PAUSE",
+	[EXIT_REASON_MCE] = "MCE",
+	[EXIT_REASON_TPR] = "TPR",
+	[EXIT_REASON_APIC] = "APIC",
+	[EXIT_REASON_GDTR_IDTR] = "GDTR/IDTR",
+	[EXIT_REASON_LDTR_TR] = "LDTR/TR",
+	[EXIT_REASON_EPT_FAULT] = "EPT Voilation",
+	[EXIT_REASON_EPT_MISCONFIG] = "EPT Misconfiguration",
+	[EXIT_REASON_INVEPT] = "INVEPT",
+	[EXIT_REASON_RDTSCP] = "RDTSCP",
+	[EXIT_REASON_VMX_PREEMPT] = "VMX-preemption Timer",
+	[EXIT_REASON_INVVPID] = "INVVPID",
+	[EXIT_REASON_WBINVD] = "WBINVD",
+	[EXIT_REASON_XSETBV] = "XSETBV",
+	[EXIT_REASON_RDRAND] = "RDRAND",
+	[EXIT_REASON_INVPCID] = "INVPCID",
+	[EXIT_REASON_VMFUNC] = "VMFUNC",
+};
+
+#endif
+
+#ifdef TRACE_VMEXIT
+
+static struct {
+	uint64_t total;
+	uint64_t delta;
+	uint64_t time;
+} vmexit_trace_info[60];
+
+static void
+dump_vmexit_trace_info(void)
+{
+	int slot;
+
+	KERN_DEBUG("VMEXIT trace:\n");
+
+	for (slot = 0; slot < 60; slot++) {
+		if (vmexit_trace_info[slot].delta > 0) {
+			vmexit_trace_info[slot].total +=
+				vmexit_trace_info[slot].delta;
+			dprintf("%s: +%lld times, "
+				"total %lld ticks, "
+				"%lld ticks/time\n",
+				exit_reason_string[slot],
+				vmexit_trace_info[slot].delta,
+				vmexit_trace_info[slot].time,
+				vmexit_trace_info[slot].time/
+				vmexit_trace_info[slot].total);
+			vmexit_trace_info[slot].delta = 0;
+		}
+	}
+}
+
+#endif
+
+#ifdef TRACE_EVT_INJECT
+static uint64_t exception_delta = 0;
+static uint64_t intr_delta = 0;
+static uint64_t others_delta = 0;
+
+static void
+dump_evt_inj_trace_info(void)
+{
+	dprintf("Inject");
+	if (exception_delta) {
+		dprintf(" +%d exceptions", exception_delta);
+		exception_delta = 0;
+	}
+	if (intr_delta) {
+		dprintf(" +%d interrupts", intr_delta);
+		intr_delta = 0;
+	}
+	if (others_delta) {
+		dprintf(" +%d others", others_delta);
+		others_delta = 0;
+	}
+	dprintf("\n");
+}
+
+#endif
 
 static void
 vmx_dump_host_info(void)
@@ -193,77 +315,77 @@ vmx_dump_info(struct vmx *vmx)
 		(uintptr_t) vmx->g_rax, (uintptr_t) vmx->g_rbx,
 		(uintptr_t) vmx->g_rcx, (uintptr_t) vmx->g_rdx,
 		(uintptr_t) vmx->g_rsi, (uintptr_t) vmx->g_rdi,
-		(uintptr_t) vmx->g_rbp, (uintptr_t) vmcs_read(VMCS_GUEST_RSP),
-		(uintptr_t) vmcs_read(VMCS_GUEST_RIP),
-		(uintptr_t) vmcs_read(VMCS_GUEST_RFLAGS),
-		(uintptr_t) vmcs_read(VMCS_GUEST_CR0),
+		(uintptr_t) vmx->g_rbp, (uintptr_t) vmcs_read32(VMCS_GUEST_RSP),
+		(uintptr_t) vmcs_read32(VMCS_GUEST_RIP),
+		(uintptr_t) vmcs_read32(VMCS_GUEST_RFLAGS),
+		(uintptr_t) vmcs_read32(VMCS_GUEST_CR0),
 		(uintptr_t) vmx->g_cr2,
-		(uintptr_t) vmcs_read(VMCS_GUEST_CR3),
-		(uintptr_t) vmcs_read(VMCS_GUEST_CR4),
+		(uintptr_t) vmcs_read32(VMCS_GUEST_CR3),
+		(uintptr_t) vmcs_read32(VMCS_GUEST_CR4),
 		(uintptr_t) vmx->g_dr0, (uintptr_t) vmx->g_dr1,
 		(uintptr_t) vmx->g_dr2, (uintptr_t) vmx->g_dr2,
-		(uintptr_t) vmx->g_dr6, (uintptr_t) vmcs_read(VMCS_GUEST_DR7),
-		(uint16_t) vmcs_read(VMCS_GUEST_CS_SELECTOR),
-		(uintptr_t) vmcs_read(VMCS_GUEST_CS_BASE),
-		(uint16_t) vmcs_read(VMCS_GUEST_CS_LIMIT),
-		(uint32_t) vmcs_read(VMCS_GUEST_CS_ACCESS_RIGHTS),
-		(uint16_t) vmcs_read(VMCS_GUEST_DS_SELECTOR),
-		(uintptr_t) vmcs_read(VMCS_GUEST_DS_BASE),
-		(uint16_t) vmcs_read(VMCS_GUEST_DS_LIMIT),
-		(uint32_t) vmcs_read(VMCS_GUEST_DS_ACCESS_RIGHTS),
-		(uint16_t) vmcs_read(VMCS_GUEST_ES_SELECTOR),
-		(uintptr_t) vmcs_read(VMCS_GUEST_ES_BASE),
-		(uint16_t) vmcs_read(VMCS_GUEST_ES_LIMIT),
-		(uint32_t) vmcs_read(VMCS_GUEST_ES_ACCESS_RIGHTS),
-		(uint16_t) vmcs_read(VMCS_GUEST_FS_SELECTOR),
-		(uintptr_t) vmcs_read(VMCS_GUEST_FS_BASE),
-		(uint16_t) vmcs_read(VMCS_GUEST_FS_LIMIT),
-		(uint32_t) vmcs_read(VMCS_GUEST_FS_ACCESS_RIGHTS),
-		(uint16_t) vmcs_read(VMCS_GUEST_GS_SELECTOR),
-		(uintptr_t) vmcs_read(VMCS_GUEST_GS_BASE),
-		(uint16_t) vmcs_read(VMCS_GUEST_GS_LIMIT),
-		(uint32_t) vmcs_read(VMCS_GUEST_GS_ACCESS_RIGHTS),
-		(uint16_t) vmcs_read(VMCS_GUEST_SS_SELECTOR),
-		(uintptr_t) vmcs_read(VMCS_GUEST_SS_BASE),
-		(uint16_t) vmcs_read(VMCS_GUEST_SS_LIMIT),
-		(uint32_t) vmcs_read(VMCS_GUEST_SS_ACCESS_RIGHTS),
-		(uint16_t) vmcs_read(VMCS_GUEST_LDTR_SELECTOR),
-		(uintptr_t) vmcs_read(VMCS_GUEST_LDTR_BASE),
-		(uint16_t) vmcs_read(VMCS_GUEST_LDTR_LIMIT),
-		(uint32_t) vmcs_read(VMCS_GUEST_LDTR_ACCESS_RIGHTS),
-		(uint16_t) vmcs_read(VMCS_GUEST_TR_SELECTOR),
-		(uintptr_t) vmcs_read(VMCS_GUEST_TR_BASE),
-		(uint16_t) vmcs_read(VMCS_GUEST_TR_LIMIT),
-		(uint32_t) vmcs_read(VMCS_GUEST_TR_ACCESS_RIGHTS),
-		(uintptr_t) vmcs_read(VMCS_GUEST_GDTR_BASE),
-		(uint16_t) vmcs_read(VMCS_GUEST_GDTR_LIMIT),
-		(uintptr_t) vmcs_read(VMCS_GUEST_IDTR_BASE),
-		(uint16_t) vmcs_read(VMCS_GUEST_IDTR_LIMIT),
-		(uint32_t) vmcs_read(VMCS_VPID),
-		vmcs_read(VMCS_EPTP),
+		(uintptr_t) vmx->g_dr6, (uintptr_t) vmcs_read32(VMCS_GUEST_DR7),
+		(uint16_t) vmcs_read16(VMCS_GUEST_CS_SELECTOR),
+		(uintptr_t) vmcs_read32(VMCS_GUEST_CS_BASE),
+		(uint16_t) vmcs_read32(VMCS_GUEST_CS_LIMIT),
+		(uint32_t) vmcs_read32(VMCS_GUEST_CS_ACCESS_RIGHTS),
+		(uint16_t) vmcs_read16(VMCS_GUEST_DS_SELECTOR),
+		(uintptr_t) vmcs_read32(VMCS_GUEST_DS_BASE),
+		(uint16_t) vmcs_read32(VMCS_GUEST_DS_LIMIT),
+		(uint32_t) vmcs_read32(VMCS_GUEST_DS_ACCESS_RIGHTS),
+		(uint16_t) vmcs_read16(VMCS_GUEST_ES_SELECTOR),
+		(uintptr_t) vmcs_read32(VMCS_GUEST_ES_BASE),
+		(uint16_t) vmcs_read32(VMCS_GUEST_ES_LIMIT),
+		(uint32_t) vmcs_read32(VMCS_GUEST_ES_ACCESS_RIGHTS),
+		(uint16_t) vmcs_read16(VMCS_GUEST_FS_SELECTOR),
+		(uintptr_t) vmcs_read32(VMCS_GUEST_FS_BASE),
+		(uint16_t) vmcs_read32(VMCS_GUEST_FS_LIMIT),
+		(uint32_t) vmcs_read32(VMCS_GUEST_FS_ACCESS_RIGHTS),
+		(uint16_t) vmcs_read16(VMCS_GUEST_GS_SELECTOR),
+		(uintptr_t) vmcs_read32(VMCS_GUEST_GS_BASE),
+		(uint16_t) vmcs_read32(VMCS_GUEST_GS_LIMIT),
+		(uint32_t) vmcs_read32(VMCS_GUEST_GS_ACCESS_RIGHTS),
+		(uint16_t) vmcs_read16(VMCS_GUEST_SS_SELECTOR),
+		(uintptr_t) vmcs_read32(VMCS_GUEST_SS_BASE),
+		(uint16_t) vmcs_read32(VMCS_GUEST_SS_LIMIT),
+		(uint32_t) vmcs_read32(VMCS_GUEST_SS_ACCESS_RIGHTS),
+		(uint16_t) vmcs_read16(VMCS_GUEST_LDTR_SELECTOR),
+		(uintptr_t) vmcs_read32(VMCS_GUEST_LDTR_BASE),
+		(uint16_t) vmcs_read32(VMCS_GUEST_LDTR_LIMIT),
+		(uint32_t) vmcs_read32(VMCS_GUEST_LDTR_ACCESS_RIGHTS),
+		(uint16_t) vmcs_read16(VMCS_GUEST_TR_SELECTOR),
+		(uintptr_t) vmcs_read32(VMCS_GUEST_TR_BASE),
+		(uint16_t) vmcs_read32(VMCS_GUEST_TR_LIMIT),
+		(uint32_t) vmcs_read32(VMCS_GUEST_TR_ACCESS_RIGHTS),
+		(uintptr_t) vmcs_read32(VMCS_GUEST_GDTR_BASE),
+		(uint16_t) vmcs_read32(VMCS_GUEST_GDTR_LIMIT),
+		(uintptr_t) vmcs_read32(VMCS_GUEST_IDTR_BASE),
+		(uint16_t) vmcs_read32(VMCS_GUEST_IDTR_LIMIT),
+		(uint32_t) vmcs_read16(VMCS_VPID),
+		vmcs_read64(VMCS_EPTP),
 		read_eax(), read_ebx(), read_ecx(), read_edx(),
 		read_esi(), read_edi(), read_ebp(),
 		/* (uintptr_t) vmcs_read(VMCS_HOST_RSP), */
 		read_esp(),
-		(uintptr_t) vmcs_read(VMCS_HOST_RIP),
+		(uintptr_t) vmcs_read32(VMCS_HOST_RIP),
 		read_eflags(),
-		(uintptr_t) vmcs_read(VMCS_HOST_CR0),
-		(uintptr_t) vmcs_read(VMCS_HOST_CR3),
-		(uintptr_t) vmcs_read(VMCS_HOST_CR4),
-		(uint16_t) vmcs_read(VMCS_HOST_CS_SELECTOR),
-		(uint16_t) vmcs_read(VMCS_HOST_DS_SELECTOR),
-		(uint16_t) vmcs_read(VMCS_HOST_ES_SELECTOR),
-		(uint16_t) vmcs_read(VMCS_HOST_FS_SELECTOR),
-		(uintptr_t) vmcs_read(VMCS_HOST_FS_BASE),
-		(uint16_t) vmcs_read(VMCS_HOST_GS_SELECTOR),
-		(uintptr_t) vmcs_read(VMCS_HOST_GS_BASE),
-		(uint16_t) vmcs_read(VMCS_HOST_SS_SELECTOR),
-		(uint16_t) vmcs_read(VMCS_HOST_TR_SELECTOR),
-		(uintptr_t) vmcs_read(VMCS_HOST_TR_BASE),
-		(uintptr_t) vmcs_read(VMCS_HOST_GDTR_BASE),
-		(uintptr_t) vmcs_read(VMCS_HOST_IDTR_BASE),
-		vmcs_read(VMCS_HOST_IA32_PAT),
-		vmcs_read(VMCS_HOST_IA32_EFER));
+		(uintptr_t) vmcs_read32(VMCS_HOST_CR0),
+		(uintptr_t) vmcs_read32(VMCS_HOST_CR3),
+		(uintptr_t) vmcs_read32(VMCS_HOST_CR4),
+		(uint16_t) vmcs_read16(VMCS_HOST_CS_SELECTOR),
+		(uint16_t) vmcs_read16(VMCS_HOST_DS_SELECTOR),
+		(uint16_t) vmcs_read16(VMCS_HOST_ES_SELECTOR),
+		(uint16_t) vmcs_read16(VMCS_HOST_FS_SELECTOR),
+		(uintptr_t) vmcs_read32(VMCS_HOST_FS_BASE),
+		(uint16_t) vmcs_read16(VMCS_HOST_GS_SELECTOR),
+		(uintptr_t) vmcs_read32(VMCS_HOST_GS_BASE),
+		(uint16_t) vmcs_read16(VMCS_HOST_SS_SELECTOR),
+		(uint16_t) vmcs_read16(VMCS_HOST_TR_SELECTOR),
+		(uintptr_t) vmcs_read32(VMCS_HOST_TR_BASE),
+		(uintptr_t) vmcs_read32(VMCS_HOST_GDTR_BASE),
+		(uintptr_t) vmcs_read32(VMCS_HOST_IDTR_BASE),
+		vmcs_read64(VMCS_HOST_IA32_PAT),
+		vmcs_read64(VMCS_HOST_IA32_EFER));
 }
 
 static void
@@ -311,7 +433,7 @@ vmx_inject_event(uint32_t type, uint8_t vector, uint32_t err_code, int err_valid
 
 	uint32_t intr_info;
 
-	intr_info = vmcs_read(VMCS_ENTRY_INTR_INFO);
+	intr_info = vmcs_read32(VMCS_ENTRY_INTR_INFO);
 	if (intr_info & VMCS_INTERRUPTION_INFO_VALID)
 		KERN_PANIC("Non-delivered event: type %d, vector %d.\n",
 			   (intr_info >> 8) & 7, intr_info & 0xff);
@@ -322,18 +444,27 @@ vmx_inject_event(uint32_t type, uint8_t vector, uint32_t err_code, int err_valid
 #ifdef DEBUG_EVT_INJECT
 	KERN_DEBUG("VMCS_ENTRY_INTR_INFO 0x%08x\n", intr_info);
 	KERN_DEBUG("VMCS_GUEST_INTERRUPTIBILITY 0x%08x\n",
-		   (uintptr_t) vmcs_read(VMCS_GUEST_INTERRUPTIBILITY));
+		   (uintptr_t) vmcs_read32(VMCS_GUEST_INTERRUPTIBILITY));
 	KERN_DEBUG("guest eflags 0x%08x\n",
-		   (uintptr_t) vmcs_read(VMCS_GUEST_RFLAGS));
+		   (uintptr_t) vmcs_read32(VMCS_GUEST_RFLAGS));
 #endif
 
-	vmcs_write(VMCS_ENTRY_INTR_INFO, intr_info);
+#ifdef TRACE_EVT_INJECT
+	if (type == VMCS_INTERRUPTION_INFO_HW_INTR)
+		intr_delta++;
+	else if (type == VMCS_INTERRUPTION_INFO_HW_EXCPT)
+		exception_delta++;
+	else
+		others_delta++;
+#endif
+
+	vmcs_write32(VMCS_ENTRY_INTR_INFO, intr_info);
 
 	if (err_valid) {
 #ifdef DEBUG_EVT_INJECT
 		KERN_DEBUG("VMCS_ENTRY_EXCEPTION_ERROR 0x%08x\n", err_code);
 #endif
-		vmcs_write(VMCS_ENTRY_EXCEPTION_ERROR, err_code);
+		vmcs_write32(VMCS_ENTRY_EXCEPTION_ERROR, err_code);
 	}
 }
 
@@ -564,12 +695,13 @@ vmx_init_vm(struct vm *vm)
 
 	extern uint8_t vmx_return_from_guest[];
 
-	int error, i, j;
+	int i, j;
 	struct vmx_info *vmx_info;
 	struct vmx *vmx;
 	pageinfo_t *vmcs_pi, *ept_pi, *msr_pi, *io_pi;
 
 	vmx_info = &vmx_proc_info[pcpu_cur_idx()];
+	KERN_DEBUG("Processor %d\n", pcpu_cur_idx());
 	KERN_ASSERT(vmx_info->vmx_enabled == TRUE);
 
 	vmx = vmx_alloc();
@@ -661,23 +793,15 @@ vmx_init_vm(struct vm *vm)
 	 */
 	vmx->vmcs->identifier = rdmsr(MSR_VMX_BASIC) & 0xffffffff;
 	vmx->g_rip = 0xfff0;
-	error = vmcs_set_defaults
+	vmcs_set_defaults
 		(vmx->vmcs, vmx->pml4ept, vmx_info->pinbased_ctls,
 		 vmx_info->procbased_ctls, vmx_info->procbased_ctls2,
 		 vmx_info->exit_ctls, vmx_info->entry_ctls, vmx->msr_bitmap,
-		 vmx->io_bitmap, (char *) ((uintptr_t) vmx->io_bitmap + PAGESIZE),
+		 vmx->io_bitmap, (char *) ((uintptr_t) vmx->io_bitmap+PAGESIZE),
 		 pcpu_cur_idx() + 1,
 		 vmx_info->cr0_ones_mask, vmx_info->cr0_zeros_mask,
 		 vmx_info->cr4_ones_mask, vmx_info->cr4_zeros_mask,
 		 (uintptr_t) vmx_return_from_guest);
-	if (error) {
-		KERN_DEBUG("Cannot set default values for VMCS. (error=%d)\n",
-			   error);
-		mem_page_free(vmcs_pi);
-		mem_page_free(ept_pi);
-		mem_page_free(msr_pi);
-		return 1;
-	}
 
 	vmx->vpid = pcpu_cur_idx() + 1;
 
@@ -703,18 +827,23 @@ vmx_run_vm(struct vm *vm)
 
 	vmptrld(vmx->vmcs);
 
-	vmcs_write(VMCS_GUEST_RIP, vmx->g_rip);
+	vmcs_write32(VMCS_GUEST_RIP, vmx->g_rip);
 
 #ifdef DEBUG_VMENTRY
 	if (vmx->launched)
 		KERN_DEBUG("Resume VM from eip 0x%08x:0x%08x ... \n",
-			   (uintptr_t) vmcs_read(VMCS_GUEST_CS_BASE),
-			   (uintptr_t) vmcs_read(VMCS_GUEST_RIP));
+			   (uintptr_t) vmcs_read32(VMCS_GUEST_CS_BASE),
+			   (uintptr_t) vmcs_read32(VMCS_GUEST_RIP));
 	else
 		KERN_DEBUG("Launch VM from eip 0x%08x:0x%08x ... \n",
-			   (uintptr_t) vmcs_read(VMCS_GUEST_CS_BASE),
-			   (uintptr_t) vmcs_read(VMCS_GUEST_RIP));
+			   (uintptr_t) vmcs_read32(VMCS_GUEST_CS_BASE),
+			   (uintptr_t) vmcs_read32(VMCS_GUEST_RIP));
 	/* vmx_dump_info(vmx); */
+#endif
+
+#ifdef TRACE_TOTAL_TIME
+	if (vm->start_tsc != 0)
+		vm->total_tsc += (rdtscp() - vm->start_tsc);
 #endif
 
 	/* the address of vmx is stored in %ecx */
@@ -745,7 +874,7 @@ vmx_run_vm(struct vm *vm)
 			 "movl %c[g_dr3](%0), %%edi;"	/* guest %dr3 */
 			 "movl %%edi, %%dr3;"
 			 "movl %c[g_dr6](%0), %%edi;"	/* guest %dr6 */
-			 "movl %%edi, %%dr6;"
+			 /* "movl %%edi, %%dr6;" */
 			 "movl %c[g_rax](%0), %%eax;"	/* guest %eax */
 			 "movl %c[g_rbx](%0), %%ebx;"	/* guest %ebx */
 			 "movl %c[g_rdx](%0), %%edx;"	/* guest %edx */
@@ -825,18 +954,22 @@ vmx_run_vm(struct vm *vm)
 			 [exit_tsc_hi] "i" (offsetof(struct vmx, exit_tsc[1]))
 			 : "cc", "memory", "eax", "ebx", "edx", "esi", "edi");
 
-	if (vmx->failed == 1)
+#ifdef TRACE_TOTAL_TIME
+	vm->start_tsc = rdtscp();
+#endif
+
+	if (unlikely(vmx->failed == 1))
 		KERN_PANIC("vmlaunch/vmresume failed: error %d.\n",
 			   vmx->failed);
-	else if (vmx->failed == 2)
+	else if (unlikely(vmx->failed == 2))
 		KERN_PANIC("vmlaunch/vmresume failed: error %d, code 0x%08x.\n",
-			   vmx->failed, vmcs_read(VMCS_INSTRUCTION_ERROR));
+			   vmx->failed, vmcs_read32(VMCS_INSTRUCTION_ERROR));
 
-	vmx->g_rip = vmcs_read(VMCS_GUEST_RIP);
-	vmx->exit_reason = vmcs_read(VMCS_EXIT_REASON);
-	vmx->exit_qualification = vmcs_read(VMCS_EXIT_QUALIFICATION);
+	vmx->g_rip = vmcs_read32(VMCS_GUEST_RIP);
+	vmx->exit_reason = vmcs_read32(VMCS_EXIT_REASON);
+	vmx->exit_qualification = vmcs_read32(VMCS_EXIT_QUALIFICATION);
 
-	if ((vmx->exit_reason & EXIT_REASON_ENTRY_FAIL)) {
+	if (unlikely(vmx->exit_reason & EXIT_REASON_ENTRY_FAIL)) {
 		KERN_PANIC("VM-entry failure: reason %d.\n",
 			   vmx->exit_reason & 0x0000ffff);
 		return 1;
@@ -845,8 +978,7 @@ vmx_run_vm(struct vm *vm)
 	if ((vmx->exit_reason & EXIT_REASON_MASK) == EXIT_REASON_EXT_INTR)
 		vm->exit_for_intr = TRUE;
 
-	if (!vmx->launched)
-		vmx->launched = 1;
+	vmx->launched = 1;
 
 	return 0;
 }
@@ -854,29 +986,13 @@ vmx_run_vm(struct vm *vm)
 static gcc_inline uint32_t
 vmx_interruption_info(void)
 {
-	return vmcs_read(VMCS_EXIT_INTERRUPTION_INFO);
+	return vmcs_read32(VMCS_EXIT_INTERRUPTION_INFO);
 }
 
 static gcc_inline uint32_t
 vmx_vector_info(void)
 {
-	return vmcs_read(VMCS_IDT_VECTORING_INFO);
-}
-
-static int
-vmx_handle_exception(struct vm *vm)
-{
-	KERN_ASSERT(vm);
-
-	uint32_t intr_info, vec_info;
-
-	intr_info = vmx_interruption_info();
-	vec_info = vmx_vector_info();
-
-	KERN_DEBUG("Interruption Info 0x%08x\n", intr_info);
-	KERN_DEBUG("IDT Vector Info 0x%08x\n", vec_info);
-
-	return 0;
+	return vmcs_read32(VMCS_IDT_VECTORING_INFO);
 }
 
 static void
@@ -925,7 +1041,7 @@ physical_ioport_write(uint32_t port, void *data, data_sz_t size)
 	}
 }
 
-static int
+static gcc_inline int
 vmx_handle_inout(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
@@ -985,90 +1101,142 @@ vmx_handle_inout(struct vm *vm)
 			physical_ioport_write(port, &data, data_size);
 	}
 
-	vmx->g_rip += vmcs_read(VMCS_EXIT_INSTRUCTION_LENGTH);
+	vmx->g_rip += vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
 
 	return 1;
 }
 
-static int
+static gcc_inline int
 vmx_handle_cpuid(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
 
 	struct vmx *vmx = (struct vmx *) vm->cookie;
+	uint32_t id;
 	uint32_t eax, ebx, ecx, edx;
 
+	id = vmx->g_rax;
+
 #ifdef DEBUG_GUEST_CPUID
-	KERN_DEBUG("Intercept cpuid 0x%08x.\n", (uintptr_t) vmx->g_rax);
+	KERN_DEBUG("Intercept cpuid 0x%08x.\n", (uintptr_t) id);
 #endif
 
-	switch (vmx->g_rax) {
-	case 0x00000001:
-		cpuid(vmx->g_rax, &eax, &ebx, &ecx, &edx);
+	if (id == 0x00000001) {
+		cpuid(id, &eax, &ebx, &ecx, &edx);
 		vmx->g_rax = eax;
 		vmx->g_rbx = /* 1 core per processor */
 			(ebx & ~(uint32_t) (0xf << 16)) | (1 << 16);
-		vmx->g_rcx = ecx & ~(uint32_t) (CPUID_FEATURE_AVX |
+		vmx->g_rcx = ecx & ~(uint32_t) (CPUID_FEATURE_RDRAND |
+						CPUID_FEATURE_AVX |
 						CPUID_FEATURE_AES |
+						CPUID_FEATURE_TSC_DEADLINE |
+						CPUID_FEATURE_X2APIC |
+						CPUID_FEATURE_PCID |
+						CPUID_FEATURE_XTPR |
+						CPUID_FEATURE_EIST |
+						CPUID_FEATURE_SMX |
+						CPUID_FEATURE_VMX |
 						CPUID_FEATURE_MONITOR);
 		vmx->g_rdx = edx & ~(uint32_t) (CPUID_FEATURE_HTT |
+						CPUID_FEATURE_ACPI |
 						CPUID_FEATURE_MCA |
 						CPUID_FEATURE_MTRR |
 						CPUID_FEATURE_APIC |
 						CPUID_FEATURE_MCE |
 						CPUID_FEATURE_MSR |
 						CPUID_FEATURE_DE);
-		break;
-
-	case 0x800000001:
-		cpuid(vmx->g_rax, &eax, &ebx, &ecx, &edx);
-		vmx->g_rax = eax;
-		vmx->g_rbx = ebx;
-		vmx->g_rcx = 0;
-		vmx->g_rdx = 0;
-		break;
-
-	default:
-		cpuid(vmx->g_rax, &eax, &ebx, &ecx, &edx);
+	} else if (id >= 0x80000000) {
+		vmx->g_rax = vmx->g_rbx = vmx->g_rcx = vmx->g_rdx = 0;
+	} else {
+		cpuid(id, &eax, &ebx, &ecx, &edx);
 		vmx->g_rax = eax;
 		vmx->g_rbx = ebx;
 		vmx->g_rcx = ecx;
 		vmx->g_rdx = edx;
-		break;
 	}
 
-	vmx->g_rip += vmcs_read(VMCS_EXIT_INSTRUCTION_LENGTH);
+	vmx->g_rip += vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
 
 	return 1;
 }
 
-static int
-vmx_handle_invalid_instruction(struct vm *vm)
+static gcc_inline int
+vmx_handle_rdmsr(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
 
-	KERN_DEBUG("Invalid OP: exit_reason 0x%08x.\n",
-		   ((struct vmx *) vm->cookie)->exit_reason);
+	struct vmx *vmx;
+	uint32_t msr;
+	uint64_t val;
+	uint16_t cs_sel;
+	uint8_t cpl;
+	uint32_t err_code;
 
-	vmx_inject_event(VMCS_INTERRUPTION_INFO_HW_EXCPT, T_ILLOP, 0, 0);
+	vmx = (struct vmx *) vm->cookie;
+	msr = vmx->g_rcx;
+	cpl = (vmcs_read32(VMCS_GUEST_CS_ACCESS_RIGHTS) >> 5) & 3;
+
+#ifdef DEBUG_GUEST_MSR
+	KERN_DEBUG("Intercept rdmsr: MSR 0x%08x, CPL %d.\n", msr, cpl);
+#endif
+
+	if (cpl != 0 &&
+	    !((0x00000000 <= msr && msr <= 0x00001fff) ||
+	      (0xc0000000 <= msr && msr <= 0xc0001fff))) {
+		cs_sel = vmcs_read16(VMCS_GUEST_CS_SELECTOR);
+		err_code = (cs_sel & 0x1fff) << 3;
+		vmx_inject_event(VMCS_INTERRUPTION_INFO_HW_EXCPT, T_GPFLT,
+				 err_code, 1);
+		return 1;
+	}
+
+	val = rdmsr(msr);
+	vmx->g_rax = val & 0xffffffff;
+	vmx->g_rdx = (val >> 32) & 0xffffffff;
+	vmx->g_rip += vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
+
 	return 1;
 }
 
-static int
-vmx_handle_rdtsc(struct vm *vm)
+static gcc_inline int
+vmx_handle_wrmsr(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
 
-	struct vmx *vmx = (struct vmx *) vm->cookie;
+	struct vmx *vmx;
+	uint32_t msr;
+	uint64_t val;
+	uint16_t cs_sel;
+	uint8_t cpl;
+	uint32_t err_code;
 
-	vmx->g_rdx = (vm->tsc >> 32);
-	vmx->g_rax = (vm->tsc &0xffffffff);
-	vmx->g_rip += vmcs_read(VMCS_EXIT_INSTRUCTION_LENGTH);
+	vmx = (struct vmx *) vm->cookie;
+	msr = vmx->g_rcx;
+	val = ((vmx->g_rdx & 0xffffffff) << 32) | (vmx->g_rax & 0xffffffff);
+	cpl = (vmcs_read32(VMCS_GUEST_CS_ACCESS_RIGHTS) >> 5) & 3;
+
+#ifdef DEBUG_GUEST_MSR
+	KERN_DEBUG("Intecept wrmsr: MSR 0x%08x, val 0x%llx, CPL %d.\n",
+		   msr, val, cpl);
+#endif
+
+	if (cpl != 0 &&
+	    !((0x00000000 <= msr && msr <= 0x00001fff) ||
+	      (0xc0000000 <= msr && msr <= 0xc0001fff))) {
+		cs_sel = vmcs_read16(VMCS_GUEST_CS_SELECTOR);
+		err_code = (cs_sel & 0x1fff) << 3;
+		vmx_inject_event(VMCS_INTERRUPTION_INFO_HW_EXCPT, T_GPFLT,
+				 err_code, 1);
+		return 1;
+	}
+
+	wrmsr(msr, val);
+	vmx->g_rip += vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
 
 	return 1;
 }
 
-static int
+static gcc_inline int
 vmx_handle_ept_violation(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
@@ -1078,14 +1246,14 @@ vmx_handle_ept_violation(struct vm *vm)
 	pageinfo_t *pi;
 
 	vmx = (struct vmx *) vm->cookie;
-	fault_pa = vmcs_read(VMCS_GUEST_PHYSICAL_ADDRESS);
+	fault_pa = vmcs_read64(VMCS_GUEST_PHYSICAL_ADDRESS);
 
 #ifdef DEBUG_EPT
 	KERN_DEBUG("Intercept EPT violation: "
 		   "guest physical address 0x%08x, "
 		   "guest linear address 0x%08x\n",
-		   (uintptr_t) vmcs_read(VMCS_GUEST_PHYSICAL_ADDRESS),
-		   (uintptr_t) vmcs_read(VMCS_GUEST_LINEAR_ADDRESS));
+		   fault_pa,
+		   (uintptr_t) vmcs_read32(VMCS_GUEST_LINEAR_ADDRESS));
 #endif
 
 	/* TODO: which exception/fault would happen? */
@@ -1120,16 +1288,16 @@ vmx_intr_assist(struct vm *vm)
 	if ((vector = vpic_get_irq(pic)) == -1)
 		return;
 
-	pending = vmcs_read(VMCS_EXIT_INTERRUPTION_INFO) &
+	pending = vmcs_read32(VMCS_EXIT_INTERRUPTION_INFO) &
 		VMCS_INTERRUPTION_INFO_VALID;
 
 #ifdef DEBUG_GUEST_INTR
 	if (pending)
 		KERN_DEBUG("Find pending event: intr_info 0x%08x.\n",
-			   vmcs_read(VMCS_EXIT_INTERRUPTION_INFO));
+			   vmcs_read32(VMCS_EXIT_INTERRUPTION_INFO));
 #endif
 
-	if (((uint32_t) vmcs_read(VMCS_GUEST_RFLAGS) & FL_IF) == 0)
+	if (((uint32_t) vmcs_read32(VMCS_GUEST_RFLAGS) & FL_IF) == 0)
 		intr_disable = 1;
 	else
 	        intr_disable = 0;
@@ -1137,10 +1305,10 @@ vmx_intr_assist(struct vm *vm)
 #ifdef DEBUG_GUEST_INTR
 	if (intr_disable)
 		KERN_DEBUG("Guest EFLAGS.IF is cleared: 0x%08x\n",
-			   (uintptr_t) vmcs_read(VMCS_GUEST_RFLAGS));
+			   (uintptr_t) vmcs_read32(VMCS_GUEST_RFLAGS));
 #endif
 
-	blocked = vmcs_read(VMCS_GUEST_INTERRUPTIBILITY) &
+	blocked = vmcs_read32(VMCS_GUEST_INTERRUPTIBILITY) &
 		(VMCS_INTERRUPTIBILITY_STI_BLOCKING |
 		 VMCS_INTERRUPTIBILITY_MOVSS_BLOCKING);
 
@@ -1154,9 +1322,9 @@ vmx_intr_assist(struct vm *vm)
 	blocked = blocked || intr_disable;
 
 	if (pending || blocked) {
-		procbased_ctls = vmcs_read(VMCS_PRI_PROC_BASED_CTLS);
-		vmcs_write(VMCS_PRI_PROC_BASED_CTLS,
-			   procbased_ctls | PROCBASED_INT_WINDOW_EXITING);
+		procbased_ctls = vmcs_read32(VMCS_PRI_PROC_BASED_CTLS);
+		vmcs_write32(VMCS_PRI_PROC_BASED_CTLS,
+			     procbased_ctls | PROCBASED_INT_WINDOW_EXITING);
 		vmx->pending_intr = vector;
 		return;
 	}
@@ -1165,72 +1333,10 @@ vmx_intr_assist(struct vm *vm)
 	vmx_inject_event(VMCS_INTERRUPTION_INFO_HW_INTR, vector, 0, 0);
 	vmx->pending_intr = -1;
 
-	procbased_ctls = vmcs_read(VMCS_PRI_PROC_BASED_CTLS);
-	vmcs_write(VMCS_PRI_PROC_BASED_CTLS,
-		   procbased_ctls & ~PROCBASED_INT_WINDOW_EXITING);
+	procbased_ctls = vmcs_read32(VMCS_PRI_PROC_BASED_CTLS);
+	vmcs_write32(VMCS_PRI_PROC_BASED_CTLS,
+		     procbased_ctls & ~PROCBASED_INT_WINDOW_EXITING);
 }
-
-#ifdef DEBUG_VMEXIT
-
-static char *exit_reason_string[60] = {
-	[EXIT_REASON_EXCEPTION] = "Exception/NMI",
-	[EXIT_REASON_EXT_INTR] = "ExtINTR",
-	[EXIT_REASON_TRIPLE_FAULT] = "Triple Fault",
-	[EXIT_REASON_INIT] = "INIT Signal",
-	[EXIT_REASON_SIPI] = "SIPI Signal",
-	[EXIT_REASON_IO_SMI] = "SMI",
-	[EXIT_REASON_SMI] = "Other SMI",
-	[EXIT_REASON_INTR_WINDOW] = "INTR Window",
-	[EXIT_REASON_NMI_WINDOW] = "NMI Window",
-	[EXIT_REASON_TASK_SWITCH] = "Task Switch",
-	[EXIT_REASON_CPUID] = "CPUID",
-	[EXIT_REASON_GETSEC] = "GETSEC",
-	[EXIT_REASON_HLT] = "HLT",
-	[EXIT_REASON_INVD] = "INVD",
-	[EXIT_REASON_INVLPG] = "INVLPG",
-	[EXIT_REASON_RDPMC] = "RDPMC",
-	[EXIT_REASON_RDTSC] = "RDTSC",
-	[EXIT_REASON_RSM] = "RSM",
-	[EXIT_REASON_VMCALL] = "VMCALL",
-	[EXIT_REASON_VMCLEAR] = "VMCLEAR",
-	[EXIT_REASON_VMLAUNCH] = "VMLAUNCH",
-	[EXIT_REASON_VMPTRLD] = "VMPTRLD",
-	[EXIT_REASON_VMPTRST] = "VMPTRST",
-	[EXIT_REASON_VMRESUME] = "VMRESUME",
-	[EXIT_REASON_VMWRITE] = "VMWRITE",
-	[EXIT_REASON_VMREAD] = "VMREAD",
-	[EXIT_REASON_VMXON] = "VMXON",
-	[EXIT_REASON_VMXOFF] = "VMXOFF",
-	[EXIT_REASON_CR_ACCESS] = "CR Access",
-	[EXIT_REASON_DR_ACCESS] = "DR Access",
-	[EXIT_REASON_INOUT] = "I/O",
-	[EXIT_REASON_RDMSR] = "RDMSR",
-	[EXIT_REASON_WRMSR] = "WRMSR",
-	[EXIT_REASON_INVAL_VMCS] = "Invalid Guest State",
-	[EXIT_REASON_INVAL_MSR] = "Invalid Guest MSRs",
-	[EXIT_REASON_MWAIT] = "MWAIT",
-	[EXIT_REASON_MTF] = "Monitor Trap Flag",
-	[EXIT_REASON_MONITOR] = "MONITOR",
-	[EXIT_REASON_PAUSE] = "PAUSE",
-	[EXIT_REASON_MCE] = "MCE",
-	[EXIT_REASON_TPR] = "TPR",
-	[EXIT_REASON_APIC] = "APIC",
-	[EXIT_REASON_GDTR_IDTR] = "GDTR/IDTR",
-	[EXIT_REASON_LDTR_TR] = "LDTR/TR",
-	[EXIT_REASON_EPT_FAULT] = "EPT Voilation",
-	[EXIT_REASON_EPT_MISCONFIG] = "EPT Misconfiguration",
-	[EXIT_REASON_INVEPT] = "INVEPT",
-	[EXIT_REASON_RDTSCP] = "RDTSCP",
-	[EXIT_REASON_VMX_PREEMPT] = "VMX-preemption Timer",
-	[EXIT_REASON_INVVPID] = "INVVPID",
-	[EXIT_REASON_WBINVD] = "WBINVD",
-	[EXIT_REASON_XSETBV] = "XSETBV",
-	[EXIT_REASON_RDRAND] = "RDRAND",
-	[EXIT_REASON_INVPCID] = "INVPCID",
-	[EXIT_REASON_VMFUNC] = "VMFUNC",
-};
-
-#endif
 
 static int
 vmx_handle_exit(struct vm *vm)
@@ -1238,7 +1344,14 @@ vmx_handle_exit(struct vm *vm)
 	KERN_ASSERT(vm != NULL);
 
 	struct vmx *vmx;
+	uint32_t procbased_ctls;
 	int handled;
+
+#if defined (TRACE_VMEXIT) || defined (TRACE_EVT_INJECT)
+	uint64_t start_tsc, end_tsc;
+	static uint64_t last_dump_tsc = 0;
+	extern uint64_t tsc_per_ms;
+#endif
 
 	vmx = (struct vmx *) vm->cookie;
 	KERN_ASSERT(vmx != NULL);
@@ -1254,14 +1367,15 @@ vmx_handle_exit(struct vm *vm)
 	KERN_DEBUG("Exit reason %s, qualification 0x%llx, eip 0x%08x\n",
 		   exit_reason_string[vmx->exit_reason & EXIT_REASON_MASK],
 		   vmx->exit_qualification,
-		   (uintptr_t) vmcs_read(VMCS_GUEST_RIP));
+		   (uintptr_t) vmcs_read32(VMCS_GUEST_RIP));
+#endif
+
+#ifdef TRACE_VMEXIT
+	vmexit_trace_info[vmx->exit_reason & EXIT_REASON_MASK].delta++;
+	start_tsc = rdtscp();
 #endif
 
 	switch (vmx->exit_reason & EXIT_REASON_MASK) {
-	case EXIT_REASON_EXCEPTION:
-		handled = vmx_handle_exception(vm);
-		break;
-
 	case EXIT_REASON_EXT_INTR:
 		KERN_ASSERT(vm->exit_for_intr == FALSE);
 		handled = 1;
@@ -1275,6 +1389,22 @@ vmx_handle_exit(struct vm *vm)
 		handled = vmx_handle_cpuid(vm);
 		break;
 
+	case EXIT_REASON_RDMSR:
+		handled = vmx_handle_rdmsr(vm);
+		break;
+
+	case EXIT_REASON_WRMSR:
+		handled = vmx_handle_wrmsr(vm);
+		break;
+
+	case EXIT_REASON_RDTSC:
+		vmx->g_rdx = (vm->tsc >> 32);
+		vmx->g_rax = (vm->tsc &0xffffffff);
+		vmx->g_rip += vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
+		handled = 1;
+		break;
+
+	case EXIT_REASON_RDTSCP:
 	case EXIT_REASON_HLT:
 	case EXIT_REASON_VMCALL:
 	case EXIT_REASON_VMCLEAR:
@@ -1288,12 +1418,10 @@ vmx_handle_exit(struct vm *vm)
 	case EXIT_REASON_VMXON:
 	case EXIT_REASON_MWAIT:
 	case EXIT_REASON_MONITOR:
-		handled = vmx_handle_invalid_instruction(vm);
-		break;
-
-	case EXIT_REASON_RDTSC:
-	case EXIT_REASON_RDTSCP:
-		handled = vmx_handle_rdtsc(vm);
+		KERN_DEBUG("Invalid OP: exit_reason 0x%08x.\n",
+			   ((struct vmx *) vm->cookie)->exit_reason);
+		vmx_inject_event(VMCS_INTERRUPTION_INFO_HW_EXCPT, T_ILLOP, 0, 0);
+		handled = 1;
 		break;
 
 	case EXIT_REASON_EPT_FAULT:
@@ -1301,9 +1429,14 @@ vmx_handle_exit(struct vm *vm)
 		break;
 
 	case EXIT_REASON_INTR_WINDOW:
+		/* disable exiting for the interrupt window */
+		procbased_ctls = vmcs_read32(VMCS_PRI_PROC_BASED_CTLS);
+		procbased_ctls &= ~PROCBASED_INT_WINDOW_EXITING;
+		vmcs_write32(VMCS_PRI_PROC_BASED_CTLS, procbased_ctls);
 		handled = 1;
 		break;
 
+	case EXIT_REASON_EXCEPTION:
 	case EXIT_REASON_TRIPLE_FAULT:
 	case EXIT_REASON_NMI_WINDOW:
 	case EXIT_REASON_INVAL_VMCS:
@@ -1315,6 +1448,25 @@ vmx_handle_exit(struct vm *vm)
 			   vmx->exit_reason);
 		handled = 0;
 	}
+
+#if defined (TRACE_VMEXIT) || defined (TRACE_EVT_INJECT)
+	end_tsc = rdtscp();
+
+#ifdef TRACE_VMEXIT
+	vmexit_trace_info[vmx->exit_reason & EXIT_REASON_MASK].time +=
+		(end_tsc - start_tsc);
+#endif
+
+	if ((end_tsc - last_dump_tsc) / tsc_per_ms > 10 * 1000) {
+		last_dump_tsc = rdtscp();
+#ifdef TRACE_VMEXIT
+		dump_vmexit_trace_info();
+#endif
+#ifdef TRACE_EVT_INJECT
+		dump_evt_inj_trace_info();
+#endif
+	}
+#endif
 
 	KERN_ASSERT(handled == 1);
 

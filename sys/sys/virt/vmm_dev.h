@@ -23,6 +23,10 @@ int vmm_iodev_read_port(struct vm *, uint32_t port, void *data, data_sz_t size);
 int vmm_iodev_write_port(struct vm *, uint32_t port, void *data, data_sz_t size);
 int vmm_handle_extintr(struct vm *, uint8_t intr_no);
 
+#ifdef TRACE_IOIO
+void dump_ioio_trace_info(void);
+#endif
+
 #endif /* _KERN_ */
 
 #endif /* !_SYS_VIRT_VMM_IODEV_H_ */

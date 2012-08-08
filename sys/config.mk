@@ -135,6 +135,11 @@ ifneq "$(strip $(DEBUG_GUEST_HLT) $(DEBUG_ALL) $(DEBUG_VIRT))" ""
 KERN_CFLAGS	+= -DDEBUG_GUEST_HLT
 endif
 
+# If set, enable debugging rdmsr/wrmsr
+ifneq "$(strip $(DEBUG_GUEST_MSR) $(DEBUG_ALL) $(DEBUG_VIRT))" ""
+KERN_CFLAGS	+= -DDEBUG_GUEST_MSR
+endif
+
 # If set, enable debugging event injection
 ifneq "$(strip $(DEBUG_EVT_INJECT) $(DEBUG_ALL) $(DEBUG_VIRT))" ""
 KERN_CFLAGS	+= -DDEBUG_EVT_INJECT
@@ -183,4 +188,24 @@ endif
 # If set, enable debugging the extended page table
 ifneq "$(strip $(DEBUG_EPT) $(DEBUG_ALL) $(DEBUG_VIRT) $(DEBUG_VMX))" ""
 KERN_CFLAGS	+= -DDEBUG_EPT
+endif
+
+# If set, enable tracing the I/O interceptions
+ifdef TRACE_IOIO
+KERN_CFLAGS	+= -DTRACE_IOIO
+endif
+
+# If set, enable tracing the VMEXITs
+ifdef TRACE_VMEXIT
+KERN_CFLAGS	+= -DTRACE_VMEXIT
+endif
+
+# If set, enable tracing the event injections
+ifdef TRACE_EVT_INJECT
+KERN_CFLAGS	+= -DTRACE_EVT_INJECT
+endif
+
+# If set, enable tracing the total time out of the guest
+ifdef TRACE_TOTAL_TIME
+KERN_CFLAGS	+= -DTRACE_TOTAL_TIME
 endif

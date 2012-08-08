@@ -16,7 +16,7 @@
 
 #include <machine/trap.h>
 
-#define VM_PHY_MEMORY_SIZE	(128 * 1024 * 1024)
+#define VM_PHY_MEMORY_SIZE	(256 * 1024 * 1024)
 
 #define VM_TIME_SCALE		1
 #define VM_TSC_ADJUST		0
@@ -57,6 +57,10 @@ struct vm {
 		void			*dev;
 		iodev_read_func_t	read_func[3]; // read data size: 0-sz8, 1-sz16,2-sz32
 		iodev_write_func_t	write_func[3];// write data size:0-sz8, 1-sz16,2-sz32
+#ifdef TRACE_IOIO
+		int			tracing;
+		int			slot;
+#endif
 	} iodev[MAX_IOPORT];
 
 	struct {
@@ -77,7 +81,11 @@ struct vm {
 
 	struct guest_debug_dev debug_dev;
 
-	bool		used;
+#ifdef TRACE_TOTAL_TIME
+	uint64_t 		start_tsc, total_tsc;
+#endif
+
+	bool			used;
 };
 
 typedef enum vmm_sig {

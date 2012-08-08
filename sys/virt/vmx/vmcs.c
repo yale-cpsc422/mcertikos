@@ -39,116 +39,60 @@ static struct {
 	[IDTR] = { 0, VMCS_GUEST_IDTR_BASE, VMCS_GUEST_IDTR_LIMIT, 0 },
 };
 
-static int
+static void
 vmcs_set_guest_segment(seg_t seg, uint16_t sel, uintptr_t base,
 		       uint32_t lim, uint32_t access)
 {
-	int error = 0;
-
 	KERN_ASSERT(CS <= seg && seg <= IDTR);
 
-	if ((error = vmcs_write(segs[seg].encoding_base, base)))
-		goto done;
-	if ((error = vmcs_write(segs[seg].encoding_limit, lim)))
-		goto done;
+	vmcs_write32(segs[seg].encoding_base, base);
+	vmcs_write32(segs[seg].encoding_limit, lim);
 
 	if (seg != GDTR && seg != IDTR) {
-		if ((error = vmcs_write(segs[seg].encoding_access, access)))
-			goto done;
-
-		if ((error = vmcs_write(segs[seg].encoding_selector, sel)))
-			goto done;
+		vmcs_write32(segs[seg].encoding_access, access);
+		vmcs_write16(segs[seg].encoding_selector, sel);
 	}
-
- done:
-	return error;
 }
 
-/*
- * Read a field in VMCS structure.
- *
- * @param encoding the encoding of the VMCS field
- *
- * @return the value of the field; the higher bits will be zeroed, if
- *         the width of the field is less than 64 bits.
- */
-uint64_t
-vmcs_read(uint32_t encoding)
+gcc_inline uint16_t
+vmcs_read16(uint32_t encoding)
 {
-	KERN_ASSERT((encoding & (uint32_t) 1) == 0);
-
-	uint32_t val_hi, val_lo;
-	int error;
-
-	val_lo = val_hi = 0;
-
-	switch (encoding) {
-		/* 64-bit fields */
-	case VMCS_IO_BITMAP_A ... VMCS_EPTP:
-	case VMCS_GUEST_PHYSICAL_ADDRESS:
-	case VMCS_LINK_POINTER ... VMCS_GUEST_PDPTE3:
-	case VMCS_HOST_IA32_PAT ... VMCS_HOST_IA32_PERF_GLOBAL_CTRL:
-		error = vmread(encoding, &val_lo);
-		if (error)
-			break;
-		encoding += 1;
-		error = vmread(encoding, &val_hi);
-		break;
-
-		/* 16-bit, 32-bit and natural-width fields */
-	default:
-		error = vmread(encoding, &val_lo);
-		break;
-	}
-
-	if (error)
-		KERN_PANIC("vmcs_read(encoding 0x%08x) error %d.\n",
-			   encoding, error);
-
-	return (((uint64_t) val_hi << 32) | (uint64_t) val_lo);
+	return (uint16_t) vmread(encoding);
 }
 
-/*
- * Write to a fileld in VMCS structure.
- *
- * @param encoding the encoding of the VMCS field
- * @param val the value to be written; the higher bits will be masked as 0's. if
- *            width of the field is less than 64 bits.
- */
-int
-vmcs_write(uint32_t encoding, uint64_t val)
+gcc_inline uint32_t
+vmcs_read32(uint32_t encoding)
 {
-	KERN_ASSERT((encoding & (uint32_t) 1) == 0);
-
-	int error = 0;
-
-	switch (encoding) {
-		/* 64-bit fields */
-	case VMCS_IO_BITMAP_A ... VMCS_EPTP:
-	case VMCS_GUEST_PHYSICAL_ADDRESS:
-	case VMCS_LINK_POINTER ... VMCS_GUEST_PDPTE3:
-	case VMCS_HOST_IA32_PAT ... VMCS_HOST_IA32_PERF_GLOBAL_CTRL:
-		error = vmwrite(encoding, (uint32_t) val);
-		if (error)
-			break;
-		encoding += 1;
-		error = vmwrite(encoding, (uint32_t) (val >> 32));
-		break;
-
-		/* 16-bit, 32-bit and natural-width fields */
-	default:
-		error = vmwrite(encoding, (uint32_t) val);
-		break;
-	}
-
-	if (error)
-		KERN_PANIC("vmcs_write(encoding 0x%08x, val 0x%llx) error %d.\n",
-			   encoding, val, error);
-
-	return error;
+	return vmread(encoding);
 }
 
-int
+gcc_inline uint64_t
+vmcs_read64(uint32_t encoding)
+{
+	return vmread(encoding) |
+		((uint64_t) vmread(encoding+1) << 32);
+}
+
+gcc_inline void
+vmcs_write16(uint32_t encoding, uint16_t val)
+{
+	vmwrite(encoding, val);
+}
+
+gcc_inline void
+vmcs_write32(uint32_t encoding, uint32_t val)
+{
+	vmwrite(encoding, val);
+}
+
+gcc_inline void
+vmcs_write64(uint32_t encoding, uint64_t val)
+{
+	vmwrite(encoding, val);
+	vmwrite(encoding+1, val >> 32);
+}
+
+void
 vmcs_set_defaults(struct vmcs *vmcs, uint64_t *pml4ept, uint32_t pinbased_ctls,
 		  uint32_t procbased_ctls, uint32_t procbased_ctls2,
 		  uint32_t exit_ctls, uint32_t entry_ctls,
@@ -157,7 +101,6 @@ vmcs_set_defaults(struct vmcs *vmcs, uint64_t *pml4ept, uint32_t pinbased_ctls,
 		  uint64_t cr4_ones_mask, uint64_t cr4_zeros_mask,
 		  uintptr_t host_rip)
 {
-	int error;
 	pcpu_t *c;
 	extern gatedesc_t idt[];
 
@@ -176,204 +119,130 @@ vmcs_set_defaults(struct vmcs *vmcs, uint64_t *pml4ept, uint32_t pinbased_ctls,
 	 * Load the VMX controls
 	 */
 	KERN_DEBUG("Set pin-based controls to 0x%08x\n", pinbased_ctls);
-	if ((error = vmcs_write(VMCS_PIN_BASED_CTLS, pinbased_ctls)) != 0)
-		goto done;
+	vmcs_write32(VMCS_PIN_BASED_CTLS, pinbased_ctls);
 	KERN_DEBUG("Set primary processor-based controls to 0x%08x\n",
 		   procbased_ctls);
-	if ((error = vmcs_write(VMCS_PRI_PROC_BASED_CTLS, procbased_ctls)) != 0)
-		goto done;
+	vmcs_write32(VMCS_PRI_PROC_BASED_CTLS, procbased_ctls);
 	KERN_DEBUG("Set secondary processor-based controls to 0x%08x\n",
 		   procbased_ctls2);
-	if ((error = vmcs_write(VMCS_SEC_PROC_BASED_CTLS, procbased_ctls2)) != 0)
-		goto done;
+	vmcs_write32(VMCS_SEC_PROC_BASED_CTLS, procbased_ctls2);
 	KERN_DEBUG("Set exit controls to 0x%08x\n", exit_ctls);
-	if ((error = vmcs_write(VMCS_EXIT_CTLS, exit_ctls)) != 0)
-		goto done;
+	vmcs_write32(VMCS_EXIT_CTLS, exit_ctls);
 	KERN_DEBUG("Set entry controls to 0x%08x\n", entry_ctls);
-	if ((error = vmcs_write(VMCS_ENTRY_CTLS, entry_ctls)) != 0)
-		goto done;
+	vmcs_write32(VMCS_ENTRY_CTLS, entry_ctls);
 
 	/*
 	 * Load host state. (Intel Software Developer's Manual Vol 3, Sec 24.5)
 	 */
 	/* host rip */
-	if ((error = vmcs_write(VMCS_HOST_RIP, host_rip)) != 0)
-		goto done;
+	vmcs_write32(VMCS_HOST_RIP, host_rip);
 
 	/* host control registers */
-	if ((error = vmcs_write(VMCS_HOST_CR0, rcr0())) != 0)
-		goto done;
-	if ((error = vmcs_write(VMCS_HOST_CR3, rcr3())) != 0)
-		goto done;
-	if ((error = vmcs_write(VMCS_HOST_CR4, rcr4())) != 0)
-		goto done;
+	vmcs_write32(VMCS_HOST_CR0, rcr0());
+	vmcs_write32(VMCS_HOST_CR3, rcr3());
+	vmcs_write32(VMCS_HOST_CR4, rcr4());
 
 	/* host segment selectors */
-	if ((error = vmcs_write(VMCS_HOST_ES_SELECTOR, CPU_GDT_KDATA)) != 0)
-		goto done;
-	if ((error = vmcs_write(VMCS_HOST_CS_SELECTOR, CPU_GDT_KCODE)) != 0)
-		goto done;
-	if ((error = vmcs_write(VMCS_HOST_SS_SELECTOR, CPU_GDT_KDATA)) != 0)
-		goto done;
-	if ((error = vmcs_write(VMCS_HOST_DS_SELECTOR, CPU_GDT_KDATA)) != 0)
-		goto done;
-	if ((error = vmcs_write(VMCS_HOST_FS_SELECTOR, CPU_GDT_KDATA)) != 0)
-		goto done;
-	if ((error = vmcs_write(VMCS_HOST_GS_SELECTOR, CPU_GDT_KDATA)) != 0)
-		goto done;
-	if ((error = vmcs_write(VMCS_HOST_TR_SELECTOR, CPU_GDT_TSS)) != 0)
-		goto done;
+	vmcs_write16(VMCS_HOST_ES_SELECTOR, CPU_GDT_KDATA);
+	vmcs_write16(VMCS_HOST_CS_SELECTOR, CPU_GDT_KCODE);
+	vmcs_write16(VMCS_HOST_SS_SELECTOR, CPU_GDT_KDATA);
+	vmcs_write16(VMCS_HOST_DS_SELECTOR, CPU_GDT_KDATA);
+	vmcs_write16(VMCS_HOST_FS_SELECTOR, CPU_GDT_KDATA);
+	vmcs_write16(VMCS_HOST_GS_SELECTOR, CPU_GDT_KDATA);
+	vmcs_write16(VMCS_HOST_TR_SELECTOR, CPU_GDT_TSS);
 
 	/* host segment base address */
-	if ((error = vmcs_write(VMCS_HOST_FS_BASE, 0)))
-		goto done;
-	if ((error = vmcs_write(VMCS_HOST_GS_BASE, 0)))
-		goto done;
-	if ((error = vmcs_write(VMCS_HOST_TR_BASE, (uintptr_t) &c->_pcpu->tss)))
-		goto done;
-	if ((error = vmcs_write(VMCS_HOST_GDTR_BASE, (uintptr_t) &c->_pcpu->gdt)))
-		goto done;
-	if ((error = vmcs_write(VMCS_HOST_IDTR_BASE, (uintptr_t) idt)))
-		goto done;
+	vmcs_write32(VMCS_HOST_FS_BASE, 0);
+	vmcs_write32(VMCS_HOST_GS_BASE, 0);
+	vmcs_write32(VMCS_HOST_TR_BASE, (uintptr_t) &c->_pcpu->tss);
+	vmcs_write32(VMCS_HOST_GDTR_BASE, (uintptr_t) &c->_pcpu->gdt);
+	vmcs_write32(VMCS_HOST_IDTR_BASE, (uintptr_t) idt);
 
 	/* host control registers */
-	if ((error = vmcs_write(VMCS_HOST_IA32_SYSENTER_CS,
-			     (uint32_t) rdmsr(MSR_IA32_SYSENTER_CS))))
-		goto done;
-	if ((error = vmcs_write(VMCS_HOST_IA32_SYSENTER_ESP,
-			     (uintptr_t) rdmsr(MSR_IA32_SYSENTER_ESP))))
-		goto done;
-	if ((error = vmcs_write(VMCS_HOST_IA32_SYSENTER_EIP,
-			     (uintptr_t) rdmsr(MSR_IA32_SYSENTER_EIP))))
-		goto done;
-	if ((error = vmcs_write(VMCS_HOST_IA32_PERF_GLOBAL_CTRL,
-			     rdmsr(MSR_IA32_PERF_GLOBAL_CTRL))))
-		goto done;
-	if ((error = vmcs_write(VMCS_HOST_IA32_PAT, rdmsr(MSR_PAT))))
-		goto done;
-	if ((error = vmcs_write(VMCS_HOST_IA32_EFER, rdmsr(MSR_EFER))))
-		goto done;
+	vmcs_write32(VMCS_HOST_IA32_SYSENTER_CS, rdmsr(MSR_IA32_SYSENTER_CS));
+	vmcs_write32(VMCS_HOST_IA32_SYSENTER_ESP, rdmsr(MSR_IA32_SYSENTER_ESP));
+	vmcs_write32(VMCS_HOST_IA32_SYSENTER_EIP, rdmsr(MSR_IA32_SYSENTER_EIP));
+	vmcs_write64(VMCS_HOST_IA32_PERF_GLOBAL_CTRL,
+		     rdmsr(MSR_IA32_PERF_GLOBAL_CTRL));
+	vmcs_write64(VMCS_HOST_IA32_PAT, rdmsr(MSR_PAT));
+	vmcs_write64(VMCS_HOST_IA32_EFER, rdmsr(MSR_EFER));
 
 	/*
 	 * Load guest state. (Intel Software Developer's Manual Vol3, Sec 24.4,
 	 * Sec 9.1)
 	 */
 	/* guest control registers */
-	if ((error = vmcs_write(VMCS_GUEST_CR0, 0x60000010 | CR0_NE)))
-		goto done;
-	if ((error = vmcs_write(VMCS_GUEST_CR3, 0)))
-		goto done;
-	if ((error = vmcs_write(VMCS_GUEST_CR4, CR4_VMXE)))
-		goto done;
+	vmcs_write32(VMCS_GUEST_CR0, 0x60000010 | CR0_NE);
+	vmcs_write32(VMCS_GUEST_CR3, 0);
+	vmcs_write32(VMCS_GUEST_CR4, CR4_VMXE);
 
 	/* guest debug registers */
-	if ((error = vmcs_write(VMCS_GUEST_DR7, 0x00000400)))
-		goto done;
+	vmcs_write32(VMCS_GUEST_DR7, 0x00000400);
 
 	/* guest RSP, RIP, RFLAGS */
-	if ((error = vmcs_write(VMCS_GUEST_RSP, 0)))
-		goto done;
-	if ((error = vmcs_write(VMCS_GUEST_RIP, 0x0000fff0)))
-		goto done;
-	if ((error = vmcs_write(VMCS_GUEST_RFLAGS, 0x00000002)))
-		goto done;
+	vmcs_write32(VMCS_GUEST_RSP, 0);
+	vmcs_write32(VMCS_GUEST_RIP, 0x0000fff0);
+	vmcs_write32(VMCS_GUEST_RFLAGS, 0x00000002);
 
 	/* guest segment */
 #define CODE_SEG_AR (SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_CODE | SEG_ATTR_A)
 #define DATA_SEG_AR (SEG_ATTR_P | SEG_ATTR_S | SEG_TYPE_DATA | SEG_ATTR_A)
 #define LDT_AR      (SEG_ATTR_P | SEG_TYPE_LDT)
 #define TSS_AR      (SEG_ATTR_P | SEG_TYPE_TSS)
-	if ((error = vmcs_set_guest_segment(CS, 0xf000, 0x000f0000, 0xffff,
-					    CODE_SEG_AR)))
-		goto done;
-	if ((error = vmcs_set_guest_segment(SS, 0x0000, 0, 0xffff,
-					    DATA_SEG_AR)))
-		goto done;
-	if ((error = vmcs_set_guest_segment(DS, 0, 0, 0xffff, DATA_SEG_AR)))
-		goto done;
-	if ((error = vmcs_set_guest_segment(ES, 0, 0, 0xffff, DATA_SEG_AR)))
-		goto done;
-	if ((error = vmcs_set_guest_segment(FS, 0, 0, 0xffff, DATA_SEG_AR)))
-		goto done;
-	if ((error = vmcs_set_guest_segment(GS, 0, 0, 0xffff, DATA_SEG_AR)))
-		goto done;
-	if ((error = vmcs_set_guest_segment(LDTR, 0, 0, 0xffff, LDT_AR)))
-		goto done;
-	if ((error = vmcs_set_guest_segment(TR, 0, 0, 0xffff, TSS_AR)))
-		goto done;
-	if ((error = vmcs_set_guest_segment(GDTR, 0, 0, 0xffff, 0)))
-		goto done;
-	if ((error = vmcs_set_guest_segment(IDTR, 0x0000, 0, 0xffff, 0)))
-		goto done;
+	vmcs_set_guest_segment(CS, 0xf000, 0x000f0000, 0xffff, CODE_SEG_AR);
+	vmcs_set_guest_segment(SS, 0x0000, 0x00000000, 0xffff, DATA_SEG_AR);
+	vmcs_set_guest_segment(DS, 0x0000, 0x00000000, 0xffff, DATA_SEG_AR);
+	vmcs_set_guest_segment(ES, 0x0000, 0x00000000, 0xffff, DATA_SEG_AR);
+	vmcs_set_guest_segment(FS, 0x0000, 0x00000000, 0xffff, DATA_SEG_AR);
+	vmcs_set_guest_segment(GS, 0x0000, 0x00000000, 0xffff, DATA_SEG_AR);
+	vmcs_set_guest_segment(LDTR, 0, 0, 0xffff, LDT_AR);
+	vmcs_set_guest_segment(TR, 0, 0, 0xffff, TSS_AR);
+	vmcs_set_guest_segment(GDTR, 0, 0, 0xffff, 0);
+	vmcs_set_guest_segment(IDTR, 0, 0, 0xffff, 0);
 #undef CODE_SEG_AR
 #undef DATA_SEG_AR
 #undef LDT_AR
 #undef TSS_AR
 
 	/* guest MSRs */
-	if ((error = vmcs_write(VMCS_GUEST_IA32_PAT, 0x7040600070406ULL)))
-		goto done;
-	if ((error = vmcs_write(VMCS_GUEST_IA32_SYSENTER_CS, 0)))
-		goto done;
-	if ((error = vmcs_write(VMCS_GUEST_IA32_SYSENTER_ESP, 0)))
-		goto done;
-	if ((error = vmcs_write(VMCS_GUEST_IA32_SYSENTER_EIP, 0)))
-		goto done;
-	if ((error = vmcs_write(VMCS_GUEST_IA32_DEBUGCTL, 0)))
-		goto done;
+	vmcs_write64(VMCS_GUEST_IA32_PAT, 0x7040600070406ULL);
+	vmcs_write32(VMCS_GUEST_IA32_SYSENTER_CS, 0);
+	vmcs_write32(VMCS_GUEST_IA32_SYSENTER_ESP, 0);
+	vmcs_write32(VMCS_GUEST_IA32_SYSENTER_EIP, 0);
+	vmcs_write64(VMCS_GUEST_IA32_DEBUGCTL, 0);
 
 	/* EPTP */
-	if ((error = vmcs_write(VMCS_EPTP, EPTP((uintptr_t) pml4ept))))
-		goto done;
+	vmcs_write64(VMCS_EPTP, EPTP((uintptr_t) pml4ept));
 
 	/* VPID */
-	if ((error = vmcs_write(VMCS_VPID, vpid)))
-		goto done;
+	vmcs_write16(VMCS_VPID, vpid);
 
 	/* exception bitmap */
-	if ((error = vmcs_write(VMCS_EXCEPTION_BITMAP, (1 << T_MCHK))))
-		goto done;
+	/* vmcs_write32(VMCS_EXCEPTION_BITMAP, (1 << T_MCHK)); */
 
 	/* MSR bitmap */
-	if ((error = vmcs_write(VMCS_MSR_BITMAP, (uintptr_t) msr_bitmap)))
-		goto done;
+	vmcs_write64(VMCS_MSR_BITMAP, (uintptr_t) msr_bitmap);
 
 	/* link pointer */
-	if ((error = vmcs_write(VMCS_LINK_POINTER, 0xffffffffffffffffULL)))
-		goto done;
+	vmcs_write64(VMCS_LINK_POINTER, 0xffffffffffffffffULL);
 
 	/* CR0 mask & shadow */
-	if ((error = vmcs_write(VMCS_CR0_MASK, cr0_ones_mask | cr0_zeros_mask)))
-		goto done;
-	if ((error = vmcs_write(VMCS_CR0_SHADOW, cr0_ones_mask)))
-		goto done;
+	vmcs_write32(VMCS_CR0_MASK, cr0_ones_mask | cr0_zeros_mask);
+	vmcs_write32(VMCS_CR0_SHADOW, cr0_ones_mask);
 
 	/* CR4 mask & shadow */
-	if ((error = vmcs_write(VMCS_CR4_MASK, cr4_ones_mask | cr4_zeros_mask)))
-		goto done;
-	if ((error = vmcs_write(VMCS_CR4_SHADOW, cr4_ones_mask)))
-		goto done;
+	vmcs_write32(VMCS_CR4_MASK, cr4_ones_mask | cr4_zeros_mask);
+	vmcs_write32(VMCS_CR4_SHADOW, cr4_ones_mask);
 
 	/* I/O bitmap */
-	if ((error = vmcs_write(VMCS_IO_BITMAP_A, (uintptr_t) io_bitmap_a)))
-		goto done;
-	if ((error = vmcs_write(VMCS_IO_BITMAP_B, (uintptr_t) io_bitmap_b)))
-		goto done;
+	vmcs_write64(VMCS_IO_BITMAP_A, (uintptr_t) io_bitmap_a);
+	vmcs_write64(VMCS_IO_BITMAP_B, (uintptr_t) io_bitmap_b);
 
 	/* others */
-	if ((error = vmcs_write(VMCS_GUEST_ACTIVITY, 0)))
-		goto done;
-	if ((error = vmcs_write(VMCS_GUEST_INTERRUPTIBILITY, 0)))
-		goto done;
-	if ((error = vmcs_write(VMCS_GUEST_PENDING_DBG_EXCEPTIONS, 0)))
-		goto done;
-	if ((error = vmcs_write(VMCS_ENTRY_INTR_INFO, 0)))
-		goto done;
-
- done:
-	if (error)
-		dprintf("failed.\n");
+	vmcs_write32(VMCS_GUEST_ACTIVITY, 0);
+	vmcs_write32(VMCS_GUEST_INTERRUPTIBILITY, 0);
+	vmcs_write32(VMCS_GUEST_PENDING_DBG_EXCEPTIONS, 0);
+	vmcs_write32(VMCS_ENTRY_INTR_INFO, 0);
 
 	vmclear(vmcs);
-	return error;
 }

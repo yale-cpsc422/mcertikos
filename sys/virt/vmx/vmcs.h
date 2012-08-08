@@ -55,43 +55,24 @@ struct msr_entry {
 	uint64_t	val;
 };
 
-int      vmcs_write(uint32_t encoding, uint64_t val);
-uint64_t vmcs_read(uint32_t encoding);
+uint16_t vmcs_read16(uint32_t encoding);
+uint32_t vmcs_read32(uint32_t encoding);
+uint64_t vmcs_read64(uint32_t encoding);
 
-int      vmcs_set_defaults(struct vmcs *,
-			   uint64_t *pml4ept,       uint32_t pinbased_ctls,
-			   uint32_t procbased_ctls, uint32_t procbased_ctls2,
-			   uint32_t exit_ctls,      uint32_t entry_ctls,
-			   char *msr_bitmap,
-			   char *io_bitmap_a,       char *io_bitmap_b,
-			   uint16_t vpid,
-			   uint64_t cr0_ones_mask,  uint64_t cr0_zeros_mask,
-			   uint64_t cr4_ones_mask,  uint64_t cr4_zeros_mask,
-			   uintptr_t host_rip);
+void vmcs_write16(uint32_t encoding, uint16_t val);
+void vmcs_write32(uint32_t encoding, uint32_t val);
+void vmcs_write64(uint32_t encoding, uint64_t val);
 
-
-
-/* int vmcs_set_msr_save(struct vmcs *vmcs, u_long g_area, u_int g_count); */
-/* int	vmcs_set_defaults(struct vmcs *vmcs, u_long host_rip, u_long host_rsp, */
-/* 			  u_long ept_pml4, */
-/* 			  uint32_t pinbased_ctls, uint32_t procbased_ctls, */
-/* 			  uint32_t procbased_ctls2, uint32_t exit_ctls, */
-/* 			  uint32_t entry_ctls, u_long msr_bitmap, */
-/* 			  uint16_t vpid); */
-/* int	vmcs_getreg(struct vmcs *vmcs, int ident, uint64_t *retval); */
-/* int	vmcs_setreg(struct vmcs *vmcs, int ident, uint64_t val); */
-/* int	vmcs_getdesc(struct vmcs *vmcs, int ident, */
-/* 		     struct seg_desc *desc); */
-/* int	vmcs_setdesc(struct vmcs *vmcs, int ident, */
-/* 		     struct seg_desc *desc); */
-/* uint64_t vmcs_read(uint32_t encoding); */
-
-/* #define	vmexit_instruction_length()	vmcs_read(VMCS_EXIT_INSTRUCTION_LENGTH) */
-/* #define	vmcs_guest_rip()		vmcs_read(VMCS_GUEST_RIP) */
-/* #define	vmcs_instruction_error()	vmcs_read(VMCS_INSTRUCTION_ERROR) */
-/* #define	vmcs_exit_reason()		(vmcs_read(VMCS_EXIT_REASON) & 0xffff) */
-/* #define	vmcs_exit_qualification()	vmcs_read(VMCS_EXIT_QUALIFICATION) */
-/* #define	vmcs_guest_cr3()		vmcs_read(VMCS_GUEST_CR3) */
+void vmcs_set_defaults(struct vmcs *,
+		       uint64_t *pml4ept,       uint32_t pinbased_ctls,
+		       uint32_t procbased_ctls, uint32_t procbased_ctls2,
+		       uint32_t exit_ctls,      uint32_t entry_ctls,
+		       char *msr_bitmap,
+		       char *io_bitmap_a,       char *io_bitmap_b,
+		       uint16_t vpid,
+		       uint64_t cr0_ones_mask,  uint64_t cr0_zeros_mask,
+		       uint64_t cr4_ones_mask,  uint64_t cr4_zeros_mask,
+		       uintptr_t host_rip);
 
 #define	VMCS_INITIAL			0xffffffffffffffff
 

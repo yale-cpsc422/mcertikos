@@ -39,16 +39,17 @@
 
 #ifdef DEBUG_VPIT
 
-#define vpit_debug KERN_DEBUG
+#define vpit_debug(fmt...)			\
+	{					\
+		KERN_DEBUG(fmt);		\
+	}
 
 #else
 
-static gcc_inline void
-vpit_debug_foo(const char *foo, ...)
-{
-}
+#define vpit_debug(fmt...)			\
+	{					\
+	}
 
-#define vpit_debug vpit_debug_foo
 #endif
 
 #define PIT_CHANNEL_MODE_0	0	/* interrupt on terminal count */
@@ -782,7 +783,7 @@ vpit_channel_update(struct vpit_channel *ch, uint64_t current_time)
 			ch->last_intr_time_valid = TRUE;
 			ch->last_intr_time = intr_time;
 
-			vpit_debug("Trigger IRQ_TIMER.\n");
+			/* vpit_debug("Trigger IRQ_TIMER.\n"); */
 			vmm_set_vm_irq(ch->pit->vm, IRQ_TIMER, 0);
 			vmm_set_vm_irq(ch->pit->vm, IRQ_TIMER, 1);
 		}
