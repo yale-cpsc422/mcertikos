@@ -126,12 +126,12 @@ kern_init(mboot_info_t *mbi)
 	}
 
 	/* Start slave kernel on APs */
-	/* int i; */
-	/* for (i = 1; i < pcpu_ncpu(); i++) { */
-	/* 	KERN_INFO("Start slave kernel on CPU%d ... ", i); */
-	/* 	pcpu_boot_ap(i, slave_kernel, (uintptr_t) &stack[i * PAGE_SIZE]); */
-	/* 	KERN_INFO("done.\n"); */
-	/* } */
+	int i;
+	for (i = 1; i < pcpu_ncpu(); i++) {
+		KERN_INFO("Start slave kernel on CPU%d ... ", i);
+		pcpu_boot_ap(i, slave_kernel, (uintptr_t) &stack[i * PAGE_SIZE]);
+		KERN_INFO("done.\n");
+	}
 
 	/* Initialize timer */
 	KERN_INFO("Initialize timer event list ... ");

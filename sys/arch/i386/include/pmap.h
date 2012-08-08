@@ -1,9 +1,7 @@
 #ifndef _MACHINE_PMAP_H_
 #define _MACHINE_PMAP_H_
 
-#ifndef _KERN_
-#error "This is a kernel header; do not include it in userspace programs."
-#endif
+#ifdef _KERN_
 
 #include <sys/mem.h>
 #include <sys/types.h>
@@ -33,4 +31,7 @@ bool pmap_checkrange(pmap_t *, uintptr_t, size_t);
 uintptr_t pmap_la2pa(pmap_t *, uintptr_t la);
 
 //pmap_t pmap_bootpdir[NPDENTRIES] gcc_aligned(PAGESIZE);
+
+#endif /* _KERN_ */
+
 #endif /* !_MACHINE_PMAP_H_ */

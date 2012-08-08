@@ -8,29 +8,59 @@
 
 #include <machine/mem.h>
 
-/* Is mem module initialized? */
+struct page_info {
+	int			used;
+	int			npages_alloc;
+	int			refcount;
+	struct page_info	*last_free_page, *next_free_page;
+};
+
+/* Is the memory module initialized? */
 static bool mem_inited = FALSE;
 
-/*
- * After mem_init(), all operations on mem_pageinfo should be done after
- * getting this lock.
- */
+/* Should be acquired before any memory operations */
 static spinlock_t mem_lock;
 
-/* linked list of page informations of all physical memory pages */
-static pageinfo_t *mem_pageinfo;
+/* information for all memory pages */
+struct page_info *mem_all_pages;
 
-/* linked list of page informations of all free physical memory pages */
-static pageinfo_t *mem_freepage;
+/* information for all free memory pages */
+struct page_info *mem_all_free_pages;
 
-/* max physical address in bytes */
+/* maximum physical address in byte */
 static size_t mem_max;
 
-/* amount of physical page */
+/* amount of physical memory pages */
 static size_t mem_npages;
 
 static int __free_pmmap_ent_idx = 0;
 
+uintptr_t
+mem_pi2phys(struct page_info *pi)
+{
+	return (pi - mem_all_pages) * PAGESIZE;
+}
+
+struct page_info *
+mem_phys2pi(uintptr_t pa)
+{
+	return &mem_all_pages[pa / PAGESIZE];
+}
+
+void *
+mem_pi2ptr(struct page_info *pi)
+{
+	return (void *) mem_pi2phys(pi);
+}
+
+struct page_info *
+mem_ptr2pi(void *ptr)
+{
+	return mem_phys2pi((uintptr_t) ptr);
+}
+
+#define mem_page_index(pi)				\
+	((struct page_info *) (pi) - mem_all_pages)
 
 /*
  * Insert an physical memory map entry in pmmap[].
@@ -232,13 +262,28 @@ pmmap_max()
 		return last_resv_ent->end;
 }
 
+static gcc_inline int
+mem_in_reserved_page(uintptr_t addr)
+{
+	return (addr < (uintptr_t)
+		ROUNDUP((uintptr_t) (mem_all_pages + mem_npages), PAGESIZE)) ||
+		addr >= 0xf0000000;
+}
+
+/*
+ * Initialize the physical memory allocator.
+ */
 void
 mem_init(mboot_info_t *mbi)
 {
-	if (mem_inited == TRUE)
-		return;
-
 	extern uint8_t end[];
+
+	pmmap_t *e820_entry;
+	struct page_info *last_free_page;
+	size_t nfreepages;
+
+	if (mem_inited == TRUE || pcpu_onboot() == FALSE)
+		return;
 
 	/* get a usable physical memory map */
 	pmmap_init(mbi);
@@ -250,207 +295,197 @@ mem_init(mboot_info_t *mbi)
 	mem_max = pmmap_max();
 	mem_npages = pmmap_max() / PAGE_SIZE;
 
+	KERN_INFO("\n\tUsable memory %u bytes, %u pages.\n",
+		   mem_max, mem_npages);
+
 	/* reserve memory for mem_npage pageinfo_t structures */
-	mem_pageinfo =
-		(pageinfo_t *) ROUNDUP((uintptr_t)end, sizeof(pageinfo_t));
-	memset(mem_pageinfo, 0x0, sizeof(pageinfo_t) * mem_npages);
+	mem_all_pages = (struct page_info *) ROUNDUP((uintptr_t)end,
+						     sizeof(struct page_info));
+	memzero(mem_all_pages, sizeof(struct page_info) * mem_npages);
 
 	/*
-	 * initialize free memory page list
+	 * Initialize the free pages list.
 	 *
-	 * 1) all pages below 1MB are reserved,
-	 * 2) all pages below end are reserved,
-	 * 3) all pages for array mem_pageinfo are reserved, and
-	 * 4) all pages above 0xf0000000 are reserved.
-	 * 5) all pages not in MEM_RAM memory regions are reserved.
+	 * - all pages below 1MB (used by BIOS) are reserved,
+	 * - all pages below end (used by the kernel code) are reserved,
+	 * - all pages for mem_all_pages are reserved,
+	 * - all pages above 0xf0000000 (used by devices) are reserved, and
+	 * - all pages not in MEM_RAM e820 entries are reserved.
 	 */
-	pmmap_t *p = pmmap;
-	pageinfo_t *last_freepage = NULL;
-	uint32_t nfreepags = 0;
-	while (p != NULL) {
-		if (p->type != MEM_RAM)
-			goto next;
+	for (e820_entry = pmmap, last_free_page = NULL, nfreepages = 0;
+	     e820_entry != NULL;
+	     e820_entry = e820_entry->next) {
+		uintptr_t lo, hi, i;
+		struct page_info *free_page;
 
-		uintptr_t lo = (uintptr_t) ROUNDUP(p->start, PAGE_SIZE);
-		uintptr_t hi = (uintptr_t) ROUNDDOWN(p->end, PAGE_SIZE);
+		if (e820_entry->type != MEM_RAM)
+			continue;
+
+		lo = (uintptr_t) ROUNDUP(e820_entry->start, PAGESIZE);
+		hi = (uintptr_t) ROUNDDOWN(e820_entry->end, PAGESIZE);
 
 		if (lo >= hi)
-			goto next;
+			continue;
 
-		uintptr_t i;
-		for (i = lo; i < hi; i += PAGE_SIZE) {
-			if (i < (uintptr_t)
-			    ROUNDUP((uintptr_t) (mem_pageinfo + mem_npages),
-				    PAGE_SIZE) ||
-			    i >= 0xf0000000)
+		for (i = lo; i < hi; i+= PAGESIZE) {
+			if (mem_in_reserved_page(i))
 				continue;
 
-			KERN_ASSERT(p->type == MEM_RAM);
-			pageinfo_t *freepage = mem_phys2pi(i);
-			freepage->free_next = NULL;
-			if (last_freepage == NULL)
-				mem_freepage = freepage;
+			free_page = mem_phys2pi(i);
+			free_page->used = 0;
+			free_page->refcount = 0;
+			free_page->npages_alloc = 0;
+			free_page->last_free_page = last_free_page;
+			free_page->next_free_page = NULL;
+
+			if (likely(last_free_page != NULL))
+				last_free_page->next_free_page = free_page;
 			else
-				last_freepage->free_next = freepage;
-			last_freepage = freepage;
-			freepage->free_next = NULL;
+				mem_all_free_pages = free_page;
 
-			nfreepags++;
+			last_free_page = free_page;
+			nfreepages++;
 		}
-
-	next:
-		p = p->next;
 	}
 
 	spinlock_init(&mem_lock);
 }
 
-pageinfo_t *
-mem_page_alloc()
+static gcc_inline int
+mem_next_npages_free(size_t page, size_t n)
 {
-	spinlock_acquire(&mem_lock);
-
-	pageinfo_t *pi = mem_freepage;
-	mem_freepage = pi->free_next;
-	if (pi != NULL)
-		pi->free_next = NULL;
-
-	spinlock_release(&mem_lock);
-
-	if (pi == NULL) {
-		KERN_WARN("No physical memory available.\n");
-	}
-
-	return pi;
-}
-
-static int
-mem_find_continuous_pages(pageinfo_t *freepage, int npage)
-{
-	pageinfo_t *p = freepage, *q;
-	int counter = 0;
-
-	while (p != NULL && counter < npage) {
-		counter++;
-
-		q = p->free_next;
-
-		if (q == NULL)
-			return counter;
-
-		if (q - p != 1)
-			return counter;
-
-		p = q;
-	}
-
-	return counter;
+	while (n)
+		if (mem_all_pages[page].used != 0) {
+			return 0;
+		} else {
+			page++;
+			n--;
+		}
+	return 1;
 }
 
 /*
- * Allocate multiple continous pages of physical memory, which is at least size
- * bytes.
+ * Allocate n pages of which the lowest address is aligned to 2^p pages.
  */
-pageinfo_t *
-mem_pages_alloc(size_t size)
+struct page_info *
+mem_pages_alloc_align(size_t n, int p)
 {
+	struct page_info *page;
+	size_t aligned_to, i;
+
+	if (n > (1 <<20) || p >= 20)
+		return NULL;
+
+	aligned_to = (1 << p);
+
 	spinlock_acquire(&mem_lock);
 
-	int i;
-	int npages = ROUNDUP(size, PAGESIZE) / PAGESIZE;
-	pageinfo_t *pi = mem_freepage;
-	pageinfo_t *pre = NULL;
+	for (page = mem_all_free_pages;
+	     page != NULL; page = page->next_free_page) {
+		size_t page_idx = mem_page_index(page);
 
-	while (pi != NULL) {
-		int nfree = mem_find_continuous_pages(pi, npages);
+		if (page_idx % aligned_to != 0)
+			continue;
 
-		KERN_ASSERT(nfree >= 1);
-
-		if (nfree == npages)
+		if (mem_next_npages_free(page_idx, n))
 			break;
-
-		pre = &pi[nfree-1];
-		pi = pi[nfree-1].free_next;
 	}
 
-	if (pi == NULL)
-		goto ret;
+	if (page == NULL) {
+		spinlock_release(&mem_lock);
+		return NULL;
+	}
 
-	if (pre == NULL)
-		mem_freepage = pi[npages-1].free_next;
+	if (page == mem_all_free_pages)
+		mem_all_free_pages = page[n-1].next_free_page;
+
+	if (page->last_free_page != NULL)
+		page->last_free_page->next_free_page = page[n-1].next_free_page;
+
+	if (page[n-1].next_free_page != NULL)
+		page[n-1].next_free_page->last_free_page = page->last_free_page;
+
+	for (i = 0; i < n; i++) {
+		page[i].used = 1;
+		page[i].npages_alloc = (i == 0) ? n : 0;
+		page[i].last_free_page = NULL;
+		page[i].next_free_page = NULL;
+	}
+
+	spinlock_release(&mem_lock);
+
+	return page;
+}
+
+/*
+ * Free memory pages.
+ */
+struct page_info *
+mem_pages_free(struct page_info *page)
+{
+	struct page_info *last_free_page;
+	size_t page_idx, npages, i;
+
+	spinlock_acquire(&mem_lock);
+
+	KERN_ASSERT(mem_all_pages <= page && page < mem_all_pages + mem_npages);
+	npages = page->npages_alloc;
+	KERN_ASSERT(npages > 0);
+	page_idx = mem_page_index(page);
+
+	i = page_idx;
+	while (i)
+		if (mem_all_pages[i].used == 0)
+			break;
+		else
+			i--;
+	if (i > 0)
+		last_free_page = &mem_all_pages[i];
+	else if (i == 0 && mem_all_pages[i].used == 0)
+		last_free_page = &mem_all_pages[0];
 	else
-		pre->free_next = pi[npages-1].free_next;
+		last_free_page = NULL;
+
+	if (last_free_page != NULL) {
+		page[npages-1].next_free_page = last_free_page->next_free_page;
+		last_free_page->next_free_page->last_free_page = &page[npages-1];
+	} else {
+		page[npages-1].next_free_page = mem_all_free_pages;
+		if (mem_all_free_pages != NULL)
+			mem_all_free_pages->last_free_page = &page[npages-1];
+		mem_all_free_pages = page;
+	}
 
 	for (i = 0; i < npages; i++) {
-		pi[i].free_next = NULL;
-		mem_incref(&pi[i]);
+		page[i].used = 0;
+		page[i].last_free_page = last_free_page;
+		if (last_free_page != NULL)
+			last_free_page->next_free_page = &page[i];
+		last_free_page = &page[i];
 	}
 
- ret:
 	spinlock_release(&mem_lock);
 
-	return pi;
+	return page;
 }
 
 void
-mem_page_free(pageinfo_t *pi)
+mem_incref(struct page_info *page)
 {
+	KERN_ASSERT(mem_all_pages <= page && page < mem_all_pages + mem_npages);
 	spinlock_acquire(&mem_lock);
-
-	KERN_ASSERT(pi != NULL);
-	KERN_ASSERT((uintptr_t) pi >= (uintptr_t) &mem_pageinfo[0] &&
-		    (uintptr_t) pi < (uintptr_t) &mem_pageinfo[mem_npages]);
-	KERN_ASSERT(pi->refcount == 0 && pi->free_next == NULL);
-
-	pi->free_next = mem_freepage;
-	mem_freepage = pi;
-
+	page->refcount++;
 	spinlock_release(&mem_lock);
 }
 
 void
-mem_incref(pageinfo_t *pi)
+mem_decref(struct page_info *page)
 {
-	KERN_ASSERT((uintptr_t) pi >= (uintptr_t) &mem_pageinfo[0] &&
-		    (uintptr_t) pi < (uintptr_t) &mem_pageinfo[mem_npages]);
-	lockadd(&pi->refcount, 1);
-}
-
-void
-mem_decref(pageinfo_t *pi)
-{
-	KERN_ASSERT((uintptr_t) pi >= (uintptr_t) &mem_pageinfo[0] &&
-		    (uintptr_t) pi < (uintptr_t) &mem_pageinfo[mem_npages]);
-	KERN_ASSERT(pi->refcount > 0);
-	lockadd(&pi->refcount, -1);
-}
-
-uintptr_t
-mem_pi2phys(pageinfo_t *pi)
-{
-	return ((pi - mem_pageinfo) * PAGE_SIZE);
-}
-
-pageinfo_t *
-mem_phys2pi(uintptr_t phys)
-{
-	return &mem_pageinfo[phys / PAGE_SIZE];
-}
-
-void *
-mem_pi2ptr(pageinfo_t *pi)
-{
-	KERN_ASSERT(pi != NULL);
-
-	return ((void *) mem_pi2phys(pi));
-}
-
-pageinfo_t *
-mem_ptr2pi(void *ptr)
-{
-	KERN_ASSERT(ptr != NULL);
-
-	return mem_phys2pi((uintptr_t) ptr);
+	KERN_ASSERT(mem_all_pages <= page && page < mem_all_pages + mem_npages);
+	spinlock_acquire(&mem_lock);
+	if (page->refcount)
+		page->refcount--;
+	spinlock_release(&mem_lock);
 }
 
 size_t
