@@ -4,13 +4,12 @@
 
 #include <types.h>
 #include <stdarg.h>
-
 #include <string.h>
 #include <stdio.h>
 
 /*
  * Space or zero padding and a field width are supported for the numeric
- * formats only. 
+ * formats only.
  */
 
 /*
@@ -89,17 +88,17 @@ vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)
 	reswitch:
 		switch (ch = *(unsigned char *) fmt++) {
 
-		// flag to pad on the right
+			// flag to pad on the right
 		case '-':
 			padc = '-';
 			goto reswitch;
-			
-		// flag to pad with 0's instead of spaces
+
+			// flag to pad with 0's instead of spaces
 		case '0':
 			padc = '0';
 			goto reswitch;
 
-		// width field
+			// width field
 		case '1':
 		case '2':
 		case '3':
@@ -135,17 +134,17 @@ vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)
 				width = precision, precision = -1;
 			goto reswitch;
 
-		// long flag (doubled for long long)
+			// long flag (doubled for long long)
 		case 'l':
 			lflag++;
 			goto reswitch;
 
-		// character
+			// character
 		case 'c':
 			putch(va_arg(ap, int), putdat);
 			break;
 
-		// string
+			// string
 		case 's':
 			if ((p = va_arg(ap, char *)) == NULL)
 				p = "(null)";
@@ -161,7 +160,7 @@ vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)
 				putch(' ', putdat);
 			break;
 
-		// (signed) decimal
+			// (signed) decimal
 		case 'd':
 			num = getint(&ap, lflag);
 			if ((long long) num < 0) {
@@ -171,13 +170,13 @@ vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)
 			base = 10;
 			goto number;
 
-		// unsigned decimal
+			// unsigned decimal
 		case 'u':
 			num = getuint(&ap, lflag);
 			base = 10;
 			goto number;
 
-		// (unsigned) octal
+			// (unsigned) octal
 		case 'o':
 #if SOL >= 1
 			num = getuint(&ap, lflag);
@@ -191,7 +190,7 @@ vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)
 			break;
 #endif
 
-		// pointer
+			// pointer
 		case 'p':
 			putch('0', putdat);
 			putch('x', putdat);
@@ -200,7 +199,7 @@ vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)
 			base = 16;
 			goto number;
 
-		// (unsigned) hexadecimal
+			// (unsigned) hexadecimal
 		case 'x':
 			num = getuint(&ap, lflag);
 			base = 16;
@@ -208,12 +207,12 @@ vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)
 			printnum(putch, putdat, num, base, width, padc);
 			break;
 
-		// escaped '%' character
+			// escaped '%' character
 		case '%':
 			putch(ch, putdat);
 			break;
-			
-		// unrecognized escape sequence - just print it literally
+
+			// unrecognized escape sequence - just print it literally
 		default:
 			putch('%', putdat);
 			for (fmt--; fmt[-1] != '%'; fmt--)

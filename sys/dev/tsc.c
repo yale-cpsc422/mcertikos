@@ -103,3 +103,9 @@ delay(uint32_t ms)
 	volatile uint64_t start = rdtscp();
 	while (rdtscp() < start + ticks);
 }
+
+uint64_t
+time_ms(void)
+{
+	return (rdtscp() / tsc_per_ms);
+}

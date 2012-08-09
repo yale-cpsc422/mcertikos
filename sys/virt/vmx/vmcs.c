@@ -101,7 +101,7 @@ vmcs_set_defaults(struct vmcs *vmcs, uint64_t *pml4ept, uint32_t pinbased_ctls,
 		  uint64_t cr4_ones_mask, uint64_t cr4_zeros_mask,
 		  uintptr_t host_rip)
 {
-	pcpu_t *c;
+	struct pcpu *c;
 	extern gatedesc_t idt[];
 
 	KERN_ASSERT(vmcs != NULL && pml4ept != NULL && msr_bitmap != NULL);

@@ -4,36 +4,33 @@
 #ifdef _KERN_
 
 #include <sys/gcc.h>
-#include <sys/mmu.h>
-/* #include <sys/pcpu.h> */
-#include <sys/trap.h>
 #include <sys/types.h>
 
-typedef
-struct context_t {
-	uint8_t stack[PAGE_SIZE - sizeof(tf_t)];
-	tf_t tf;
-} context_t;
+#include <machine/trap.h>
 
-typedef uint32_t (*callback_t) (context_t *);
+struct proc;	/* defined in sys/sys/proc.h */
 
-void context_init(void);
+struct context {
+	tf_t 		tf;	/* trapframe */
 
-context_t *context_new(void (*f)(void), uint32_t);
-void context_destroy(context_t *);
+	struct proc	*p;	/* must be NULL if it's not the context of a
+				   process */
+};
 
-void context_register_handler(int, callback_t);
+typedef uint32_t (*ctx_cb_t) (struct context *);
 
-void context_start(context_t *) gcc_noreturn;
+void ctx_init(struct proc *, void (*entry)(void), uintptr_t stack);
 
-uint32_t context_errno(context_t *);
-uint32_t context_arg1(context_t *);
-uint32_t context_arg2(context_t *);
-uint32_t context_arg3(context_t *);
-uint32_t context_arg4(context_t *);
+void ctx_start(struct context *) gcc_noreturn;
 
-context_t *context_cur(void);
-void context_set_cur(context_t *);
+uint32_t ctx_errno(struct context *);
+uint32_t ctx_arg1(struct context *);
+uint32_t ctx_arg2(struct context *);
+uint32_t ctx_arg3(struct context *);
+uint32_t ctx_arg4(struct context *);
+void ctx_set_retval(struct context *, uint32_t);
+
+void ctx_dump(struct context *);
 
 #endif /* _KERN_ */
 

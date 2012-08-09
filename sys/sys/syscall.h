@@ -1,44 +1,43 @@
 #ifndef _SYS_SYSCALL_H_
 #define _SYS_SYSCALL_H_
 
+#ifdef _KERN_
+
+#include <sys/context.h>
+#include <sys/types.h>
+
+#include <machine/trap.h>
+
+int syscall_handler(struct context *);
+
+#endif /* _KERN_ */
+
+#define T_SYSCALL	48
+
 /*
-* syscall header for certikos
-* basically for master and client kernel
-*
-*
-*
-*/
-// Master syscall
+ * System calls for I/O
+ */
+#define SYS_puts	0	/* output a string to the console */
+#define SYS_getc	1	/* input a character from the console */
 
-/* must be identity to T_SYSCALL defined in sys/arch/xxx/include/trap.h */
-#define T_SYSCALL		48
+/*
+ * Systam calls for the process
+ */
+#define SYS_spawn	2	/* spawn a process */
+#define SYS_yield	3	/* yield to another process */
+#define SYS_getpid	4	/* get my process id */
+#define SYS_send	5	/* send a message to another process */
+#define SYS_recv	6	/* receive a message */
 
-#define SYSCALL_PUTS			1
-#define SYSCALL_GETC			2
-#define SYSCALL_NCPU			3
-#define SYSCALL_CPUSTAT			4
-#define SYSCALL_SIGNAL			5
-#define SYSCALL_SIGRET			6
-#define SYSCALL_LOAD			7
-#define SYSCALL_MGMT			8
-#define SYSCALL_STARTUPVM		9
+/*
+ * System calls for the virtual machine
+ */
+#define SYS_allocvm	32	/* allocate a virtual machine */
+#define SYS_execvm	33	/* execute the virtual machine */
 
-#define SYSCALL_MGMT_START		1
-#define SYSCALL_MGMT_STOP		2
-#define SYSCALL_MGMT_ALLOCA_PAGE	3
-
-
-//client syscall
-// The number of the interrupt on which the syscalls happend on application cores
-#define T_CLIENT_SYSCALL 48
-
-#define SYSCALL_CLIENT_PUTS 1
-#define SYSCALL_CLIENT_GETC 2
-#define SYSCALL_CLIENT_TIME 3
-#define SYSCALL_CLIENT_PID 4
-#define SYSCALL_CLIENT_CPU 5
-#define SYSCALL_CLIENT_SETUPVM 6
-
-//#endif /* _KERN_ */
+/*
+ * System calss for testing
+ */
+#define SYS_test	255
 
 #endif /* !_SYS_SYSCALL_H_ */

@@ -99,6 +99,9 @@ pmap_walk(pde_t *pdir, uintptr_t la, bool write)
  * identically maps the ACPI address space, IOAPIC address space, and
  * 0xf000_0000 to 0xffff_ffff.
  *
+ * XXX: all these pages are marked as global pages (PTE_G=1) so that "move to
+ *      CR3" can not invalidate the TLB entries for them.
+ *
  * @param pmap the kernel page table
  *
  * @return the kernel page table, if succeed; otherwise, NULL.
@@ -428,6 +431,8 @@ pmap_setperm(pmap_t *pmap, uintptr_t va, uint32_t size, int perm)
 void
 pmap_install(pmap_t *pmap)
 {
+	KERN_DEBUG("pmap_install: 0x%08x\n", pmap);
+
 	lcr3((uintptr_t) pmap);
 }
 

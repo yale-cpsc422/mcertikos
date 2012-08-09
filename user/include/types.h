@@ -18,29 +18,6 @@ typedef int32_t			ssize_t;
 
 typedef uint32_t		pid_t;
 
-typedef
-struct mgmt_start_t {
-	uint32_t	cpu;
-	pid_t		pid;
-} mgmt_start_t;
-
-typedef
-struct mgmt_stop_t {
-	uint32_t	cpu;
-} mgmt_stop_t;
-
-typedef
-struct mgmt_allocpage_t {
-	pid_t		pid;
-	uintptr_t	va;
-} mgmt_allocpage_t;
-
-typedef
-struct mgmt_data_t {
-	uint32_t	cmd;
-	uint8_t		params[100];
-} mgmt_data_t;
-
 #define NULL	((void *) 0)
 
 #endif /* !_USER_TYPES_H_ */

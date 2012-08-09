@@ -147,6 +147,9 @@ lapic_init()
 	KERN_DEBUG("Set LAPIC TICR = %x.\n", ticr);
 	lapic_write(LAPIC_TICR, ticr);
 
+	/* disable lapic timer */
+	/* lapic_write(LAPIC_TIMER, LAPIC_TIMER_MASKED); */
+
 	// Disable logical interrupt lines.
 	lapic_write(LAPIC_LINT0, LAPIC_LINT_MASKED);
 	lapic_write(LAPIC_LINT1, LAPIC_LINT_MASKED);

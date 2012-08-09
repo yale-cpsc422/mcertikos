@@ -622,7 +622,7 @@ vpit_ioport_read(struct vpit *pit, uint32_t port)
 			break;
 
 		default:
-			KERN_PANIC("Invalid read state %x of counter %x.\n ",
+			KERN_PANIC("Invalid read state %x of counter %x.\n",
 				   ch->count_latched, channel);
 		}
 	} else { /* read unlatched count */

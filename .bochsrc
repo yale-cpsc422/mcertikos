@@ -27,6 +27,8 @@ keyboard_paste_delay: 100000
 keyboard_mapping: enabled=0, map=
 mouse: enabled=0
 
+com1: enabled=1, mode=file, dev=log
+
 # romimage: file=misc/bios.bin
 
 com1: enabled=1, mode=file, dev=bochs.log

@@ -1,144 +1,139 @@
 #ifndef _USER_SYSCALL_H_
 #define _USER_SYSCALL_H_
 
+#include <sys/syscall.h>
+
 #include <gcc.h>
+#include <proc.h>
 #include <types.h>
-#include <sys/sys/syscall.h>
-/* must be identity to T_SYSCALL defined in sys/arch/xxx/include/trap.h */
-//#define T_SYSCALL		48
 
-/* must be identity to those defined in sys/sys/user.h */
-/*
-#define SYSCALL_PUTS		1
-#define SYSCALL_GETC		2
-#define SYSCALL_NCPU		3
-#define SYSCALL_CPUSTAT		4
-#define SYSCALL_SIGNAL		5
-#define SYSCALL_SIGRET		6
-#define SYSCALL_LOAD		7
-#define SYSCALL_MGMT		8
-#define SYSCALL_STARTUPVM		9
-*/
+static gcc_inline void
+sys_test(uint32_t a)
+{
+	asm volatile("int %1" :
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_test),
+		       "b" (a)
+		     : "cc", "memory");
+}
 
-/* must be identity to those defined in sys/sys/user.h */
-#define MGMT_START		1
-#define MGMT_STOP		2
-#define MGMT_ALLOCA_PAGE	3
-/*
-static void gcc_inline
-sys_putc(const char *c)
+static gcc_inline void
+sys_puts(const char *s)
 {
 	asm volatile("int %0" :
 		     : "i" (T_SYSCALL),
-		       "a" (SYSCALL_PUTC),
-		       "b" (c)
+		       "a" (SYS_puts),
+		       "b" (s)
 		     : "cc", "memory");
 }
-*/
-static void gcc_inline sys_puts(const char *s) {
-    asm volatile("int %0" :
-            : "i" (T_SYSCALL),
-              "a" (SYSCALL_PUTS),
-              "b" (s)
-            : "cc", "memory");
-}
 
-static int gcc_inline
+static gcc_inline int
 sys_getc(void)
 {
 	int c;
 
 	asm volatile("int %0" :
 		     : "i" (T_SYSCALL),
-		       "a" (SYSCALL_GETC),
+		       "a" (SYS_getc),
 		       "b" (&c)
 		     : "cc", "memory");
 
 	return c;
 }
 
-static int gcc_inline
-sys_ncpu(void)
+static gcc_inline pid_t
+sys_spawn(uintptr_t exe)
 {
-	int n;
+	pid_t pid;
 
 	asm volatile("int %0" :
 		     : "i" (T_SYSCALL),
-		       "a" (SYSCALL_NCPU),
-		       "b" (&n)
+		       "a" (SYS_spawn),
+		       "b" (exe),
+		       "c" (&pid)
 		     : "cc", "memory");
 
-	return n;
+	return pid;
 }
 
-static int gcc_inline
-sys_cpustat(int cpu)
-{
-	int stat = cpu;
-
-	asm volatile("int %0" :
-		     : "i" (T_SYSCALL),
-		       "a" (SYSCALL_CPUSTAT),
-		       "b" (&stat)
-		     : "cc", "memory");
-
-	return stat;
-}
-
-static pid_t gcc_inline
-sys_load(uintptr_t binary, pid_t *pid)
+static gcc_inline void
+sys_yield(void)
 {
 	asm volatile("int %0" :
 		     : "i" (T_SYSCALL),
-		       "a" (SYSCALL_LOAD),
-		       "b" (binary),
-		       "c" (pid)
+		       "a" (SYS_yield)
 		     : "cc", "memory");
-
-	return *pid;
 }
 
-static void gcc_inline
-sys_mgmt(mgmt_data_t *data)
+static gcc_inline pid_t
+sys_getpid(void)
 {
+	pid_t pid;
+
 	asm volatile("int %0" :
 		     : "i" (T_SYSCALL),
-		       "a" (SYSCALL_MGMT),
-		       "b" (data)
+		       "a" (SYS_getpid),
+		       "b" (&pid)
 		     : "cc", "memory");
 
-	return;
+	return pid;
 }
 
-static void gcc_inline
-sys_startupvm(void)
+static gcc_inline void
+sys_send(pid_t pid, void *data, size_t size)
 {
-	int ret;
+	if (size != 0 && data == NULL)
+		return;
+
 	asm volatile("int %0" :
 		     : "i" (T_SYSCALL),
-		       "a" (SYSCALL_STARTUPVM),
-		       "b" (&ret)
+		       "a" (SYS_send),
+		       "b" (pid),
+		       "c" (data),
+		       "d" (size)
 		     : "cc", "memory");
 }
 
-static void cpustart(uint32_t cpu, uint32_t procid) {
-        mgmt_start_t params = {cpu, procid};
-        mgmt_data_t data;
-        data.cmd = MGMT_START;
-        *((mgmt_start_t*)&data.params) = params;
-        sys_mgmt(&data);
-        return;
+static gcc_inline void
+sys_recv(void *data, size_t *size)
+{
+	if (data == NULL || size  == NULL)
+		return;
+
+	asm volatile("int %0" :
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_recv),
+		       "b" (data),
+		       "c" (size)
+		     : "cc", "memory");
 }
 
+static gcc_inline uint32_t
+sys_allocvm(void)
+{
+	uint32_t rc;
 
-static void stop_cpu(uint32_t cpu) {
-        mgmt_stop_t params = {cpu};
-        mgmt_data_t data;
-        data.cmd = MGMT_STOP;
-        *((mgmt_stop_t*)&data.params) = params;
-        sys_mgmt(&data);
-        return;
+	asm volatile("int %1"
+		     : "=a" (rc)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_allocvm)
+		     : "cc", "memory");
+
+	return rc;
 }
 
+static gcc_inline uint32_t
+sys_execvm(void)
+{
+	uint32_t rc;
+
+	asm volatile("int %1"
+		     : "=a" (rc)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_execvm)
+		     : "cc", "memory");
+
+	return rc;
+}
 
 #endif /* !_USER_SYSCALL_H_ */

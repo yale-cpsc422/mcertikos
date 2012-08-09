@@ -1,5 +1,6 @@
 #include <sys/debug.h>
 #include <sys/intr.h>
+#include <sys/proc.h>
 #include <sys/spinlock.h>
 #include <sys/string.h>
 #include <sys/types.h>
@@ -18,8 +19,6 @@ static bool vmm_inited = FALSE;
 
 static struct vm vm_pool[4];
 static spinlock_t vm_pool_lock;
-
-static struct vm *cur_vm = NULL;
 
 static enum {SVM, VMX} virt_type;
 static struct vmm_ops *vmm_ops = NULL;
@@ -97,8 +96,6 @@ vmm_init(void)
 	}
 
 	spinlock_init(&vm_pool_lock);
-
-	cur_vm = NULL;
 
 	vmm_inited = TRUE;
 
@@ -178,9 +175,10 @@ vmm_run_vm(struct vm *vm)
 	static uint64_t last_dump = 0;
 #endif
 
-	cur_vm = vm;
-
 	while (1) {
+		/* make sure all external interrups are handled */
+		KERN_ASSERT(vm->exit_for_intr == FALSE);
+
 		vmm_pre_time_update(vm);
 
 		vmm_ops->vm_run(vm);
@@ -188,40 +186,17 @@ vmm_run_vm(struct vm *vm)
 		vmm_post_time_update(vm);
 
 		/*
-		 * If VM exits for interrupts, then enable interrupts in the
-		 * host in order to let host interrupt handlers come in.
+		 * If VM exits for the external interrupt, return to userspace
+		 * and let the interrupt handler of CertiKOS be triggered.
 		 */
-		if (vm->exit_for_intr == TRUE)
-			intr_local_enable();
+		if (vm->exit_for_intr == TRUE) {
+#ifdef DEBUG_GUEST_INTR
+			KERN_DEBUG("VMEXIT for ExtINTR.\n");
+#endif
+			break;
+		}
 
-		/*
-		 * Wait until the interrupt is handled.
-		 * XXX: According to Intel's instruction set reference, STI
-		 *      takes effect after the instruction following STI.
-		 *      However, it maybe not enough in QEMU+KVM, so following
-		 *      loop is added to explictly wait for the effect.
-		 * XXX: pause() in the loop body can NOT be removed. pause() is
-		 *      actually "__asm __volatile("pause":::"memory")". Note
-		 *      the third parameter of the inline assembly tells the
-		 *      compilers it may clobber some memory, so that the
-		 *      compiler may not treat this loop as an empty loop.
-		 *      Otherwise, compilers may merge this loop and above if
-		 *      statement as
-		 *         if (vm->exit_for_intr == TRUE) {
-		 *                 intr_local_enable();
-		 *                 while (1)
-		 *                         ;
-		 *         }
-		 *      , which will halt the whole kernel when the if condition
-		 *      is satisfied.
-		 * XXX: Another solution is to declare exit_for_intr as volatile.
-		 *      CertiKOS uses both to prevent compilers doing
-		 *      unnecessary optimizations.
-		 */
-		while (vm->exit_for_intr == TRUE)
-			pause();
-		/* assertion that makes sure that interrupts are disabled */
-		KERN_ASSERT((read_eflags() & FL_IF) == 0x0);
+		/* otherwise, handle VMEXIT normally */
 		vmm_ops->vm_exit_handle(vm);
 
 #if defined (TRACE_IOIO) || defined (TRACE_TOTAL_TIME)
@@ -238,7 +213,6 @@ vmm_run_vm(struct vm *vm)
 #endif
 		}
 #endif
-
 	}
 
 	return 0;
@@ -247,7 +221,20 @@ vmm_run_vm(struct vm *vm)
 struct vm *
 vmm_cur_vm(void)
 {
-	return cur_vm;
+	struct proc *p;
+	struct vm *vm;
+
+	if (vmm_inited == FALSE)
+		return NULL;
+
+	if ((p = proc_cur()) == NULL)
+		return NULL;
+
+	proc_lock(p);
+	vm = p->vm;
+	proc_unlock(p);
+
+	return vm;
 }
 
 void

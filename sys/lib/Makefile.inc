@@ -8,6 +8,7 @@ KERN_SRCFILES	+= $(KERN_DIR)/lib/dprintf.c
 KERN_SRCFILES	+= $(KERN_DIR)/lib/printfmt.c
 KERN_SRCFILES	+= $(KERN_DIR)/lib/debug.c
 KERN_SRCFILES	+= $(KERN_DIR)/lib/elf.c
+KERN_SRCFILES	+= $(KERN_DIR)/lib/mqueue.c
 
 # Targets
 

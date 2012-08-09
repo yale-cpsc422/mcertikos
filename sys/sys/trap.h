@@ -3,9 +3,26 @@
 
 #ifdef _KERN_
 
+#include <sys/context.h>
+
 #include <machine/trap.h>
 
+struct context;
+
+typedef int (*trap_cb_t) (struct context *);
+
 void trap(tf_t *);
+void trap_handler_register(int trapno, trap_cb_t);
+
+/* exception handlers */
+int default_exception_handler(struct context *);
+int gpf_handler(struct context *);
+int pgf_handler(struct context *);
+
+/* external interrupt handlers */
+int spurious_intr_handler(struct context *);
+int timer_intr_handler(struct context *);
+int kbd_intr_handler(struct context *);
 
 #endif /* _KERN_ */
 
