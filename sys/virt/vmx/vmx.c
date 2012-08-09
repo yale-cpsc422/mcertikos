@@ -701,7 +701,6 @@ vmx_init_vm(struct vm *vm)
 	pageinfo_t *vmcs_pi, *ept_pi, *msr_pi, *io_pi;
 
 	vmx_info = &vmx_proc_info[pcpu_cur_idx()];
-	KERN_DEBUG("Processor %d\n", pcpu_cur_idx());
 	KERN_ASSERT(vmx_info->vmx_enabled == TRUE);
 
 	vmx = vmx_alloc();
@@ -1258,18 +1257,20 @@ vmx_handle_ept_violation(struct vm *vm)
 
 	/* TODO: which exception/fault would happen? */
 	if (0xf0000000 <= fault_pa && fault_pa <= 0xffffffff) {
-		if ((pi = mem_page_alloc()) == NULL)
+		if ((pi = mem_pages_alloc_align(512, 9)) == NULL)
 			return 0;
-		memset(mem_pi2ptr(pi), 0, PAGESIZE);
+		memset(mem_pi2ptr(pi), 0, PAGESIZE * 512);
+
 		if (ept_add_mapping(vmx->pml4ept,
-				    ROUNDDOWN(fault_pa, PAGESIZE),
-				    mem_pi2phys(pi)))
+				    ROUNDDOWN(fault_pa, PAGESIZE * 512),
+				    PAT_UNCACHEABLE, mem_pi2phys(pi), TRUE))
 			KERN_PANIC("Cannot allocate memory for guest physical "
 				   "address 0x%08x.\n", fault_pa);
-	} else
-		KERN_PANIC("Out of physical memory range: 0x%08x.\n", fault_pa);
 
-	ept_invalidate_mappings((uintptr_t) vmx->pml4ept);
+		ept_invalidate_mappings((uintptr_t) vmx->pml4ept);
+	} else {
+		KERN_PANIC("Out of physical memory range: 0x%08x.\n", fault_pa);
+	}
 
 	return 1;
 }
