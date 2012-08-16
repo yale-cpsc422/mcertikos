@@ -172,7 +172,9 @@ physical_ioport_write(uint32_t port, void *data, data_sz_t size)
 int
 svm_guest_intr_handler(struct vm *vm, uint8_t irq)
 {
-	KERN_ASSERT(vm != NULL && vm->exit_for_intr == TRUE);
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(vm->exit_reason == EXIT_FOR_EXTINT &&
+		    vm->handled == FALSE);
 
 	KERN_ASSERT(irq >= 0);
 #ifdef DEBUG_GUEST_INTR
@@ -194,7 +196,7 @@ svm_guest_intr_handler(struct vm *vm, uint8_t irq)
 		}
 	}
 
-	vm->exit_for_intr = FALSE;
+	vm->handled = TRUE;
 
 	return 0;
 }

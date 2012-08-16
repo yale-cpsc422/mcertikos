@@ -469,7 +469,6 @@ vm_init(struct vm *vm)
 	/* Sec 15.21.1, APM Vol2 r3.19 */
 	svm->vmcb->control.int_ctl = (SVM_INTR_CTRL_VINTR_MASK |
 				      (0x0 & SVM_INTR_CTRL_VTPR));
-	vm->exit_for_intr = FALSE;
 
 	/* initialize TSC */
 	svm->enter_tsc = 0x0;
@@ -498,8 +497,6 @@ vm_run(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
 
-	KERN_DEBUG("vm_run(): vm @ 0x%08x\n", vm);
-
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_control_area *ctrl = &vmcb->control;
@@ -522,7 +519,8 @@ vm_run(struct vm *vm)
 	lldt(svm->h_ldt);
 
 	if(ctrl->exit_code == SVM_EXIT_INTR) {
-		vm->exit_for_intr = TRUE;
+		vm->exit_reason = EXIT_FOR_EXTINT;
+		vm->handled = FALSE;
 	}
 
 	if (ctrl->exit_int_info & SVM_EXITINTINFO_VALID) {
@@ -581,8 +579,6 @@ svm_handle_exit(struct vm *vm)
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_control_area *ctrl = &vmcb->control;
 
-	bool handled = FALSE;
-
 	switch (ctrl->exit_code) {
 	case SVM_EXIT_EXCP_BASE ... (SVM_EXIT_INTR-1):
 #ifdef DEBUG_GUEST_EXCEPT
@@ -590,7 +586,8 @@ svm_handle_exit(struct vm *vm)
 			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for EXCP ");
 #endif
-		handled = svm_handle_exception(vm);
+		vm->exit_reason = EXIT_FOR_OTHERS;
+		vm->handled = svm_handle_exception(vm);
 		break;
 
 	case SVM_EXIT_INTR:
@@ -600,8 +597,9 @@ svm_handle_exit(struct vm *vm)
 			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for INTR (post).\n");
 #endif
-		KERN_ASSERT(vm->exit_for_intr == FALSE);
-		handled = svm_handle_intr(vm);
+		KERN_ASSERT(vm->exit_reason == EXIT_FOR_EXTINT &&
+			    vm->handled == TRUE);
+		svm_handle_intr(vm);
 		break;
 
 	case SVM_EXIT_VINTR:
@@ -610,7 +608,8 @@ svm_handle_exit(struct vm *vm)
 			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for VINTR.\n");
 #endif
-		handled = svm_handle_vintr(vm);
+		vm->exit_reason = EXIT_FOR_OTHERS;
+		vm->handled = svm_handle_vintr(vm);
 		break;
 
 	case SVM_EXIT_IOIO:
@@ -619,7 +618,8 @@ svm_handle_exit(struct vm *vm)
 			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for IO");
 #endif
-		handled = svm_handle_ioio(vm);
+		vm->exit_reason = EXIT_FOR_OTHERS;
+		vm->handled = svm_handle_ioio(vm);
 		break;
 
 	case SVM_EXIT_NPF:
@@ -628,7 +628,8 @@ svm_handle_exit(struct vm *vm)
 			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for NPF");
 #endif
-		handled = svm_handle_npf(vm);
+		vm->exit_reason = EXIT_FOR_OTHERS;
+		vm->handled = svm_handle_npf(vm);
 		break;
 
 	case SVM_EXIT_CPUID:
@@ -637,7 +638,8 @@ svm_handle_exit(struct vm *vm)
 			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for cpuid");
 #endif
-		handled = svm_handle_cpuid(vm);
+		vm->exit_reason = EXIT_FOR_OTHERS;
+		vm->handled = svm_handle_cpuid(vm);
 		break;
 
 	case SVM_EXIT_SWINT:
@@ -646,7 +648,8 @@ svm_handle_exit(struct vm *vm)
 			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for INTn.\n");
 #endif
-		handled = svm_handle_swint(vm);
+		vm->exit_reason = EXIT_FOR_OTHERS;
+		vm->handled = svm_handle_swint(vm);
 		break;
 
 	case SVM_EXIT_RDTSC:
@@ -655,7 +658,8 @@ svm_handle_exit(struct vm *vm)
 			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for RDTSC.\n");
 #endif
-		handled = svm_handle_rdtsc(vm);
+		vm->exit_reason = EXIT_FOR_OTHERS;
+		vm->handled = svm_handle_rdtsc(vm);
 		break;
 
 	case SVM_EXIT_RDTSCP:
@@ -664,7 +668,8 @@ svm_handle_exit(struct vm *vm)
 			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for RDTSCP.\n");
 #endif
-		handled = svm_handle_rdtscp(vm);
+		vm->exit_reason = EXIT_FOR_OTHERS;
+		vm->handled = svm_handle_rdtscp(vm);
 		break;
 
 	case SVM_EXIT_VMMCALL:
@@ -673,14 +678,16 @@ svm_handle_exit(struct vm *vm)
 			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for VMMCALL.\n");
 #endif
-		handled = svm_handle_vmmcall(vm);
+		vm->exit_reason = EXIT_FOR_OTHERS;
+		vm->handled = svm_handle_vmmcall(vm);
 		break;
 
 	case SVM_EXIT_ERR:
 		KERN_DEBUG("[%x:%llx] ",
 			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
 		dprintf("VMEXIT for invalid guest state in VMCB.\n");
-		handled = svm_handle_err(vm);
+		vm->exit_reason = EXIT_FOR_OTHERS;
+		vm->handled = svm_handle_err(vm);
 		break;
 
 	default:
@@ -693,7 +700,7 @@ svm_handle_exit(struct vm *vm)
 	if (ctrl->exit_code == SVM_EXIT_ERR)
 		KERN_PANIC("Halt for SVM_EXIT_ERR.\n");
 
-	if (handled == FALSE) {
+	if (vm->handled == FALSE) {
 		KERN_PANIC("Unhandled VMEXIT: exit_code = %x.\n",
 			   ctrl->exit_code);
 	}

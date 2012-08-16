@@ -13,67 +13,108 @@
 #include <machine/trap.h>
 #include <machine/vm.h>
 
-#include <dev/lapic.h>
 #include <dev/kbd.h>
+#include <dev/lapic.h>
+#include <dev/tsc.h>
 
-void gcc_noreturn
-trap(tf_t *tf)
+/*
+ * Trap handler entry for traps from userspace.
+ */
+static gcc_inline gcc_noreturn void
+trap_user(tf_t *tf)
 {
+	KERN_ASSERT(tf->eip >= VM_USERLO && tf->eip < VM_USERHI);
+
 	struct proc *p;
 	struct context *ctx;
-	int vmexit;	/* is a virtual machine running? */
-	struct vm *vm;
 	trap_cb_t f;
-
-	asm volatile("cld" ::: "cc");
-
-	KERN_ASSERT(tf != NULL);
-	if (tf->trapno < T_IRQ0) {
-		trap_dump(tf);
-		if (tf->trapno == T_PGFLT)
-			KERN_DEBUG("Page fault for address 0x%08x.\n", rcr2());
-	}
-
-	KERN_ASSERT(VM_USERLO <= tf->eip && tf->eip < VM_USERHI);
 
 	p = proc_cur();
 
+	KERN_ASSERT(p != NULL);
+
 	proc_lock(p);
 
+	/* update schedule info */
+	p->total_running_time += (time_ms() - p->last_running_time);
+
+	/* save the context */
 	ctx = &p->ctx;
-	vmexit = (p->vm != NULL && p->vm->exit_for_intr == TRUE);
-
-	KERN_DEBUG("Trap %d from process %d on CPU %d, vmexit=%d.\n",
-		   tf->trapno, p->pid, pcpu_cur_idx(), vmexit);
-
-	vm = vmexit ? p->vm : NULL;
 	proc_save(p, tf);
 
 	proc_unlock(p);
 
 	f = pcpu_cur()->trap_cb[tf->trapno];
 
-	if (f) {
+	if (f)
 		f(ctx);
-	} else if (vmexit) {
-		int irq = tf->trapno - T_IRQ0;
+	else
+		KERN_WARN("No handler for trap %d.\n", tf->trapno);
 
+	/* return to userspace */
+	proc_sched();
+}
+
+/*
+ * Trap handler entry for traps from kernel.
+ *
+ * XXX: In CertiKOS, traps from the kernel only consist of the external
+ *      interrupts from a running guest. All exceptions from the kernel
+ *      are invalid.
+ */
+static gcc_inline gcc_noreturn void
+trap_kern(tf_t *tf)
+{
+	KERN_ASSERT(tf->trapno >= T_IRQ0);
+
+	struct vm *vm;
+	trap_cb_t f;
+	int irq;
+
+#ifdef DEBUG_GUEST_INTR
+	KERN_DEBUG("ExtINTR %d from guest.\n", tf->trapno - T_IRQ0);
+#endif
+
+	f = pcpu_cur()->trap_cb[tf->trapno];
+
+	if (f) {
+		f(NULL);
+	} else {
+		vm = vmm_cur_vm();
 		KERN_ASSERT(vm != NULL);
+		KERN_ASSERT(vm->exit_reason == EXIT_FOR_EXTINT &&
+			    vm->handled == FALSE);
+
+		irq = tf->trapno - T_IRQ0;
 		KERN_ASSERT(irq >= 0);
 
 		vmm_handle_intr(vm, irq);
-	} else {
-		KERN_WARN("NO handler registered for trap %d.\n", tf->trapno);
 	}
 
-	if (vmexit) {
-		KERN_DEBUG("Re-enter VM\n");
-		KERN_ASSERT(vm != NULL);
-		vmm_run_vm(vm);
+	tf->eflags &= ~(uint32_t) FL_IF;
+	trap_return(tf);
+}
+
+/*
+ * Top-level trap handler entry.
+ */
+gcc_noreturn void
+trap(tf_t *tf)
+{
+	asm volatile("cld" ::: "cc");
+
+	KERN_ASSERT(tf != NULL);
+
+	if (tf->trapno < T_IRQ0) {
+		trap_dump(tf);
+		if (tf->trapno == T_PGFLT)
+			KERN_DEBUG("Fault address 0x%08x.\n", rcr2());
 	}
 
-	ctx->tf.eflags &= ~FL_IF;
-	proc_run();
+	if (tf->eip >= VM_USERLO)
+		trap_user(tf);
+	else
+		trap_kern(tf);
 }
 
 void
@@ -177,18 +218,11 @@ timer_intr_handler(struct context *ctx)
 	/* timer_handle_timeout(); */
 
 	struct vm *vm = vmm_cur_vm();
-	bool from_guest =
-		(vm != NULL && vm->exit_for_intr == TRUE) ? TRUE : FALSE;
+	bool from_guest = (vm != NULL &&
+			   vm->exit_reason == EXIT_FOR_EXTINT) ? TRUE : FALSE;
 
-	if (from_guest == TRUE) {
+	if (from_guest == TRUE)
 		vmm_handle_intr(vm, IRQ_TIMER);
-	} else {
-		/*
-		 * XXX: If the current process is running a virtual machine,
-		 *      don't do the process schedule.
-		 */
-		proc_sched(pcpu_cur());
-	}
 
 	intr_eoi();
 
@@ -201,8 +235,8 @@ kbd_intr_handler(struct context *ctx)
 	KERN_DEBUG("master_kbd_handler\n");
 
 	struct vm *vm = vmm_cur_vm();
-	bool from_guest =
-		(vm != NULL && vm->exit_for_intr == TRUE) ? TRUE : FALSE;
+	bool from_guest = (vm != NULL &&
+			   vm->exit_reason == EXIT_FOR_EXTINT) ? TRUE : FALSE;
 
 	if (from_guest != TRUE) { /* for a normal application */
 		kbd_intr();

@@ -26,6 +26,7 @@
 uint8_t pcpu_stack[MAX_CPU * PAGE_SIZE] gcc_aligned(PAGE_SIZE);
 
 extern uint8_t _binary___obj_user_init_init_start[];
+extern uint8_t _binary___obj_user_idle_idle_start[];
 
 static void gcc_noreturn
 kern_main(void)
@@ -35,7 +36,7 @@ kern_main(void)
 	struct proc *init_proc;
 
 	c = pcpu_cur();
-	KERN_ASSERT(c != NULL && c->state == PCPU_READY);
+	KERN_ASSERT(c != NULL && c->state == PCPU_INITED);
 
 	/* allocate buffer for handling system calls */
 	KERN_INFO("[BSP KERN] Prepare buffer for handling system calls ... ");
@@ -94,16 +95,12 @@ kern_main(void)
 	if (init_proc == NULL)
 		KERN_PANIC("Cannot create init process on CPU %d.\n",
 			   pcpu_cur_idx());
-	if (proc_ready(init_proc, c))
-		KERN_PANIC("Cannot put init process %d on the ready queue "
-			   "of CPU %d.\n", init_proc->pid, pcpu_cur_idx());
+	proc_add2sched(init_proc);
 	KERN_INFO("done.\n");
 
 	/* goto userspace */
-	KERN_INFO("[BSP KERN] Start init process.\n");
-	c->state = PCPU_RUNNING;
-	proc_sched(c);
-	proc_run();
+	KERN_INFO("[BSP KERN] Go to userspace.\n");
+	proc_sched();
 }
 
 static void
@@ -115,7 +112,7 @@ kern_main_ap(void)
 	int cpu_idx = pcpu_cur_idx();
 
 	c = pcpu_cur();
-	KERN_ASSERT(c != NULL && c->state == PCPU_READY);
+	KERN_ASSERT(c != NULL && c->state == PCPU_INITED);
 
 	/* allocate buffer for handling system calls */
 	KERN_INFO("[AP%d KERN] Prepare buffer for handling system calls ... ",
@@ -171,20 +168,16 @@ kern_main_ap(void)
 
 	/* create init process */
 	KERN_INFO("[AP%d KERN] Create init process ... ", cpu_idx);
-	init_proc = proc_create((uintptr_t) _binary___obj_user_init_init_start);
+	init_proc = proc_create((uintptr_t) _binary___obj_user_idle_idle_start);
 	if (init_proc == NULL)
 		KERN_PANIC("Cannot create init process on CPU %d.\n",
 			   pcpu_cur_idx());
-	if (proc_ready(init_proc, c))
-		KERN_PANIC("Cannot put init process %d on the ready queue "
-			   "of CPU %d.\n", init_proc->pid, pcpu_cur_idx());
+	proc_add2sched(init_proc);
 	KERN_INFO("done.\n");
 
 	/* goto userspace */
-	/* KERN_INFO("[AP%d KERN] Start init process.\n", cpu_idx); */
-	/* c->state = PCPU_RUNNING; */
-	/* proc_sched(c); */
-	/* proc_run(); */
+	KERN_INFO("[AP%d KERN] Go to userspace.\n", cpu_idx);
+	proc_sched();
 }
 
 void gcc_noreturn
@@ -274,9 +267,8 @@ kern_init(mboot_info_t *mbi)
 	 * Initialize context
 	 */
 	KERN_INFO("Initialize BSP context ... ");
-	pcpu_cur()->state = PCPU_BOOTUP;
 	pcpu_init_cpu();
-	KERN_ASSERT(pcpu_cur()->state == PCPU_READY);
+	KERN_ASSERT(pcpu_cur()->state == PCPU_INITED);
 	KERN_INFO("done.\n");
 
 	/*
@@ -325,15 +317,11 @@ kern_init(mboot_info_t *mbi)
 void
 kern_init_ap(void (*f)(void))
 {
-	struct pcpu *c = pcpu_cur();
-
-	KERN_ASSERT(c->state == PCPU_SHUTDOWN);
-
-	c->state = PCPU_BOOTUP;
+	KERN_ASSERT(pcpu_cur()->state == PCPU_SHUTDOWN);
 
 	pcpu_init_cpu();
 	intr_init();
 	pmap_init();
 
-	f();
+	f();	/* kern_main_ap() */
 }

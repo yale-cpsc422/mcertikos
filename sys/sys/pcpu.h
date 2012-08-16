@@ -13,40 +13,18 @@
 #include <machine/pcpu.h>
 #include <machine/pmap.h>
 
-#define PCPU_AP_START_ADDR	0x8000
-
 /*
- * States and state transitions of a physical processor core.
+ * The address of the first instruction which is executed by an application
+ * processor core.
  *
- * PCPU_SHUTDOWN: the processor core is not initialized or shut down
- * PCPU_BOOTUP  : the processor core boots up but is not initialized
- * PCPU_READY   : the processor core is initialized and ready for the workload
- * PCPU_RUNNING : the processor core is running some workload
- *
- *
- *     after        +---------------+   encounter errors / shutdown
- *   power on /     | PCPU_SHUTDOWN | <-------------------+
- *     reset        +---------------+                     |
- *                     ^    |                             |
- *                     |    |                             |
- *               +-----+    V                             |
- *               |   +-------------+  initialize   +------------+
- *               |   | PCPU_BOOTUP | ------------> | PCPU_READY | <--------+
- *               |   +-------------+               +------------+          |
- *               |                                         |       remove  |
- *               |                         start workload  |      workload |
- *               |                                         V               |
- *               |                                  +--------------+       |
- *               +--------------------------------- | PCPU_RUNNING | ------+
- *                  encounter errors / shutdown     +--------------+
+ * XXX: It's actually start_ap() in sys/arch/i386/i386/boot_ap.S.
  */
+#define PCPU_AP_START_ADDR	0x8000
 
 typedef
 volatile enum {
-	PCPU_SHUTDOWN,
-	PCPU_BOOTUP,
-	PCPU_READY,
-	PCPU_RUNNING
+	PCPU_SHUTDOWN,	/* processor core is uninitialized or shutdown */
+	PCPU_INITED	/* processor core is initialized */
 } pcpu_stat_t;
 
 struct sched {
@@ -60,16 +38,16 @@ struct sched {
 	 * - ready_queue: queue of processes that can be scheduled to run on
 	 *                this processor.
 	 *
-	 * - sleeping_queue: queue of processes that are waiting for resources.
+	 * - blocked_queue: queue of processes that are blocked.
 	 *
 	 * - dead_queue: queue of processes that are waiting for being recycled.
 	 */
 	struct proc			*cur_proc;
 	TAILQ_HEAD(readyq, proc)	ready_queue;
-	TAILQ_HEAD(sleepingq, proc)	sleeping_queue;
+	TAILQ_HEAD(blockedq, proc)      blocked_queue;
 	TAILQ_HEAD(deadq, proc)		dead_queue;
 
-	spinlock_t cur_lk, ready_lk, sleeping_lk, dead_lk;
+	spinlock_t			lk;
 };
 
 struct pcpu {

@@ -42,6 +42,13 @@ typedef enum {
 	HYPERCALL_NULL,	/* XXX: should be the last one */
 } hypercall_t;
 
+typedef enum {
+	EXIT_NONE,		/* no VMEXIT */
+	EXIT_FOR_EXTINT,	/* exit for the external interrupt */
+	EXIT_FOR_HLT,		/* exit for the hlt instruction */
+	EXIT_FOR_OTHERS		/* exit for other reasons */
+} exit_reason_t;;
+
 typedef void (*iodev_read_func_t)(struct vm *,
 				  void *iodev, uint32_t port, void *data);
 typedef void (*iodev_write_func_t)(struct vm *,
@@ -51,7 +58,8 @@ typedef void (*intr_handle_t)(struct vm *);
 struct vm {
 	void		*cookie;	/* processor-specific data */
 
-	volatile bool	exit_for_intr;	/* VMEXIT for interrupts */
+	exit_reason_t	exit_reason;
+	volatile bool	handled;	/* is the exit event handled? */
 
 	struct {
 		void			*dev;

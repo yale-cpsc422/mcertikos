@@ -32,7 +32,7 @@ pcpu_valid(struct pcpu *c)
 }
 
 /*
- * Initialize the pcpu module.
+ * Initialize the PCPU (Physical CPU) module.
  *
  * XXX: pcpu_init() must be called before SMP could be enabled.
  */
@@ -58,24 +58,26 @@ pcpu_init(void)
 }
 
 /*
- * Initialize a pcpu_t structure.
+ * Initialize a processor core.
  *
- * XXX: PCPU_BOOTUP --> PCPU_READY
+ * XXX: If pcpu_init_cpu() succeedds, the state of the processor core is
+ *      changed to PCPU_INITED.
  */
 void
 pcpu_init_cpu(void)
 {
+	KERN_ASSERT(pcpu_inited == TRUE);
+
 	struct pcpu *c = pcpu_cur();
 
 	KERN_ASSERT(c != NULL);
 
 	spinlock_acquire(&c->lk);
 
-	if (c->state == PCPU_READY)
+	if (c->state == PCPU_INITED)
 		goto ret;
 
 	KERN_ASSERT(pcpu_valid(c) == TRUE);
-	KERN_ASSERT(c->state == PCPU_BOOTUP);
 
 	/* machine-dependent initialization */
 	uintptr_t stack_pointer = get_stack_pointer();
@@ -94,7 +96,7 @@ pcpu_init_cpu(void)
 	/* initialize memory for the process scheduler */
 	proc_sched_init(&c->sched);
 
-	c->state = PCPU_READY;
+	c->state = PCPU_INITED;
  ret:
 	spinlock_release(&c->lk);
 }
@@ -102,17 +104,34 @@ pcpu_init_cpu(void)
 extern void kern_init_ap(void);	/* defined in sys/kern/init.c */
 
 /*
- * XXX: PCPU_SHUTDOWN --> PCPU_BOOTUP
+ * Boot up an application processor core.
+ *
+ * XXX: pcpu_boot_ap() is blocked until the application core succeeds calling
+ *      pcpu_init_cpu().
+ *
+ * @param cpu_idx    the index of the application processor core (> 0)
+ * @param f          the initilization function which will execute by the
+ *                   application processor core
+ * @param stack_addr the base address of the kernel stack used on the
+ *                   application core
+ *
+ * @return 0 if the application processor core is boot up, and the state of
+ *         the application processor core is changed to PCPU_INITED; otherwise,
+ *         return 1.
  */
 int
 pcpu_boot_ap(uint32_t cpu_idx, void (*f)(void), uintptr_t stack_addr)
 {
 	KERN_ASSERT(pcpu_inited == TRUE);
-	/* is AP */
 	KERN_ASSERT(cpu_idx > 0 && cpu_idx < pcpu_ncpu());
-	KERN_ASSERT(pcpu[cpu_idx].state == PCPU_SHUTDOWN);
-	/* start function f is avalid */
 	KERN_ASSERT(f != NULL);
+
+	/* avoid being called by AP */
+	if (pcpu_onboot() == FALSE)
+		return 1;
+
+	if (pcpu[cpu_idx].state == PCPU_INITED)
+		return 0;
 
 	uint8_t *boot = (uint8_t *) PCPU_AP_START_ADDR;
 	*(uintptr_t *) (boot - 4) = stack_addr + PAGE_SIZE;
@@ -120,8 +139,11 @@ pcpu_boot_ap(uint32_t cpu_idx, void (*f)(void), uintptr_t stack_addr)
 	*(uintptr_t *) (boot - 12) = (uintptr_t) kern_init_ap;
 	lapic_startcpu(pcpu_cpu_lapicid(cpu_idx), (uintptr_t) boot);
 
+	/* wait until the processor is intialized */
 	while (pcpu[cpu_idx].state == PCPU_SHUTDOWN)
 		pause();
+
+	KERN_ASSERT(pcpu[cpu_idx].state == PCPU_INITED);
 
 	return 0;
 }

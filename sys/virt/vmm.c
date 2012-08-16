@@ -134,7 +134,8 @@ vmm_init_vm(void)
 
 	memset(vm, 0x0, sizeof(struct vm));
 
-	vm->exit_for_intr = FALSE;
+	vm->exit_reason = EXIT_NONE;
+	vm->handled = TRUE;
 
 	vm->tsc = 0;
 
@@ -176,8 +177,7 @@ vmm_run_vm(struct vm *vm)
 #endif
 
 	while (1) {
-		/* make sure all external interrups are handled */
-		KERN_ASSERT(vm->exit_for_intr == FALSE);
+		KERN_ASSERT(vm->handled == TRUE);
 
 		vmm_pre_time_update(vm);
 
@@ -186,17 +186,18 @@ vmm_run_vm(struct vm *vm)
 		vmm_post_time_update(vm);
 
 		/*
-		 * If VM exits for the external interrupt, return to userspace
-		 * and let the interrupt handler of CertiKOS be triggered.
+		 * If VM exits for interrupts, then enable interrupts in the
+		 * host in order to let host interrupt handlers come in.
 		 */
-		if (vm->exit_for_intr == TRUE) {
-#ifdef DEBUG_GUEST_INTR
-			KERN_DEBUG("VMEXIT for ExtINTR.\n");
-#endif
-			break;
-		}
+		if (vm->exit_reason == EXIT_FOR_EXTINT && vm->handled == FALSE)
+			intr_local_enable();
 
-		/* otherwise, handle VMEXIT normally */
+		/* wait until the external interrupt is handled */
+		while (vm->exit_reason == EXIT_FOR_EXTINT &&
+		       vm->handled == FALSE)
+			pause();
+		/* assertion makes sure that interrupts are disabled */
+		KERN_ASSERT((read_eflags() & FL_IF) == 0x0);
 		vmm_ops->vm_exit_handle(vm);
 
 #if defined (TRACE_IOIO) || defined (TRACE_TOTAL_TIME)
@@ -213,6 +214,7 @@ vmm_run_vm(struct vm *vm)
 #endif
 		}
 #endif
+
 	}
 
 	return 0;

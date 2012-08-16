@@ -21,63 +21,46 @@
 #define PID_INV		(~(pid_t) 0)
 
 /*
- * States and state transitions of a process:
+ *                              (3)
+ *                      +----------------+
+ *                      |                |
+ *             (1)      V      (2)       |       (4)
+ * PROC_INITED ---> PROC_READY ---> PROC_RUNNING ---> PROC_BLOCKED
+ *      ^               ^                                 |
+ *      |(0)            |              (5)                |
+ *      |               +---------------------------------+
+ *  PROC_INVAL
  *
- * PROC_RUNNING   : the process is running and a currently running process on a
- *                  processor
- * PROC_READY     : the process is ready to be scheduled to run
- * PROC_SLEEPING  : the process is sleeping, usually for waiting for some
- *                  resource
- * PROC_DEAD      : the process is dead and waiting for recycle, usually for
- *                  being killed or terminating normally
+ * (0) The process is initialzied.
  *
- *                          +---------------+
- *                          | PROC_UNINITED |
- *                          +---------------+
- *                                  |
- *                                  | a process is created
- *                                  V
- *                           +-------------+
- *                           | PROC_INITED |
- *                           +-------------+
- *                                  | put in a ready queue
- *                                  |
- *           be scheduled           V         some resource
- *             or yield      +------------+     unavailable
- *       +-----------------> | PROC_READY | ------------------+
- *       |  +--------------- +------------+ <--------------+  |
- *       |  |                       |                      |  |
- *       |  | be scheduled          |        some resource |  |
- *       |  |                       |          available   |  |
- *       |  V        some resource  |                      |  V
- * +--------------+   unavailable   |                +---------------+
- * | PROC_RUNNING | ----------------(--------------> | PROC_SLEEPING |
- * +--------------+                 |                +---------------+
- *         \                        |                        /
- *          |                       |                       |
- *           \----------------------+----------------------/
- *                                  | terminate normally
- *                                  |    or be killed
- *                                  V
- *                             +-----------+
- *                             | PROC_DEAD |
- *                             +-----------+
+ * (1) The process structures and resources are initialized, and the process is
+ *     ready to run.
+ *
+ * (2) The process is scheduled to run.
+ *
+ * (3) The process is time-out or yields to another process.
+ *
+ * (4) The process is blocked for events, e.g. waiting for an interrupt.
+ *
+ * (5) The process is unblocked, and ready to run again.
  */
 
 typedef
 volatile enum {
-	PROC_UNINITED,	/* process is not created */
-	PROC_INITED,	/* process is created */
-	PROC_READY,	/* process can run but not running now */
+	PROC_INVAL,	/* invalid process */
+	PROC_INITED,	/* process is initialized */
+	PROC_READY,	/* process is ready to run */
 	PROC_RUNNING,	/* process is running */
-	PROC_SLEEPING,	/* process is sleeping for some resource */
-	PROC_DEAD	/* process is killed or terminates normally */
+	PROC_BLOCKED	/* process is blocked and can't run */
 } proc_state_t;
 
 struct proc;
 
 typedef int (*wake_cb_t) (struct proc *);
 
+/*
+ * Process Control Block.
+ */
 struct proc {
 	pid_t		pid;	/* process id */
 	pmap_t		*pmap;	/* page table */
@@ -86,11 +69,8 @@ struct proc {
 	struct pcpu	*cpu;	/* which CPU I'm on */
 	struct context	ctx;	/* process context */
 
-	spinlock_t	*waiting_for;
-	wake_cb_t	wake_cb;
-
-	uint64_t	start_time;	/* when did this process start
-					   running? */
+	uint64_t	last_running_time;
+	uint64_t	total_running_time;
 
 	struct mqueue	mqueue;	/* message queue */
 
@@ -154,43 +134,42 @@ int proc_sched_init(struct sched *);
 struct proc *proc_create(uintptr_t start);
 
 /*
- * Put a process p on the ready queue of the cpu c.
+ * Block a process p.
  */
-int proc_ready(struct proc *p, struct pcpu *c);
+int proc_block(struct proc *p);
 
 /*
- * Let a process p sleep to wait for the spinlock lk.
+ * Unblock a process p and put it on the ready queue.
  */
-int proc_sleep(struct proc *p, spinlock_t *lk, wake_cb_t);
+int proc_unblock(struct proc *p);
 
 /*
- * Wake up a sleeping process.
+ * Per-processor scheduler.
  */
-int proc_wake(struct proc * p);
+void proc_sched(void) gcc_noreturn;
 
 /*
- * Yield a running process p.
+ * Add a new created process to the scheduler.
  */
-int proc_yield(struct proc *p);
+int proc_add2sched(struct proc *p);
 
 /*
- * Per-cpu process scheduler.
+ * Yield to another process.
  */
-int proc_sched(struct pcpu *c);
+int proc_yield(void);
 
 /*
- * Start running process p.
+ * Get the current process.
  */
-void proc_run(void) gcc_noreturn;
-
-/* Get the current process. */
 struct proc *proc_cur(void);
 
-/* save the context of the process */
-void proc_save(struct proc *, tf_t *);
-
-/* get the process by its process id */
+/*
+ * Get the process by its process id.
+ */
 struct proc *proc_pid2proc(pid_t);
+
+void
+proc_save(struct proc *p, tf_t *tf);
 
 #endif /* _KERN_ */
 

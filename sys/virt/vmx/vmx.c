@@ -975,8 +975,10 @@ vmx_run_vm(struct vm *vm)
 		return 1;
 	}
 
-	if ((vmx->exit_reason & EXIT_REASON_MASK) == EXIT_REASON_EXT_INTR)
-		vm->exit_for_intr = TRUE;
+	if ((vmx->exit_reason & EXIT_REASON_MASK) == EXIT_REASON_EXT_INTR) {
+		vm->exit_reason = EXIT_FOR_EXTINT;
+		vm->handled = FALSE;
+	}
 
 	vmx->launched = 1;
 
@@ -1041,7 +1043,7 @@ physical_ioport_write(uint32_t port, void *data, data_sz_t size)
 	}
 }
 
-static gcc_inline int
+static gcc_inline bool
 vmx_handle_inout(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
@@ -1103,10 +1105,10 @@ vmx_handle_inout(struct vm *vm)
 
 	vmx->g_rip += vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
 
-	return 1;
+	return TRUE;
 }
 
-static gcc_inline int
+static gcc_inline bool
 vmx_handle_cpuid(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
@@ -1157,10 +1159,10 @@ vmx_handle_cpuid(struct vm *vm)
 
 	vmx->g_rip += vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
 
-	return 1;
+	return TRUE;
 }
 
-static gcc_inline int
+static gcc_inline bool
 vmx_handle_rdmsr(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
@@ -1187,7 +1189,7 @@ vmx_handle_rdmsr(struct vm *vm)
 		err_code = (cs_sel & 0x1fff) << 3;
 		vmx_inject_event(VMCS_INTERRUPTION_INFO_HW_EXCPT, T_GPFLT,
 				 err_code, 1);
-		return 1;
+		return TRUE;
 	}
 
 	val = rdmsr(msr);
@@ -1195,10 +1197,10 @@ vmx_handle_rdmsr(struct vm *vm)
 	vmx->g_rdx = (val >> 32) & 0xffffffff;
 	vmx->g_rip += vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
 
-	return 1;
+	return TRUE;
 }
 
-static gcc_inline int
+static gcc_inline bool
 vmx_handle_wrmsr(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
@@ -1227,16 +1229,16 @@ vmx_handle_wrmsr(struct vm *vm)
 		err_code = (cs_sel & 0x1fff) << 3;
 		vmx_inject_event(VMCS_INTERRUPTION_INFO_HW_EXCPT, T_GPFLT,
 				 err_code, 1);
-		return 1;
+		return TRUE;
 	}
 
 	wrmsr(msr, val);
 	vmx->g_rip += vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
 
-	return 1;
+	return TRUE;
 }
 
-static gcc_inline int
+static gcc_inline bool
 vmx_handle_ept_violation(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
@@ -1273,7 +1275,7 @@ vmx_handle_ept_violation(struct vm *vm)
 		KERN_PANIC("Out of physical memory range: 0x%08x.\n", fault_pa);
 	}
 
-	return 1;
+	return TRUE;
 }
 
 static void
@@ -1347,7 +1349,6 @@ vmx_handle_exit(struct vm *vm)
 
 	struct vmx *vmx;
 	uint32_t procbased_ctls;
-	int handled;
 
 #if defined (TRACE_VMEXIT) || defined (TRACE_EVT_INJECT)
 	uint64_t start_tsc, end_tsc;
@@ -1357,11 +1358,11 @@ vmx_handle_exit(struct vm *vm)
 
 	vmx = (struct vmx *) vm->cookie;
 	KERN_ASSERT(vmx != NULL);
-	handled = 0;
 
 	if ((vmx->exit_reason & EXIT_REASON_ENTRY_FAIL)) {
 		KERN_DEBUG("VMEXIT for VM-entry failure.\n");
-		handled = 0;
+		vm->exit_reason = EXIT_FOR_OTHERS;
+		vm->handled = 0;
 		goto ret;
 	}
 
@@ -1379,31 +1380,37 @@ vmx_handle_exit(struct vm *vm)
 
 	switch (vmx->exit_reason & EXIT_REASON_MASK) {
 	case EXIT_REASON_EXT_INTR:
-		KERN_ASSERT(vm->exit_for_intr == FALSE);
-		handled = 1;
+		/* external interrupts should be handled before here */
+		KERN_ASSERT(vm->exit_reason == EXIT_FOR_EXTINT &&
+			    vm->handled == TRUE);
 		break;
 
 	case EXIT_REASON_INOUT:
-		handled = vmx_handle_inout(vm);
+		vm->exit_reason = EXIT_FOR_OTHERS;
+		vm->handled = vmx_handle_inout(vm);
 		break;
 
 	case EXIT_REASON_CPUID:
-		handled = vmx_handle_cpuid(vm);
+		vm->exit_reason = EXIT_FOR_OTHERS;
+		vm->handled = vmx_handle_cpuid(vm);
 		break;
 
 	case EXIT_REASON_RDMSR:
-		handled = vmx_handle_rdmsr(vm);
+		vm->exit_reason = EXIT_FOR_OTHERS;
+		vm->handled = vmx_handle_rdmsr(vm);
 		break;
 
 	case EXIT_REASON_WRMSR:
-		handled = vmx_handle_wrmsr(vm);
+		vm->exit_reason = EXIT_FOR_OTHERS;
+		vm->handled = vmx_handle_wrmsr(vm);
 		break;
 
 	case EXIT_REASON_RDTSC:
+		vm->exit_reason = EXIT_FOR_OTHERS;
 		vmx->g_rdx = (vm->tsc >> 32);
 		vmx->g_rax = (vm->tsc &0xffffffff);
 		vmx->g_rip += vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
-		handled = 1;
+		vm->handled = TRUE;
 		break;
 
 	case EXIT_REASON_RDTSCP:
@@ -1420,22 +1427,25 @@ vmx_handle_exit(struct vm *vm)
 	case EXIT_REASON_VMXON:
 	case EXIT_REASON_MWAIT:
 	case EXIT_REASON_MONITOR:
+		vm->exit_reason = EXIT_FOR_OTHERS;
 		KERN_DEBUG("Invalid OP: exit_reason 0x%08x.\n",
 			   ((struct vmx *) vm->cookie)->exit_reason);
 		vmx_inject_event(VMCS_INTERRUPTION_INFO_HW_EXCPT, T_ILLOP, 0, 0);
-		handled = 1;
+		vm->handled = TRUE;
 		break;
 
 	case EXIT_REASON_EPT_FAULT:
-		handled = vmx_handle_ept_violation(vm);
+		vm->exit_reason = EXIT_FOR_OTHERS;
+		vm->handled = vmx_handle_ept_violation(vm);
 		break;
 
 	case EXIT_REASON_INTR_WINDOW:
 		/* disable exiting for the interrupt window */
+		vm->exit_reason = EXIT_FOR_OTHERS;
 		procbased_ctls = vmcs_read32(VMCS_PRI_PROC_BASED_CTLS);
 		procbased_ctls &= ~PROCBASED_INT_WINDOW_EXITING;
 		vmcs_write32(VMCS_PRI_PROC_BASED_CTLS, procbased_ctls);
-		handled = 1;
+		vm->handled = TRUE;
 		break;
 
 	case EXIT_REASON_EXCEPTION:
@@ -1448,7 +1458,8 @@ vmx_handle_exit(struct vm *vm)
 	default:
 		KERN_DEBUG("Unhandled VMEXIT: exit_reason 0x%08x.\n",
 			   vmx->exit_reason);
-		handled = 0;
+		vm->exit_reason = EXIT_FOR_OTHERS;
+		vm->handled = FALSE;
 	}
 
 #if defined (TRACE_VMEXIT) || defined (TRACE_EVT_INJECT)
@@ -1470,19 +1481,20 @@ vmx_handle_exit(struct vm *vm)
 	}
 #endif
 
-	KERN_ASSERT(handled == 1);
+	KERN_ASSERT(vm->handled == TRUE);
 
 	vmx_intr_assist(vm);
 
  ret:
-	return handled;
+	return vm->handled;
 }
 
 static int
 vmx_handle_extint(struct vm *vm, uint8_t irq)
 {
 	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(vm->exit_for_intr == TRUE);
+	KERN_ASSERT(vm->exit_reason == EXIT_FOR_EXTINT &&
+		    vm->handled == FALSE);
 
 	if (vmm_handle_extintr(vm, irq)) {
 		if (vpic_is_ready(&vm->vpic) == TRUE) {
@@ -1491,7 +1503,7 @@ vmx_handle_extint(struct vm *vm, uint8_t irq)
 		}
 	}
 
-	vm->exit_for_intr = FALSE;
+	vm->handled = TRUE;
 
 	return 0;
 }
