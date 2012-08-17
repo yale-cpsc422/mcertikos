@@ -9,8 +9,8 @@ void	yield(void);
 pid_t	getpid(void);
 
 struct msg {
-	pid_t	pid;		/* process id of the sender */
-	char	data[64];	/* data payload */
+	pid_t	pid;				/* process id of the sender */
+	char	data[256-sizeof(pid_t)];	/* data payload */
 } gcc_packed;
 
 size_t	recv(struct msg *);

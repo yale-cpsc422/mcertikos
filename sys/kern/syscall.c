@@ -232,179 +232,117 @@ sys_getpid(struct pcpu *c, struct proc *p, pid_t *pid)
 	return rc;
 }
 
-/* static int */
-/* sys_send(struct pcpu *c, struct proc *p, */
-/* 	 pid_t recv_pid, void *data, size_t size) */
-/* { */
-/* 	int rc  = 0; */
-/* 	struct proc *q; */
+static int
+sys_send(struct pcpu *c, struct proc *sender,
+	 pid_t receiver_pid, void *data, size_t size)
+{
+	int rc  = 0;
+	struct proc *receiver;
 
-/* 	SYSCALL_DEBUG("Send message to process %d, size %d.\n", recv_pid, size); */
+	SYSCALL_DEBUG("Send message to process %d, size %d.\n",
+		      receiver_pid, size);
 
-/* 	if ((q = proc_pid2proc(recv_pid)) == NULL) { */
-/* 		SYSCALL_DEBUG("Cannnot find proecss %d.\n", recv_pid); */
-/* 		rc = 1; */
-/* 		goto ret; */
-/* 	} */
+	if (c == NULL || sender == NULL || data == NULL) {
+		SYSCALL_DEBUG("Illegal parameters.\n");
+		rc = 2;
+		goto ret;
+	}
 
-/* 	if (size != 0 && data == NULL) { */
-/* 		rc = 2; */
-/* 		goto ret; */
-/* 	} */
+	if ((receiver = proc_pid2proc(receiver_pid)) == NULL) {
+		SYSCALL_DEBUG("Cannnot find proecss %d.\n", receiver_pid);
+		rc = 1;
+		goto ret;
+	}
 
-/* 	if (size > PAGE_SIZE - sizeof(struct message_header)) { */
-/* 		SYSCALL_DEBUG("Cannot send message (size %d bytes) " */
-/* 			   "larger then %d bytes.\n", */
-/* 			   size, PAGE_SIZE- sizeof(struct message_header)); */
-/* 		rc = 2; */
-/* 		goto ret; */
-/* 	} */
+	proc_lock(sender);
+	if (copy_from_user(c->sys_buf, data, size) == NULL) {
+		SYSCALL_DEBUG("Cannot copy data from userspace.\n");
+		proc_unlock(sender);
+		rc = 3;
+		goto ret;
+	}
+	proc_unlock(sender);
 
-/* 	if (size != 0) { */
-/* 		proc_lock(p); */
-/* 		if (copy_from_user(c->sys_buf, data, size) == NULL) { */
-/* 			proc_unlock(p); */
-/* 			rc = 3; */
-/* 			goto ret; */
-/* 		} */
-/* 		proc_unlock(p); */
-/* 	} */
+	rc = proc_send_msg(receiver, c->sys_buf, size);
 
-/* 	proc_lock(q); */
-/* 	spinlock_acquire(&q->mqueue.lk); */
+ ret:
+	memzero(c->sys_buf, size);
+	return rc;
+}
 
-/* 	if (mqueue_enqueue(&q->mqueue, MSG_USER, c->sys_buf, size)) { */
-/* 		SYSCALL_DEBUG("Cannot send message to process %d.\n", recv_pid); */
-/* 		rc = 4; */
-/* 		goto lock_ret; */
-/* 	} */
+static int
+sys_recv_unblock(struct proc *p)
+{
+	int rc = 0;
+	struct message *msg;
+	uint8_t *data;
+	size_t *size;
 
-/* 	/\* */
-/* 	 * If the receiver is waiting for the messages, wake up it. */
-/* 	 *\/ */
-/* 	if (q->state == PROC_SLEEPING && q->waiting_for == &q->mqueue.lk) { */
-/* 		SYSCALL_DEBUG("Receiver process %d is sleeping. Wakeup it.\n", */
-/* 			   q->pid); */
-/* 		spinlock_release(&q->mqueue.lk); */
-/* 		proc_unlock(q); */
-/* 		proc_wake(q); */
-/* 		proc_lock(q); */
-/* 		spinlock_acquire(&q->mqueue.lk); */
-/* 	} */
+	if (p == NULL) {
+		SYSCALL_DEBUG("Illegal parameters.\n");
+		rc = 2;
+		goto ret;
+	}
 
-/*  lock_ret: */
-/* 	spinlock_release(&q->mqueue.lk); */
-/* 	proc_unlock(q); */
+	KERN_ASSERT(spinlock_holding(&p->lk) == TRUE);
+	KERN_ASSERT(p->blocked_for == WAIT_FOR_MSG);
 
-/*  ret: */
-/* 	memset(c->sys_buf, 0, PAGE_SIZE); */
-/* 	return rc; */
-/* } */
+	data = (uint8_t *) ctx_arg2(&p->ctx);
+	size = (size_t *) ctx_arg3(&p->ctx);
 
-/* static int */
-/* sys_recv_post(struct proc *p) */
-/* { */
-/* 	KERN_ASSERT(p != NULL); */
-/* 	KERN_ASSERT(spinlock_holding(&p->lk) == TRUE); */
+	spinlock_acquire(&p->mqueue.lk);
+	msg = mqueue_dequeue(&p->mqueue);
+	spinlock_release(&p->mqueue.lk);
 
-/* 	struct pcpu *c; */
-/* 	struct message *msg; */
-/* 	char *buf; */
-/* 	size_t *size; */
-/* 	int rc = 0; */
+	if (msg == NULL) {
+		KERN_WARN("sys_recv_unblock() receives an empty message.\n");
+		*size = 0;
+	} else {
+		if (copy_to_user(data, msg->data, msg->size) == NULL) {
+			SYSCALL_DEBUG("Cannot copy data to userspace.\n");
+			rc = 3;
+			goto ret;
+		}
+		*size = msg->size;
+	}
 
-/* 	c = pcpu_cur(); */
+ ret:
+	return rc;
+}
 
-/* 	KERN_ASSERT(c != NULL); */
+static int
+sys_recv(struct pcpu *c, struct proc *receiver, void *buf, size_t *size)
+{
+	int rc = 0;
+	struct message *msg;
 
-/* 	spinlock_acquire(&p->mqueue.lk); */
+	if (c == NULL || receiver == NULL || buf == NULL || size == NULL) {
+		SYSCALL_DEBUG("Illegal parameters.\n");
+		rc = 2;
+		goto ret;
+	}
 
-/* 	if (mqueue_empty(&p->mqueue) == TRUE) { */
-/* 		rc = 1; */
-/* 		goto lock_ret; */
-/* 	} */
+	msg = proc_recv_msg();
 
-/* 	c->sys_buf = mqueue_dequeue(&p->mqueue); */
-/* 	KERN_ASSERT(c->sys_buf != NULL); */
-/* 	msg = (struct message *) c->sys_buf; */
-/* 	KERN_ASSERT(msg != NULL); */
-/* 	KERN_ASSERT(msg->header.type == MSG_USER); */
+	if (msg == NULL) {
+		proc_lock(receiver);
+		receiver->unblock_callback = sys_recv_unblock;
+		proc_unlock(receiver);
+	} else {
+		proc_lock(receiver);
+		if (copy_to_user(buf, msg->data, msg->size) == NULL) {
+			SYSCALL_DEBUG("Cannot copy data to userspace.\n");
+			rc = 1;
+			proc_unlock(receiver);
+			goto ret;
+		}
+		*size = msg->size;
+		proc_unlock(receiver);
+	}
 
-/* 	buf = (char *) ctx_arg2(&p->ctx); */
-/* 	size = (size_t *) ctx_arg3(&p->ctx); */
-/* 	KERN_ASSERT(buf != NULL || size != NULL); */
-
-/* 	if (copy_to_user(buf, msg->data, msg->header.size) == NULL) { */
-/* 		rc = 3; */
-/* 		goto lock_ret; */
-/* 	} */
-
-/* 	if (copy_to_user(size, */
-/* 			 &msg->header.size, sizeof(msg->header.size)) == NULL) { */
-/* 		rc = 3; */
-/* 		goto lock_ret; */
-/* 	} */
-
-/*  lock_ret: */
-/* 	spinlock_release(&p->mqueue.lk); */
-/* 	memset(c->sys_buf, 0, sizeof(struct message)); */
-/* 	return rc; */
-/* } */
-
-/* static int */
-/* sys_recv(struct pcpu *c, struct proc *p, void *buf, size_t *size) */
-/* { */
-/* 	int rc = 0; */
-/* 	size_t sz = 0; */
-/* 	struct message *msg; */
-
-/* 	KERN_ASSERT(p != NULL); */
-
-/* 	if (buf == NULL || size == NULL) { */
-/* 		rc = 2; */
-/* 		goto ret; */
-/* 	} */
-
-/* 	proc_lock(p); */
-/* 	spinlock_acquire(&p->mqueue.lk); */
-
-/* 	/\* */
-/* 	 * If the message queue is empty, let the process sleep util a new */
-/* 	 * message arrives. */
-/* 	 *\/ */
-/* 	if (mqueue_empty(&p->mqueue) == TRUE) { */
-/* 		SYSCALL_DEBUG("Message queue of process %d is empty. " */
-/* 			   "Sleep ... \n", p->pid); */
-/* 		spinlock_release(&p->mqueue.lk); */
-/* 		proc_unlock(p); */
-/* 		proc_sleep(p, &p->mqueue.lk, sys_recv_post); */
-/* 		rc = 1; */
-/* 		goto ret; */
-/* 	} */
-
-/* 	c->sys_buf = mqueue_dequeue(&p->mqueue); */
-/* 	msg = (struct message *) c->sys_buf; */
-/* 	KERN_ASSERT(msg != NULL); */
-/* 	KERN_ASSERT(msg->header.type == MSG_USER); */
-
-/* 	if (copy_to_user(buf, msg->data, msg->header.size) == NULL) { */
-/* 		rc = 3; */
-/* 		goto clean_ret; */
-/* 	} */
-
-/* 	sz = msg->header.size; */
-
-/*  clean_ret: */
-/* 	memset(c->sys_buf, 0, PAGE_SIZE); */
-/* 	if (copy_to_user(size, &sz, sizeof(sz)) == NULL) */
-/* 		rc = 3; */
-
-/* 	spinlock_release(&p->mqueue.lk); */
-/* 	proc_unlock(p); */
-
-/*  ret: */
-/* 	return rc; */
-/* } */
+ ret:
+	return rc;
+}
 
 static int
 sys_allocvm(struct pcpu *c, struct proc *p)
@@ -537,25 +475,25 @@ syscall_handler(struct context *ctx)
 		rc = sys_getpid(c, p, (pid_t *) a[0]);
 		break;
 
-	/* case SYS_send: */
-	/* 	/\* */
-	/* 	 * Send a message to another process. */
-	/* 	 * a[0]: process id the receiver process */
-	/* 	 * a[1]: address of the data */
-	/* 	 * a[2]: size in bytes of the data of message */
-	/* 	 *\/ */
-	/* 	rc = sys_send(c, p, (pid_t) a[0], */
-	/* 		      (struct message *) a[1], (size_t) a[2]); */
-	/* 	break; */
+	case SYS_send:
+		/*
+		 * Send a message to another process.
+		 * a[0]: process id the receiver process
+		 * a[1]: address of the data
+		 * a[2]: size in bytes of the data of message
+		 */
+		rc = sys_send(c, p, (pid_t) a[0],
+			      (struct message *) a[1], (size_t) a[2]);
+		break;
 
-	/* case SYS_recv: */
-	/* 	/\* */
-	/* 	 * Receive a message. */
-	/* 	 * a[0]: address where the message data will be stored. */
-	/* 	 * a[1]: address where the data size will be stored */
-	/* 	 *\/ */
-	/* 	rc = sys_recv(c, p, (char *) a[0], (size_t *) a[1]); */
-	/* 	break; */
+	case SYS_recv:
+		/*
+		 * Receive a message.
+		 * a[0]: address where the message data will be stored.
+		 * a[1]: address where the data size will be stored
+		 */
+		rc = sys_recv(c, p, (char *) a[0], (size_t *) a[1]);
+		break;
 
 	case SYS_allocvm:
 		/*

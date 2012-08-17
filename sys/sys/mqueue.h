@@ -8,22 +8,12 @@
 #include <sys/spinlock.h>
 #include <sys/types.h>
 
-#define NMSG		8
-
-typedef
-enum message_type {
-	MSG_USER,	/* message from another userspace process */
-	MSG_INTR	/* message indicating an interrupt */
-} msg_type_t;
-
-struct message_header {
-	msg_type_t	type;
-	size_t		size;
-} gcc_packed;
+#define MSG_SIZE	256
+#define NMSG		(PAGE_SIZE/MSG_SIZE)
 
 struct message {
-	struct message_header header;
-	uint8_t		data[PAGE_SIZE - sizeof(struct message_header)];
+	size_t	size;
+	uint8_t	data[MSG_SIZE-sizeof(size_t)];
 } gcc_packed;
 
 struct mqueue {
@@ -33,12 +23,33 @@ struct mqueue {
 	struct message	msgs[NMSG];
 };
 
-void		mqueue_init(struct mqueue *);
+/*
+ * Initialize the message queue.
+ */
+void mqueue_init(struct mqueue *);
 
-struct message	*mqueue_first(struct mqueue *);
-struct message	*mqueue_dequeue(struct mqueue *);
-int		mqueue_enqueue(struct mqueue *, msg_type_t, void *, size_t);
-bool		mqueue_empty(struct mqueue *);
+/*
+ * Get the first message in the message queue; return NULL if the message queue
+ * is empty.
+ */
+struct message *mqueue_first(struct mqueue *);
+
+/*
+ * Remove the first message from the message queue and return it; return NULL if
+ * the message queue is empty.
+ */
+struct message *mqueue_dequeue(struct mqueue *);
+
+/*
+ * Add a message to the end of the message queue. Return 0 if no errors happen;
+ * otherwise, return a non-zero value.
+ */
+int mqueue_enqueue(struct mqueue *, void *, size_t);
+
+/*
+ * Check whether the message queue is empty.
+ */
+bool mqueue_empty(struct mqueue *);
 
 #endif /* _KERN_ */
 

@@ -66,6 +66,9 @@ static gcc_inline gcc_noreturn void
 trap_kern(tf_t *tf)
 {
 	KERN_ASSERT(tf->trapno >= T_IRQ0);
+	KERN_ASSERT(vmm_cur_vm() != NULL);
+	KERN_ASSERT(vmm_cur_vm()->exit_reason == EXIT_FOR_EXTINT &&
+		    vmm_cur_vm()->handled == FALSE);
 
 	struct vm *vm;
 	trap_cb_t f;
@@ -232,8 +235,6 @@ timer_intr_handler(struct context *ctx)
 int
 kbd_intr_handler(struct context *ctx)
 {
-	KERN_DEBUG("master_kbd_handler\n");
-
 	struct vm *vm = vmm_cur_vm();
 	bool from_guest = (vm != NULL &&
 			   vm->exit_reason == EXIT_FOR_EXTINT) ? TRUE : FALSE;

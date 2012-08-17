@@ -3,54 +3,32 @@
 #include <types.h>
 
 extern uint8_t _binary___obj_user_idle_idle_start[];
-extern uint8_t _binary___obj_user_pingpong_pingpong_start[];
 extern uint8_t _binary___obj_user_guest_guest_start[];
+
+extern uint8_t _binary___obj_user_msg_sender_start[];
+extern uint8_t _binary___obj_user_msg_receiver_start[];
 
 int
 main(int argc, char **argv)
 {
 #if 0
-	pid_t init, idle, pingpong1, pingpong2, pid;
-	struct msg msg;
-
-	init = getpid();
-
-	printf("init %d starts.\n");
+	pid_t sender, receiver, idle;
 
 	idle = spawn((uintptr_t) _binary___obj_user_idle_idle_start);
-	printf("idle (pid %d) is created.\n", idle);
+	printf("idle process (pid %d) is created.\n", idle);
 
-	pingpong1 = spawn((uintptr_t) _binary___obj_user_pingpong_pingpong_start);
-	printf("pingpong (pid %d) is created.\n", pingpong1);
+	sender = spawn((uintptr_t) _binary___obj_user_msg_sender_start);
+	printf("sender (pid %d) is created.\n", sender);
 
-	pingpong2 = spawn((uintptr_t) _binary___obj_user_pingpong_pingpong_start);
-	printf("pingpong (pid %d) is created.\n", pingpong2);
+	receiver = spawn((uintptr_t) _binary___obj_user_msg_receiver_start);
+	printf("receiver (pid %d) is created.\n", receiver);
 
-	printf("Send init pid %d to process %d.\n", init, pingpong1);
-	send(pingpong1, &init, sizeof(pid_t));
+	send(sender, &receiver, sizeof(receiver));
 
-	printf("Send init pid %d to process %d.\n", init, pingpong2);
-	send(pingpong2, &init, sizeof(pid_t));
-
-	if (recv(&msg)) {
-		printf("Receive ACK from process %d.\n", msg.pid);
-		pid = (msg.pid == pingpong2) ? pingpong1 : pingpong2;
-
-		printf("Send pid %d to process %d.\n", pid, msg.pid);
-		send(msg.pid, &pid, sizeof(pid_t));
-	}
-
-	if (recv(&msg)) {
-		printf("Receive ACK from process %d.\n", msg.pid);
-		pid = (msg.pid == pingpong2) ? pingpong1 : pingpong2;
-
-		printf("Send pid %d to process %d.\n", pid, msg.pid);
-		send(msg.pid, &pid, sizeof(pid_t));
-	}
-#endif
-
+#else
 	pid_t guest = spawn((uintptr_t) _binary___obj_user_guest_guest_start);
 	printf("guest (pid %d) is created.\n", guest);
+#endif
 
 	return 0;
 }

@@ -20,6 +20,8 @@
 
 #define PID_INV		(~(pid_t) 0)
 
+struct proc;
+
 /*
  *                              (3)
  *                      +----------------+
@@ -54,9 +56,13 @@ volatile enum {
 	PROC_BLOCKED	/* process is blocked and can't run */
 } proc_state_t;
 
-struct proc;
+typedef
+enum {
+	NOT_BLOCKED,	/* process is not blocked */
+	WAIT_FOR_MSG	/* process is waiting for messages */
+} block_reason_t;
 
-typedef int (*wake_cb_t) (struct proc *);
+typedef int (*unblock_cb_t) (struct proc *);
 
 /*
  * Process Control Block.
@@ -68,6 +74,20 @@ struct proc {
 
 	struct pcpu	*cpu;	/* which CPU I'm on */
 	struct context	ctx;	/* process context */
+
+	/*
+	 * Whenever the process is blocked, blocked_for records the reason why
+	 * it's blocked.
+	 *
+	 * If unblock_callback is not NULL, it will called once the blocked
+	 * process is unblocked. unblock_callback is responsible to complete the
+	 * blocking operations. For example, if there's no meesage in the
+	 * message queue, receiving the message will block the receiver process.
+	 * When new messages come, the process is unblocked and calls
+	 * unblock_callback to get the message from the message queue.
+	 */
+	block_reason_t	blocked_for;
+	unblock_cb_t	unblock_callback;
 
 	uint64_t	last_running_time;
 	uint64_t	total_running_time;
@@ -136,7 +156,7 @@ struct proc *proc_create(uintptr_t start);
 /*
  * Block a process p.
  */
-int proc_block(struct proc *p);
+int proc_block(struct proc *p, block_reason_t);
 
 /*
  * Unblock a process p and put it on the ready queue.
@@ -168,8 +188,29 @@ struct proc *proc_cur(void);
  */
 struct proc *proc_pid2proc(pid_t);
 
-void
-proc_save(struct proc *p, tf_t *tf);
+/*
+ * Save the context of a process.
+ */
+void proc_save(struct proc *p, tf_t *tf);
+
+/*
+ * Send a messags to a process.
+ *
+ * @param receiver which process the message is sent to
+ * @param msg      the message to be sent
+ * @param size     the size of the message
+ *
+ * @return 0 if no errors; otherwise, return a non-zero value.
+ */
+int proc_send_msg(struct proc *receiver, void *msg, size_t size);
+
+/*
+ * Receive a message. If no message is present, the receiver process will be
+ * blocked.
+ *
+ * @return the message if successful; if no message is present, return NULL.
+ */
+struct message *proc_recv_msg(void);
 
 #endif /* _KERN_ */
 

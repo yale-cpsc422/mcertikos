@@ -30,7 +30,7 @@
 
 #endif
 
-#define SCHED_TIME_SLICE	200
+#define SCHED_TIME_SLICE	20
 
 static bool proc_inited = FALSE;
 
@@ -94,7 +94,7 @@ proc_free(struct proc *proc)
 }
 
 /*
- * Put process p on the ready queue of the current processor.
+ * Put process p on the ready queue of processor c.
  *
  * XXX: proc_ready() assumes the process p is locked.
  * XXX: proc_ready() assumes the scheduler of the current processor is locked.
@@ -102,27 +102,28 @@ proc_free(struct proc *proc)
  * @return 0 if no errors, and the state of the process is set to PROC_READY.
  */
 static int
-proc_ready(struct proc *p)
+proc_ready(struct proc *p, struct pcpu *c)
 {
 	KERN_ASSERT(proc_inited == TRUE);
+
 	KERN_ASSERT(p != NULL);
 	KERN_ASSERT(spinlock_holding(&p->lk) == TRUE);
 	KERN_ASSERT(p->state == PROC_INITED ||
 		    p->state == PROC_BLOCKED ||
 		    p->state == PROC_RUNNING);
 
-	struct pcpu *c;
-	struct sched *sched;
+	KERN_ASSERT(c != NULL);
 
-	c = pcpu_cur();
-
+	/* CertiKOS doesn't support the process migration. */
 	KERN_ASSERT(p->cpu == NULL || p->cpu == c);
+
+	struct sched *sched;
 
 	sched = &c->sched;
 
 	KERN_ASSERT(spinlock_holding(&sched->lk) == TRUE);
 
-	if (p == proc_cur())
+	if (p == sched->cur_proc)
 		sched->cur_proc = NULL;
 
 	if (p->state == PROC_BLOCKED)
@@ -170,6 +171,14 @@ proc_run(void)
 	spinlock_release(&c->lk);
 
 	pmap_install(p->pmap);
+
+	if (p->blocked_for != NOT_BLOCKED && p->unblock_callback) {
+		p->unblock_callback(p);
+
+		p->blocked_for = NOT_BLOCKED;
+		p->unblock_callback = NULL;
+	}
+
 	ctx = &p->ctx;
 	p->state = PROC_RUNNING;
 	p->last_running_time = time_ms();
@@ -181,7 +190,6 @@ proc_run(void)
 	PROC_DEBUG("Start runnig process %d.\n", p->pid);
 	/* ctx_dump(ctx); */
 
-	ctx->tf.eflags &= ~FL_IF;
 	ctx_start(ctx);
 }
 
@@ -254,6 +262,9 @@ proc_create(uintptr_t binary)
 	new_proc->cpu = NULL;
 	new_proc->vm = NULL;
 
+	new_proc->blocked_for = NOT_BLOCKED;
+	new_proc->unblock_callback = NULL;
+
 	if ((new_proc->pmap = pmap_new()) == NULL) {
 		PROC_DEBUG("Failed to allocate address space for process %d.\n",
 			   new_proc->pid);
@@ -300,7 +311,7 @@ proc_create(uintptr_t binary)
  *         otherwise, return 1.
  */
 int
-proc_block(struct proc *p)
+proc_block(struct proc *p, block_reason_t reason)
 {
 	KERN_ASSERT(proc_inited == TRUE);
 	KERN_ASSERT(p != NULL);
@@ -308,18 +319,20 @@ proc_block(struct proc *p)
 	struct pcpu *c;
 	struct sched *sched;
 
-	c = pcpu_cur();
+	proc_lock(p);
+
+	KERN_ASSERT(p->state == PROC_RUNNING);
+
+	c = p->cpu;
 	sched = &c->sched;
 
-	proc_lock(p);
 	spinlock_acquire(&sched->lk);
 
-	KERN_ASSERT(p == proc_cur());
-	KERN_ASSERT(p->state == PROC_RUNNING);
-	KERN_ASSERT(p->cpu == c);
+	KERN_ASSERT(p == sched->cur_proc);
 
 	sched->cur_proc = NULL;
 	p->state = PROC_BLOCKED;
+	p->blocked_for = reason;
 	TAILQ_INSERT_TAIL(&sched->blocked_queue, p, entry);
 
 	spinlock_release(&sched->lk);
@@ -344,16 +357,16 @@ proc_unblock(struct proc *p)
 	struct pcpu *c;
 	struct sched *sched;
 
-	c = pcpu_cur();
-	sched = &c->sched;
-
 	proc_lock(p);
-	spinlock_acquire(&sched->lk);
 
 	KERN_ASSERT(p->state == PROC_BLOCKED);
-	KERN_ASSERT(p->cpu == c);
 
-	proc_ready(p);
+	c = p->cpu;
+	sched = &c->sched;
+
+	spinlock_acquire(&sched->lk);
+
+	proc_ready(p, c);
 
 	spinlock_release(&sched->lk);
 	proc_unlock(p);
@@ -390,7 +403,7 @@ proc_sched(void)
 		if (p->total_running_time > SCHED_TIME_SLICE &&
 		    !TAILQ_EMPTY(&sched->ready_queue)) {
 			p->total_running_time = 0;
-			proc_ready(p);
+			proc_ready(p, c);
 			proc_unlock(p);
 
 			PROC_DEBUG("Process %d is time-out.\n", p->pid);
@@ -422,7 +435,7 @@ proc_add2sched(struct proc *p)
 	spinlock_acquire(&sched->lk);
 
 	KERN_ASSERT(p->state == PROC_INITED);
-	proc_ready(p);
+	proc_ready(p, c);
 
 	spinlock_release(&sched->lk);
 	proc_unlock(p);
@@ -446,7 +459,7 @@ proc_yield(void)
 
 	p = proc_cur();
 	proc_lock(p);
-	proc_ready(p);
+	proc_ready(p, c);
 	proc_unlock(p);
 
 	spinlock_release(&sched->lk);
@@ -481,4 +494,76 @@ struct proc *
 proc_pid2proc(pid_t pid)
 {
 	return &process[pid];
+}
+
+int
+proc_send_msg(struct proc *receiver, void *data, size_t size)
+{
+	KERN_ASSERT(receiver != NULL);
+	KERN_ASSERT(data != NULL);
+
+	int rc = 0;
+	struct proc *sender = proc_cur();
+
+	proc_lock(sender);
+
+	KERN_ASSERT(sender->state == PROC_RUNNING);
+
+	spinlock_acquire(&receiver->mqueue.lk);
+
+	rc = mqueue_enqueue(&receiver->mqueue, data, size);
+
+	spinlock_release(&receiver->mqueue.lk);
+	proc_unlock(sender);
+
+	if (rc == 0) {
+		PROC_DEBUG("Send a message from process %d to process %d"
+			   " successfuly.\n", sender->pid, receiver->pid);
+
+		proc_lock(receiver);
+
+		/*
+		 * If the receiver process is waiting for messages, unblock it.
+		 */
+		if (receiver->state == PROC_BLOCKED &&
+		    receiver->blocked_for == WAIT_FOR_MSG) {
+			proc_unlock(receiver);
+			proc_unblock(receiver);
+		} else {
+			proc_unlock(receiver);
+		}
+	} else {
+		PROC_DEBUG("Cannot send a message from process %d to process %d"
+			   " (error %d).\n", sender->pid, receiver->pid, rc);
+	}
+
+	return rc;
+}
+
+struct message *
+proc_recv_msg(void)
+{
+	struct message *msg;
+	struct proc *receiver = proc_cur();
+
+	proc_lock(receiver);
+
+	KERN_ASSERT(receiver->state == PROC_RUNNING);
+
+	spinlock_acquire(&receiver->mqueue.lk);
+	if (mqueue_empty(&receiver->mqueue) == FALSE)
+		msg = mqueue_dequeue(&receiver->mqueue);
+	else
+		msg = NULL;
+	spinlock_release(&receiver->mqueue.lk);
+
+	proc_unlock(receiver);
+
+	/*
+	 * If there is no message, block the receiver process.
+	 */
+	if (msg == NULL)
+		proc_block(receiver, WAIT_FOR_MSG);
+
+	return msg;
 }
