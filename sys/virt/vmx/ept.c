@@ -195,7 +195,7 @@ ept_create_mappings(uint64_t *pml4ept, size_t mem_size)
 		if ((pi = mem_page_alloc()) == NULL)
 			return 2;
 		if (ept_add_mapping(pml4ept, gpa, mem_pi2phys(pi),
-				    PAT_UNCACHEABLE, FALSE))
+				    PAT_WRITE_BACK, FALSE))
 			return 1;
 	}
 	/*
@@ -209,7 +209,7 @@ ept_create_mappings(uint64_t *pml4ept, size_t mem_size)
 		if ((pi = mem_page_alloc()) == NULL)
 			return 2;
 		if (ept_add_mapping(pml4ept, gpa, mem_pi2phys(pi),
-				    PAT_UNCACHEABLE, FALSE))
+				    PAT_WRITE_BACK, FALSE))
 			return 1;
 	}
 

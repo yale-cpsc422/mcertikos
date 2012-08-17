@@ -1266,7 +1266,7 @@ vmx_handle_ept_violation(struct vm *vm)
 
 		if (ept_add_mapping(vmx->pml4ept,
 				    ROUNDDOWN(fault_pa, PAGESIZE * 512),
-				    PAT_UNCACHEABLE, mem_pi2phys(pi), TRUE))
+				    PAT_WRITE_BACK, mem_pi2phys(pi), TRUE))
 			KERN_PANIC("Cannot allocate memory for guest physical "
 				   "address 0x%08x.\n", fault_pa);
 
