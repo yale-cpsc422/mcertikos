@@ -112,6 +112,9 @@ trap(tf_t *tf)
 		trap_dump(tf);
 		if (tf->trapno == T_PGFLT)
 			KERN_DEBUG("Fault address 0x%08x.\n", rcr2());
+	} else if (tf->trapno == T_IRQ0+IRQ_IPI_RESCHED) {
+		KERN_DEBUG("Receive IPI.\n");
+		trap_dump(tf);
 	}
 
 	if (tf->eip >= VM_USERLO)

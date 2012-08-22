@@ -1,9 +1,7 @@
 #ifndef _KERN_DEV_LAPIC_H_
 #define _KERN_DEV_LAPIC_H_
 
-#ifndef _KERN_
-#error "This is a kernel header file; do not include it in userspace programs."
-#endif
+#ifdef _KERN_
 
 #include <sys/types.h>
 
@@ -22,13 +20,24 @@
 #define LAPIC_IRR		(0x0200/4)   //IRR
 #define LAPIC_ESR		(0x0280/4)   // Error Status
 #define LAPIC_ICRLO		(0x0300/4)   // Interrupt Command
+# define LAPIC_ICRLO_VECTOR	0xFF         // Vector Mask
+# define LAPIC_ICRLO_FIXED	0x00000000   // Fixed
+# define LAPIC_ICRLO_LOWEST	0x00000100   // Lowest Priority
+# define LAPIC_ICRLO_SMI	0x00000200   // SMI
+# define LAPIC_ICRLO_NMI	0x00000400   // NMI
 # define LAPIC_ICRLO_INIT       0x00000500   // INIT/RESET
 # define LAPIC_ICRLO_STARTUP    0x00000600   // Startup IPI
+# define LAPIC_ICRLO_LOGIC	0x00000800   // Logical Mode
 # define LAPIC_ICRLO_DELIVS     0x00001000   // Delivery status
 # define LAPIC_ICRLO_ASSERT     0x00004000   // Assert interrupt (vs deassert)
 # define LAPIC_ICRLO_LEVEL      0x00008000   // Level triggered
+# define LAPIC_ICRLO_NOBCAST	0x00000000   // No Shorthand
+# define LAPIC_ICRLO_SELF       0x00040000   // Send to self
 # define LAPIC_ICRLO_BCAST      0x00080000   // Send to all APICs, including self.
+# define LAPIC_ICRLO_OTHERS	0x000C0000   // Send to all other APICs
 #define LAPIC_ICRHI		(0x0310/4)   // Interrupt Command [63:32]
+# define LAPIC_ICRHI_DEST_MASK	0xFF000000   // Destination Mask
+# define LAPIC_ICRHI_DEST_SHIFT	24           // Destination Shift
 #define LAPIC_TIMER		(0x0320/4)   // Local Vector Table 0 (TIMER)
 # define LAPIC_TIMER_MASKED	0x00010000
 # define LAPIC_TIMER_X1		0x0000000B   // divide counts by 1
@@ -115,5 +124,10 @@ void lapic_eoi(void);
 void lapic_startcpu(lapicid_t, uintptr_t);
 
 uint32_t lapic_read_debug(int);
+
+void lapic_send_ipi(lapicid_t lapicid, uint8_t vector,
+		    uint32_t deliver_mode, uint32_t shorthand_mode);
+
+#endif /* _KERN_ */
 
 #endif /* !_KERN_DEV_LAPIC_H_ */

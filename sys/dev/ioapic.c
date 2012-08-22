@@ -68,7 +68,7 @@ ioapic_init(void)
 		}
 
 		if (id != ioapicid[i])
-			KERN_WARN("ioapicinit: id %d != ioapicid %d\n",
+			KERN_WARN("ioapic_init: id %d != ioapicid %d\n",
 				  id, ioapicid[i]);
 
 		int maxintr = (ioapic_read(ioapic, IOAPIC_VER) >> 16) & 0xFF;
@@ -109,6 +109,9 @@ ioapic_enable(int irq, lapicid_t apicid)
 			break;
 		}
 	}
+
+	if (i == ioapic_num)
+		KERN_PANIC("Cannot enable IRQ %d on IOAPIC.\n", irq);
 }
 
 int

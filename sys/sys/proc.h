@@ -166,7 +166,7 @@ int proc_unblock(struct proc *p);
 /*
  * Per-processor scheduler.
  */
-void proc_sched(void) gcc_noreturn;
+gcc_noreturn void proc_sched(void);
 
 /*
  * Add a new created process to the scheduler.
@@ -187,6 +187,11 @@ struct proc *proc_cur(void);
  * Get the process by its process id.
  */
 struct proc *proc_pid2proc(pid_t);
+
+/*
+ * Reschedule.
+ */
+int proc_resched(struct context *);
 
 /*
  * Save the context of a process.

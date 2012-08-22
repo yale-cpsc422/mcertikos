@@ -17,7 +17,7 @@ extern char Xdivide,Xdebug,Xnmi,Xbrkpt,Xoflow,Xbound,
 	Xgpflt,Xpgflt,Xfperr,Xalign,Xmchk,Xdefault,Xsyscall;
 extern char Xirq0,Xirq1,Xirq2,Xirq3,Xirq4,Xirq5,
 	Xirq6,Xirq7,Xirq8,Xirq9,Xirq10,Xirq11,
-	Xirq12,Xirq13,Xirq14,Xirq15,Xirq19;
+	Xirq12,Xirq13,Xirq14,Xirq15,Xirq19, Xirq20;
 
 /* Interrupt Descriptors Table */
 gatedesc_t idt[256];
@@ -80,6 +80,9 @@ intr_init_idt(void)
 
 	/* interrupt gate for IRQ_ERROR */
 	SETGATE(idt[T_IRQ0 + 19], 0, CPU_GDT_KCODE, &Xirq19, 0);
+
+	/* interrupt gate for IRQ_IPI_RESCHED */
+	SETGATE(idt[T_IRQ0 + IRQ_IPI_RESCHED], 0, CPU_GDT_KCODE, &Xirq20, 0);
 
 	asm volatile("lidt %0" : : "m" (idt_pd));
 }

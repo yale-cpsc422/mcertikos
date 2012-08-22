@@ -102,7 +102,7 @@ proc_free(struct proc *proc)
  * @return 0 if no errors, and the state of the process is set to PROC_READY.
  */
 static int
-proc_ready(struct proc *p, struct pcpu *c)
+proc_ready(struct proc *p, struct pcpu *c, bool head)
 {
 	KERN_ASSERT(proc_inited == TRUE);
 
@@ -129,7 +129,10 @@ proc_ready(struct proc *p, struct pcpu *c)
 	if (p->state == PROC_BLOCKED)
 		TAILQ_REMOVE(&sched->blocked_queue, p, entry);
 
-	TAILQ_INSERT_TAIL(&sched->ready_queue, p, entry);
+	if (head == TRUE)
+		TAILQ_INSERT_HEAD(&sched->ready_queue, p, entry);
+	else
+		TAILQ_INSERT_TAIL(&sched->ready_queue, p, entry);
 
 	p->cpu = c;
 	p->state = PROC_READY;
@@ -338,6 +341,8 @@ proc_block(struct proc *p, block_reason_t reason)
 	spinlock_release(&sched->lk);
 	proc_unlock(p);
 
+	PROC_DEBUG("Process %d is blocked.\n", p->pid);
+
 	return 0;
 }
 
@@ -366,10 +371,21 @@ proc_unblock(struct proc *p)
 
 	spinlock_acquire(&sched->lk);
 
-	proc_ready(p, c);
+	/*
+	 * Put the process at the begining of the ready queue, so that it would
+	 * run immediately once the schedule is done.
+	 */
+	proc_ready(p, c, TRUE);
 
 	spinlock_release(&sched->lk);
+
+	if (p->cpu != pcpu_cur())
+		lapic_send_ipi(p->cpu->_pcpu->lapic_id, T_IRQ0+IRQ_IPI_RESCHED,
+			       LAPIC_ICRLO_FIXED, LAPIC_ICRLO_NOBCAST);
+
 	proc_unlock(p);
+
+	PROC_DEBUG("Process %d is unblocked.\n", p->pid);
 
 	return 0;
 }
@@ -403,7 +419,8 @@ proc_sched(void)
 		if (p->total_running_time > SCHED_TIME_SLICE &&
 		    !TAILQ_EMPTY(&sched->ready_queue)) {
 			p->total_running_time = 0;
-			proc_ready(p, c);
+			proc_ready(p, c, FALSE); /* put the process at the tail
+						    of the ready queue */
 			proc_unlock(p);
 
 			PROC_DEBUG("Process %d is time-out.\n", p->pid);
@@ -435,11 +452,19 @@ proc_add2sched(struct proc *p)
 	spinlock_acquire(&sched->lk);
 
 	KERN_ASSERT(p->state == PROC_INITED);
-	proc_ready(p, c);
+	proc_ready(p, c, TRUE);
 
 	spinlock_release(&sched->lk);
 	proc_unlock(p);
 
+	return 0;
+}
+
+int
+proc_resched(struct context *ctx)
+{
+	PROC_DEBUG("Reschedule on processor %d.\n", pcpu_cur_idx());
+	proc_sched();
 	return 0;
 }
 
@@ -459,7 +484,7 @@ proc_yield(void)
 
 	p = proc_cur();
 	proc_lock(p);
-	proc_ready(p, c);
+	proc_ready(p, c, FALSE);
 	proc_unlock(p);
 
 	spinlock_release(&sched->lk);

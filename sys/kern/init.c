@@ -19,6 +19,7 @@
 #include <machine/pmap.h>
 
 #include <dev/kbd.h>
+#include <dev/lapic.h>
 #include <dev/pci.h>
 #include <dev/tsc.h>
 #include <dev/timer.h>
@@ -28,12 +29,16 @@ uint8_t pcpu_stack[MAX_CPU * PAGE_SIZE] gcc_aligned(PAGE_SIZE);
 extern uint8_t _binary___obj_user_init_init_start[];
 extern uint8_t _binary___obj_user_idle_idle_start[];
 
+static void kern_main_ap(void);
+
 static void gcc_noreturn
 kern_main(void)
 {
 	pageinfo_t *pi;
 	struct pcpu *c;
 	struct proc *init_proc;
+	int i;
+	uint8_t *stack = (uint8_t *) pcpu_stack;
 
 	c = pcpu_cur();
 	KERN_ASSERT(c != NULL && c->state == PCPU_INITED);
@@ -78,6 +83,7 @@ kern_main(void)
 	trap_handler_register(T_IRQ0+IRQ_SPURIOUS, spurious_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_TIMER, timer_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_KBD, kbd_intr_handler);
+	trap_handler_register(T_IRQ0+IRQ_IPI_RESCHED, proc_resched);
 	KERN_INFO("done.\n");
 
 	/* enable interrupts */
@@ -88,6 +94,17 @@ kern_main(void)
 	KERN_INFO("[BSP KERN] Enable KBD interrupt ... ");
 	kbd_intenable();
 	KERN_INFO("done.\n");
+
+	KERN_INFO("[BSP KERN] Enable IPI ... ");
+	intr_enable(IRQ_IPI_RESCHED, 0);
+	KERN_INFO("done.\n");
+
+	/* Start slave kernel on APs */
+	for (i = 1; i < pcpu_ncpu(); i++) {
+		KERN_INFO("Start slave kernel on CPU%d ... ", i);
+		pcpu_boot_ap(i, kern_main_ap, (uintptr_t) &stack[i * PAGE_SIZE]);
+		KERN_INFO("done.\n");
+	}
 
 	/* create init process */
 	KERN_INFO("[BSP KERN] Create init process ... ");
@@ -164,6 +181,10 @@ kern_main_ap(void)
 
 	KERN_INFO("[AP%d KERN] Enable KBD interrupt ... ", cpu_idx);
 	kbd_intenable();
+	KERN_INFO("done.\n");
+
+	KERN_INFO("[BSP KERN] Enable IPI ... ");
+	intr_enable(IRQ_IPI_RESCHED, 0);
 	KERN_INFO("done.\n");
 
 	/* create init process */
@@ -297,14 +318,6 @@ kern_init(mboot_info_t *mbi)
 	KERN_INFO("Initialize process module ... ");
 	proc_init();
 	KERN_INFO("done.\n");
-
-	/* Start slave kernel on APs */
-	int i;
-	for (i = 1; i < pcpu_ncpu(); i++) {
-		KERN_INFO("Start slave kernel on CPU%d ... ", i);
-		pcpu_boot_ap(i, kern_main_ap, (uintptr_t) &stack[i * PAGE_SIZE]);
-		KERN_INFO("done.\n");
-	}
 
 	/* Start master kernel on BSP */
 	KERN_INFO("Start kernel on BSP ... \n");

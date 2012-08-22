@@ -243,3 +243,26 @@ lapic_read_debug(int index)
 {
 	return lapic_read(index);
 }
+
+/*
+ * Send an IPI.
+ */
+void
+lapic_send_ipi(lapicid_t apicid, uint8_t vector,
+	       uint32_t deliver_mode, uint32_t shorthand_mode)
+{
+	KERN_ASSERT(deliver_mode != LAPIC_ICRLO_INIT &&
+		    deliver_mode != LAPIC_ICRLO_STARTUP);
+
+	while (lapic_read(LAPIC_ICRLO) & LAPIC_ICRLO_DELIVS)
+		pause();
+
+	if (shorthand_mode == LAPIC_ICRLO_NOBCAST)
+		lapic_write(LAPIC_ICRHI, (apicid << LAPIC_ICRHI_DEST_SHIFT) &
+			    LAPIC_ICRHI_DEST_MASK);
+
+	lapic_write(LAPIC_ICRLO, shorthand_mode | /* LAPIC_ICRLO_LEVEL | */
+		    deliver_mode | (vector & LAPIC_ICRLO_VECTOR));
+
+	KERN_DEBUG("IPI %d has been sent to processor %d.\n", vector, apicid);
+}

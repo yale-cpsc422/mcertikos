@@ -54,6 +54,7 @@
 #define IRQ_MOUSE	12	/* Mouse interrupt */
 #define IRQ_IDE		14	/* IDE disk controller interrupt */
 #define IRQ_ERROR	19	/* */
+#define IRQ_IPI_RESCHED	20	/* IPI: force another processor to reschedule */
 
 #ifndef __ASSEMBLER__
 
