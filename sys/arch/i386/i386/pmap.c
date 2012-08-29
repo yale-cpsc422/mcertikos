@@ -109,6 +109,8 @@ pmap_walk(pde_t *pdir, uintptr_t la, bool write)
 static pmap_t *
 pmap_init_bootpdir(pmap_t *pmap)
 {
+	KERN_ASSERT(pmap != NULL);
+
 	pmmap_t *e820_ent, *e820_last_ent;
 	uint32_t addr;
 	pmap_t *rc;

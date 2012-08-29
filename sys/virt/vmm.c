@@ -1,5 +1,6 @@
 #include <sys/debug.h>
 #include <sys/intr.h>
+#include <sys/pcpu.h>
 #include <sys/proc.h>
 #include <sys/spinlock.h>
 #include <sys/string.h>
@@ -10,8 +11,6 @@
 #include <sys/virt/vmm_dev.h>
 #endif
 #include <sys/virt/dev/virtio_blk.h>
-
-#include <machine/pcpu.h>
 
 #include <dev/tsc.h>
 
@@ -26,13 +25,13 @@ static struct vmm_ops *vmm_ops = NULL;
 static bool gcc_inline
 is_intel(void)
 {
-	return (strncmp(cpuinfo.vendor, "GenuineIntel", 20) == 0);
+	return (strncmp(pcpu_cur()->arch_info.vendor, "GenuineIntel", 20) == 0);
 }
 
 static bool gcc_inline
 is_amd(void)
 {
-	return (strncmp(cpuinfo.vendor, "AuthenticAMD", 20) == 0);
+	return (strncmp(pcpu_cur()->arch_info.vendor, "AuthenticAMD", 20) == 0);
 }
 
 static void

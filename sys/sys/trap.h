@@ -4,14 +4,17 @@
 #ifdef _KERN_
 
 #include <sys/context.h>
+#include <sys/pcpu.h>
 
 #include <machine/trap.h>
 
 struct context;
+struct pcpu;
 
 typedef int (*trap_cb_t) (struct context *);
 
 void trap(tf_t *);
+void trap_init_array(struct pcpu *c);
 void trap_handler_register(int trapno, trap_cb_t);
 
 /* exception handlers */
@@ -23,6 +26,9 @@ int pgf_handler(struct context *);
 int spurious_intr_handler(struct context *);
 int timer_intr_handler(struct context *);
 int kbd_intr_handler(struct context *);
+
+/* IPI handlers */
+int ipi_resched_handler(struct context *);
 
 #endif /* _KERN_ */
 

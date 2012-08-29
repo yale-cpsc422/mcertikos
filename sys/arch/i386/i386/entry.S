@@ -34,7 +34,7 @@ start:
 
 	/* prepare the kernel stack  */
 	movl	$0x0,%ebp
-	movl	$(pcpu_stack+4096),%esp
+	movl	$(bsp_kstack+4096),%esp
 
 	/* jump to the C code */
 	push	multiboot_ptr

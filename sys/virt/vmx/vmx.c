@@ -522,7 +522,7 @@ vmx_enable(void)
 	struct vmx_info *vmx_info;
 	int error;
 
-	vmx_info = &vmx_proc_info[pcpu_cur_idx()];
+	vmx_info = &vmx_proc_info[pcpu_cpu_idx(pcpu_cur())];
 
 	lcr4(rcr4() | CR4_VMXE);
 
@@ -552,7 +552,7 @@ vmx_init(void)
 	struct vmx_info *vmx_info;
 
 	KERN_ASSERT(pcpu_cur() != NULL);
-	vmx_info = &vmx_proc_info[pcpu_cur_idx()];
+	vmx_info = &vmx_proc_info[pcpu_cpu_idx(pcpu_cur())];
 
 	memset(&vmx_pool, 0, sizeof(vmx_pool));
 
@@ -701,7 +701,7 @@ vmx_init_vm(struct vm *vm)
 	struct vmx *vmx;
 	pageinfo_t *vmcs_pi, *ept_pi, *msr_pi, *io_pi;
 
-	vmx_info = &vmx_proc_info[pcpu_cur_idx()];
+	vmx_info = &vmx_proc_info[pcpu_cpu_idx(pcpu_cur())];
 	KERN_ASSERT(vmx_info->vmx_enabled == TRUE);
 
 	vmx = vmx_alloc();
@@ -798,17 +798,19 @@ vmx_init_vm(struct vm *vm)
 		 vmx_info->procbased_ctls, vmx_info->procbased_ctls2,
 		 vmx_info->exit_ctls, vmx_info->entry_ctls, vmx->msr_bitmap,
 		 vmx->io_bitmap, (char *) ((uintptr_t) vmx->io_bitmap+PAGESIZE),
-		 pcpu_cur_idx() + 1,
+		 pcpu_cpu_idx(pcpu_cur()) + 1,
 		 vmx_info->cr0_ones_mask, vmx_info->cr0_zeros_mask,
 		 vmx_info->cr4_ones_mask, vmx_info->cr4_zeros_mask,
 		 (uintptr_t) vmx_return_from_guest);
 
-	vmx->vpid = pcpu_cur_idx() + 1;
+	vmx->vpid = pcpu_cpu_idx(pcpu_cur()) + 1;
 
 	vmx->g_rax = vmx->g_rbx = vmx->g_rcx =
 		vmx->g_rsi = vmx->g_rdi = vmx->g_rbp = 0;
 	vmx->g_rdx =
-		(cpuinfo.family << 8) | (cpuinfo.model << 4) | (cpuinfo.step);
+		(pcpu_cur()->arch_info.family << 8) |
+		(pcpu_cur()->arch_info.model << 4) |
+		(pcpu_cur()->arch_info.step);
 	vmx->g_cr2 = 0;
 	vmx->g_dr0 = vmx->g_dr1 = vmx->g_dr2 = vmx->g_dr3 = 0;
 	vmx->g_dr6 = 0xffff0ff0;

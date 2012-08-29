@@ -6,13 +6,13 @@ USER_GUEST_SRC	+= $(USER_DIR)/guest/guest.c
 USER_GUEST_OBJ	:= $(patsubst %.c, $(OBJDIR)/%.o, $(USER_GUEST_SRC))
 USER_GUEST_OBJ	:= $(patsubst %.S, $(OBJDIR)/%.o, $(USER_GUEST_OBJ))
 
-USER_BINFILES	+= $(USER_OBJDIR)/guest/guest
+KERN_BINFILES	+= $(USER_OBJDIR)/guest/guest
 
 guest: $(USER_OBJDIR)/guest/guest
 
-$(USER_OBJDIR)/guest/guest: $(USER_LIB_OBJ) $(USER_GUEST_OBJ)
+$(USER_OBJDIR)/guest/guest: $(USER_LIB_OBJ) $(USER_GUEST_OBJ) $(GUEST_BINFILES)
 	@echo + ld[USER/guest] $@
-	$(V)$(LD) -o $@ $(USER_LDFLAGS) $(USER_LIB_OBJ) $(USER_GUEST_OBJ) $(GCC_LIBS)
+	$(V)$(LD) -o $@ $(USER_LDFLAGS) $(USER_LIB_OBJ) $(USER_GUEST_OBJ) $(GCC_LIBS) -b binary $(GUEST_BINFILES)
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym
 

@@ -1,6 +1,7 @@
 #include <sys/debug.h>
 #include <sys/intr.h>
 #include <sys/mem.h>
+#include <sys/pcpu.h>
 #include <sys/string.h>
 #include <sys/types.h>
 #include <sys/x86.h>
@@ -11,7 +12,6 @@
 #include <sys/virt/dev/pci.h>
 #include <sys/virt/dev/pic.h>
 
-#include <machine/pcpu.h>
 #include <machine/pmap.h>
 
 #include <dev/kbd.h>

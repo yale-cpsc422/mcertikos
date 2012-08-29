@@ -8,13 +8,6 @@
 #include <dev/lapic.h>
 #include <dev/timer.h>
 
-#if	defined (DEBUG_ALL) || defined (DEBUG_VIRT) ||	\
-	defined (LOW_FREQ) || defined (DEBUG_VMEXIT)
-#define LAPIC_TIMER_INTR_FREQ	1
-#else
-#define LAPIC_TIMER_INTR_FREQ	100
-#endif
-
 volatile lapic_t *lapic;
 
 /*

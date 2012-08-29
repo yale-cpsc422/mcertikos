@@ -154,8 +154,8 @@ vmcs_set_defaults(struct vmcs *vmcs, uint64_t *pml4ept, uint32_t pinbased_ctls,
 	/* host segment base address */
 	vmcs_write32(VMCS_HOST_FS_BASE, 0);
 	vmcs_write32(VMCS_HOST_GS_BASE, 0);
-	vmcs_write32(VMCS_HOST_TR_BASE, (uintptr_t) &c->_pcpu->tss);
-	vmcs_write32(VMCS_HOST_GDTR_BASE, (uintptr_t) &c->_pcpu->gdt);
+	vmcs_write32(VMCS_HOST_TR_BASE, (uintptr_t) &c->kstack->tss);
+	vmcs_write32(VMCS_HOST_GDTR_BASE, (uintptr_t) &c->kstack->gdt);
 	vmcs_write32(VMCS_HOST_IDTR_BASE, (uintptr_t) idt);
 
 	/* host control registers */

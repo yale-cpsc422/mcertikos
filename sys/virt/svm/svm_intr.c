@@ -1,4 +1,5 @@
 #include <sys/debug.h>
+#include <sys/trap.h>
 #include <sys/types.h>
 
 #include <sys/virt/vmm.h>

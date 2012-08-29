@@ -3,17 +3,17 @@
 
 #ifdef _KERN_
 
+#include <sys/channel.h>
 #include <sys/context.h>
 #include <sys/gcc.h>
-#include <sys/mqueue.h>
 #include <sys/pcpu.h>
 #include <sys/queue.h>
 #include <sys/signal.h>
 #include <sys/spinlock.h>
+#include <sys/trap.h>
 #include <sys/types.h>
 
 #include <machine/pmap.h>
-#include <machine/trap.h>
 
 #define MAX_PID		64
 #define MAX_MSG		8
@@ -21,6 +21,7 @@
 #define PID_INV		(~(pid_t) 0)
 
 struct proc;
+typedef int (*trap_cb_t) (struct context *);
 
 /*
  *                              (3)
@@ -33,18 +34,11 @@ struct proc;
  *      |               +---------------------------------+
  *  PROC_INVAL
  *
- * (0) The process is initialzied.
- *
- * (1) The process structures and resources are initialized, and the process is
- *     ready to run.
- *
- * (2) The process is scheduled to run.
- *
- * (3) The process is time-out or yields to another process.
- *
- * (4) The process is blocked for events, e.g. waiting for an interrupt.
- *
- * (5) The process is unblocked, and ready to run again.
+ * (1) A new process is put on the ready queue.
+ * (2) A ready process is scheduled to run.
+ * (3) A running process runs out of its time slice or gives up the CPU.
+ * (4) A running process is blocked.
+ * (5) A blocked process is unblocked.
  */
 
 typedef
@@ -58,55 +52,70 @@ volatile enum {
 
 typedef
 enum {
-	NOT_BLOCKED,	/* process is not blocked */
-	WAIT_FOR_MSG	/* process is waiting for messages */
+	WAITING_FOR_SENDING,	/* process is waiting for the completion of the
+				   message sending */
+	WAITING_FOR_RECEIVING	/* process is waiting for the completion of the
+				   message receiving */
 } block_reason_t;
 
 typedef int (*unblock_cb_t) (struct proc *);
 
 /*
- * Process Control Block.
+ * Process Control Block (PCB)
+ *
+ * Protection categories:
+ * - *: not protected yet
+ * - c: created at proc_spawn(), never changed in the future
+ * - a: protected by the process lock
+ * - s: protected by the scheduler lock
  */
 struct proc {
-	pid_t		pid;	/* process id */
-	pmap_t		*pmap;	/* page table */
-	proc_state_t	state;	/* state of process */
+	pid_t		pid;	/* (c) process id */
+	struct kstack	*kstack;/* (c) kernel stack for this process */
+	pmap_t		*pmap;	/* (c) page table */
+	proc_state_t	state;	/* (s) state of process */
 
-	struct pcpu	*cpu;	/* which CPU I'm on */
-	struct context	ctx;	/* process context */
+	struct pcpu	*cpu;	/* (c) which CPU I'm on */
+	struct kern_ctx	*kctx;	/* (a) kernel context for kernel context
+				   switches */
+	struct context	ctx;	/* (a) user context for traps  */
+
+	struct vm	*vm;	/* (a) which virtual machine is running in this
+				   process */
+
+	block_reason_t	block_reason;	/* (s) why the process is blocked */
+	struct channel	*block_channel;	/* (s) which channel the process is
+					   blocked on */
+
+	struct proc	*parent;    /* (s) the parent process of this process */
+	struct channel	*parent_ch; /* (a) bidirection channel to the parent */
 
 	/*
-	 * Whenever the process is blocked, blocked_for records the reason why
-	 * it's blocked.
-	 *
-	 * If unblock_callback is not NULL, it will called once the blocked
-	 * process is unblocked. unblock_callback is responsible to complete the
-	 * blocking operations. For example, if there's no meesage in the
-	 * message queue, receiving the message will block the receiver process.
-	 * When new messages come, the process is unblocked and calls
-	 * unblock_callback to get the message from the message queue.
+	 * (s) child_list: all children process of this process
+	 * (s) child_entry: child_list entry in the parent's child_list
 	 */
-	block_reason_t	blocked_for;
-	unblock_cb_t	unblock_callback;
+	TAILQ_HEAD(children, proc) child_list;
+	TAILQ_ENTRY(proc)          child_entry;
 
-	uint64_t	last_running_time;
-	uint64_t	total_running_time;
-
-	struct mqueue	mqueue;	/* message queue */
-
-	spinlock_t	lk;	/* must be acquired before accessing this
-				   structure */
-
-	struct vm	*vm;	/* which virtual machine is running in this
-				   process */
+	spinlock_t	lk;	/* (*) process lock */
 
 	/*
 	 * A process can be in either of the free processes list, the ready
 	 * processes list, the sleeping processes list or the dead processes
 	 * list.
 	 */
-	TAILQ_ENTRY(proc) entry;
+	TAILQ_ENTRY(proc) entry;/* (s) linked list entry in scheduler queue */
 };
+
+#define proc_lock(p)				\
+	do {					\
+		spinlock_acquire(&p->lk);	\
+	} while (0)
+
+#define proc_unlock(p)				\
+	do {					\
+		spinlock_release(&p->lk);	\
+	} while (0)
 
 struct sched;
 
@@ -123,60 +132,49 @@ int proc_init(void);
 int proc_sched_init(struct sched *);
 
 /*
- * Acquire/Release the spinlock of a process. It's recommended to use them in
- * pairs.
+ * Start running a new process on a specified processor.
  *
- * XXX: They are blocking operations, i.e. they are blocked until the operation
- *      succeeds.
+ * proc_spawn() creates a new process, load an execution file to the address
+ * space of the process, and notifies the scheduler on the specified processor
+ * to run the process.
+ *
+ * @param c     the processor on which the process will run
+ * @param start the start address of the execution file.
+ *
+ * @return PCB of the process if spawn succeeds; otherwise, return NULL.
  */
-#define proc_lock(p)					\
-	do {						\
-		KERN_ASSERT(p != NULL);			\
-		spinlock_acquire(&p->lk);		\
-	} while (0)
-
-#define proc_unlock(p)							\
-	do {								\
-		KERN_ASSERT(p != NULL);					\
-		if (spinlock_holding(&p->lk) == FALSE)			\
-			KERN_PANIC("Process %d tries to release "	\
-				   "unlocked lock", p->pid);		\
-		spinlock_release(&p->lk);				\
-	} while (0)
+struct proc *proc_spawn(struct pcpu *c, uintptr_t start);
 
 /*
- * Create a new process.
+ * Block a process.
  *
- * @param start the start address of the code to execute in this process
- *
- * @return a pointer to the structure of the process; NULL if failed.
+ * @param p      which process is to be blocked
+ * @param reason why the process is blocked
+ * @param ch     which channel the process is blocked on
  */
-struct proc *proc_create(uintptr_t start);
+void proc_block(struct proc *p, block_reason_t reason, struct channel *ch);
 
 /*
- * Block a process p.
+ * Unblock a process.
+ *
+ * @param p which process is to be unblocked
  */
-int proc_block(struct proc *p, block_reason_t);
-
-/*
- * Unblock a process p and put it on the ready queue.
- */
-int proc_unblock(struct proc *p);
+void proc_unblock(struct proc *p);
 
 /*
  * Per-processor scheduler.
  */
-gcc_noreturn void proc_sched(void);
+void proc_sched(bool need_sched);
 
 /*
- * Add a new created process to the scheduler.
+ * Update the scheduling information.
  */
-int proc_add2sched(struct proc *p);
+void proc_sched_update(void);
 
 /*
  * Yield to another process.
  */
-int proc_yield(void);
+void proc_yield(void);
 
 /*
  * Get the current process.
@@ -189,33 +187,44 @@ struct proc *proc_cur(void);
 struct proc *proc_pid2proc(pid_t);
 
 /*
- * Reschedule.
- */
-int proc_resched(struct context *);
-
-/*
  * Save the context of a process.
  */
 void proc_save(struct proc *p, tf_t *tf);
 
 /*
- * Send a messags to a process.
+ * Send a messags through a channel. If the channel is busy when proc_send_msg()
+ * is trying to send the message, the sending process will be blocked util the
+ * channel is idle.
  *
- * @param receiver which process the message is sent to
- * @param msg      the message to be sent
- * @param size     the size of the message
+ * @param ch   the channel through which the message will be sent
+ * @param msg  the message to be sent
+ * @param size the size of the message
  *
- * @return 0 if no errors; otherwise, return a non-zero value.
+ * @return 0 if the sending succeeds; otherwise,
+ *  return E_CHANNEL_BUSY, if there's pending messages in the channel;
+ *  return E_CHANNEL_ILL_TYPE, if the channel type is receive-only;
+ *  return E_CHANNEL_MSG_TOO_LARGE, if the message is too large;
+ *  return E_CHANNEL_ILL_SENDER, if the sending process is not allowed to send
+ *         through the channel.
  */
-int proc_send_msg(struct proc *receiver, void *msg, size_t size);
+int proc_send_msg(struct channel *ch, void *msg, size_t size);
 
 /*
- * Receive a message. If no message is present, the receiver process will be
- * blocked.
+ * Receive a message through a channel. If the channel is idle when
+ * proc_recv_msg() is trying to receive the message, the receiving process will
+ * be blocked until the channel is busy.
  *
- * @return the message if successful; if no message is present, return NULL.
+ * @param ch   the channel from which the message will be received
+ * @param msg  where the received message will be stored
+ * @param size where the size of the received message will be stored
+ *
+ * @return 0 if the receiving succeeds; otherwise,
+ *  return E_CHANNEL_IDLE, if there's no message in the channel;
+ *  return E_CHANNEL_ILL_TYPE, if the channel type is send-only;
+ *  return E_CHANNEL_ILL_RECEIVER, if the receiving process is not allowed to
+ *         receive from the channel.
  */
-struct message *proc_recv_msg(void);
+int proc_recv_msg(struct channel *ch, void *msg, size_t *size);
 
 #endif /* _KERN_ */
 

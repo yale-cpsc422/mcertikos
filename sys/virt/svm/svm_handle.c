@@ -719,7 +719,7 @@ svm_handle_err(struct vm *vm)
 		KERN_WARN("DR7[63..32] != 0\n");
 
 	if (((efer & MSR_EFER_LMA) || (efer & MSR_EFER_LME)) &&
-	    (cpuinfo.feature2 & CPUID_X_FEATURE_LM) == 0)
+	    (pcpu_cur()->arch_info.feature2 & CPUID_X_FEATURE_LM) == 0)
 		KERN_WARN("EFER.LMA =1 or EFER.LME = 1, while long mode is not supported.\n");
 	if ((efer & MSR_EFER_LME) && (cr0 & CR0_PG) && (cr4 & CR4_PAE) == 0)
 		KERN_WARN("EFER.LME = 1 and CR0.PG =1, while CR4.PAE = 0.\n");

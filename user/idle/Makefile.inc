@@ -7,7 +7,6 @@ USER_IDLE_OBJ	:= $(patsubst %.c, $(OBJDIR)/%.o, $(USER_IDLE_SRC))
 USER_IDLE_OBJ	:= $(patsubst %.S, $(OBJDIR)/%.o, $(USER_IDLE_OBJ))
 
 KERN_BINFILES	+= $(USER_OBJDIR)/idle/idle
-USER_BINFILES	+= $(USER_OBJDIR)/idle/idle
 
 idle: $(USER_OBJDIR)/idle/idle
 

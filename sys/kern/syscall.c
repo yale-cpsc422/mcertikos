@@ -15,29 +15,49 @@
 
 #ifdef DEBUG_SYSCALL
 
-#define SYSCALL_DEBUG(fmt...)			\
-	{					\
-		KERN_DEBUG(fmt);		\
-	}
-
 static char *syscall_name[256] =
 	{
 		[SYS_puts]	= "sys_puts",
 		[SYS_getc]	= "sys_getc",
+		[SYS_spawn]	= "sys_spawn",
 		[SYS_yield]	= "sys_yield",
 		[SYS_getpid]	= "sys_getpid",
 		[SYS_send]	= "sys_send",
 		[SYS_recv]	= "sys_recv",
+		[SYS_ncpus]	= "sys_ncpus",
+		[SYS_getpchid]	= "sys_getpchid",
 		[SYS_allocvm]	= "sys_allocvm",
 		[SYS_execvm]	= "sys_execvm",
 		[SYS_test]	= "sys_test",
 	};
 
+#define SYSCALL_DEBUG(fmt, args...)			\
+	do {						\
+		KERN_DEBUG("CPU%d:PID%d: "fmt,		\
+			   pcpu_cpu_idx(pcpu_cur()),	\
+			   proc_cur()->pid,		\
+			   args);			\
+	} while (0)
+
+#define NR_DEBUG(nr, fmt, args...)					\
+	do {								\
+		KERN_DEBUG("CPU%d:PID%d:%s(nr %d): "fmt,		\
+			   pcpu_cpu_idx(pcpu_cur()),			\
+			   proc_cur()->pid,				\
+			   (0 <= nr && nr < 256) ? syscall_name[nr] : "null", \
+			   nr,						\
+			   args);					\
+	} while (0)
+
 #else
 
 #define SYSCALL_DEBUG(fmt...)			\
-	{					\
-	}
+	do {					\
+	} while (0)
+
+#define NR_DEBUG(fmt...)			\
+	do {					\
+	} while (0)
 
 #endif
 
@@ -62,20 +82,19 @@ copy_from_user(void *dest, void *src, size_t size)
 	pmap_t *user_pmap;
 
 	user_proc = proc_cur();
-	KERN_ASSERT(spinlock_holding(&user_proc->lk) == TRUE);
 
 	user_pmap = user_proc->pmap;
 	KERN_ASSERT(user_pmap == (pmap_t *) rcr3());
 
 	if (pmap_checkrange(user_pmap, (uintptr_t) dest, size) == FALSE) {
 		SYSCALL_DEBUG("%x ~ %x do not fit in the kernel address space.\n",
-			   dest, dest+size);
+			      dest, dest+size);
 		return NULL;
 	}
 
 	if (pmap_checkrange(user_pmap, (uintptr_t) src, size) == FALSE) {
 		SYSCALL_DEBUG("%x ~ %x do not fit in the user address space.\n",
-			   src, src+size);
+			      src, src+size);
 		return NULL;
 	}
 
@@ -106,20 +125,19 @@ copy_to_user(void *dest, void *src, size_t size)
 	pmap_t *user_pmap;
 
 	user_proc = proc_cur();
-	KERN_ASSERT(spinlock_holding(&user_proc->lk) == TRUE);
 
 	user_pmap = user_proc->pmap;
 	KERN_ASSERT(user_pmap == (pmap_t *) rcr3());
 
 	if (pmap_checkrange(user_pmap, (uintptr_t) src, size) == FALSE) {
 		SYSCALL_DEBUG("%x ~ %x do not fit in the kernel address space.\n",
-			   src, src+size);
+			      src, src+size);
 		return NULL;
 	}
 
 	if (pmap_checkrange(user_pmap, (uintptr_t) dest, size) == FALSE) {
 		SYSCALL_DEBUG("%x ~ %x do not fit in the user address space.\n",
-			   dest, dest+size);
+			      dest, dest+size);
 		return NULL;
 	}
 
@@ -131,284 +149,246 @@ copy_to_user(void *dest, void *src, size_t size)
 static int
 sys_test(uint32_t arg)
 {
-	SYSCALL_DEBUG(" test: arg0 0x%08x\n", arg);
-	return 0;
+	NR_DEBUG(SYS_test, "arg0 0x%08x\n", arg);
+	return E_SUCC;
 }
 
 static int
-sys_getc(struct pcpu *c, struct proc *p, char *buf)
+sys_getc(char *buf)
 {
-	int rc = 0;
+	struct pcpu *c = pcpu_cur();
 
 	*(char *) c->sys_buf = getchar();
-	proc_lock(p);
 	if (copy_to_user(buf, c->sys_buf, sizeof(char)) == NULL)
-		rc = 1;
-	proc_unlock(p);
-	memset(c->sys_buf, 0x0, sizeof(char));
-
-	return rc;
+		return E_MEM_FAIL;
+	else
+		return E_SUCC;
 }
 
 static int
-sys_puts(struct pcpu *c, struct proc *p, char *buf)
+sys_puts(char *buf)
 {
-	int rc = 0;
+	struct pcpu *c = pcpu_cur();
 
-	proc_lock(p);
-	if (copy_from_user(c->sys_buf, buf, PAGE_SIZE) == NULL) {
-		rc = 1;
-		proc_unlock(p);
-		goto ret;
-	}
-	proc_unlock(p);
+	if (copy_from_user(c->sys_buf, buf, PAGE_SIZE) == NULL)
+		return E_MEM_FAIL;
 
 	((char *) (c->sys_buf))[PAGE_SIZE - 1] = '\0';
 	cprintf("%s", (char *) c->sys_buf);
 
- ret:
-	memset(c->sys_buf, 0x0, PAGE_SIZE);
-	return rc;
+	return E_SUCC;
 }
 
 static int
-sys_spawn(struct pcpu *c, struct proc *p, uintptr_t exe, pid_t *pid)
+sys_spawn(uint32_t cpu_idx, uintptr_t exe, pid_t *pid)
 {
-	int rc = 0;
+	int rc = E_SUCC;
+	struct pcpu *cur_cpu = pcpu_cur();
+	struct pcpu *c = &pcpu[cpu_idx];
+	struct proc *child;
 
-	struct proc *q;
-
-	if ((q = proc_create(exe)) == NULL) {
-		*(pid_t *) c->sys_buf = PID_INV;
-		proc_lock(p);
-		copy_to_user(pid, c->sys_buf, sizeof(pid_t));
-		proc_unlock(p);
-		memset(c->sys_buf, 0, sizeof(pid_t));
-		rc = 1;
-		goto ret;
+	if ((child = proc_spawn(c, exe)) == NULL) {
+		*(pid_t *) cur_cpu->sys_buf = PID_INV;
+		rc = E_SPAWN_FAIL;
+	} else {
+		*(pid_t *) cur_cpu->sys_buf = child->pid;
 	}
 
-	proc_add2sched(q);
+	if (copy_to_user(pid, cur_cpu->sys_buf, sizeof(pid_t)) == NULL)
+		rc = E_MEM_FAIL;
 
-	*(pid_t *) c->sys_buf = q->pid;
-	proc_lock(p);
-	copy_to_user(pid, c->sys_buf, sizeof(pid_t));
-	proc_unlock(p);
-	memset(c->sys_buf, 0, sizeof(pid_t));
-
- ret:
 	return rc;
 }
 
 static int
-sys_yield(struct proc *p)
+sys_yield(void)
 {
-	KERN_ASSERT(p != NULL);
-
-	if (proc_cur() != p)
-		return 1;
-
-	return proc_yield();
+	proc_yield();
+	return E_SUCC;
 }
 
 static int
-sys_getpid(struct pcpu *c, struct proc *p, pid_t *pid)
+sys_getpid(pid_t *pid)
 {
-	int rc = 0;
-
-	KERN_ASSERT(p != NULL);
-
-	proc_lock(p);
+	struct pcpu *c = pcpu_cur();
+	struct proc *p = proc_cur();
 
 	*(pid_t *) c->sys_buf = p->pid;
 
 	if (copy_to_user(pid, c->sys_buf, sizeof(pid_t)) == NULL)
-		rc = 1;
-
-	proc_unlock(p);
-
-	memset(c->sys_buf, 0x0, sizeof(pid_t));
-
-	return rc;
+		return E_MEM_FAIL;
+	else
+		return E_SUCC;
 }
 
 static int
-sys_send(struct pcpu *c, struct proc *sender,
-	 pid_t receiver_pid, void *data, size_t size)
+sys_allocvm(void)
 {
-	int rc  = 0;
-	struct proc *receiver;
-
-	SYSCALL_DEBUG("Send message to process %d, size %d.\n",
-		      receiver_pid, size);
-
-	if (c == NULL || sender == NULL || data == NULL) {
-		SYSCALL_DEBUG("Illegal parameters.\n");
-		rc = 2;
-		goto ret;
-	}
-
-	if ((receiver = proc_pid2proc(receiver_pid)) == NULL) {
-		SYSCALL_DEBUG("Cannnot find proecss %d.\n", receiver_pid);
-		rc = 1;
-		goto ret;
-	}
-
-	proc_lock(sender);
-	if (copy_from_user(c->sys_buf, data, size) == NULL) {
-		SYSCALL_DEBUG("Cannot copy data from userspace.\n");
-		proc_unlock(sender);
-		rc = 3;
-		goto ret;
-	}
-	proc_unlock(sender);
-
-	rc = proc_send_msg(receiver, c->sys_buf, size);
-
- ret:
-	memzero(c->sys_buf, size);
-	return rc;
-}
-
-static int
-sys_recv_unblock(struct proc *p)
-{
-	int rc = 0;
-	struct message *msg;
-	uint8_t *data;
-	size_t *size;
-
-	if (p == NULL) {
-		SYSCALL_DEBUG("Illegal parameters.\n");
-		rc = 2;
-		goto ret;
-	}
-
-	KERN_ASSERT(spinlock_holding(&p->lk) == TRUE);
-	KERN_ASSERT(p->blocked_for == WAIT_FOR_MSG);
-
-	data = (uint8_t *) ctx_arg2(&p->ctx);
-	size = (size_t *) ctx_arg3(&p->ctx);
-
-	spinlock_acquire(&p->mqueue.lk);
-	msg = mqueue_dequeue(&p->mqueue);
-	spinlock_release(&p->mqueue.lk);
-
-	if (msg == NULL) {
-		KERN_WARN("sys_recv_unblock() receives an empty message.\n");
-		*size = 0;
-	} else {
-		if (copy_to_user(data, msg->data, msg->size) == NULL) {
-			SYSCALL_DEBUG("Cannot copy data to userspace.\n");
-			rc = 3;
-			goto ret;
-		}
-		*size = msg->size;
-	}
-
- ret:
-	return rc;
-}
-
-static int
-sys_recv(struct pcpu *c, struct proc *receiver, void *buf, size_t *size)
-{
-	int rc = 0;
-	struct message *msg;
-
-	if (c == NULL || receiver == NULL || buf == NULL || size == NULL) {
-		SYSCALL_DEBUG("Illegal parameters.\n");
-		rc = 2;
-		goto ret;
-	}
-
-	msg = proc_recv_msg();
-
-	if (msg == NULL) {
-		proc_lock(receiver);
-		receiver->unblock_callback = sys_recv_unblock;
-		proc_unlock(receiver);
-	} else {
-		proc_lock(receiver);
-		if (copy_to_user(buf, msg->data, msg->size) == NULL) {
-			SYSCALL_DEBUG("Cannot copy data to userspace.\n");
-			rc = 1;
-			proc_unlock(receiver);
-			goto ret;
-		}
-		*size = msg->size;
-		proc_unlock(receiver);
-	}
-
- ret:
-	return rc;
-}
-
-static int
-sys_allocvm(struct pcpu *c, struct proc *p)
-{
-	int rc = 0;
+	struct proc *p = proc_cur();
 
 	if (pcpu_onboot() != TRUE) {
-		SYSCALL_DEBUG("Only support running the virtual machine on the "
-			      "bootstrap processor.\n");
-		rc = 1;
-		goto ret;
+		NR_DEBUG(SYS_allocvm,
+			 "Process %d is not on the bootstrap processor.\n",
+			 p->pid);
+		return E_VM_ON_AP;
 	}
 
 	proc_lock(p);
 
 	if (p->vm != NULL) {
-		SYSCALL_DEBUG("Cannot create the virtual machine in process %d."
-			      " There is already a virtual machine "
-			      "in this process.\n", p->pid);
-		rc = 2;
-		goto lock_ret;
+		NR_DEBUG(SYS_allocvm,
+			 "A virtual machine is already running in process %d.\n",
+			 p->pid);
+		proc_unlock(p);
+		return E_VM_EXIST;
 	}
 
 	if ((p->vm = vmm_init_vm()) == NULL) {
-		SYSCALL_DEBUG("Cannot create a virtual machine "
-			      "in process %d.\n", p->pid);
-		rc = 3;
-		goto lock_ret;
+		NR_DEBUG(SYS_allocvm,
+			 "Cannot initialize a virtual machine in process %d.\n",
+			 p->pid);
+		proc_unlock(p);
+		return E_VM_INIT_FAIL;
 	}
 
- lock_ret:
 	proc_unlock(p);
- ret:
-	return rc;
+	return E_SUCC;
 }
 
 static int
-sys_execvm(struct pcpu *c, struct proc *p)
+sys_execvm(void)
 {
-	int rc = 0;
+	struct proc *p = proc_cur();
 
 	if (pcpu_onboot() != TRUE) {
-		SYSCALL_DEBUG("Only support running the virtual machine on the "
-			      "bootstrap processor.\n");
-		rc = 1;
-		goto ret;
+		NR_DEBUG(SYS_execvm,
+			 "Process %d is not on the bootstrap processor.\n",
+			 p->pid);
+		return E_VM_ON_AP;
 	}
 
 	proc_lock(p);
 
 	if (p->vm == NULL) {
-		SYSCALL_DEBUG("No virtual machine in process %d.\n", p->pid);
-		rc = 2;
-		goto lock_ret;
+		NR_DEBUG(SYS_execvm,
+			 "No virtual machine in process %d.\n", p->pid);
+		proc_unlock(p);
+		return E_NO_VM;
 	}
 
 	proc_unlock(p);
 	vmm_run_vm(p->vm);
-	goto ret;
 
- lock_ret:
-	proc_unlock(p);
- ret:
-	return rc;
+	return E_SUCC;
 }
 
+static int
+sys_ncpus(uint32_t *n)
+{
+	struct pcpu *c = pcpu_cur();
+	*(uint32_t *) c->sys_buf = pcpu_ncpu();
+	if (copy_to_user(n, c->sys_buf, sizeof(uint32_t)) == NULL)
+		return E_MEM_FAIL;
+	else
+		return E_SUCC;
+}
+
+static int
+sys_getpchid(int *chid)
+{
+	struct pcpu *c = pcpu_cur();
+	struct proc *cur_proc = proc_cur();;
+	int errno;
+
+	if ((cur_proc = proc_cur()) == NULL) {
+		*(int *) c->sys_buf = -1;
+		errno = E_INVAL_PROC;
+	} else if (cur_proc->parent == NULL || cur_proc->parent_ch == NULL) {
+		*(int *) c->sys_buf = -1;
+		errno = E_NO_CHANNEL;
+	} else {
+		*(int *) c->sys_buf = channel_getid(cur_proc->parent_ch);
+		errno = E_SUCC;
+	}
+
+	if (copy_to_user(chid, c->sys_buf, sizeof(int)) == NULL)
+		errno = E_MEM_FAIL;
+
+	return errno;
+}
+
+static int
+sys_send(int channel_id, void *msg, size_t size)
+{
+	int errno;
+	struct channel *ch;
+
+	ch = channel_getch(channel_id);
+
+	if (ch == NULL || (ch->state & CHANNEL_STAT_INITED) == 0)
+		return E_NO_PERM;
+
+	if (msg == NULL || size == 0)
+		return E_EMPTY_MSG;
+
+	errno = proc_send_msg(ch, msg, size);
+
+	switch (errno) {
+	case E_CHANNEL_MSG_TOO_LARGE:
+		return E_LARGE_MSG;
+	case E_CHANNEL_ILL_SENDER:
+		return E_NO_PERM;
+	case E_CHANNEL_BUSY:
+		return E_SEND_BUSY;
+	default:
+		return E_SUCC;
+	}
+}
+
+static int
+sys_recv(int channel_id, void *msg, size_t *size)
+{
+	int errno;
+	struct channel *ch;
+
+	ch = channel_getch(channel_id);
+
+	if (ch == NULL || (ch->state & CHANNEL_STAT_INITED) == 0)
+		return E_NO_PERM;
+
+	if (msg == NULL || size == NULL)
+		return E_EMPTY_MSG;
+
+	errno = proc_recv_msg(ch, msg, size);
+
+	switch (errno) {
+	case E_CHANNEL_ILL_RECEIVER:
+		return E_NO_PERM;
+	case E_CHANNEL_IDLE:
+		return E_RECV_IDLE;
+	default:
+		return E_SUCC;
+	}
+}
+
+/*
+ * Syetem calls in CertiKOS follow the convention below.
+ *
+ * - The system call number is passed through the first argument of the user
+ *   context, i.e. %eax in the i386 architecture.
+ *
+ * - Each system call can have at most three parameters, which are passed
+ *   through the second argument to the fourth argument of the user context
+ *   respectively, i.e. %ebx, %ecx, and %edx in the i386 architecture.
+ *
+ * - The error number of the syscall is returned through the first argument of
+ *   the user context, i.e. %eax in the i386 architecture. If the error number
+ *   is zero, it means no error.
+ *
+ * - Other return value can be passed through the second argument to the fourth
+ *   argument. Which one/ones is/are used by a system call is decided by the
+ *   system call.
+ */
 int
 syscall_handler(struct context *ctx)
 {
@@ -417,23 +397,14 @@ syscall_handler(struct context *ctx)
 	uint32_t nr = ctx_arg1(ctx);
 	uint32_t a[3] =
 		{ctx_arg2(ctx), ctx_arg3(ctx), ctx_arg4(ctx)};
-	uint32_t rc = 0;
-	struct pcpu *c = pcpu_cur();
-	struct proc *p = proc_cur();
+	uint32_t errno = 0;
 
-	KERN_ASSERT(p != NULL);
-
-	KERN_ASSERT(c != NULL);
-	spinlock_acquire(&c->lk);
-
-	SYSCALL_DEBUG("syscall %s (nr %d) from process %d on CPU %d, RIP 0x%08x.\n",
-		   (0 <= nr && nr < 256) ? syscall_name[nr] : "unkown",
-		   nr, p->pid, pcpu_cur_idx(), ctx->tf.eip);
+	NR_DEBUG(nr, "called from 0x%08x.\n", ctx->tf.eip);
 	/* ctx_dump(ctx); */
 
 	switch (nr) {
 	case SYS_test:
-		rc = sys_test(a[0]);
+		errno = sys_test(a[0]);
 		break;
 
 	case SYS_getc:
@@ -441,7 +412,7 @@ syscall_handler(struct context *ctx)
 		 * Read a character from the console.
 		 * a[0]: the address where the character will be stored.
 		 */
-		rc = sys_getc(c, p, (char *) a[0]);
+		errno = sys_getc((char *) a[0]);
 		break;
 
 	case SYS_puts:
@@ -449,81 +420,97 @@ syscall_handler(struct context *ctx)
 		 * Output a string to the console.
 		 * a[0]: the address where the string is stored.
 		 */
-		rc = sys_puts(c, p, (char *) a[0]);
+		errno = sys_puts((char *) a[0]);
 		break;
 
 	case SYS_spawn:
 		/*
 		 * Spawn a process and put it on the ready queue.
-		 * a[0]: the base address of the execution image
-		 * a[1]: the address where the process id will be returned.
+		 * a[0]: the index of the processor where the process will run
+		 * a[1]: the base address of the execution image
+		 * a[2]: the address where the process id will be returned.
 		 */
-		rc = sys_spawn(c, p, a[0], (pid_t *) a[1]);
+		errno = sys_spawn(a[0], a[1], (pid_t *) a[2]);
 		break;
 
 	case SYS_yield:
 		/*
 		 * Yield currently running process to other processes.
 		 */
-		rc = sys_yield(p);
+		errno = sys_yield();
 		break;
 
 	case SYS_getpid:
 		/*
 		 * Get the process id of currently running process.
+		 * a[0]: the address where the process id will be returned
 		 */
-		rc = sys_getpid(c, p, (pid_t *) a[0]);
+		errno = sys_getpid((pid_t *) a[0]);
 		break;
 
 	case SYS_send:
 		/*
-		 * Send a message to another process.
-		 * a[0]: process id the receiver process
-		 * a[1]: address of the data
-		 * a[2]: size in bytes of the data of message
+		 * Send a meesage to a channel.
+		 * a[0]: the channel id
+		 * a[1]: the start address of the message
+		 * a[2]: the size of the message
 		 */
-		rc = sys_send(c, p, (pid_t) a[0],
-			      (struct message *) a[1], (size_t) a[2]);
+		errno = sys_send((int) a[0], (void *) a[1], (size_t) a[2]);
 		break;
 
 	case SYS_recv:
 		/*
-		 * Receive a message.
-		 * a[0]: address where the message data will be stored.
-		 * a[1]: address where the data size will be stored
+		 * Receive a meesage from a channel.
+		 * a[0]: the channel id
+		 * a[1]: the address where the received message will be stored
+		 * a[2]: the address where the size of the message will be
+		 *       stored
 		 */
-		rc = sys_recv(c, p, (char *) a[0], (size_t *) a[1]);
+		errno = sys_recv((int) a[0], (void *) a[1], (size_t *) a[2]);
 		break;
 
 	case SYS_allocvm:
 		/*
 		 * Create a virtual machine in the current process.
 		 */
-		rc = sys_allocvm(c, p);
+		errno = sys_allocvm();
 		break;
 
 	case SYS_execvm:
 		/*
 		 * Execute the virtual machine in the current process.
 		 */
-		rc = sys_execvm(c, p);
+		errno = sys_execvm();
+		break;
+
+	case SYS_ncpus:
+		/*
+		 * Get the number of processors.
+		 * a[0]: the address where the number will be returned to
+		 */
+		errno = sys_ncpus((uint32_t *) a[0]);
+		break;
+
+	case SYS_getpchid:
+		/*
+		 * Get the id of the channel between the current process and its
+		 * parent.
+		 * a[0]: the address where the channel id will be returned
+		 */
+		errno = sys_getpchid((int *) a[0]);
 		break;
 
 	default:
-		rc = 1;
+		errno = E_INVAL_NR;
 		break;
 	}
 
-	ctx_set_retval(ctx, rc);
+	ctx_set_retval(ctx, errno);
 
-	if (rc) {
-		SYSCALL_DEBUG("Syscall %s (nr %d) from "
-			      "process %d on CPU %d failed, error %d.\n",
-			      (0 <= nr && nr < 256) ? syscall_name[nr] : "unkown",
-			      nr, p->pid, pcpu_cur_idx(), rc);
-		memset(c->sys_buf, 0, PAGE_SIZE);
-	}
+	if (errno)
+		NR_DEBUG(nr, "failed (errno=%d)\n", errno);
 
-	spinlock_release(&c->lk);
-	return rc;
+	memset(pcpu_cur()->sys_buf, 0, PAGE_SIZE);
+
+	return errno;
 }

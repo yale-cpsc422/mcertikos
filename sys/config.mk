@@ -215,12 +215,12 @@ ifneq "$(strip $(DEBUG_PROC) $(DEBUG_ALL))" ""
 KERN_CFLAGS	+= -DDEBUG_PROC
 endif
 
-# if set, enable debugging syscalls
+# If set, enable debugging syscalls
 ifneq "$(strip $(DEBUG_SYSCALL) $(DEBUG_ALL))" ""
 KERN_CFLAGS	+= -DDEBUG_SYSCALL
 endif
 
-# if set, enable debugging message queues
-ifneq "$(strip $(DEBUG_MQUEUE) $(DEBUG_ALL))" ""
-KERN_CFLAGS	+= -DDEBUG_MQUEUE
+# If set, enable debugging channels
+ifneq "$(strip $(DEBUG_CHANNEL) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_CHANNEL
 endif

@@ -3,6 +3,7 @@
 #include <sys/intr.h>
 #include <sys/pcpu.h>
 #include <sys/proc.h>
+#include <sys/string.h>
 #include <sys/trap.h>
 #include <sys/types.h>
 #include <sys/x86.h>
@@ -25,34 +26,28 @@ trap_user(tf_t *tf)
 {
 	KERN_ASSERT(tf->eip >= VM_USERLO && tf->eip < VM_USERHI);
 
-	struct proc *p;
-	struct context *ctx;
+	struct proc *cur_proc;
 	trap_cb_t f;
 
-	p = proc_cur();
+	cur_proc = proc_cur();
 
-	KERN_ASSERT(p != NULL);
+	/* save the user context */
+	proc_save(cur_proc, tf);
 
-	proc_lock(p);
-
-	/* update schedule info */
-	p->total_running_time += (time_ms() - p->last_running_time);
-
-	/* save the context */
-	ctx = &p->ctx;
-	proc_save(p, tf);
-
-	proc_unlock(p);
-
-	f = pcpu_cur()->trap_cb[tf->trapno];
-
+	/* call the specific trap handler */
+	f = (*pcpu_cur()->trap_handler)[tf->trapno];
 	if (f)
-		f(ctx);
+		f(&cur_proc->ctx);
 	else
-		KERN_WARN("No handler for trap %d.\n", tf->trapno);
+		KERN_WARN("No handler for user trap %d.\n", tf->trapno);
 
-	/* return to userspace */
-	proc_sched();
+	/*
+	 * XXX: f may call the scheduler, so the current process maybe changed.
+	 */
+	cur_proc = proc_cur();
+
+	/* return to the userspace */
+	ctx_start(&cur_proc->ctx);
 }
 
 /*
@@ -78,7 +73,7 @@ trap_kern(tf_t *tf)
 	KERN_DEBUG("ExtINTR %d from guest.\n", tf->trapno - T_IRQ0);
 #endif
 
-	f = pcpu_cur()->trap_cb[tf->trapno];
+	f = (*pcpu_cur()->trap_handler)[tf->trapno];
 
 	if (f) {
 		f(NULL);
@@ -108,13 +103,18 @@ trap(tf_t *tf)
 
 	KERN_ASSERT(tf != NULL);
 
+	if (tf->trapno == T_IRQ0+IRQ_TIMER && tf->eip >= VM_USERLO)
+		proc_sched_update();
+
 	if (tf->trapno < T_IRQ0) {
-		trap_dump(tf);
 		if (tf->trapno == T_PGFLT)
-			KERN_DEBUG("Fault address 0x%08x.\n", rcr2());
+			KERN_DEBUG("Page fault @ 0x%08x on CPU%d.\n",
+				   rcr2(), pcpu_cpu_idx(pcpu_cur()));
+		/* trap_dump(tf); */
 	} else if (tf->trapno == T_IRQ0+IRQ_IPI_RESCHED) {
-		KERN_DEBUG("Receive IPI.\n");
-		trap_dump(tf);
+		KERN_DEBUG("IRQ_IPI_RESCHED on CPU%d.\n",
+			   pcpu_cpu_idx(pcpu_cur()));
+		/* trap_dump(tf); */
 	}
 
 	if (tf->eip >= VM_USERLO)
@@ -124,12 +124,31 @@ trap(tf_t *tf)
 }
 
 void
+trap_init_array(struct pcpu *c)
+{
+	KERN_ASSERT(c != NULL);
+	KERN_ASSERT(c->inited == TRUE);
+
+	int npages;
+	pageinfo_t *pi;
+
+	npages = ROUNDUP(sizeof(trap_cb_t) * T_MAX, PAGESIZE) / PAGESIZE;
+	if ((pi = mem_pages_alloc(npages)) == NULL)
+		KERN_PANIC("Cannot allocate memory for trap handlers.\n");
+
+	spinlock_acquire(&c->lk);
+	c->trap_handler = (trap_cb_t **) mem_pi2phys(pi);
+	memzero(c->trap_handler, npages * PAGESIZE);
+	spinlock_release(&c->lk);
+}
+
+void
 trap_handler_register(int trapno, trap_cb_t cb)
 {
-	KERN_ASSERT(0 <= trapno && trapno < 256);
+	KERN_ASSERT(0 <= trapno && trapno < T_MAX);
 	KERN_ASSERT(cb != NULL);
 
-	pcpu_cur()->trap_cb[trapno] = cb;
+	(*pcpu_cur()->trap_handler)[trapno] = cb;
 }
 
 int
@@ -139,7 +158,7 @@ default_exception_handler(struct context *ctx)
 	KERN_ASSERT(proc_cur() != NULL);
 
 	KERN_DEBUG("Exception %d caused by process %d on CPU %d.\n",
-		   ctx->tf.trapno, proc_cur()->pid, pcpu_cur_idx());
+		   ctx->tf.trapno, proc_cur()->pid, pcpu_cpu_idx(pcpu_cur()));
 	ctx_dump(ctx);
 
 	KERN_PANIC("Stop here.\n");
@@ -154,7 +173,7 @@ gpf_handler(struct context *ctx)
 	KERN_ASSERT(proc_cur() != NULL);
 
 	KERN_DEBUG("General protection fault caused by process %d on CPU %d.\n",
-		   proc_cur()->pid, pcpu_cur_idx());
+		   proc_cur()->pid, pcpu_cpu_idx(pcpu_cur()));
 	ctx_dump(ctx);
 
 	/*
@@ -177,7 +196,7 @@ pgf_handler(struct context *ctx)
 	uintptr_t fault_va = rcr2();
 
 	KERN_DEBUG("Page fault at 0x%08x caused by process %d on CPU %d.\n",
-		   fault_va, p->pid, pcpu_cur_idx());
+		   fault_va, p->pid, pcpu_cpu_idx(pcpu_cur()));
 	/* trap_dump(&ctx->tf); */
 
 	if (errno & PFE_PR) {
@@ -205,7 +224,7 @@ pgf_handler(struct context *ctx)
 	proc_unlock(p);
 
 	KERN_DEBUG("Page fault at 0x%08x, process %d on CPU %d is handled.\n",
-		   fault_va, p->pid, pcpu_cur_idx());
+		   fault_va, p->pid, pcpu_cpu_idx(pcpu_cur()));
 
 	return 0;
 }
@@ -227,8 +246,15 @@ timer_intr_handler(struct context *ctx)
 	bool from_guest = (vm != NULL &&
 			   vm->exit_reason == EXIT_FOR_EXTINT) ? TRUE : FALSE;
 
-	if (from_guest == TRUE)
+	if (from_guest == TRUE) {
 		vmm_handle_intr(vm, IRQ_TIMER);
+	} else {
+		struct pcpu *c = pcpu_cur();
+		sched_lock(c);
+		if (c->sched.run_ticks > SCHED_SLICE)
+			proc_sched(FALSE);
+		sched_unlock(c);
+	}
 
 	intr_eoi();
 
@@ -246,6 +272,18 @@ kbd_intr_handler(struct context *ctx)
 		kbd_intr();
 	} else /* for a guest */
 		vmm_handle_intr(vm, IRQ_KBD);
+
+	intr_eoi();
+
+	return 0;
+}
+
+int
+ipi_resched_handler(struct context *ctx)
+{
+	sched_lock(pcpu_cur());
+	proc_sched(TRUE);
+	sched_unlock(pcpu_cur());
 
 	intr_eoi();
 

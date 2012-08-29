@@ -1,5 +1,6 @@
 #include <sys/debug.h>
 #include <sys/mptable.h>
+#include <sys/pcpu.h>
 #include <sys/string.h>
 #include <sys/types.h>
 #include <sys/x86.h>
@@ -8,16 +9,70 @@
 #include <dev/ioapic.h>
 #include <dev/lapic.h>
 
-#include <machine/pcpu.h>
+#include <machine/pcpu_mp.h>
 
-uint32_t ncpu = 0;
+static uint32_t ncpu = 0;
 
-bool mp_inited = FALSE;
+static bool mp_inited = FALSE;
 
-bool ismp = FALSE;
+static bool ismp = FALSE;
 
 extern uint8_t _binary___obj_sys_arch_i386_i386_boot_ap_start[];
 extern uint8_t _binary___obj_sys_arch_i386_i386_boot_ap_size[];
+
+static gcc_inline void
+pcpu_print_cpuinfo(uint32_t cpu_idx, struct pcpuinfo *cpuinfo)
+{
+	KERN_INFO("CPU%d: %s, FAMILY %d(%d), MODEL %d(%d), STEP %d, "
+		  "FEATURE %x %x\n",
+		  cpu_idx, cpuinfo->vendor,
+		  cpuinfo->family, cpuinfo->ext_family,
+		  cpuinfo->model, cpuinfo->ext_model,
+		  cpuinfo->step, cpuinfo->feature1, cpuinfo->feature2);
+}
+
+static void
+pcpu_identify(void)
+{
+	struct pcpuinfo *cpuinfo = &pcpu_cur()->arch_info;
+	uint32_t eax, ebx, ecx, edx;
+
+	cpuid(0x0, &eax, &ebx, &ecx, &edx);
+	cpuinfo->max_input = eax;
+	((uint32_t *) cpuinfo->vendor)[0] = ebx;
+	((uint32_t *) cpuinfo->vendor)[1] = edx;
+	((uint32_t *) cpuinfo->vendor)[2] = ecx;
+	cpuinfo->vendor[12] = '\0';
+
+	cpuid(0x1, &eax, &ebx, &ecx, &edx);
+	cpuinfo->family = (eax >> 8) & 0xf;
+	cpuinfo->model = (eax >> 4) & 0xf;
+	cpuinfo->step = eax & 0xf;
+	cpuinfo->ext_family = (eax >> 20) & 0xff;
+	cpuinfo->ext_model = (eax >> 16) & 0xff;
+	cpuinfo->brand_idx = ebx & 0xff;
+	cpuinfo->clflush_size = (ebx >> 8) & 0xff;
+	cpuinfo->max_cpu_id = (ebx >> 16) &0xff;
+	cpuinfo->apic_id = (ebx >> 24) & 0xff;
+	cpuinfo->feature1 = ecx;
+	cpuinfo->feature2 = edx;
+
+	pcpu_print_cpuinfo(pcpu_cpu_idx(pcpu_cur()), cpuinfo);
+}
+
+static void
+pcpu_mp_init_cpu(uint32_t idx, uint8_t lapic_id, bool is_bsp)
+{
+	KERN_ASSERT((is_bsp == TRUE && idx == 0) || (is_bsp == FALSE));
+
+	if (idx >= MAX_CPU)
+		return;
+
+	struct pcpuinfo *info = &pcpu[idx].arch_info;
+
+	info->lapicid = lapic_id;
+	info->bsp = is_bsp;
+}
 
 /*
  * fallback multiple processors initialization method using MP table.
@@ -135,10 +190,10 @@ mp_init_fallback(void)
 
 			if (proc->flags & MPBOOT) {
 				KERN_INFO("BSP.\n");
-				__pcpu_mp_init_cpu(0, proc->apicid, TRUE);
+				pcpu_mp_init_cpu(0, proc->apicid, TRUE);
 			} else {
 				KERN_INFO("AP.\n");
-				__pcpu_mp_init_cpu(ap_idx, proc->apicid, FALSE);
+				pcpu_mp_init_cpu(ap_idx, proc->apicid, FALSE);
 				ap_idx++;
 			}
 			ncpu++;
@@ -185,9 +240,9 @@ mp_init_fallback(void)
  */
 
 bool
-__pcpu_mp_init(void)
+pcpu_mp_init(struct pcpu *c)
 {
-	KERN_INFO("\n");
+	KERN_ASSERT(c != NULL);
 
 	uint8_t *p, *e;
 	acpi_rsdp_t *rsdp;
@@ -199,6 +254,8 @@ __pcpu_mp_init(void)
 
 	if (mp_inited == TRUE)
 		return TRUE;
+
+	KERN_INFO("\n");
 
 	if ((rsdp = acpi_probe_rsdp()) == NULL) {
 		KERN_DEBUG("Not found RSDP.\n");
@@ -228,6 +285,7 @@ __pcpu_mp_init(void)
 
 	p = (uint8_t *)madt->ent;
 	e = (uint8_t *)madt + madt->length;
+
 	while (p < e) {
 		acpi_madt_apic_hdr_t * hdr = (acpi_madt_apic_hdr_t *) p;
 
@@ -245,16 +303,15 @@ __pcpu_mp_init(void)
 			KERN_INFO("\tCPU%d: APIC id = %x, ",
 				  ncpu, lapic_ent->lapic_id);
 
-			//according to acpi p.138, section 5.2.12.1, 
+			//according to acpi p.138, section 5.2.12.1,
 			//"platform firmware should list the boot processor as the first processor entry in the MADT"
 			if (!found_bsp) {
-				found_bsp=TRUE;	
+				found_bsp=TRUE;
 				KERN_INFO("BSP\n");
-				__pcpu_mp_init_cpu
-					(0, lapic_ent->lapic_id, TRUE);
+				pcpu_mp_init_cpu(0, lapic_ent->lapic_id, TRUE);
 			} else {
 				KERN_INFO("AP\n");
-				__pcpu_mp_init_cpu
+				pcpu_mp_init_cpu
 					(ap_idx, lapic_ent->lapic_id, FALSE);
 				ap_idx++;
 			}
@@ -319,14 +376,64 @@ __pcpu_mp_init(void)
 		return TRUE;
 }
 
+int
+pcpu_boot_ap(uint32_t cpu_idx, void (*f)(void), uintptr_t stack_addr)
+{
+	KERN_ASSERT(cpu_idx > 0 && cpu_idx < pcpu_ncpu());
+	KERN_ASSERT(pcpu[cpu_idx].inited == TRUE);
+	KERN_ASSERT(f != NULL);
+
+	/* avoid being called by AP */
+	if (pcpu_onboot() == FALSE)
+		return 1;
+
+	if (pcpu[cpu_idx].booted == TRUE)
+		return 0;
+
+	extern void kern_init_ap(void);		/* defined in sys/kern/init.c */
+	uint8_t *boot = (uint8_t *) PCPU_AP_START_ADDR;
+	*(uintptr_t *) (boot - 4) = stack_addr + PAGE_SIZE;
+	*(uintptr_t *) (boot - 8) = (uintptr_t) f;
+	*(uintptr_t *) (boot - 12) = (uintptr_t) kern_init_ap;
+	lapic_startcpu(pcpu_cpu_lapicid(cpu_idx), (uintptr_t) boot);
+
+	/* wait until the processor is intialized */
+	while (pcpu[cpu_idx].booted == FALSE)
+		pause();
+
+	KERN_ASSERT(pcpu[cpu_idx].booted == TRUE);
+
+	return 0;
+}
+
+void
+pcpu_init_cpu(void)
+{
+	pcpu_identify();
+}
+
 uint32_t
-__pcpu_ncpu()
+pcpu_ncpu(void)
 {
 	return ncpu;
 }
 
 bool
-__pcpu_is_smp()
+pcpu_is_smp(void)
 {
 	return ismp;
+}
+
+bool
+pcpu_onboot(void)
+{
+	return (mp_inited == TRUE) ?
+		pcpu_cur()->arch_info.bsp : (pcpu_cpu_idx(pcpu_cur()) == 0);
+}
+
+lapicid_t
+pcpu_cpu_lapicid(int cpu_idx)
+{
+	KERN_ASSERT(0 <= cpu_idx && cpu_idx < ncpu);
+	return pcpu[cpu_idx].arch_info.lapicid;
 }

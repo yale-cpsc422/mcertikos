@@ -10,7 +10,7 @@
 static gcc_inline void
 sys_test(uint32_t a)
 {
-	asm volatile("int %1" :
+	asm volatile("int %0" :
 		     : "i" (T_SYSCALL),
 		       "a" (SYS_test),
 		       "b" (a)
@@ -42,15 +42,16 @@ sys_getc(void)
 }
 
 static gcc_inline pid_t
-sys_spawn(uintptr_t exe)
+sys_spawn(uint32_t cpu_idx, uintptr_t exe)
 {
 	pid_t pid;
 
 	asm volatile("int %0" :
 		     : "i" (T_SYSCALL),
 		       "a" (SYS_spawn),
-		       "b" (exe),
-		       "c" (&pid)
+		       "b" (cpu_idx),
+		       "c" (exe),
+		       "d" (&pid)
 		     : "cc", "memory");
 
 	return pid;
@@ -79,61 +80,100 @@ sys_getpid(void)
 	return pid;
 }
 
-static gcc_inline void
-sys_send(pid_t pid, void *data, size_t size)
-{
-	if (size != 0 && data == NULL)
-		return;
-
-	asm volatile("int %0" :
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_send),
-		       "b" (pid),
-		       "c" (data),
-		       "d" (size)
-		     : "cc", "memory");
-}
-
-static gcc_inline void
-sys_recv(void *data, size_t *size)
-{
-	if (data == NULL || size  == NULL)
-		return;
-
-	asm volatile("int %0" :
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_recv),
-		       "b" (data),
-		       "c" (size)
-		     : "cc", "memory");
-}
-
-static gcc_inline uint32_t
+static gcc_inline int
 sys_allocvm(void)
 {
-	uint32_t rc;
+	int errno;
 
 	asm volatile("int %1"
-		     : "=a" (rc)
+		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
 		       "a" (SYS_allocvm)
 		     : "cc", "memory");
 
-	return rc;
+	return errno;
 }
 
-static gcc_inline uint32_t
+static gcc_inline int
 sys_execvm(void)
 {
-	uint32_t rc;
+	int errno;
 
 	asm volatile("int %1"
-		     : "=a" (rc)
+		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
 		       "a" (SYS_execvm)
 		     : "cc", "memory");
 
-	return rc;
+	return errno;
+}
+
+static gcc_inline int
+sys_ncpus(void)
+{
+	int n;
+
+	asm volatile("int %0" :
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_ncpus),
+		       "b" (&n)
+		     : "cc", "memory");
+
+	return n;
+}
+
+static gcc_inline int
+sys_getpchid(void)
+{
+	int chid;
+
+	asm volatile("int %0" :
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_getpchid),
+		       "b" (&chid)
+		     : "cc", "memory");
+
+	return chid;
+}
+
+static gcc_inline int
+sys_send(int channel_id, void *msg, size_t size)
+{
+	int errno;
+
+	if (channel_id < 0 || msg == NULL || size == 0)
+		return -1;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_send),
+		       "b" (channel_id),
+		       "c" (msg),
+		       "d" (size)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_recv(int channel_id, void *msg, size_t *size)
+{
+	int errno;
+
+	if (channel_id < 0 || msg == NULL || size == NULL)
+		return -1;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_recv),
+		       "b" (channel_id),
+		       "c" (msg),
+		       "d" (size)
+		     : "cc", "memory");
+
+	return errno;
 }
 
 #endif /* !_USER_SYSCALL_H_ */

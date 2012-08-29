@@ -1,7 +1,18 @@
+/*
+ * Process Management & Process Scheduler.
+ *
+ * - CertiKOS runs a round-robin process scheduler on each processor core.
+ *
+ * - The scheduler only schedules processes on that processor core.
+ *
+ * - A process is pined to one processor core and can't be migrated to another
+ *   processor.
+ */
+
+#include <sys/channel.h>
 #include <sys/context.h>
 #include <sys/debug.h>
 #include <sys/elf.h>
-#include <sys/mqueue.h>
 #include <sys/pcpu.h>
 #include <sys/proc.h>
 #include <sys/queue.h>
@@ -19,112 +30,90 @@
 #ifdef DEBUG_PROC
 
 #define PROC_DEBUG(fmt...)			\
-	{					\
+	do {					\
 		KERN_DEBUG(fmt);		\
-	}
+	} while (0)
 #else
 
 #define PROC_DEBUG(fmt...)			\
-	{					\
-	}
+	do {					\
+	} while (0)
 
 #endif
 
-#define SCHED_TIME_SLICE	20
+static bool 				proc_inited = FALSE;
 
-static bool proc_inited = FALSE;
+static spinlock_t			proc_pool_lk;
+static TAILQ_HEAD(proc_pool, proc)	proc_pool;
+static struct proc 			process[MAX_PID];
 
-static TAILQ_HEAD(free_proc_list, proc)	free_procs;
-static struct proc process[MAX_PID];
-
-static spinlock_t free_procs_lk;
-
-/*
- * Allocate a process structure from the free processes list.
- *
- * XXX: no state transition (PROC_UNINITED)
- *
- * @return pointer to the process structure; NULL if there is no free process
- */
 static struct proc *
 proc_alloc(void)
 {
 	KERN_ASSERT(proc_inited == TRUE);
 
-	struct proc *new_proc = NULL;
+	struct proc *p;
 
-	spinlock_acquire(&free_procs_lk);
+	spinlock_acquire(&proc_pool_lk);
 
-	if (TAILQ_EMPTY(&free_procs))
-		goto ret;
+	if (TAILQ_EMPTY(&proc_pool)) {
+		spinlock_release(&proc_pool_lk);
+		PROC_DEBUG("Process pool is empty.\n");
+		return NULL;
+	}
 
-	new_proc = TAILQ_FIRST(&free_procs);
-	KERN_ASSERT(new_proc->state == PROC_INVAL);
-	TAILQ_REMOVE(&free_procs, new_proc, entry);
+	p = TAILQ_FIRST(&proc_pool);
+	TAILQ_REMOVE(&proc_pool, p, entry);
 
- ret:
-	spinlock_release(&free_procs_lk);
-	return new_proc;
+	spinlock_release(&proc_pool_lk);
+
+	return p;
 }
 
-/*
- * Free a process structure; put it in the free processes queue again.
- *
- * XXX: any state --> PROC_UNINITED
- *
- * XXX: proc->lk should be held by the caller.
- */
 static void
-proc_free(struct proc *proc)
+proc_free(struct proc *p)
 {
 	KERN_ASSERT(proc_inited == TRUE);
-	KERN_ASSERT(proc != NULL);
-	KERN_ASSERT(0 <= proc - process && proc - process < MAX_PID);
+	KERN_ASSERT(p != NULL);
+	KERN_ASSERT(0 <= p - process && p - process < MAX_PID);
 
-	KERN_ASSERT(spinlock_holding(&proc->lk) == TRUE);
-
-	if (proc->state == PROC_INVAL) /* already in the free queue */
-		return;
-
-	spinlock_acquire(&free_procs_lk);
-	TAILQ_INSERT_TAIL(&free_procs, proc, entry);
-	spinlock_release(&free_procs_lk);
-
-	proc->state = PROC_INVAL;
+	spinlock_acquire(&proc_pool_lk);
+	TAILQ_INSERT_TAIL(&proc_pool, p, entry);
+	spinlock_release(&proc_pool_lk);
 }
 
 /*
- * Put process p on the ready queue of processor c.
+ * Put a process on the ready queue of a specified processor.
  *
- * XXX: proc_ready() assumes the process p is locked.
- * XXX: proc_ready() assumes the scheduler of the current processor is locked.
+ * XXX: The lock of the scheduler of the specified processor must be acquired
+ *      before entering proc_ready().
  *
- * @return 0 if no errors, and the state of the process is set to PROC_READY.
+ * XXX: Only the new created process, the running process and the blocked
+ *      process can be put on the ready queue.
+ *
+ * XXX: If the process is a running process, proc_ready() must be running on
+ *      the same processor as that on which the process is running.
+ *
+ * XXX: proc_ready() doesn't modify sched->cur_proc.
+ *
+ * @param p    the process
+ * @param c    the processor
+ * @param head if TRUE, put the process at the beginning of the ready queue;
+ *             if FALSE, put at the end of the ready queue.
  */
-static int
+static void
 proc_ready(struct proc *p, struct pcpu *c, bool head)
 {
 	KERN_ASSERT(proc_inited == TRUE);
-
 	KERN_ASSERT(p != NULL);
-	KERN_ASSERT(spinlock_holding(&p->lk) == TRUE);
-	KERN_ASSERT(p->state == PROC_INITED ||
-		    p->state == PROC_BLOCKED ||
-		    p->state == PROC_RUNNING);
-
 	KERN_ASSERT(c != NULL);
-
-	/* CertiKOS doesn't support the process migration. */
+	KERN_ASSERT(p->state == PROC_INITED ||
+		    (p->state == PROC_RUNNING && pcpu_cur() == c) ||
+		    p->state == PROC_BLOCKED);
 	KERN_ASSERT(p->cpu == NULL || p->cpu == c);
+	KERN_ASSERT(spinlock_holding(&c->sched.lk) == TRUE);
 
-	struct sched *sched;
-
-	sched = &c->sched;
-
-	KERN_ASSERT(spinlock_holding(&sched->lk) == TRUE);
-
-	if (p == sched->cur_proc)
-		sched->cur_proc = NULL;
+	struct sched *sched = &c->sched;
 
 	if (p->state == PROC_BLOCKED)
 		TAILQ_REMOVE(&sched->blocked_queue, p, entry);
@@ -137,85 +126,108 @@ proc_ready(struct proc *p, struct pcpu *c, bool head)
 	p->cpu = c;
 	p->state = PROC_READY;
 
-	return 0;
+	PROC_DEBUG("Process %d is put on the ready queue of CPU %d.\n",
+		   p->pid, c-pcpu);
 }
 
 /*
- * Run the current process on the current processor.
- *
- * XXX: proc_run() assumes the current process is locked.
- * XXX: proc_run() assumes the scheduler of the current processor is locked.
+ * Defined in sys/$ARCH/$ARCH/switch.S. (ARCH = i386)
  */
-static gcc_noreturn void
-proc_run(void)
+extern void swtch(struct kern_ctx **from, struct kern_ctx *to);
+
+/*
+ * Switch from the current process to another process.
+ *
+ * XXX: The lock of the scheduler of the current processor must be acquired
+ *      before entering proc_switch().
+ *
+ * XXX: The process to which proc_switch() will switch must be on the current
+ *      processor.
+ */
+static void
+proc_switch(struct proc *to)
 {
 	KERN_ASSERT(proc_inited == TRUE);
+	KERN_ASSERT(to != NULL && to->cpu == pcpu_cur());
+	KERN_ASSERT(spinlock_holding(&pcpu_cur()->sched.lk) == TRUE);
 
-	struct pcpu *c;
-	struct proc *p;
-	struct sched *sched;
-	struct context *ctx;
+	struct sched *sched = &pcpu_cur()->sched;
+	struct proc *from;
+	struct kern_ctx *kctx; /* used when switching to the first process */
 
-	c = pcpu_cur();
-	sched = &c->sched;
+	/* switch the kernel stack (i.e. TSS) */
+	kstack_switch(to->kstack);
 
+	/* switch the page structures  */
+	pmap_install(to->pmap);
+
+	/* switch to process to */
+	from = sched->cur_proc;
+	if (from != NULL)
+		PROC_DEBUG("Switch from process %d to process %d.\n",
+			   from->pid, to->pid);
+	else
+		PROC_DEBUG("Switch to the first process %d.\n", to->pid);
+	sched->cur_proc = to;
+	to->state = PROC_RUNNING;
+	if (from != NULL)
+		swtch(&from->kctx, to->kctx);
+	else
+		swtch(&kctx, to->kctx);
+
+	/*
+	 * XXX: Return from another process.
+	 */
+
+	if (from == NULL)
+		KERN_PANIC("Switch from the last process on CPU%d.\n",
+			   pcpu_cpu_idx(pcpu_cur()));
+
+	KERN_ASSERT(sched->cur_proc != NULL);
+	KERN_ASSERT(sched->cur_proc == from);
 	KERN_ASSERT(spinlock_holding(&sched->lk) == TRUE);
 
-	p = sched->cur_proc;
+	PROC_DEBUG("Return to process %d.\n", from->pid);
+}
 
-	KERN_ASSERT(p != NULL);
-	KERN_ASSERT(spinlock_holding(&p->lk) == TRUE);
-	KERN_ASSERT(p->state == PROC_READY || p->state == PROC_RUNNING);
-	KERN_ASSERT(p->pmap != NULL);
-
-	/* update the pcpu_t structure of the processor */
-	spinlock_acquire(&c->lk);
-	c->pmap = p->pmap;
-	spinlock_release(&c->lk);
-
-	pmap_install(p->pmap);
-
-	if (p->blocked_for != NOT_BLOCKED && p->unblock_callback) {
-		p->unblock_callback(p);
-
-		p->blocked_for = NOT_BLOCKED;
-		p->unblock_callback = NULL;
-	}
-
-	ctx = &p->ctx;
-	p->state = PROC_RUNNING;
-	p->last_running_time = time_ms();
-
-	/* it's safe to release all locks here (?) */
-	proc_unlock(p);
-	spinlock_release(&sched->lk);
-
-	PROC_DEBUG("Start runnig process %d.\n", p->pid);
-	/* ctx_dump(ctx); */
-
-	ctx_start(ctx);
+/*
+ * The first-created process uses proc_spawn_return() to return to userspace.
+ *
+ * XXX: The lock the scheduler of the current processor must be acquired
+ *      before entering proc_spawn_return().
+ */
+static void
+proc_spawn_return(void)
+{
+	KERN_DEBUG("proc_spawn_return() on CPU%d.\n", pcpu_cpu_idx(pcpu_cur()));
+	KERN_ASSERT(spinlock_holding(&pcpu_cur()->sched.lk) == TRUE);
+	sched_unlock(pcpu_cur());
+	PROC_DEBUG("Return to ctx_start().\n");
+	/* return to ctx_start() (see kstack_init_proc()) */
 }
 
 int
 proc_init(void)
 {
+	pid_t pid;
+
 	if (proc_inited == TRUE)
 		return 0;
 
-	pid_t pid;
+	if (pcpu_onboot() == FALSE)
+		return 1;
 
-	/* clear all process structures */
-	memset(process, 0x0, sizeof(struct proc) * MAX_PID);
+	spinlock_init(&proc_pool_lk);
 
-	/* initialize the free processs list */
-	spinlock_init(&free_procs_lk);
-	spinlock_acquire(&free_procs_lk);
-	TAILQ_INIT(&free_procs);
+	memzero(process, sizeof(struct proc) * MAX_PID);
+
+	TAILQ_INIT(&proc_pool);
 	for (pid = 0; pid < MAX_PID; pid++) {
 		process[pid].pid = pid;
-		TAILQ_INSERT_TAIL(&free_procs, &process[pid], entry);
+		TAILQ_INSERT_TAIL(&proc_pool, &process[pid], entry);
 	}
-	spinlock_release(&free_procs_lk);
+
+	channel_init();
 
 	proc_inited = TRUE;
 
@@ -228,6 +240,7 @@ proc_sched_init(struct sched *sched)
 	KERN_ASSERT(sched != NULL);
 
 	sched->cur_proc = NULL;
+	sched->run_ticks = 0;
 
 	TAILQ_INIT(&sched->ready_queue);
 	TAILQ_INIT(&sched->blocked_queue);
@@ -238,357 +251,338 @@ proc_sched_init(struct sched *sched)
 	return 0;
 }
 
-/*
- * Create a new process.
- *
- * @return the process control block of the new process, and the state of the
- *         new process is set to PROC_INITED; otherwise, return NULL.
- */
 struct proc *
-proc_create(uintptr_t binary)
+proc_spawn(struct pcpu *c, uintptr_t binary)
 {
 	KERN_ASSERT(proc_inited == TRUE);
+	KERN_ASSERT(c != NULL);
 
+	struct proc *p;
 	pageinfo_t *pi;
-	struct proc *new_proc = proc_alloc();
 
-	if (new_proc == NULL) {
-		PROC_DEBUG("No free process.\n");
-		goto ret;
+	/* get a free PCB */
+	if ((p = proc_alloc()) == NULL) {
+		PROC_DEBUG("Cannot get a free PCB.\n");
+		return NULL;
 	}
 
-	spinlock_init(&new_proc->lk);
-	proc_lock(new_proc);
-
-	KERN_ASSERT(new_proc->state == PROC_INVAL);
-
-	new_proc->cpu = NULL;
-	new_proc->vm = NULL;
-
-	new_proc->blocked_for = NOT_BLOCKED;
-	new_proc->unblock_callback = NULL;
-
-	if ((new_proc->pmap = pmap_new()) == NULL) {
-		PROC_DEBUG("Failed to allocate address space for process %d.\n",
-			   new_proc->pid);
-		proc_free(new_proc);
-		goto lock_ret;
+	/* initialize the page structures */
+	if ((p->pmap = pmap_new()) == NULL) {
+		PROC_DEBUG("Cannot initialize page structures.\n");
+		proc_free(p);
+		return NULL;
 	}
 
-	PROC_DEBUG("pmap of process %d: 0x%08x\n",
-		   new_proc->pid, new_proc->pmap);
+	/* initialize the kernel stack for the process */
+	if ((p->kstack = kstack_alloc()) == NULL) {
+		PROC_DEBUG("Cannot allocate memory for kernek stack.\n");
+		pmap_free(p->pmap);
+		proc_free(p);
+		return NULL;
+	}
+	kstack_init_proc(p, c, proc_spawn_return);
 
-	/*
-	 * TODO: move this to the userspace
-	 */
-	elf_load(binary, new_proc->pmap);
-	ctx_init(new_proc,
-		 (void (*)(void)) elf_entry(binary), VM_STACKHI - PAGESIZE);
-
-	/* allocate memory for the stack */
+	/* allocate memory for the userspace stack */
 	if ((pi = mem_page_alloc()) == NULL) {
-		PROC_DEBUG("Cannot allocate memory for stack of process %d.\n",
-			   new_proc->pid);
-		proc_free(new_proc);
-		goto lock_ret;
+		PROC_DEBUG("Cannot allocate memory for userspace stack.\n");
+		pmap_free(p->pmap);
+		kstack_free(p->kstack);
+		proc_free(p);
+		return NULL;
 	}
-	pmap_insert(new_proc->pmap, pi, VM_STACKHI - PAGESIZE,
-		    PTE_P | PTE_U | PTE_W);
+	pmap_insert(p->pmap, pi, VM_STACKHI - PAGESIZE, PTE_P | PTE_U | PTE_W);
 
-	mqueue_init(&new_proc->mqueue);
+	/* load the execution file */
+	elf_load(binary, p->pmap);
 
-	new_proc->state = PROC_INITED;
+	/* initialize user context */
+	ctx_init(p, (void (*)(void)) elf_entry(binary), VM_STACKHI - PAGESIZE);
 
-	PROC_DEBUG("Process %d is created.\n", new_proc->pid);
+	/* other fields */
+	p->cpu = c;
+	p->vm = NULL;
+	spinlock_init(&p->lk);
+	p->state = PROC_INITED;
 
- lock_ret:
-	proc_unlock(new_proc);
- ret:
-	return new_proc;
+	/* maintain the process tree */
+	p->parent = pcpu_cur()->sched.cur_proc;
+	if (p->parent != NULL) {
+		TAILQ_INSERT_TAIL(&p->parent->child_list, p, child_entry);
+		p->parent_ch =
+			channel_alloc(p->parent, p, CHANNEL_TYPE_BIDIRECT);
+	}
+	TAILQ_INIT(&p->child_list);
+
+	/* put the process on the ready queue */
+	sched_lock(c);
+	proc_ready(p, c, TRUE);
+	sched_unlock(c);
+
+	PROC_DEBUG("Process %d is spawned on CPU%d.\n",
+		   p->pid, pcpu_cpu_idx(c));
+
+	return p;
 }
 
 /*
- * Put a process p on the blocked queue of the current processor.
+ * XXX: The lock of the scheduler of the current processor must be acquired
+ *      before entering proc_block().
  *
- * @return 0 if no errors, and the state of the process is set to PCPU_BLOCKED;
- *         otherwise, return 1.
+ * XXX: The blocked process must be the running process on the current
+ *      processor.
  */
-int
-proc_block(struct proc *p, block_reason_t reason)
+void
+proc_block(struct proc *p, block_reason_t reason, struct channel *ch)
 {
 	KERN_ASSERT(proc_inited == TRUE);
 	KERN_ASSERT(p != NULL);
-
-	struct pcpu *c;
-	struct sched *sched;
-
-	proc_lock(p);
-
 	KERN_ASSERT(p->state == PROC_RUNNING);
+	KERN_ASSERT(p->cpu == pcpu_cur());
+	KERN_ASSERT(spinlock_holding(&pcpu_cur()->sched.lk) == TRUE);
 
-	c = p->cpu;
-	sched = &c->sched;
+	struct sched *sched = &pcpu_cur()->sched;
 
-	spinlock_acquire(&sched->lk);
-
-	KERN_ASSERT(p == sched->cur_proc);
-
-	sched->cur_proc = NULL;
+	p->block_reason = reason;
+	p->block_channel = ch;
 	p->state = PROC_BLOCKED;
-	p->blocked_for = reason;
+
 	TAILQ_INSERT_TAIL(&sched->blocked_queue, p, entry);
 
-	spinlock_release(&sched->lk);
-	proc_unlock(p);
+	PROC_DEBUG("Process %d is blocked for %s channel %d.\n",
+		   p->pid, (reason == WAITING_FOR_SENDING) ? "sending to" :
+		   "receiving from", channel_getid(ch));
 
-	PROC_DEBUG("Process %d is blocked.\n", p->pid);
-
-	return 0;
+	proc_sched(TRUE);
 }
 
 /*
- * Move a process from the blocked queue of the current processor to the ready
- * ready queue of the same processor.
+ * XXX: The lock of the scheduler of the processor on which is the blocked
+ *      process must be acquired before entering proc_unblock().
  *
- * @return 0 if no errors, and the state of the process is set to PCPU_READY;
- *         otherwise, return 1.
+ * XXX: Only blocked processes can be unblocked.
+ *
+ * XXX: proc_unblock() can unblock processes on another processor.
  */
-int
+void
 proc_unblock(struct proc *p)
 {
 	KERN_ASSERT(proc_inited == TRUE);
 	KERN_ASSERT(p != NULL);
-
-	struct pcpu *c;
-	struct sched *sched;
-
-	proc_lock(p);
-
 	KERN_ASSERT(p->state == PROC_BLOCKED);
+	KERN_ASSERT(spinlock_holding(&p->cpu->sched.lk) == TRUE);
 
-	c = p->cpu;
-	sched = &c->sched;
-
-	spinlock_acquire(&sched->lk);
+	proc_ready(p, p->cpu, TRUE);
 
 	/*
-	 * Put the process at the begining of the ready queue, so that it would
-	 * run immediately once the schedule is done.
+	 * If the process is on another processor, send an IPI to trigger the
+	 * scheduler on the processor.
 	 */
-	proc_ready(p, c, TRUE);
-
-	spinlock_release(&sched->lk);
-
 	if (p->cpu != pcpu_cur())
-		lapic_send_ipi(p->cpu->_pcpu->lapic_id, T_IRQ0+IRQ_IPI_RESCHED,
+		lapic_send_ipi(p->cpu->arch_info.lapicid,
+			       T_IRQ0+IRQ_IPI_RESCHED,
 			       LAPIC_ICRLO_FIXED, LAPIC_ICRLO_NOBCAST);
 
-	proc_unlock(p);
-
 	PROC_DEBUG("Process %d is unblocked.\n", p->pid);
-
-	return 0;
 }
 
 /*
- * Per-processor scheduler. It selects a process from the ready queue, sets it
- * as the current process, and runs it.
+ * XXX: The lock of the scheduler of the current processor must be acquired
+ *      before entering proc_sched().
+ *
+ * XXX: proc_sched() only schedules processes on the current processor.
+ *
+ * XXX: If need_sched is TRUE and the ready queue is not empty, proc_sched()
+ *      will select one process from the ready queue as the new current
+ *      process.
  */
-gcc_noreturn void
-proc_sched(void)
+void
+proc_sched(bool need_sched)
 {
 	KERN_ASSERT(proc_inited == TRUE);
+	KERN_ASSERT(spinlock_holding(&pcpu_cur()->sched.lk) == TRUE);
 
-	struct pcpu *c;
-	struct sched *sched;
-	struct proc *p;
+	struct proc *new_curp;
+	struct pcpu *c = pcpu_cur();
+	struct sched *sched = &c->sched;
+	bool select_new = FALSE;
 
-	c = pcpu_cur();
-	sched = &c->sched;
+	new_curp = sched->cur_proc;
 
-	spinlock_acquire(&sched->lk);
-
-	if (unlikely(sched->cur_proc == NULL &&
+	if (unlikely((sched->cur_proc == NULL ||
+		      sched->cur_proc->state == PROC_READY) &&
 		     TAILQ_EMPTY(&sched->ready_queue)))
-		KERN_PANIC("No schedulable process!");
+		KERN_PANIC("No schedulable process.\n");
 
-	if (sched->cur_proc != NULL) {
-		p = sched->cur_proc;
-		proc_lock(p);
-
-		if (p->total_running_time > SCHED_TIME_SLICE &&
-		    !TAILQ_EMPTY(&sched->ready_queue)) {
-			p->total_running_time = 0;
-			proc_ready(p, c, FALSE); /* put the process at the tail
-						    of the ready queue */
-			proc_unlock(p);
-
-			PROC_DEBUG("Process %d is time-out.\n", p->pid);
-		}
+	if (sched->cur_proc != NULL && sched->cur_proc->state != PROC_RUNNING) {
+		/*
+		 * If the current process is already moved to the ready queue or
+		 * the blocked queue, force to select a new process.
+		 */
+		select_new = TRUE;
+	} else if (sched->cur_proc != NULL &&
+		   (need_sched || sched->run_ticks > SCHED_SLICE) &&
+		   !TAILQ_EMPTY(&sched->ready_queue)) {
+		/*
+		 * Otherwise, if
+		 * - the current process is not empty,
+		 * - need_sched is TRUE, or the current process runs out of its
+		 *   time slice, and
+		 * - the ready queue is not empty,
+		 * then move the current process to the ready queue and force to
+		 * select a new process.
+		 */
+		proc_ready(sched->cur_proc, c, FALSE);
+		select_new = TRUE;
 	}
 
-	if (sched->cur_proc == NULL) {
-		p = TAILQ_FIRST(&sched->ready_queue);
-		proc_lock(p);
-		TAILQ_REMOVE(&sched->ready_queue, p, entry);
-		sched->cur_proc = p;
+	if (sched->cur_proc == NULL || select_new == TRUE) {
+		new_curp = TAILQ_FIRST(&sched->ready_queue);
+		TAILQ_REMOVE(&sched->ready_queue, new_curp, entry);
+
+		PROC_DEBUG("Process %d is selected.\n", new_curp->pid);
+
+		sched->run_ticks = 0;
 	}
 
-	proc_run();
+	if (sched->cur_proc != new_curp)
+		proc_switch(new_curp);
 }
 
-int
-proc_add2sched(struct proc *p)
+void
+proc_sched_update(void)
 {
-	KERN_ASSERT(proc_inited == TRUE);
-
-	struct pcpu *c;
-	struct sched *sched;
-
-	c = pcpu_cur();
-	sched = &c->sched;
-
-	proc_lock(p);
-	spinlock_acquire(&sched->lk);
-
-	KERN_ASSERT(p->state == PROC_INITED);
-	proc_ready(p, c, TRUE);
-
-	spinlock_release(&sched->lk);
-	proc_unlock(p);
-
-	return 0;
+	sched_lock(pcpu_cur());
+	pcpu_cur()->sched.run_ticks += (1000 / LAPIC_TIMER_INTR_FREQ);
+	sched_unlock(pcpu_cur());
 }
 
-int
-proc_resched(struct context *ctx)
-{
-	PROC_DEBUG("Reschedule on processor %d.\n", pcpu_cur_idx());
-	proc_sched();
-	return 0;
-}
-
-int
+void
 proc_yield(void)
 {
 	KERN_ASSERT(proc_inited == TRUE);
 
-	struct proc *p;
-	struct pcpu *c;
-	struct sched *sched;
+	struct sched *sched = &pcpu_cur()->sched;
 
-	c = pcpu_cur();
-	sched = &c->sched;
+	sched_lock(pcpu_cur());
 
-	spinlock_acquire(&sched->lk);
+	if (!TAILQ_EMPTY(&sched->ready_queue)) {
+		proc_ready(sched->cur_proc, pcpu_cur(), FALSE);
+		proc_sched(TRUE);
+	}
 
-	p = proc_cur();
-	proc_lock(p);
-	proc_ready(p, c, FALSE);
-	proc_unlock(p);
-
-	spinlock_release(&sched->lk);
-
-	return 0;
+	sched_unlock(pcpu_cur());
 }
 
 struct proc *
 proc_cur(void)
 {
-	struct pcpu *c;
-
-	if (proc_inited == FALSE)
-		return NULL;
-
-	c = pcpu_cur();
-	KERN_ASSERT(c != NULL);
-
-	return c->sched.cur_proc;
-}
-
-void
-proc_save(struct proc *p, tf_t *tf)
-{
-	KERN_ASSERT(p != NULL && tf != NULL);
-	KERN_ASSERT(spinlock_holding(&p->lk) == TRUE);
-
-	p->ctx.tf = *tf;
+	KERN_ASSERT(proc_inited == TRUE);
+	return pcpu_cur()->sched.cur_proc;
 }
 
 struct proc *
 proc_pid2proc(pid_t pid)
 {
+	KERN_ASSERT(proc_inited == TRUE);
+	if (!(0 <= pid && pid < MAX_PID))
+		return NULL;
 	return &process[pid];
 }
 
+/*
+ * XXX: If the receiver is waiting for the message, proc_send_msg() will wake up
+ *      it by moving it from the blocked queue to the head of the ready queue.
+ */
 int
-proc_send_msg(struct proc *receiver, void *data, size_t size)
+proc_send_msg(struct channel *ch, void *msg, size_t size)
 {
-	KERN_ASSERT(receiver != NULL);
-	KERN_ASSERT(data != NULL);
+	KERN_ASSERT(proc_inited == TRUE);
+	KERN_ASSERT(ch != NULL);
+	KERN_ASSERT(msg != NULL);
+	KERN_ASSERT(size > 0);
 
-	int rc = 0;
 	struct proc *sender = proc_cur();
 
-	proc_lock(sender);
+	int rc = channel_send(ch, sender, msg, size);
 
-	KERN_ASSERT(sender->state == PROC_RUNNING);
+	/*
+	 * - If the channel is busy when sending, block the sending process.
 
-	spinlock_acquire(&receiver->mqueue.lk);
+	 * - If the sending succeeds and the receiving process is blocked for
+	 *   receiving from teh channel, unblock the receiving process.
+	 */
+	if (rc == E_CHANNEL_BUSY) {
+		sched_lock(pcpu_cur());
+		proc_block(sender, WAITING_FOR_SENDING, ch);
+		proc_sched(FALSE);
+		sched_unlock(pcpu_cur());
 
-	rc = mqueue_enqueue(&receiver->mqueue, data, size);
+		rc = channel_send(ch, sender, msg, size);
 
-	spinlock_release(&receiver->mqueue.lk);
-	proc_unlock(sender);
-
-	if (rc == 0) {
-		PROC_DEBUG("Send a message from process %d to process %d"
-			   " successfuly.\n", sender->pid, receiver->pid);
-
-		proc_lock(receiver);
-
-		/*
-		 * If the receiver process is waiting for messages, unblock it.
-		 */
+		KERN_ASSERT(rc != E_CHANNEL_BUSY);
+	} else if (rc == 0) {
+		struct proc *receiver =
+			(ch->p1 == sender) ? ch->p2 : ch->p1;
+		sched_lock(receiver->cpu);
 		if (receiver->state == PROC_BLOCKED &&
-		    receiver->blocked_for == WAIT_FOR_MSG) {
-			proc_unlock(receiver);
+		    receiver->block_reason == WAITING_FOR_RECEIVING &&
+		    receiver->block_channel == ch)
 			proc_unblock(receiver);
-		} else {
-			proc_unlock(receiver);
-		}
-	} else {
-		PROC_DEBUG("Cannot send a message from process %d to process %d"
-			   " (error %d).\n", sender->pid, receiver->pid, rc);
+		sched_unlock(receiver->cpu);
 	}
 
 	return rc;
 }
 
-struct message *
-proc_recv_msg(void)
+/*
+ * XXX: If the sender is waiting for the completion of sending the message,
+ *      proc_recv_msg() will wake up it by moving it from the blocked queue
+ *      to the head of the ready queue.
+ */
+int
+proc_recv_msg(struct channel *ch, void *msg, size_t *size)
 {
-	struct message *msg;
+	KERN_ASSERT(proc_inited == TRUE);
+	KERN_ASSERT(ch != NULL);
+	KERN_ASSERT(msg != NULL);
+	KERN_ASSERT(size != NULL);
+
 	struct proc *receiver = proc_cur();
 
-	proc_lock(receiver);
+	int rc = channel_receive(ch, receiver, msg, size);
 
-	KERN_ASSERT(receiver->state == PROC_RUNNING);
+	if (rc == E_CHANNEL_IDLE) {
+		sched_lock(pcpu_cur());
+		proc_block(receiver, WAITING_FOR_RECEIVING, ch);
+		proc_sched(FALSE);
+		sched_unlock(pcpu_cur());
 
-	spinlock_acquire(&receiver->mqueue.lk);
-	if (mqueue_empty(&receiver->mqueue) == FALSE)
-		msg = mqueue_dequeue(&receiver->mqueue);
-	else
-		msg = NULL;
-	spinlock_release(&receiver->mqueue.lk);
+		rc = channel_receive(ch, receiver, msg, size);;
 
-	proc_unlock(receiver);
+		KERN_ASSERT(rc != E_CHANNEL_IDLE);
+	} else if (rc == 0) {
+		struct proc *sender =
+			(ch->p2 == receiver) ? ch->p1 : ch->p2;
+		sched_lock(sender->cpu);
+		if (sender->state == PROC_BLOCKED &&
+		    sender->block_reason == WAITING_FOR_SENDING &&
+		    sender->block_channel == ch)
+			proc_unblock(sender);
+		sched_unlock(sender->cpu);
+	}
 
-	/*
-	 * If there is no message, block the receiver process.
-	 */
-	if (msg == NULL)
-		proc_block(receiver, WAIT_FOR_MSG);
+	return rc;
+}
 
-	return msg;
+void
+proc_save(struct proc *p, tf_t *tf)
+{
+	KERN_ASSERT(proc_inited == TRUE);
+	KERN_ASSERT(p != NULL);
+	KERN_ASSERT(p->state == PROC_RUNNING);
+	KERN_ASSERT(tf != NULL);
+
+	proc_lock(p);
+	p->ctx.tf = *tf;
+	proc_unlock(p);
 }
