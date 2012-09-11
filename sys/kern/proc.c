@@ -126,7 +126,7 @@ proc_ready(struct proc *p, struct pcpu *c, bool head)
 	p->cpu = c;
 	p->state = PROC_READY;
 
-	PROC_DEBUG("Process %d is put on the ready queue of CPU %d.\n",
+	PROC_DEBUG("Process %d is put on the ready queue of CPU%d.\n",
 		   p->pid, c-pcpu);
 }
 
@@ -150,6 +150,7 @@ proc_switch(struct proc *to)
 	KERN_ASSERT(proc_inited == TRUE);
 	KERN_ASSERT(to != NULL && to->cpu == pcpu_cur());
 	KERN_ASSERT(spinlock_holding(&pcpu_cur()->sched.lk) == TRUE);
+	KERN_ASSERT((read_eflags() & FL_IF) == 0);
 
 	struct sched *sched = &pcpu_cur()->sched;
 	struct proc *from;
@@ -186,8 +187,7 @@ proc_switch(struct proc *to)
 	KERN_ASSERT(sched->cur_proc != NULL);
 	KERN_ASSERT(sched->cur_proc == from);
 	KERN_ASSERT(spinlock_holding(&sched->lk) == TRUE);
-
-	PROC_DEBUG("Return to process %d.\n", from->pid);
+	KERN_ASSERT(rcr3() == (uintptr_t) from->pmap);
 }
 
 /*
@@ -199,10 +199,8 @@ proc_switch(struct proc *to)
 static void
 proc_spawn_return(void)
 {
-	KERN_DEBUG("proc_spawn_return() on CPU%d.\n", pcpu_cpu_idx(pcpu_cur()));
 	KERN_ASSERT(spinlock_holding(&pcpu_cur()->sched.lk) == TRUE);
 	sched_unlock(pcpu_cur());
-	PROC_DEBUG("Return to ctx_start().\n");
 	/* return to ctx_start() (see kstack_init_proc()) */
 }
 
@@ -352,6 +350,11 @@ proc_block(struct proc *p, block_reason_t reason, struct channel *ch)
 		   p->pid, (reason == WAITING_FOR_SENDING) ? "sending to" :
 		   "receiving from", channel_getid(ch));
 
+	/* KERN_DEBUG("Process %d is blocked for %s channel %d.\n", */
+	/* 	   p->pid, (reason == WAITING_FOR_SENDING) ? "sending to" : */
+	/* 	   "receiving from", channel_getid(ch)); */
+
+
 	proc_sched(TRUE);
 }
 
@@ -383,6 +386,8 @@ proc_unblock(struct proc *p)
 			       LAPIC_ICRLO_FIXED, LAPIC_ICRLO_NOBCAST);
 
 	PROC_DEBUG("Process %d is unblocked.\n", p->pid);
+
+	/* KERN_DEBUG("Process %d is unblocked.\n", p->pid); */
 }
 
 /*
@@ -440,12 +445,15 @@ proc_sched(bool need_sched)
 		TAILQ_REMOVE(&sched->ready_queue, new_curp, entry);
 
 		PROC_DEBUG("Process %d is selected.\n", new_curp->pid);
-
-		sched->run_ticks = 0;
 	}
 
-	if (sched->cur_proc != new_curp)
+	if (sched->cur_proc != new_curp) {
+		sched->run_ticks = 0;
 		proc_switch(new_curp);
+	}
+
+	PROC_DEBUG("proc_sched(): process %d returns to 0x%08x.\n",
+		   sched->cur_proc->pid, *(uint32_t *) (read_ebp() + 4));
 }
 
 void
@@ -453,6 +461,8 @@ proc_sched_update(void)
 {
 	sched_lock(pcpu_cur());
 	pcpu_cur()->sched.run_ticks += (1000 / LAPIC_TIMER_INTR_FREQ);
+	PROC_DEBUG("+%d to run_ticks on CPU%d.\n",
+		   (1000 / LAPIC_TIMER_INTR_FREQ), pcpu_cpu_idx(pcpu_cur()));
 	sched_unlock(pcpu_cur());
 }
 
@@ -494,41 +504,53 @@ proc_pid2proc(pid_t pid)
  *      it by moving it from the blocked queue to the head of the ready queue.
  */
 int
-proc_send_msg(struct channel *ch, void *msg, size_t size)
+proc_send_msg(struct channel *ch, struct proc *sender, void *msg, size_t size)
 {
 	KERN_ASSERT(proc_inited == TRUE);
+	KERN_ASSERT(sender != NULL);
 	KERN_ASSERT(ch != NULL);
 	KERN_ASSERT(msg != NULL);
 	KERN_ASSERT(size > 0);
 
-	struct proc *sender = proc_cur();
+	int rc;
 
-	int rc = channel_send(ch, sender, msg, size);
+	while ((rc = channel_send(ch, sender, msg, size)) == E_CHANNEL_BUSY) {
+		PROC_DEBUG("Process %d: channel %d is busy, wait for a while.\n",
+			   sender->pid, channel_getid(ch));
 
-	/*
-	 * - If the channel is busy when sending, block the sending process.
+		/* KERN_DEBUG("Process %d: channel %d is busy, wait for a while.\n", */
+		/* 	   sender->pid, channel_getid(ch)); */
 
-	 * - If the sending succeeds and the receiving process is blocked for
-	 *   receiving from teh channel, unblock the receiving process.
-	 */
-	if (rc == E_CHANNEL_BUSY) {
 		sched_lock(pcpu_cur());
 		proc_block(sender, WAITING_FOR_SENDING, ch);
-		proc_sched(FALSE);
 		sched_unlock(pcpu_cur());
+	}
 
-		rc = channel_send(ch, sender, msg, size);
+	if (rc == 0) {
+		PROC_DEBUG("Process %d: %d bytes are sent to channel %d.\n",
+			   sender->pid, size, channel_getid(ch));
 
-		KERN_ASSERT(rc != E_CHANNEL_BUSY);
-	} else if (rc == 0) {
 		struct proc *receiver =
 			(ch->p1 == sender) ? ch->p2 : ch->p1;
 		sched_lock(receiver->cpu);
 		if (receiver->state == PROC_BLOCKED &&
 		    receiver->block_reason == WAITING_FOR_RECEIVING &&
-		    receiver->block_channel == ch)
+		    receiver->block_channel == ch) {
+			PROC_DEBUG("Unblock process %d to receive from "
+				   "channel %d.\n",
+				   receiver->pid, channel_getid(ch));
+			/* KERN_DEBUG("Unblock process %d to receive from " */
+			/* 	   "channel %d.\n", */
+			/* 	   receiver->pid, channel_getid(ch)); */
 			proc_unblock(receiver);
+		}
 		sched_unlock(receiver->cpu);
+	} else {
+		PROC_DEBUG("Process %d: cannot send to channel %d, errno %d.\n",
+			   sender->pid, channel_getid(ch), rc);
+
+		/* KERN_DEBUG("Process %d: cannot send to channel %d, errno %d.\n", */
+		/* 	   sender->pid, channel_getid(ch), rc); */
 	}
 
 	return rc;
@@ -540,35 +562,53 @@ proc_send_msg(struct channel *ch, void *msg, size_t size)
  *      to the head of the ready queue.
  */
 int
-proc_recv_msg(struct channel *ch, void *msg, size_t *size)
+proc_recv_msg(struct channel *ch,
+	      struct proc *receiver, void *msg, size_t *size, bool block)
 {
 	KERN_ASSERT(proc_inited == TRUE);
+	KERN_ASSERT(receiver != NULL);
 	KERN_ASSERT(ch != NULL);
 	KERN_ASSERT(msg != NULL);
 	KERN_ASSERT(size != NULL);
 
-	struct proc *receiver = proc_cur();
+	int rc;
 
-	int rc = channel_receive(ch, receiver, msg, size);
+	while ((rc = channel_receive(ch, receiver, msg, size)) == E_CHANNEL_IDLE) {
+		PROC_DEBUG("Process %d: channel %d is empty, %s.\n",
+			   receiver->pid, channel_getid(ch),
+			   (block == TRUE) ?
+			   "wait for a while" : "return immediately");
 
-	if (rc == E_CHANNEL_IDLE) {
-		sched_lock(pcpu_cur());
-		proc_block(receiver, WAITING_FOR_RECEIVING, ch);
-		proc_sched(FALSE);
-		sched_unlock(pcpu_cur());
+		if (block == TRUE) {
+			sched_lock(pcpu_cur());
+			proc_block(receiver, WAITING_FOR_RECEIVING, ch);
+			sched_unlock(pcpu_cur());
+		} else {
+			return rc;
+		}
+	}
 
-		rc = channel_receive(ch, receiver, msg, size);;
+	if (rc == 0) {
+		PROC_DEBUG("Process %d: %d bytes are received from channel %d.\n",
+			   receiver->pid, *size, channel_getid(ch));
 
-		KERN_ASSERT(rc != E_CHANNEL_IDLE);
-	} else if (rc == 0) {
 		struct proc *sender =
 			(ch->p2 == receiver) ? ch->p1 : ch->p2;
 		sched_lock(sender->cpu);
 		if (sender->state == PROC_BLOCKED &&
 		    sender->block_reason == WAITING_FOR_SENDING &&
-		    sender->block_channel == ch)
+		    sender->block_channel == ch) {
+			PROC_DEBUG("Unblock process %d to send to channel %d.\n",
+				   sender->pid, channel_getid(ch));
+			/* KERN_DEBUG("Unblock process %d to send to channel %d.\n", */
+			/* 	   sender->pid, channel_getid(ch)); */
 			proc_unblock(sender);
+		}
 		sched_unlock(sender->cpu);
+	} else {
+		PROC_DEBUG("Process %d: cannot receive from channel %d, "
+			   "errno %d.\n",
+			   receiver->pid, channel_getid(ch), rc);
 	}
 
 	return rc;

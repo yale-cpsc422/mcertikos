@@ -257,5 +257,5 @@ lapic_send_ipi(lapicid_t apicid, uint8_t vector,
 	lapic_write(LAPIC_ICRLO, shorthand_mode | /* LAPIC_ICRLO_LEVEL | */
 		    deliver_mode | (vector & LAPIC_ICRLO_VECTOR));
 
-	KERN_DEBUG("IPI %d has been sent to processor %d.\n", vector, apicid);
+	/* KERN_DEBUG("IPI %d has been sent to processor %d.\n", vector, apicid); */
 }

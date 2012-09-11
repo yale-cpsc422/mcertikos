@@ -3,18 +3,10 @@
 
 #ifdef _KERN_
 
+#include <sys/proc.h>
+#include <sys/spinlock.h>
+#include <sys/trap.h>
 #include <sys/types.h>
-
-#include <sys/virt/dev/kbd.h>
-#include <sys/virt/dev/nvram.h>
-#include <sys/virt/dev/pci.h>
-#include <sys/virt/dev/pic.h>
-#include <sys/virt/dev/pit.h>
-#include <sys/virt/dev/serial.h>
-#include <sys/virt/dev/virtio_blk.h>
-#include <sys/virt/dev/debug_dev.h>
-
-#include <machine/trap.h>
 
 #define VM_PHY_MEMORY_SIZE	(256 * 1024 * 1024)
 
@@ -25,7 +17,7 @@
 #define VM_TSC_FREQ		(800 * 1000 * 1000 / VM_TIME_SCALE)
 
 #define MAX_IOPORT		0x10000
-#define MAX_EXTINTR		0x100
+#define MAX_IRQ			0x100
 
 typedef enum data_sz_t {
 	SZ8, 	/* 1 byte */
@@ -55,39 +47,32 @@ typedef void (*iodev_write_func_t)(struct vm *,
 				   void *iodev, uint32_t port, void *data);
 typedef void (*intr_handle_t)(struct vm *);
 
+struct vdev {
+	struct {
+		struct proc	*read_proc, *write_proc;
+		spinlock_t	read_lk, write_lk;
+	} ioport[MAX_IOPORT][3];
+
+	struct {
+		struct proc	*irq_proc;
+		spinlock_t	irq_lk;
+	} irq[MAX_IRQ];
+
+	struct proc		*pic_proc;
+	spinlock_t		pic_lk;
+};
+
 struct vm {
 	void		*cookie;	/* processor-specific data */
 
+	struct proc	*proc;		/* the process hosting the VM */
+
 	exit_reason_t	exit_reason;
-	volatile bool	handled;	/* is the exit event handled? */
+	volatile bool	handled;	/* Is the exit event handled? */
 
-	struct {
-		void			*dev;
-		iodev_read_func_t	read_func[3]; // read data size: 0-sz8, 1-sz16,2-sz32
-		iodev_write_func_t	write_func[3];// write data size:0-sz8, 1-sz16,2-sz32
-#ifdef TRACE_IOIO
-		int			tracing;
-		int			slot;
-#endif
-	} iodev[MAX_IOPORT];
+	struct vdev	vdev;		/* interface of the virtual devices */
 
-	struct {
-		void		*dev;
-		intr_handle_t	handle;
-	} extintr[MAX_EXTINTR];
-
-	uint64_t	tsc;		/* TSC read by guests */
-
-	struct vpic		vpic;	/* virtual PIC (i8259) */
-	struct vpci_host	vpci;	/* virtual PCI host */
-	struct vkbd		vkbd;	/* virtual keyboard controller (i8042) */
-	struct vserial		vserial;/* virtual serial ports */
-	struct vnvram		vnvram;	/* virtual NVRAM */
-	struct vpit		vpit;	/* virtual PIT (i8254) */
-
-	struct virtio_blk	blk;	/* virtio block device - hard drive */
-
-	struct guest_debug_dev debug_dev;
+	uint64_t	tsc;		/* guest TSC */
 
 #ifdef TRACE_TOTAL_TIME
 	uint64_t 		start_tsc, total_tsc;
@@ -201,6 +186,8 @@ struct vmm_ops {
 	vm_translate_gp2hp_func_t	vm_translate_gp2hp;
 };
 
+struct vmm_ops *vmm_ops;
+
 /*
  * Top-level VMM initialization function.
  */
@@ -227,18 +214,6 @@ int vmm_run_vm(struct vm *);
  * Get the current VM.
  */
 struct vm *vmm_cur_vm(void);
-
-/*
- * Set the level of an IRQ of the virtualized PIC/APIC.
- * XXX: It's to set the level of an IRQ line, other than to trigger or
- *      untrigger an interrupt, e.g. for an edge-triggered interrupt IRQ1,
- *        vmm_set_vm_irq(vm, IRQ1, 1);
- *      does not trigger IRQ1 if the level of IRQ1 is already 1;
- *        vmm_set_vm_irq(vm, IRQ1, 0);
- *        vmm_set_vm_irq(vm, IRQ1, 1);
- *      emulate the edge trigger and conseqently do trigger the interrupt.
- */
-void vmm_set_vm_irq(struct vm *, int irq, int level);
 
 /*
  * VMM stage of interrupt handling.

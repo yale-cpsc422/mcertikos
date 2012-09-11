@@ -26,32 +26,26 @@
  * Adapted for CertiKOS by Haozhong Zhang at Yale University.
  */
 
-#include <sys/debug.h>
-#include <sys/gcc.h>
-#include <sys/string.h>
-#include <sys/types.h>
-#include <sys/trap.h>
-#include <sys/x86.h>
+#include <debug.h>
+#include <gcc.h>
+#include <string.h>
+#include <syscall.h>
 
-#include <sys/virt/vmm.h>
-#include <sys/virt/vmm_dev.h>
-#include <sys/virt/dev/kbd.h>
-#include <sys/virt/dev/ps2.h>
-
-#include <dev/kbd.h>
+#include "kbd.h"
+#include "ps2.h"
 
 #ifdef DEUBG_VKBD
 
-#define vkbd_debug vkbd_debug
+#define vkbd_debug(fmt...)			\
+	do {					\
+		debug(fmt);			\
+	} while (0)
 
 #else
 
-static gcc_inline void
-vkbd_debug_foo(const char *fmt, ...)
-{
-}
-
-#define vkbd_debug vkbd_debug_foo
+#define vkbd_debug(fmt...)			\
+	do {					\
+	} while (0)
 
 #endif
 
@@ -148,7 +142,7 @@ vkbd_debug_foo(const char *fmt, ...)
 static void
 vkbd_update_irq(struct vkbd *vkbd)
 {
-	KERN_ASSERT(vkbd != NULL);
+	ASSERT(vkbd != NULL);
 
 	int irq_kbd_level, irq_mouse_level;
 
@@ -175,21 +169,17 @@ vkbd_update_irq(struct vkbd *vkbd)
 
 	/* the interrupts from i8042 are edge-triggered */
 
-	if (irq_kbd_level) {
-		vmm_set_vm_irq(vkbd->vm, IRQ_KBD, 0);
-		vmm_set_vm_irq(vkbd->vm, IRQ_KBD, 1);
-	}
+	if (irq_kbd_level)
+		sys_trigger_irq(IRQ_KBD);
 
-	if (irq_mouse_level) {
-		vmm_set_vm_irq(vkbd->vm, IRQ_MOUSE, 0);
-		vmm_set_vm_irq(vkbd->vm, IRQ_MOUSE, 1);
-	}
+	if (irq_mouse_level)
+		sys_trigger_irq(IRQ_MOUSE);
 }
 
 static void
 vkbd_update_kbd_irq(void *opaque, int level)
 {
-	KERN_ASSERT(opaque != NULL);
+	ASSERT(opaque != NULL);
 
 	struct vkbd *vkbd = (struct vkbd *) opaque;
 
@@ -205,7 +195,7 @@ vkbd_update_kbd_irq(void *opaque, int level)
 static void
 vkbd_update_aux_irq(void *opaque, int level)
 {
-	KERN_ASSERT(opaque != NULL);
+	ASSERT(opaque != NULL);
 
 	struct vkbd *vkbd = (struct vkbd *) opaque;
 
@@ -220,14 +210,14 @@ vkbd_update_aux_irq(void *opaque, int level)
 static uint8_t
 vkbd_read_status(struct vkbd *vkbd)
 {
-	KERN_ASSERT(vkbd != NULL);
+	ASSERT(vkbd != NULL);
 	return vkbd->status;
 }
 
 static void
 vkbd_queue(struct vkbd *vkbd, int b, int aux)
 {
-	KERN_ASSERT(vkbd != NULL);
+	ASSERT(vkbd != NULL);
 
 	if (aux) {
 		vkbd_debug("Enqueue %x to AUX.\n", (uint8_t) b);
@@ -241,7 +231,7 @@ vkbd_queue(struct vkbd *vkbd, int b, int aux)
 static void
 outport_write(struct vkbd *vkbd, uint32_t data)
 {
-	KERN_ASSERT(vkbd != NULL);
+	ASSERT(vkbd != NULL);
 
 	vkbd->outport = data;
 
@@ -254,14 +244,14 @@ outport_write(struct vkbd *vkbd, uint32_t data)
 	/* } */
 
 	if (!(data & 1)) {
-		KERN_WARN("Reset in not implemented yet.\n");
+		WARN("Reset in not implemented yet.\n");
 	}
 }
 
 static void
 vkbd_write_command(struct vkbd *vkbd, uint32_t data)
 {
-	KERN_ASSERT(vkbd != NULL);
+	ASSERT(vkbd != NULL);
 
 	/* Bits 3-0 of the output port P2 of the keyboard controller may be pulsed
 	 * low for approximately 6 micro seconds. Bits 3-0 of the KBD_CCMD_PULSE
@@ -348,7 +338,7 @@ vkbd_write_command(struct vkbd *vkbd, uint32_t data)
 		break;
 
 	case KBD_CCMD_RESET:
-		KERN_WARN("Reset is not implemented yet.\n");
+		WARN("Reset is not implemented yet.\n");
 		break;
 
 	case KBD_CCMD_NO_OP:
@@ -356,14 +346,14 @@ vkbd_write_command(struct vkbd *vkbd, uint32_t data)
 		break;
 
 	default:
-		KERN_PANIC("Unknown KBD command=%x.\n", data);
+		PANIC("Unknown KBD command=%x.\n", data);
 	}
 }
 
 static uint32_t
 vkbd_read_data(struct vkbd *vkbd)
 {
-	KERN_ASSERT(vkbd != NULL);
+	ASSERT(vkbd != NULL);
 
 	uint32_t data;
 
@@ -379,7 +369,7 @@ vkbd_read_data(struct vkbd *vkbd)
 static void
 vkbd_write_data(struct vkbd *vkbd, uint32_t data)
 {
-	KERN_ASSERT(vkbd != NULL);
+	ASSERT(vkbd != NULL);
 
 	switch(vkbd->write_cmd) {
 	case 0:
@@ -417,10 +407,10 @@ vkbd_write_data(struct vkbd *vkbd, uint32_t data)
 }
 
 static void
-_vkbd_ioport_read(struct vm *vm, void *vkbd, uint32_t port, void *data)
+_vkbd_ioport_read(struct vkbd *vkbd, uint16_t port, void *data)
 {
-	KERN_ASSERT(vm != NULL && vkbd != NULL && data != NULL);
-	KERN_ASSERT(port == KBSTATP || port == KBDATAP);
+	ASSERT(vkbd != NULL && data != NULL);
+	ASSERT(port == KBSTATP || port == KBDATAP);
 
 	if (port == KBSTATP)
 		*(uint8_t *) data = vkbd_read_status(vkbd);
@@ -431,10 +421,10 @@ _vkbd_ioport_read(struct vm *vm, void *vkbd, uint32_t port, void *data)
 }
 
 static void
-_vkbd_ioport_write(struct vm *vm, void *vkbd, uint32_t port, void *data)
+_vkbd_ioport_write(struct vkbd *vkbd, uint16_t port, void *data)
 {
-	KERN_ASSERT(vm != NULL && vkbd != NULL && data != NULL);
-	KERN_ASSERT(port == KBCMDP || port == KBDATAP);
+	ASSERT(vkbd != NULL && data != NULL);
+	ASSERT(port == KBCMDP || port == KBDATAP);
 
 	/* vkbd_debug("Write port=%x, data=%x.\n", port, *(uint8_t *) data); */
 
@@ -447,7 +437,7 @@ _vkbd_ioport_write(struct vm *vm, void *vkbd, uint32_t port, void *data)
 static void
 vkbd_reset(struct vkbd *vkbd)
 {
-	KERN_ASSERT(vkbd != NULL);
+	ASSERT(vkbd != NULL);
 
 	vkbd->mode = KBD_MODE_KBD_INT | KBD_MODE_MOUSE_INT;
 	vkbd->status = KBD_STAT_CMD | KBD_STAT_UNLOCKED;
@@ -455,38 +445,111 @@ vkbd_reset(struct vkbd *vkbd)
 }
 
 static void
-vkbd_sync_kbd(struct vm *vm)
+vkbd_sync_kbd(struct vkbd *vkbd)
 {
+	uint8_t status, c;
+
 	/* synchronize the state of physical i8042 to virtualized i8042 */
-	while (inb(KBSTATP) & KBD_STAT_OBF) {
-		int c = inb(KBDATAP);
-		vkbd_queue(&vm->vkbd, c, 0);
+	while (1) {
+		if (sys_read_ioport(KBSTATP, SZ8, &status))
+			break;
+		if (!(status & KBD_STAT_OBF))
+			break;
+		sys_read_ioport(KBDATAP, SZ8, &c);
+		vkbd_queue(vkbd, c, 0);
 	}
 }
 
-void inject_vkbd_queue(struct vkbd *vkbd, int b, int aux)
+int
+main(int argc, char **argv)
 {
-  	vkbd_queue(vkbd, b, aux);
-}
+	struct vkbd vkbd;
 
-void
-vkbd_init(struct vkbd *vkbd, struct vm *vm)
-{
-	KERN_ASSERT(vkbd != NULL && vm != NULL);
+	int parent_chid;
 
-	memset(vkbd, 0x0, sizeof(struct vkbd));
+	uint8_t buf[1024];
+	size_t size;
 
-	vkbd->status = KBD_STAT_CMD | KBD_STAT_UNLOCKED;
-	vkbd->outport = KBD_OUT_RESET | KBD_OUT_A20;
-	vkbd->vm = vm;
+	struct ioport_rw_req *rw_req;
+	struct ioport_read_ret *ret;
+	struct sync_req *sync_req;
+	struct device_ready *dev_rdy;
+	struct sync_complete *sync_compl;
 
-	ps2_kbd_init(&vkbd->kbd, vkbd_update_kbd_irq, vkbd);
-	ps2_mouse_init(&vkbd->mouse, vkbd_update_aux_irq, vkbd);
+	memset(&vkbd, 0, sizeof(vkbd));
+	vkbd.status = KBD_STAT_CMD | KBD_STAT_UNLOCKED;
+	vkbd.outport = KBD_OUT_RESET | KBD_OUT_A20;
 
-	/* register virtualized device (handlers of I/O ports &  IRQs) */
-	vmm_iodev_register_read(vm, vkbd, KBSTATP, SZ8, _vkbd_ioport_read);
-	vmm_iodev_register_read(vm, vkbd, KBDATAP, SZ8, _vkbd_ioport_read);
-	vmm_iodev_register_write(vm, vkbd, KBCMDP, SZ8, _vkbd_ioport_write);
-	vmm_iodev_register_write(vm, vkbd, KBDATAP, SZ8, _vkbd_ioport_write);
-	vmm_register_extintr(vm, vkbd, IRQ_KBD, vkbd_sync_kbd);
+	ps2_kbd_init(&vkbd.kbd, vkbd_update_kbd_irq, &vkbd);
+	ps2_mouse_init(&vkbd.mouse, vkbd_update_aux_irq, &vkbd);
+
+	sys_register_ioport(KBSTATP, SZ8, 0);
+	sys_register_ioport(KBDATAP, SZ8, 0);
+	sys_register_ioport(KBCMDP, SZ8, 1);
+	sys_register_ioport(KBDATAP, SZ8, 1);
+	sys_register_irq(IRQ_KBD);
+	sys_register_irq(IRQ_MOUSE);
+
+	parent_chid = sys_getpchid();
+
+	dev_rdy = (struct device_ready *) buf;
+	dev_rdy->magic = MAGIC_DEVICE_READY;
+	sys_send(parent_chid, dev_rdy, sizeof(struct device_ready));
+
+	while (1) {
+		if (sys_recv(parent_chid, buf, &size, TRUE))
+			continue;
+
+		switch (((uint32_t *) buf)[0]) {
+		case MAGIC_IOPORT_RW_REQ:
+			rw_req = (struct ioport_rw_req *) buf;
+			if (rw_req->port != KBSTATP &&
+			    rw_req->port != KBDATAP &&
+			    rw_req->port != KBCMDP)
+				continue;
+			if (rw_req->width != SZ8)
+				continue;
+			ret = (struct ioport_read_ret *) buf;
+			if (rw_req->write) {
+				_vkbd_ioport_write(&vkbd,
+						   rw_req->port,
+						   &rw_req->data);
+			} else {
+				_vkbd_ioport_read(&vkbd,
+						  rw_req->port,
+						  &ret->data);
+				ret->magic = MAGIC_IOPORT_READ_RET;
+				sys_send(parent_chid,
+					 ret, sizeof(struct ioport_read_ret));
+			}
+			continue;
+
+		case MAGIC_SYNC_IRQ:
+			sync_req = (struct sync_req *) buf;
+
+			if (sync_req->irq != IRQ_KBD &&
+			    sync_req->irq != IRQ_MOUSE) {
+				vkbd_debug("Ignore unknown IRQ %d.\n",
+					   sync_req->irq);
+				continue;
+			}
+
+			if (sync_req->irq == IRQ_KBD)
+				vkbd_sync_kbd(&vkbd);
+
+			vkbd_debug("Send SYNC_COMPLETE.\n");
+			sync_compl = (struct sync_complete *) buf;
+			sync_compl->irq = sync_req->irq;
+			sync_compl->magic = MAGIC_SYNC_COMPLETE;
+			sys_send(parent_chid,
+				 sync_compl, sizeof(struct sync_complete));
+
+			continue;
+
+		default:
+			continue;
+		}
+	}
+
+	return 0;
 }

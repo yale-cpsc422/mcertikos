@@ -43,7 +43,7 @@ kern_main(void)
 {
 	pageinfo_t *pi;
 	struct pcpu *c;
-	struct proc *init_proc;
+	struct proc *guest_proc, *idle_proc;
 	struct kstack *ap_kstack;
 	int i;
 
@@ -108,10 +108,14 @@ kern_main(void)
 	KERN_INFO("done.\n");
 
 	/* create the first user process */
-	init_proc = proc_spawn(c, (uintptr_t)
+	guest_proc = proc_spawn(c, (uintptr_t)
 			       _binary___obj_user_guest_guest_start);
-	if (init_proc == NULL)
-		KERN_PANIC("Cannot create the init process on BSP.\n");
+	if (guest_proc == NULL)
+		KERN_PANIC("Cannot create the guest process on BSP.\n");
+	idle_proc = proc_spawn(c, (uintptr_t)
+			       _binary___obj_user_idle_idle_start);
+	if (idle_proc == NULL)
+		KERN_PANIC("Cannot create the idle process on BSP.\n");
 
 
 	/* boot APs  */

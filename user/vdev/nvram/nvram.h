@@ -1,5 +1,5 @@
-#ifndef _SYS_VIRT_DEV_NVRAM_H_
-#define _SYS_VIRT_DEV_NVRAM_H_
+#ifndef _VDEV_NVRAM_H_
+#define _VDEV_NVRAM_H_
 
 /*
  * XXX: Virtualized NVRAM does NOT intend to provide the full simulation of
@@ -12,11 +12,7 @@
  *      - getting physical memory size above 4 GB.
  */
 
-#ifdef _KERN_
-
-#include <sys/types.h>
-
-#include <sys/virt/vmm.h>
+#include <types.h>
 
 struct vnvram {
 	bool		data_valid;
@@ -24,11 +20,7 @@ struct vnvram {
 	size_t		extmem2_size;
 	uint64_t	highmem_size;
 
-	uint8_t	data;
+	uint8_t		data;
 };
 
-void vnvram_init(struct vnvram *, struct vm *);
-
-#endif /* _KERN_ */
-
-#endif /* !_SYS_VIRT_DEV_NVRAM_H_ */
+#endif /* !_VDEV_NVRAM_H_ */

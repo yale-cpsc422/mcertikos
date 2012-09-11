@@ -47,6 +47,8 @@ struct sched {
 	spinlock_t	lk;		/* scheduler lock */
 };
 
+struct vm;
+
 struct pcpu {
 	spinlock_t	lk;
 
@@ -63,6 +65,8 @@ struct pcpu {
 					   return values of system calls */
 
 	trap_cb_t	**trap_handler;	/* arrays of trap handlers */
+
+	struct vm	*vm;
 };
 
 struct pcpu pcpu[MAX_CPU];
@@ -141,7 +145,7 @@ bool pcpu_is_smp(void);
  */
 lapicid_t pcpu_cpu_lapicid(int cpu_idx);
 
-#define SCHED_SLICE			20	/* schedule every 20ms */
+#define SCHED_SLICE	20	/* schedule every 20ms */
 
 /*
  * Lock the scheduler on the processor c.

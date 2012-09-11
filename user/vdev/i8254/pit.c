@@ -26,22 +26,20 @@
  * Adapted for CertiKOS by Haozhong Zhang at Yale University.
  */
 
-#include <sys/debug.h>
-#include <sys/gcc.h>
-#include <sys/spinlock.h>
-#include <sys/string.h>
-#include <sys/types.h>
-#include <sys/x86.h>
+#include <debug.h>
+#include <gcc.h>
+#include <spinlock.h>
+#include <string.h>
+#include <syscall.h>
+#include <types.h>
 
-#include <sys/virt/vmm.h>
-#include <sys/virt/vmm_dev.h>
-#include <sys/virt/dev/pit.h>
+#include "pit.h"
 
 #ifdef DEBUG_VPIT
 
 #define vpit_debug(fmt...)			\
 	{					\
-		KERN_DEBUG(fmt);		\
+		DEBUG(fmt);			\
 	}
 
 #else
@@ -59,8 +57,6 @@
 #define PIT_CHANNEL_MODE_4	4	/* software triggered strobe */
 #define PIT_CHANNEL_MODE_5	5	/* hardware triggered strobe */
 
-#define TICKS_PER_SEC		1000000000LL
-
 #define PIT_RW_STATE_LSB	1
 #define PIT_RW_STATE_MSB	2
 #define PIT_RW_STATE_WORD0	3
@@ -71,6 +67,8 @@
 #define PIT_CHANNEL2_PORT	0x42
 #define PIT_CONTROL_PORT	0x43
 #define PIT_GATE_PORT		0x61
+
+static uint64_t guest_tsc_freq;
 
 static void vpit_channel_update(struct vpit_channel *, uint64_t current_tsc);
 
@@ -100,16 +98,16 @@ muldiv64(uint64_t a, uint32_t b, uint32_t c)
 static int32_t
 vpit_get_count(struct vpit_channel *ch)
 {
-	KERN_ASSERT(ch != NULL);
-	KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
+	ASSERT(ch != NULL);
+	ASSERT(spinlock_holding(&ch->lk) == TRUE);
 
-	uint64_t d, count;
+	uint64_t d, count, guest_tsc;
 	int32_t counter = 0;
 	uint16_t d0, d1;
 
-	d = muldiv64(vmm_rdtsc(ch->pit->vm) - ch->count_load_time,
-		     VM_PIT_FREQ, VM_TSC_FREQ);
-	d /= VM_TIME_SCALE;
+	sys_read_guest_tsc(&guest_tsc);
+
+	d = muldiv64(guest_tsc - ch->count_load_time, PIT_FREQ, guest_tsc_freq);
 	count = (uint64_t)(uint32_t) ch->count;
 
 	switch(ch->mode) {
@@ -144,9 +142,9 @@ vpit_get_count(struct vpit_channel *ch)
 		break;
 
 	default:
-		KERN_PANIC("Invalid PIT channel mode %x.\n", ch->mode);
+		PANIC("Invalid PIT channel mode %x.\n", ch->mode);
 	}
-	KERN_ASSERT(counter >= 0 && counter <= count);
+	ASSERT(counter >= 0 && counter <= count);
 	return counter;
 }
 
@@ -156,15 +154,14 @@ vpit_get_count(struct vpit_channel *ch)
 static int
 vpit_get_out(struct vpit_channel *ch, uint64_t current_time)
 {
-	KERN_ASSERT(ch != NULL);
-	KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
+	ASSERT(ch != NULL);
+	ASSERT(spinlock_holding(&ch->lk) == TRUE);
 
 	uint64_t d, count;
 	int out = 0;
 
 	d = muldiv64(current_time - ch->count_load_time,
-		     VM_PIT_FREQ, VM_TSC_FREQ);
-	d /= VM_TIME_SCALE;
+		     PIT_FREQ, guest_tsc_freq);
 	count = (uint64_t)(uint32_t) ch->count;
 	switch(ch->mode) {
 	case PIT_CHANNEL_MODE_0:
@@ -188,7 +185,7 @@ vpit_get_out(struct vpit_channel *ch, uint64_t current_time)
 		break;
 
 	default:
-		KERN_PANIC("Invalid PIT channel mode %x.\n", ch->mode);
+		PANIC("Invalid PIT channel mode %x.\n", ch->mode);
 	}
 	return out;
 }
@@ -196,7 +193,7 @@ vpit_get_out(struct vpit_channel *ch, uint64_t current_time)
 static uint64_t
 vpit_get_next_intr_time(struct vpit *pit)
 {
-	KERN_ASSERT(pit != NULL);
+	ASSERT(pit != NULL);
 
 	struct vpit_channel *ch0 = &pit->channels[0];
 	uint64_t count = (uint64_t)(uint32_t) ch0->count;
@@ -208,16 +205,16 @@ vpit_get_next_intr_time(struct vpit *pit)
 	case PIT_CHANNEL_MODE_2:
 	case PIT_CHANNEL_MODE_3:
 		next_tsc = ch0->count_load_time +
-			muldiv64(count, VM_TSC_FREQ, VM_PIT_FREQ);
+			muldiv64(count, guest_tsc_freq, PIT_FREQ);
 		break;
 	case PIT_CHANNEL_MODE_4:
 	case PIT_CHANNEL_MODE_5:
 		next_tsc = ch0->count_load_time +
-			muldiv64(count+1, VM_TSC_FREQ, VM_PIT_FREQ);
+			muldiv64(count+1, guest_tsc_freq, PIT_FREQ);
 		break;
 
 	default:
-		KERN_PANIC("Invalid PIT channle mode %x.\n", ch0->mode);
+		PANIC("Invalid PIT channle mode %x.\n", ch0->mode);
 	}
 
 	return next_tsc;
@@ -231,15 +228,14 @@ static uint64_t
 vpit_get_next_transition_time(struct vpit_channel *ch, uint64_t current_time,
 			      bool *valid)
 {
-	KERN_ASSERT(ch != NULL);
-	KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
+	ASSERT(ch != NULL);
+	ASSERT(spinlock_holding(&ch->lk) == TRUE);
 
 	uint64_t d, count, next_time = 0, base;
 	int period2;
 
 	d = muldiv64(current_time - ch->count_load_time,
-		     VM_PIT_FREQ, VM_TSC_FREQ);
-	d /= VM_TIME_SCALE;
+		     PIT_FREQ, guest_tsc_freq);
 	count = (uint64_t)(uint32_t) ch->count;
 	*valid = TRUE;
 	switch(ch->mode) {
@@ -280,13 +276,13 @@ vpit_get_next_transition_time(struct vpit_channel *ch, uint64_t current_time,
 		break;
 
 	default:
-		KERN_PANIC("Invalid PIT channel mode %x.\n", ch->mode);
+		PANIC("Invalid PIT channel mode %x.\n", ch->mode);
 	}
 	/* convert to timer units */
 	next_time = ch->count_load_time
-		+ muldiv64(next_time, VM_TSC_FREQ, VM_PIT_FREQ);
+		+ muldiv64(next_time, guest_tsc_freq, PIT_FREQ);
 	/* fix potential rounding problems */
-	/* XXX: better solution: use a clock at VM_PIT_FREQ Hz */
+	/* XXX: better solution: use a clock at PIT_FREQ Hz */
 	if (next_time <= current_time)
 		next_time = current_time + 1;
 	return next_time;
@@ -295,14 +291,16 @@ vpit_get_next_transition_time(struct vpit_channel *ch, uint64_t current_time,
 static void
 vpit_set_gate(struct vpit *pit, int channel, int val)
 {
-	KERN_ASSERT(pit != NULL);
-	KERN_ASSERT(0 <= channel && channel < 3);
-	KERN_ASSERT(val == 0 || val == 1);
+	ASSERT(pit != NULL);
+	ASSERT(0 <= channel && channel < 3);
+	ASSERT(val == 0 || val == 1);
 
 	struct vpit_channel *ch = &pit->channels[channel];
-	uint64_t load_time = vmm_rdtsc(pit->vm);
+	uint64_t load_time;
 
-	KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
+	sys_read_guest_tsc(&load_time);
+
+	ASSERT(spinlock_holding(&ch->lk) == TRUE);
 
 	switch(ch->mode) {
 	case 0:
@@ -328,7 +326,7 @@ vpit_set_gate(struct vpit *pit, int channel, int val)
 		break;
 
 	default:
-		KERN_PANIC("Invalid PIT channel mode %x.\n", ch->mode);
+		PANIC("Invalid PIT channel mode %x.\n", ch->mode);
 	}
 	ch->gate = val;
 }
@@ -336,12 +334,12 @@ vpit_set_gate(struct vpit *pit, int channel, int val)
 static int
 vpit_get_gate(struct vpit *pit, int channel)
 {
-	KERN_ASSERT(pit != NULL);
-	KERN_ASSERT(0 <= channel && channel < 3);
+	ASSERT(pit != NULL);
+	ASSERT(0 <= channel && channel < 3);
 
 	struct vpit_channel *ch = &pit->channels[channel];
 
-	KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
+	ASSERT(spinlock_holding(&ch->lk) == TRUE);
 
 	return ch->gate;
 }
@@ -349,12 +347,12 @@ vpit_get_gate(struct vpit *pit, int channel)
 static int32_t
 vpit_get_initial_count(struct vpit *pit, int channel)
 {
-	KERN_ASSERT(pit != NULL);
-	KERN_ASSERT(0 <= channel && channel < 3);
+	ASSERT(pit != NULL);
+	ASSERT(0 <= channel && channel < 3);
 
 	struct vpit_channel *ch = &pit->channels[channel];
 
-	KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
+	ASSERT(spinlock_holding(&ch->lk) == TRUE);
 
 	return ch->count;
 }
@@ -362,12 +360,12 @@ vpit_get_initial_count(struct vpit *pit, int channel)
 static int
 vpit_get_mode(struct vpit *pit, int channel)
 {
-	KERN_ASSERT(pit != NULL);
-	KERN_ASSERT(0 <= channel && channel < 3);
+	ASSERT(pit != NULL);
+	ASSERT(0 <= channel && channel < 3);
 
 	struct vpit_channel *ch = &pit->channels[channel];
 
-	KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
+	ASSERT(spinlock_holding(&ch->lk) == TRUE);
 
 	return ch->mode;
 }
@@ -375,14 +373,14 @@ vpit_get_mode(struct vpit *pit, int channel)
 static void
 vpit_load_count(struct vpit_channel *ch, uint16_t val)
 {
-	KERN_ASSERT(ch != NULL);
-	KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
+	ASSERT(ch != NULL);
+	ASSERT(spinlock_holding(&ch->lk) == TRUE);
 
 	int32_t count = val;
 
 	if (count == 0)
 		count = 0x10000;
-	ch->count_load_time = vmm_rdtsc(ch->pit->vm);
+	sys_read_guest_tsc(&ch->count_load_time);
 	ch->count = count;
 	vpit_debug("[%llx] Set counter: %x.\n",
 		   ch->count_load_time, ch->count);
@@ -392,8 +390,8 @@ vpit_load_count(struct vpit_channel *ch, uint16_t val)
 static void
 vpit_latch_count(struct vpit_channel *ch)
 {
-	KERN_ASSERT(ch != NULL);
-	KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
+	ASSERT(ch != NULL);
+	ASSERT(spinlock_holding(&ch->lk) == TRUE);
 
 	if (!ch->count_latched) {
 		ch->latched_count = vpit_get_count(ch);
@@ -402,11 +400,11 @@ vpit_latch_count(struct vpit_channel *ch)
 }
 
 static void
-vpit_ioport_write(struct vpit *pit, uint32_t port, uint8_t data)
+vpit_ioport_write(struct vpit *pit, uint16_t port, uint8_t data)
 {
-	KERN_ASSERT(pit != NULL);
-	KERN_ASSERT(port == PIT_CHANNEL0_PORT || port == PIT_CHANNEL1_PORT ||
-		    port == PIT_CHANNEL2_PORT || port == PIT_CONTROL_PORT);
+	ASSERT(pit != NULL);
+	ASSERT(port == PIT_CHANNEL0_PORT || port == PIT_CHANNEL1_PORT ||
+	       port == PIT_CHANNEL2_PORT || port == PIT_CONTROL_PORT);
 
 	int channel, rw;
 	struct vpit_channel *ch;
@@ -465,12 +463,12 @@ vpit_ioport_write(struct vpit *pit, uint32_t port, uint8_t data)
 
 		/* XXX: not suuport BCD yet */
 		if (data & 0x1)
-			KERN_PANIC("PIT not support BCD yet.\n");
+			PANIC("PIT not support BCD yet.\n");
 
 		channel = (data >> 6) & 0x3;
 
 		if (channel == 3) { /* read-back command */
-			KERN_ASSERT(!(data & 0x1));
+			ASSERT(!(data & 0x1));
 
 			int i;
 			for (i = 0; i < 3; i++) {
@@ -497,7 +495,8 @@ vpit_ioport_write(struct vpit *pit, uint32_t port, uint8_t data)
 						continue;
 					}
 
-					uint64_t tsc = vmm_rdtsc(pit->vm);
+					uint64_t tsc;
+					sys_read_guest_tsc(&tsc);
 					int out = vpit_get_out(ch, tsc);
 
 					ch->status =
@@ -569,8 +568,8 @@ vpit_ioport_write(struct vpit *pit, uint32_t port, uint8_t data)
 			break;
 
 		default:
-			KERN_PANIC("Invalid write state %x of counter %x.\n",
-				   ch->write_state, channel);
+			PANIC("Invalid write state %x of counter %x.\n",
+			      ch->write_state, channel);
 		}
 
 		spinlock_release(&ch->lk);
@@ -578,11 +577,11 @@ vpit_ioport_write(struct vpit *pit, uint32_t port, uint8_t data)
 }
 
 static uint8_t
-vpit_ioport_read(struct vpit *pit, uint32_t port)
+vpit_ioport_read(struct vpit *pit, uint16_t port)
 {
-	KERN_ASSERT(pit != NULL);
-	KERN_ASSERT(port == PIT_CHANNEL0_PORT || port == PIT_CHANNEL1_PORT ||
-		    port == PIT_CHANNEL2_PORT);
+	ASSERT(pit != NULL);
+	ASSERT(port == PIT_CHANNEL0_PORT || port == PIT_CHANNEL1_PORT ||
+	       port == PIT_CHANNEL2_PORT);
 
 	int ret = 0, count;
 	int channel = port-PIT_CHANNEL0_PORT;
@@ -622,8 +621,8 @@ vpit_ioport_read(struct vpit *pit, uint32_t port)
 			break;
 
 		default:
-			KERN_PANIC("Invalid read state %x of counter %x.\n",
-				   ch->count_latched, channel);
+			PANIC("Invalid read state %x of counter %x.\n",
+			      ch->count_latched, channel);
 		}
 	} else { /* read unlatched count */
 		switch(ch->read_state) {
@@ -658,38 +657,14 @@ vpit_ioport_read(struct vpit *pit, uint32_t port)
 			break;
 
 		default:
-			KERN_PANIC("Invalid read state %x of counter %x.\n",
-				   ch->read_state, channel);
+			PANIC("Invalid read state %x of counter %x.\n",
+			      ch->read_state, channel);
 		}
 	}
 
 	spinlock_release(&ch->lk);
 
 	return ret;
-}
-
-static void
-_vpit_ioport_read(struct vm *vm, void *pit, uint32_t port, void *data)
-{
-	KERN_ASSERT(vm != NULL && pit != NULL && data != NULL);
-	KERN_ASSERT(port == PIT_CONTROL_PORT || port == PIT_CHANNEL0_PORT ||
-		    port == PIT_CHANNEL1_PORT || port == PIT_CHANNEL2_PORT);
-
-	*(uint8_t *) data = vpit_ioport_read(pit, port);
-
-	/* vpit_debug("Read: port=%x, data=%x.\n", port, *(uint8_t *) data); */
-}
-
-static void
-_vpit_ioport_write(struct vm *vm, void *pit, uint32_t port, void *data)
-{
-	KERN_ASSERT(vm != NULL && pit != NULL && data != NULL);
-	KERN_ASSERT(port == PIT_CONTROL_PORT || port == PIT_CHANNEL0_PORT ||
-		    port == PIT_CHANNEL1_PORT || port == PIT_CHANNEL2_PORT);
-
-	/* vpit_debug("Write: port=%x, data=%x.\n", port, *(uint8_t *) data); */
-
-	vpit_ioport_write(pit, port, *(uint8_t *) data);
 }
 
 /*
@@ -703,17 +678,19 @@ _vpit_ioport_write(struct vm *vm, void *pit, uint32_t port, void *data)
 static uint8_t
 vpit_gate_ioport_read(struct vpit *pit)
 {
-	KERN_ASSERT(pit != NULL);
+	ASSERT(pit != NULL);
 
 	struct vpit_channel *ch = &pit->channels[2];
-	uint64_t current_time = vmm_rdtsc(pit->vm);
+
+	uint64_t current_time;
+	sys_read_guest_tsc(&current_time);
 
 	spinlock_acquire(&ch->lk);
 	uint8_t ret =
 		(vpit_get_out(ch, current_time) << 5) | vpit_get_gate(pit, 2);
 	spinlock_release(&ch->lk);
 
-	/* vpit_debug("[%llx] Read GATE of channel 2: %x\n", current_time, ret); */
+	vpit_debug("[%llx] Read GATE of channel 2: %x\n", current_time, ret);
 
 	return ret;
 }
@@ -729,7 +706,7 @@ vpit_gate_ioport_read(struct vpit *pit)
 static void
 vpit_gate_ioport_write(struct vpit *pit, uint8_t data)
 {
-	KERN_ASSERT(pit != NULL);
+	ASSERT(pit != NULL);
 
 	/* vpit_debug("[%llx] Set GATE of channel 2: gate=%x.\n", */
 	/* 	   vmm_rdtsc(pit->vm), data & 0x1); */
@@ -740,28 +717,42 @@ vpit_gate_ioport_write(struct vpit *pit, uint8_t data)
 }
 
 static void
-_vpit_gate_ioport_read(struct vm *vm, void *pit, uint32_t port, void *data)
+_vpit_ioport_read(struct vpit *pit, uint16_t port, void *data)
 {
-	KERN_ASSERT(vm != NULL && pit != NULL && data != NULL);
-	KERN_ASSERT(port == PIT_GATE_PORT);
+	ASSERT(pit != NULL && data != NULL);
+	ASSERT(port == PIT_CONTROL_PORT || port == PIT_CHANNEL0_PORT ||
+	       port == PIT_CHANNEL1_PORT || port == PIT_CHANNEL2_PORT ||
+	       port == PIT_GATE_PORT);
 
-	*(uint8_t *) data = vpit_gate_ioport_read(pit);
+	if (port == PIT_GATE_PORT)
+		*(uint8_t *) data = vpit_gate_ioport_read(pit);
+	else
+		*(uint8_t *) data = vpit_ioport_read(pit, port);
+
+	vpit_debug("Read: port=%x, data=%x.\n", port, *(uint8_t *) data);
 }
 
 static void
-_vpit_gate_ioport_write(struct vm *vm, void *pit, uint32_t port, void *data)
+_vpit_ioport_write(struct vpit *pit, uint16_t port, void *data)
 {
-	KERN_ASSERT(vm != NULL && pit != NULL && data != NULL);
-	KERN_ASSERT(port == PIT_GATE_PORT);
+	ASSERT(pit != NULL && data != NULL);
+	ASSERT(port == PIT_CONTROL_PORT || port == PIT_CHANNEL0_PORT ||
+	       port == PIT_CHANNEL1_PORT || port == PIT_CHANNEL2_PORT ||
+	       port == PIT_GATE_PORT);
 
-	vpit_gate_ioport_write(pit, *(uint8_t *) data);
+	vpit_debug("Write: port=%x, data=%x.\n", port, *(uint8_t *) data);
+
+	if (port == PIT_GATE_PORT)
+		vpit_gate_ioport_write(pit, *(uint8_t *) data);
+	else
+		vpit_ioport_write(pit, port, *(uint8_t *) data);
 }
 
 static void
 vpit_channel_update(struct vpit_channel *ch, uint64_t current_time)
 {
-	KERN_ASSERT(ch != NULL);
-	KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
+	ASSERT(ch != NULL);
+	ASSERT(spinlock_holding(&ch->lk) == TRUE);
 
 	/*
 	 * Check channel 0 for timer interrupt.
@@ -784,8 +775,8 @@ vpit_channel_update(struct vpit_channel *ch, uint64_t current_time)
 			ch->last_intr_time = intr_time;
 
 			/* vpit_debug("Trigger IRQ_TIMER.\n"); */
-			vmm_set_vm_irq(ch->pit->vm, IRQ_TIMER, 0);
-			vmm_set_vm_irq(ch->pit->vm, IRQ_TIMER, 1);
+			DEBUG("Trigger IRQ_TIMER.\n");
+			sys_trigger_irq(IRQ_TIMER);
 		}
 	}
 
@@ -798,7 +789,7 @@ vpit_channel_update(struct vpit_channel *ch, uint64_t current_time)
 	case PIT_CHANNEL_MODE_0:
 	case PIT_CHANNEL_MODE_1:
 		expired_time = ch->count_load_time +
-			muldiv64(count, VM_TSC_FREQ, VM_PIT_FREQ);
+			muldiv64(count, guest_tsc_freq, PIT_FREQ);
 		if (current_time >= expired_time)
 			ch->enabled = FALSE;
 		else
@@ -808,13 +799,13 @@ vpit_channel_update(struct vpit_channel *ch, uint64_t current_time)
 	case PIT_CHANNEL_MODE_2:
 	case PIT_CHANNEL_MODE_3:
 		expired_time = ch->count_load_time +
-			muldiv64(count, VM_TSC_FREQ, VM_PIT_FREQ);
+			muldiv64(count, guest_tsc_freq, PIT_FREQ);
 		if (current_time >= expired_time) {
 			d = current_time - expired_time;
-			cycle = muldiv64(count, VM_TSC_FREQ, VM_PIT_FREQ);
+			cycle = muldiv64(count, guest_tsc_freq, PIT_FREQ);
 			d /= cycle;
 			ch->count_load_time +=
-				muldiv64(count*(d+1), VM_TSC_FREQ, VM_PIT_FREQ);
+				muldiv64(count*(d+1), guest_tsc_freq, PIT_FREQ);
 		}
 		ch->enabled = TRUE;
 		break;
@@ -822,7 +813,7 @@ vpit_channel_update(struct vpit_channel *ch, uint64_t current_time)
 	case PIT_CHANNEL_MODE_4:
 	case PIT_CHANNEL_MODE_5:
 		expired_time = ch->count_load_time +
-			muldiv64(count+1, VM_TSC_FREQ, VM_PIT_FREQ);
+			muldiv64(count+1, guest_tsc_freq, PIT_FREQ);
 		if (current_time >= expired_time)
 			ch->enabled = FALSE;
 		else
@@ -830,80 +821,163 @@ vpit_channel_update(struct vpit_channel *ch, uint64_t current_time)
 		break;
 
 	default:
-		KERN_PANIC("Invalid PIT channle mode %x.\n", ch->mode);
+		PANIC("Invalid PIT channle mode %x.\n", ch->mode);
 	}
+
+	vpit_debug("vpit_channel_update() done.\n");
 }
 
 static void
-vpit_timer_intr_handler(struct vm *vm)
+vpit_update(struct vpit *vpit)
 {
-	KERN_ASSERT(vm != NULL);
-}
+	ASSERT(vpit != NULL);
 
-void
-vpit_init(struct vpit *pit, struct vm *vm)
-{
-	KERN_ASSERT(pit != NULL && vm != NULL);
-
-	memset(pit, 0x0, sizeof(struct vpit));
-
-	pit->vm = vm;
-
-	/* initialize channle 0 */
-	spinlock_init(&pit->channels[0].lk);
-	pit->channels[0].pit = pit;
-	pit->channels[0].enabled = FALSE;
-	pit->channels[0].last_intr_time_valid = FALSE;
-
-	/* initialize channel 1 */
-	spinlock_init(&pit->channels[1].lk);
-	pit->channels[1].pit = pit;
-	pit->channels[1].enabled = FALSE;
-	pit->channels[1].last_intr_time_valid = FALSE;
-
-	/* initialize channel 2 */
-	spinlock_init(&pit->channels[2].lk);
-	pit->channels[2].pit = pit;
-	pit->channels[2].enabled = FALSE;
-	pit->channels[2].last_intr_time_valid = FALSE;
-
-	/* register virtualized device (handlers of I/O ports & IRQ) */
-	vmm_iodev_register_read(vm, pit, PIT_CONTROL_PORT, SZ8,
-				_vpit_ioport_read);
-	vmm_iodev_register_read(vm, pit, PIT_CHANNEL0_PORT, SZ8,
-				_vpit_ioport_read);
-	vmm_iodev_register_read(vm, pit, PIT_CHANNEL1_PORT, SZ8,
-				_vpit_ioport_read);
-	vmm_iodev_register_read(vm, pit, PIT_CHANNEL2_PORT, SZ8,
-				_vpit_ioport_read);
-	vmm_iodev_register_read(vm, pit, PIT_GATE_PORT, SZ8,
-				_vpit_gate_ioport_read);
-	vmm_iodev_register_write(vm, pit, PIT_CONTROL_PORT, SZ8,
-				 _vpit_ioport_write);
-	vmm_iodev_register_write(vm, pit, PIT_CHANNEL0_PORT, SZ8,
-				 _vpit_ioport_write);
-	vmm_iodev_register_write(vm, pit, PIT_CHANNEL1_PORT, SZ8,
-				 _vpit_ioport_write);
-	vmm_iodev_register_write(vm, pit, PIT_CHANNEL2_PORT, SZ8,
-				 _vpit_ioport_write);
-	vmm_iodev_register_write(vm, pit, PIT_GATE_PORT, SZ8,
-				 _vpit_gate_ioport_write);
-	vmm_register_extintr(vm, pit, IRQ_TIMER, vpit_timer_intr_handler);
-}
-
-void
-vpit_update(struct vm *vm)
-{
-	KERN_ASSERT(vm != NULL);
-
-	uint64_t tsc = vmm_rdtsc(vm);
+	uint64_t tsc;
+	sys_read_guest_tsc(&tsc);
 
 	int i;
 	for (i = 0; i < 3; i++) {
-		struct vpit_channel *ch = &vm->vpit.channels[i];
+		vpit_debug("Update i8254 channel %d.\n", i);
+		struct vpit_channel *ch = &vpit->channels[i];
 		spinlock_acquire(&ch->lk);
-		if (ch->enabled == TRUE)
+		if (ch->enabled == TRUE) {
+			vpit_debug("Channel %d is enabled; updating ...\n", i);
 			vpit_channel_update(ch, tsc);
+		}
 		spinlock_release(&ch->lk);
 	}
+}
+
+int
+main(int argc, char **argv)
+{
+	struct vpit vpit;
+
+	int parent_chid;
+
+	uint8_t buf[1024];
+	size_t size;
+
+	struct ioport_rw_req *rw_req;
+	struct ioport_read_ret *ret;
+	struct sync_req *sync_req;
+	struct device_ready *dev_rdy;
+	struct sync_complete *sync_compl;
+
+	memset(&vpit, 0, sizeof(vpit));
+
+	/* initialize channle 0 */
+	spinlock_init(&vpit.channels[0].lk);
+	vpit.channels[0].pit = &vpit;
+	vpit.channels[0].enabled = FALSE;
+	vpit.channels[0].last_intr_time_valid = FALSE;
+
+	/* initialize channel 1 */
+	spinlock_init(&vpit.channels[1].lk);
+	vpit.channels[1].pit = &vpit;
+	vpit.channels[1].enabled = FALSE;
+	vpit.channels[1].last_intr_time_valid = FALSE;
+
+	/* initialize channel 2 */
+	spinlock_init(&vpit.channels[2].lk);
+	vpit.channels[2].pit = &vpit;
+	vpit.channels[2].enabled = FALSE;
+	vpit.channels[2].last_intr_time_valid = FALSE;
+
+	/* register virtualized device (handlers of I/O ports & IRQ) */
+	sys_register_ioport(PIT_CONTROL_PORT, SZ8, 0);
+	sys_register_ioport(PIT_CHANNEL0_PORT, SZ8, 0);
+	sys_register_ioport(PIT_CHANNEL1_PORT, SZ8, 0);
+	sys_register_ioport(PIT_CHANNEL2_PORT, SZ8, 0);
+	sys_register_ioport(PIT_GATE_PORT, SZ8, 0);
+	sys_register_ioport(PIT_CONTROL_PORT, SZ8, 1);
+	sys_register_ioport(PIT_CHANNEL0_PORT, SZ8, 1);
+	sys_register_ioport(PIT_CHANNEL1_PORT, SZ8, 1);
+	sys_register_ioport(PIT_CHANNEL2_PORT, SZ8, 1);
+	sys_register_ioport(PIT_GATE_PORT, SZ8, 1);
+	sys_register_irq(IRQ_TIMER);
+
+	sys_guest_tsc_freq(&guest_tsc_freq);
+
+	parent_chid = sys_getpchid();
+
+	dev_rdy = (struct device_ready *) buf;
+	dev_rdy->magic = MAGIC_DEVICE_READY;
+	sys_send(parent_chid, dev_rdy, sizeof(struct device_ready));
+
+	while (1) {
+		if (sys_recv(parent_chid, buf, &size, FALSE)) {
+			/* yield(); */
+			continue;
+		}
+
+		switch (((uint32_t *) buf)[0]) {
+		case MAGIC_IOPORT_RW_REQ:
+			rw_req = (struct ioport_rw_req *) buf;
+
+			if (rw_req->port != PIT_CONTROL_PORT &&
+			    rw_req->port != PIT_CHANNEL0_PORT &&
+			    rw_req->port != PIT_CHANNEL1_PORT &&
+			    rw_req->port != PIT_CHANNEL2_PORT &&
+			    rw_req->port != PIT_GATE_PORT) {
+				vpit_debug("Ignore unknown port %d.\n",
+					   rw_req->port);
+				continue;
+			}
+
+			if (rw_req->width != SZ8) {
+				vpit_debug("Ignore unknown data width %d.\n",
+					   rw_req->width);
+				continue;
+			}
+
+			ret = (struct ioport_read_ret *) buf;
+
+			vpit_debug("Receive I/O port read request.\n");
+
+			if (rw_req->write) {
+				_vpit_ioport_write(&vpit,
+						   rw_req->port,
+						   &rw_req->data);
+			} else {
+				_vpit_ioport_read(&vpit,
+						  rw_req->port,
+						  &ret->data);
+				ret->magic = MAGIC_IOPORT_READ_RET;
+				sys_send(parent_chid,
+					 ret, sizeof(struct ioport_read_ret));
+			}
+
+			continue;
+
+		case MAGIC_SYNC_IRQ:
+			sync_req = (struct sync_req *) buf;
+			vpit_debug("Receive SYNC_IRQ %d.\n", sync_req->irq);
+			if (sync_req->irq != IRQ_TIMER) {
+				vpit_debug("Ignore unknown IRQ %d.\n",
+					   sync_req->irq);
+				continue;
+			}
+
+			vpit_update(&vpit);
+
+			vpit_debug("SYNC is done.\n");
+
+			vpit_debug("Send SYNC_COMPLETE.\n");
+			sync_compl = (struct sync_complete *) buf;
+			sync_compl->irq = sync_req->irq;
+			sync_compl->magic = MAGIC_SYNC_COMPLETE;
+			sys_send(parent_chid,
+				 sync_compl, sizeof(struct sync_complete));
+
+			continue;
+
+		default:
+			vpit_debug("Ignore unknown request.\n");
+			continue;
+		}
+
+	}
+
+	return 0;
 }

@@ -14,7 +14,7 @@ main(int argc, char **argv)
 	printf("Receiver (pid %d): parent channel id %d.\n", pid, pchid);
 
 	sys_send(pchid, &pid, sizeof(pid));
-	sys_recv(pchid, buf, &size);
+	sys_recv(pchid, buf, &size, TRUE);
 
 	return 0;
 }

@@ -57,7 +57,7 @@ putch(int ch, struct printbuf *b)
 }
 
 int
-vprintf(const char *fmt, va_list ap)
+vcprintf(const char *fmt, va_list ap)
 {
 	struct printbuf b;
 
@@ -78,7 +78,7 @@ printf(const char *fmt, ...)
 	int cnt;
 
 	va_start(ap, fmt);
-	cnt = vprintf(fmt, ap);
+	cnt = vcprintf(fmt, ap);
 	va_end(ap);
 
 	return cnt;

@@ -1,33 +1,31 @@
-#include <sys/debug.h>
-#include <sys/gcc.h>
-#include <sys/string.h>
-#include <sys/types.h>
-#include <sys/x86.h>
+#include <debug.h>
+#include <gcc.h>
+#include <string.h>
+#include <syscall.h>
+#include <types.h>
 
-#include <sys/virt/vmm.h>
-#include <sys/virt/vmm_dev.h>
-#include <sys/virt/dev/pci.h>
-#include <sys/virt/dev/virtio.h>
-
-#include <dev/pci.h>
+#include "pci.h"
+#include "virtio.h"
 
 #ifdef DEBUG_VIRTIO
 
-#define virtio_debug(fmt...)			\
-	{					\
-		KERN_DEBUG("VIRTIO: ");		\
-		dprintf(fmt);			\
-	}
+#define virtio_debug(fmt, ...)				\
+	do {						\
+		DEBUG("VIRTIO: "fmt, ##__VA_ARGS__);	\
+	} while (0)
+
 #else
+
 #define virtio_debug(fmt...)			\
-	{					\
-	}
+	do {					\
+	} while (0)
+
 #endif
 
 static void
 vring_init(struct vring *vring, uintptr_t guest_addr)
 {
-	KERN_ASSERT(vring != NULL);
+	ASSERT(vring != NULL);
 
 	vring->desc_guest_addr = guest_addr;
 	vring->avail_guest_addr =
@@ -54,8 +52,8 @@ vring_init(struct vring *vring, uintptr_t guest_addr)
 gcc_inline struct vring_desc *
 vring_get_desc(struct vm *vm, struct vring *vring, uint16_t idx)
 {
-	KERN_ASSERT(vm != NULL && vring != NULL);
-	KERN_ASSERT(idx < vring->queue_size);
+	ASSERT(vm != NULL && vring != NULL);
+	ASSERT(idx < vring->queue_size);
 	return (struct vring_desc *) vmm_translate_gp2hp
 		(vm, vring->desc_guest_addr + sizeof(struct vring_desc) * idx);
 }
@@ -63,7 +61,7 @@ vring_get_desc(struct vm *vm, struct vring *vring, uint16_t idx)
 gcc_inline struct vring_avail *
 vring_get_avail(struct vm *vm, struct vring *vring)
 {
-	KERN_ASSERT(vm != NULL && vring != NULL);
+	ASSERT(vm != NULL && vring != NULL);
 	return (struct vring_avail *)
 		vmm_translate_gp2hp(vm, vring->avail_guest_addr);
 }
@@ -71,7 +69,7 @@ vring_get_avail(struct vm *vm, struct vring *vring)
 gcc_inline struct vring_used *
 vring_get_used(struct vm *vm, struct vring *vring)
 {
-	KERN_ASSERT(vm != NULL && vring != NULL);
+	ASSERT(vm != NULL && vring != NULL);
 	return (struct vring_used *)
 		vmm_translate_gp2hp(vm, vring->used_guest_addr);
 }
@@ -83,14 +81,14 @@ vring_get_used(struct vm *vm, struct vring *vring)
 static int
 vring_dequeue_req(struct vm *vm, struct vring *vring)
 {
-	KERN_ASSERT(vm != NULL && vring != NULL);
+	ASSERT(vm != NULL && vring != NULL);
 
 	struct vring_avail *avail;
 	uint16_t idx;
 
 	avail = vring_get_avail(vm, vring);
 
-	KERN_ASSERT(avail != NULL);
+	ASSERT(avail != NULL);
 
 	if (vring->last_avail_idx == avail->idx) {
 		virtio_debug("queue is empty.\n");
@@ -113,7 +111,7 @@ vring_dequeue_req(struct vm *vm, struct vring *vring)
 static void
 virtio_notify_guest(struct virtio_device *dev)
 {
-	KERN_ASSERT(dev != NULL);
+	ASSERT(dev != NULL);
 
 	virtio_debug("notify: raise IRQ 0x%x.\n", dev->pci_conf.intr_line);
 
@@ -131,7 +129,7 @@ virtio_notify_guest(struct virtio_device *dev)
 static int
 virtio_handle_req(struct virtio_device *dev, int vq_idx)
 {
-	KERN_ASSERT(dev != NULL);
+	ASSERT(dev != NULL);
 
 	struct vring *vring;
 	uint16_t desc_idx;
@@ -168,12 +166,12 @@ virtio_handle_req(struct virtio_device *dev, int vq_idx)
 static void
 virtio_get_dev_features(struct vm *vm, void *opaque, uint32_t reg, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(vm != NULL && opaque != NULL && data != NULL);
 
 	struct virtio_device *dev = (struct virtio_device *) opaque;
 
-	KERN_ASSERT(reg == dev->iobase +
-		    offsetof(struct virtio_header, device_features));
+	ASSERT(reg == dev->iobase +
+	       offsetof(struct virtio_header, device_features));
 
 	*(uint32_t *) data = dev->virtio_header.device_features;
 
@@ -183,12 +181,12 @@ virtio_get_dev_features(struct vm *vm, void *opaque, uint32_t reg, void *data)
 static void
 virtio_get_guest_features(struct vm *vm, void *opaque, uint32_t reg, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(vm != NULL && opaque != NULL && data != NULL);
 
 	struct virtio_device *dev = (struct virtio_device *) opaque;
 
-	KERN_ASSERT(reg == dev->iobase +
-		    offsetof(struct virtio_header, guest_features));
+	ASSERT(reg == dev->iobase +
+	       offsetof(struct virtio_header, guest_features));
 
 	*(uint32_t *) data = dev->virtio_header.guest_features;
 
@@ -196,16 +194,14 @@ virtio_get_guest_features(struct vm *vm, void *opaque, uint32_t reg, void *data)
 }
 
 static void
-virtio_set_guest_features(struct vm *vm, void *opaque, uint32_t reg, void *data)
+virtio_set_guest_features(struct virtio_device *dev, uint16_t reg, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(dev != NULL && data != NULL);
 
 	virtio_debug("write guest features %08x.\n", *(uint32_t *) data);
 
-	struct virtio_device *dev = (struct virtio_device *) opaque;
-
-	KERN_ASSERT(reg == dev->iobase +
-		    offsetof(struct virtio_header, guest_features));
+	ASSERT(reg == dev->iobase +
+	       offsetof(struct virtio_header, guest_features));
 
 	dev->virtio_header.guest_features = *(uint32_t *) data;
 
@@ -215,12 +211,12 @@ virtio_set_guest_features(struct vm *vm, void *opaque, uint32_t reg, void *data)
 static void
 virtio_get_queue_addr(struct vm *vm, void *opaque, uint32_t reg, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(vm != NULL && opaque != NULL && data != NULL);
 
 	struct virtio_device *dev = (struct virtio_device *) opaque;
 
-	KERN_ASSERT(reg == dev->iobase +
-		    offsetof(struct virtio_header, queue_addr));
+	ASSERT(reg == dev->iobase +
+	       offsetof(struct virtio_header, queue_addr));
 
 	*(uint32_t *) data = dev->virtio_header.queue_addr;
 
@@ -228,19 +224,16 @@ virtio_get_queue_addr(struct vm *vm, void *opaque, uint32_t reg, void *data)
 }
 
 static void
-virtio_set_queue_addr(struct vm *vm, void *opaque, uint32_t reg, void *data)
+virtio_set_queue_addr(struct virtio_device *dev, uint16_t reg, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(dev != NULL && data != NULL);
 
 	virtio_debug("write queue address %08x.\n", *(uint32_t *) data * 4096);
 
-	struct virtio_device *dev;
 	struct vring *ring;
 
-	dev = (struct virtio_device *) opaque;
-
-	KERN_ASSERT(reg == dev->iobase +
-		    offsetof(struct virtio_header, queue_addr));
+	ASSERT(reg == dev->iobase +
+	       offsetof(struct virtio_header, queue_addr));
 
 	ring = dev->ops->get_vring(dev, dev->virtio_header.queue_select);
 
@@ -258,12 +251,12 @@ virtio_set_queue_addr(struct vm *vm, void *opaque, uint32_t reg, void *data)
 static void
 virtio_get_queue_size(struct vm *vm, void *opaque, uint32_t reg, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(vm != NULL && opaque != NULL && data != NULL);
 
 	struct virtio_device *dev = (struct virtio_device *) opaque;
 
-	KERN_ASSERT(reg == dev->iobase +
-		    offsetof(struct virtio_header, queue_size));
+	ASSERT(reg == dev->iobase +
+	       offsetof(struct virtio_header, queue_size));
 
 	*(uint16_t *) data = dev->virtio_header.queue_size;
 
@@ -273,12 +266,12 @@ virtio_get_queue_size(struct vm *vm, void *opaque, uint32_t reg, void *data)
 static void
 virtio_get_queue_select(struct vm *vm, void *opaque, uint32_t reg, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(vm != NULL && opaque != NULL && data != NULL);
 
 	struct virtio_device *dev = (struct virtio_device *) opaque;
 
-	KERN_ASSERT(reg == dev->iobase +
-		    offsetof(struct virtio_header, queue_select));
+	ASSERT(reg == dev->iobase +
+	       offsetof(struct virtio_header, queue_select));
 
 	*(uint16_t *) data = dev->virtio_header.queue_select;
 
@@ -286,19 +279,17 @@ virtio_get_queue_select(struct vm *vm, void *opaque, uint32_t reg, void *data)
 }
 
 static void
-virtio_set_queue_select(struct vm *vm, void *opaque, uint32_t reg, void *data)
+virtio_set_queue_select(struct virtio_device *dev, uint32_t reg, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(dev != NULL && data != NULL);
 
 	virtio_debug("select queue %d.\n", *(uint16_t *) data);
 
 	struct virtio_device *dev;
 	struct vring *ring;
 
-	dev = (struct virtio_device *) opaque;
-
-	KERN_ASSERT(reg == dev->iobase +
-		    offsetof(struct virtio_header, queue_select));
+	ASSERT(reg == dev->iobase +
+	       offsetof(struct virtio_header, queue_select));
 
 	ring = dev->ops->get_vring(dev, *(uint16_t *) data);
 
@@ -319,12 +310,12 @@ virtio_set_queue_select(struct vm *vm, void *opaque, uint32_t reg, void *data)
 static void
 virtio_get_queue_notify(struct vm *vm, void *opaque, uint32_t reg, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(vm != NULL && opaque != NULL && data != NULL);
 
 	struct virtio_device *dev = (struct virtio_device *) opaque;
 
-	KERN_ASSERT(reg == dev->iobase +
-		    offsetof(struct virtio_header, queue_notify));
+	ASSERT(reg == dev->iobase +
+	       offsetof(struct virtio_header, queue_notify));
 
 	*(uint16_t *) data = dev->virtio_header.queue_notify;
 
@@ -332,9 +323,9 @@ virtio_get_queue_notify(struct vm *vm, void *opaque, uint32_t reg, void *data)
 }
 
 static void
-virtio_set_queue_notify(struct vm *vm, void *opaque, uint32_t reg, void *data)
+virtio_set_queue_notify(struct virtio_device *dev, uint32_t reg, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(dev != NULL && data != NULL);
 
 	virtio_debug("notify queue %d.\n", *(uint16_t *) data);
 
@@ -343,11 +334,10 @@ virtio_set_queue_notify(struct vm *vm, void *opaque, uint32_t reg, void *data)
 	struct vring_avail *avail;
 	uint8_t queue_idx;
 
-	dev = (struct virtio_device *) opaque;
 	queue_idx = *(uint16_t *) data;
 
-	KERN_ASSERT(reg == dev->iobase +
-		    offsetof(struct virtio_header, queue_notify));
+	ASSERT(reg == dev->iobase +
+	       offsetof(struct virtio_header, queue_notify));
 
 	dev->virtio_header.queue_notify = queue_idx;
 
@@ -366,12 +356,12 @@ virtio_set_queue_notify(struct vm *vm, void *opaque, uint32_t reg, void *data)
 static void
 virtio_get_device_status(struct vm *vm, void *opaque, uint32_t reg, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(vm != NULL && opaque != NULL && data != NULL);
 
 	struct virtio_device *dev = (struct virtio_device *) opaque;
 
-	KERN_ASSERT(reg == dev->iobase +
-		    offsetof(struct virtio_header, device_status));
+	ASSERT(reg == dev->iobase +
+	       offsetof(struct virtio_header, device_status));
 
 	*(uint8_t *) data = dev->virtio_header.device_status;
 
@@ -381,14 +371,14 @@ virtio_get_device_status(struct vm *vm, void *opaque, uint32_t reg, void *data)
 static void
 virtio_set_device_status(struct vm *vm, void *opaque, uint32_t reg, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(vm != NULL && opaque != NULL && data != NULL);
 
 	virtio_debug("write device status %01x.\n", *(uint8_t *) data);
 
 	struct virtio_device *dev = (struct virtio_device *) opaque;
 
-	KERN_ASSERT(reg == dev->iobase +
-		    offsetof(struct virtio_header, device_status));
+	ASSERT(reg == dev->iobase +
+	       offsetof(struct virtio_header, device_status));
 
 	dev->virtio_header.device_status = *(uint8_t *) data;
 }
@@ -396,12 +386,12 @@ virtio_set_device_status(struct vm *vm, void *opaque, uint32_t reg, void *data)
 static void
 virtio_get_isr_status(struct vm *vm, void *opaque, uint32_t reg, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(vm != NULL && opaque != NULL && data != NULL);
 
 	struct virtio_device *dev = (struct virtio_device *) opaque;
 
-	KERN_ASSERT(reg == dev->iobase +
-		    offsetof(struct virtio_header, isr_status));
+	ASSERT(reg == dev->iobase +
+	       offsetof(struct virtio_header, isr_status));
 
 	*(uint8_t *) data = dev->virtio_header.isr_status;
 
@@ -412,7 +402,7 @@ static void
 virtio_default_ioport_readb(struct vm *vm,
 			    void *opaque, uint32_t port, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(vm != NULL && opaque != NULL && data != NULL);
 
 	*(uint8_t *) data = 0;
 
@@ -424,7 +414,7 @@ static void
 virtio_default_ioport_readw(struct vm *vm,
 			    void *opaque, uint32_t port, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(vm != NULL && opaque != NULL && data != NULL);
 
 	*(uint16_t *) data = 0;
 
@@ -436,7 +426,7 @@ static void
 virtio_default_ioport_readl(struct vm *vm,
 			    void *opaque, uint32_t port, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(vm != NULL && opaque != NULL && data != NULL);
 
 	*(uint32_t *) data = 0;
 
@@ -448,7 +438,7 @@ static void
 virtio_default_ioport_writeb(struct vm *vm,
 			     void *opaque, uint32_t port, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(vm != NULL && opaque != NULL && data != NULL);
 
 	virtio_debug("writeb reg %x, val %02x, nop.\n",
 		     port - ((struct virtio_device *) opaque)->iobase,
@@ -459,7 +449,7 @@ static void
 virtio_default_ioport_writew(struct vm *vm,
 			     void *opaque, uint32_t port, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(vm != NULL && opaque != NULL && data != NULL);
 
 	virtio_debug("writew reg %x, val %04x, nop.\n",
 		     port - ((struct virtio_device *) opaque)->iobase,
@@ -470,7 +460,7 @@ static void
 virtio_default_ioport_writel(struct vm *vm,
 			     void *opaque, uint32_t port, void *data)
 {
-	KERN_ASSERT(vm != NULL && opaque != NULL && data != NULL);
+	ASSERT(vm != NULL && opaque != NULL && data != NULL);
 
 	virtio_debug("writel reg %x, val %08x, nop.\n",
 		     port - ((struct virtio_device *) opaque)->iobase,
@@ -482,7 +472,7 @@ virtio_default_ioport_writel(struct vm *vm,
 static void
 unregister_ioport_handlers(struct vm *vm, uint16_t iobase, uint16_t iosize)
 {
-	KERN_ASSERT(vm != NULL);
+	ASSERT(vm != NULL);
 
 	uint16_t port;
 
@@ -523,22 +513,19 @@ unregister_register_write(struct virtio_device *dev,
  * the end.
  *
  * @param dev the virtio device to be initialized
- * @param vm the VM to which the virtio device is attached
  * @param ops the device-specific operations
  *
  * @return 0 if no errors happen
  */
 int
-virtio_device_init(struct virtio_device *dev,
-		   struct vm *vm, struct virtio_device_ops *ops)
+virtio_device_init(struct virtio_device *dev, struct virtio_device_ops *ops,
+		   struct vpci_host *vpci_host)
 {
-	KERN_ASSERT(dev != NULL && vm != NULL && ops != NULL);
+	ASSERT(dev != NULL && ops != NULL && vpci_host != NULL);
 
 	int rc;
 
 	memset(dev, 0, sizeof(struct virtio_device));
-
-	dev->vm = vm;
 
 	/* device-independent PCI initialization */
 	dev->pci_conf.header.vendor = VIRTIO_PCI_VENDOR_ID;
@@ -549,7 +536,7 @@ virtio_device_init(struct virtio_device *dev,
 	dev->pci_dev.dev = dev;
 	dev->pci_dev.conf_read = ops->pci_conf_read;
 	dev->pci_dev.conf_write = ops->pci_conf_write;
-	if ((rc = vpci_attach_device(&vm->vpci, &dev->pci_dev)) != 0) {
+	if ((rc = vpci_attach_device(vpci_host, &dev->pci_dev)) != 0) {
 		virtio_debug("failed to attach the device to PCI bus.\n");
 		return 1;
 	}
@@ -561,6 +548,94 @@ virtio_device_init(struct virtio_device *dev,
 	dev->ops = ops;
 
 	return 0;
+}
+
+void
+virtio_handle_ioport(struct virtio_device *dev,
+		    uint16_t port, data_sz_t width, void *data, int write)
+{
+	ASSERT(dev != NULL);
+	ASSERT(dev->iobase <= port &&
+	       port < dev->iobase + sizeof(struct virtio_header));
+	ASSERT(data != NULL);
+
+	uint16 iobase;
+
+	struct ioport_read_ret *ret;
+
+	iobase = dev->iobase;
+	ret = (struct ioport_rw_ret *) buf;
+
+	if (write) {
+		if (port == iobase + offsetof(struct virtio_header,
+					      guest_features) &&
+		    width == SZ32) {
+			virtio_set_guest_features(dev, (uint32_t *) data);
+		} else if (port == iobase + offsetof(struct virtio_header,
+						   queue_addr) &&
+			   width == SZ32) {
+			virtio_set_queue_addr(dev, (uint32_t *) data);
+		} else if (port == iobase + offsetof(struct virtio_header,
+						   queue_select) &&
+			   width == SZ16) {
+			virtio_set_queue_select(dev, (uint16_t *) data);
+		} else if (port == iobase + offsetof(struct virtio_header,
+						   queue_notify) &&
+			   width == SZ16) {
+			virtio_set_queue_notify(dev, (uint16_t *) data);
+		} else if (port == iobase + offsetof(struct virtio_header,
+						   device_status) &&
+			   width == SZ8) {
+			virtio_set_device_status(dev, (uint8_t *) data);
+		} else if (port < iobase + dev->iosize) {
+			uint16 delta = iobase + dev->iosize - port;
+			if (width == SZ8)
+				virtio_default_ioport_writeb(dev, port, data);
+			else if (width == SZ16 && delta > 1)
+				virtio_default_ioport_writew(dev, port, data);
+			else if (width == SZ32 && delta > 3)
+				virtio_default_ioport_writel(dev, port, data);
+		}
+		return;
+	}
+
+	if (port == iobase + offsetof(struct virtio_header, device_features) &&
+	    width == SZ32) {
+		virtio_get_dev_features(dev, &ret->data);
+	} else if (port == iobase + offsetof(struct virtio_header, guest_features) &&
+		   width == SZ32) {
+		virtio_get_guest_features(dev, &ret->data);
+	} else if (port == iobase + offsetof(struct virtio_header, queue_addr) &&
+		   width == SZ32) {
+		virtio_get_queue_addr(dev, &ret->data);
+	} else if (port == iobase + offsetof(struct virtio_header, queue_size) &&
+		   width == SZ16) {
+		virtio_get_queue_size(dev, &ret->data);
+	} else if (port == iobase + offsetof(struct virtio_header, queue_select) &&
+		   width == SZ16) {
+		virtio_get_queue_select(dev, &ret->data);
+	} else if (port == iobase + offsetof(struct virtio_header, queue_notify) &&
+		   width == SZ16) {
+		virtio_get_queue_notify(dev, &ret->data);
+	} else if (port == iobase + offsetof(struct virtio_header, device_status) &&
+		   width == SZ8) {
+		virtio_get_device_status(dev, &ret->data);
+	} else if (port == iobase + offsetof(struct virtio_header, isr_status) &&
+		   width == SZ8) {
+		virtio_get_isr_status(dev, &ret->data);
+	else if (port < iobase _dev->iosize) {
+		uint16 delta = iobase + dev->iosize - port;
+		if (width == SZ8)
+			virtio_default_ioport_readb(dev, port, &ret->data);
+		else if (width == SZ16 && delta > 1)
+			virtio_default_ioport_readw(dev, port, &ret->data);
+		else if (width == SZ32 && delta > 3)
+			virtio_default_ioport_readl(dev, port, &ret->data);
+		else
+			ret->data = 0xffffffff;
+		ret->magic = MAGIC_IOPORT_READ_RET;
+		sys_send(channel_id, ret, sizeof(struct ioport_read_ret));
+	}
 }
 
 /*
@@ -575,14 +650,14 @@ void
 virtio_device_update_ioport_handlers(struct virtio_device *dev,
 				     uint16_t new_iobase)
 {
-	KERN_ASSERT(dev != NULL);
+	ASSERT(dev != NULL);
 
 	uint16_t iobase, iosize, port;
 
 	iobase = dev->iobase;
 	iosize = dev->iosize;
 
-	KERN_ASSERT(iobase == 0xffff || 0xffff - iobase + 1 >= iosize);
+	ASSERT(iobase == 0xffff || 0xffff - iobase + 1 >= iosize);
 
 	if (iobase != 0xffff) {
 		virtio_debug("unregister handlers for I/O ports %x ~ %x.\n",
@@ -595,97 +670,51 @@ virtio_device_update_ioport_handlers(struct virtio_device *dev,
 	virtio_debug("register handlers for I/O ports %x ~ %x.\n",
 		     iobase, iobase + iosize - 1);
 
-	/*
-	 * Register default I/O port handlers for all ports in [iobase,
-	 * iobase+iosize)
-	 */
-	for (port = iobase; port < iobase + iosize; port++) {
+	for (port == iobase; port < iobase + iosize; port++) {
 		uint16_t delta = iobase + iosize - port;
 
-		vmm_iodev_register_read(dev->vm, dev, port, SZ8,
-					virtio_default_ioport_readb);
-		vmm_iodev_register_write(dev->vm, dev, port, SZ8,
-					virtio_default_ioport_writeb);
+		if (port == iobase +
+		    offsetof(struct virtio_header, device_features)) {
+			unregister_register_read(port, SZ32);
+		} else if (port == iobase +
+			   offsetof(struct virtio_header, guest_features)) {
+			unregister_register_read(port, SZ32);
+			unregister_register_write(port, SZ32);
+		} else if (port == iobase +
+			   offsetof(struct virtio_header, queue_addr)) {
+			unregister_register_read(port, SZ32);
+			unregister_register_write(port, SZ32);
+		} else if (port == iobase +
+			   offsetof(struct virtio_header, queue_size)) {
+			unregister_register_read(port, SZ16);
+		} else if (port == iobase +
+			   offsetof(struct virtio_header, queue_select)) {
+			unregister_register_read(port, SZ16);
+			unregister_register_write(port, SZ16);
+		} else if (port == iobase +
+			   offsetof(struct virtio_header, queue_notify)) {
+			unregister_register_read(port, SZ16);
+			unregister_register_write(port, SZ16);
+		} else if (port == iobase +
+			   offsetof(struct virtio_header, device_status)) {
+			unregister_register_read(port, SZ8);
+			unregister_register_write(port, SZ8);
+		} else if (port == iobase +
+			   offsetof(struct virtio_header, isr_status)) {
+			unregister_register_read(port, SZ8);
+		} else {
+			unregister_register_read(port, SZ8);
+			unregister_register_write(port, SZ8);
 
-		if (delta > 1) {
-			vmm_iodev_register_read(dev->vm, dev, port, SZ16,
-						virtio_default_ioport_readw);
-			vmm_iodev_register_write(dev->vm, dev, port, SZ16,
-						 virtio_default_ioport_writew);
-		}
+			if (delta > 1) {
+				unregister_register_read(port, SZ16);
+				unregister_register_write(port, SZ16);
+			}
 
-		if (delta > 3) {
-			vmm_iodev_register_read(dev->vm, dev, port, SZ32,
-						virtio_default_ioport_readl);
-			vmm_iodev_register_write(dev->vm, dev, port, SZ32,
-						 virtio_default_ioport_writel);
+			if (delta > 3) {
+				unregister_register_read(port, SZ32);
+				unregister_register_write(port, SZ32);
+			}
 		}
 	}
-
-	/*
-	 * Reregister I/O port handlers for virtio header.
-	 */
-
-	/* device features bits */
-	unregister_register_read
-		(dev, iobase + offsetof(struct virtio_header, device_features),
-		 SZ32, virtio_get_dev_features);
-
-	/* guest features bits */
-	unregister_register_read
-		(dev, iobase + offsetof(struct virtio_header, guest_features),
-		 SZ32, virtio_get_guest_features);
-	unregister_register_write
-		(dev, iobase + offsetof(struct virtio_header, guest_features),
-		 SZ32, virtio_set_guest_features);
-
-	/* queue address */
-	unregister_register_read
-		(dev, iobase + offsetof(struct virtio_header, queue_addr),
-		 SZ32, virtio_get_queue_addr);
-	unregister_register_write
-		(dev, iobase + offsetof(struct virtio_header, queue_addr),
-		 SZ32, virtio_set_queue_addr);
-
-	/* queue size */
-	unregister_register_read
-		(dev, iobase + offsetof(struct virtio_header, queue_size),
-		 SZ16, virtio_get_queue_size);
-
-	/* queue select */
-	unregister_register_read
-		(dev, iobase + offsetof(struct virtio_header, queue_select),
-		 SZ16, virtio_get_queue_select);
-	unregister_register_write
-		(dev, iobase + offsetof(struct virtio_header, queue_select),
-		 SZ16, virtio_set_queue_select);
-
-	/* queue notify */
-	unregister_register_read
-		(dev, iobase + offsetof(struct virtio_header, queue_notify),
-		 SZ16, virtio_get_queue_notify);
-	unregister_register_write
-		(dev, iobase + offsetof(struct virtio_header, queue_notify),
-		 SZ16, virtio_set_queue_notify);
-
-	/* device status */
-	unregister_register_read
-		(dev, iobase + offsetof(struct virtio_header, device_status),
-		 SZ8, virtio_get_device_status);
-	unregister_register_write
-		(dev, iobase + offsetof(struct virtio_header, device_status),
-		 SZ8, virtio_set_device_status);
-
-	/* ISR */
-	unregister_register_read
-		(dev, iobase + offsetof(struct virtio_header, isr_status),
-		 SZ8, virtio_get_isr_status);
-
-	/*
-	 * Device-specific I/O port handlers registration.
-	 */
-	dev->ops->update_ioport_handlers(dev);
-
-	/* update */
-	vmm_update(dev->vm);
 }

@@ -3,10 +3,12 @@
 OBJDIRS		+= $(USER_OBJDIR)/lib
 
 USER_LIB_SRC	+= $(USER_DIR)/lib/entry.S
+USER_LIB_SRC	+= $(USER_DIR)/lib/debug.c
 USER_LIB_SRC	+= $(USER_DIR)/lib/atoi.c
 USER_LIB_SRC	+= $(USER_DIR)/lib/printf.c
 USER_LIB_SRC	+= $(USER_DIR)/lib/printfmt.c
 USER_LIB_SRC	+= $(USER_DIR)/lib/proc.c
+USER_LIB_SRC	+= $(USER_DIR)/lib/spinlock.c
 USER_LIB_SRC	+= $(USER_DIR)/lib/string.c
 
 USER_LIB_SRC	:= $(wildcard $(USER_LIB_SRC))

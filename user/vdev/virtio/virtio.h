@@ -3,17 +3,13 @@
  * device.
  */
 
-#ifndef _SYS_VIRT_DEV_VIRTIO_H_
-#define _SYS_VIRT_DEV_VIRTIO_H_
+#ifndef _VDEV_VIRTIO_H_
+#define _VDEV_VIRTIO_H_
 
-#ifdef _KERN_
+#include <gcc.h>
+#include <types.h>
 
-#include <sys/gcc.h>
-#include <sys/types.h>
-
-#include <sys/virt/vmm.h>
-
-#include <dev/pci.h>
+#include "pci.h"
 
 #define VIRTIO_PCI_VENDOR_ID		0x1af4
 /* NOTE: SeaBIOS requires the device ID of a VirtIO block device be 0x1001. */
@@ -250,8 +246,6 @@ struct virtio_device_ops {
  *              };
  */
 struct virtio_device {
-	struct vm *vm;				/* VM the device is bound to */
-
 	struct pci_general pci_conf;		/* PCI header */
 	struct vpci_device pci_dev;		/* vPCI device */
 
@@ -282,8 +276,8 @@ struct vring_used *vring_get_used(struct vm *, struct vring *ring);
 /*
  * Do the common intialization for a virtio device.
  */
-int virtio_device_init(struct virtio_device *,
-		       struct vm *, struct virtio_device_ops *);
+int virtio_device_init(struct virtio_device *, struct virtio_device_ops *,
+		       struct vpci_host *);
 
 /*
  * Reregister I/O port handlers for reading/writing the device configuration
@@ -296,6 +290,4 @@ int virtio_device_init(struct virtio_device *,
 void virtio_device_update_ioport_handlers(struct virtio_device *,
 					  uint16_t new_iobase);
 
-#endif /* _KERN_ */
-
-#endif /* !_SYS_VIRT_DEV_VIRTIO_H_ */
+#endif /* !_VDEV_VIRTIO_H_ */

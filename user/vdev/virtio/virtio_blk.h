@@ -1,12 +1,9 @@
-#ifndef _SYS_VIRT_DEV_VIRTIO_BLK_H_
-#define _SYS_VIRT_DEV_VIRTIO_BLK_H_
+#ifndef _VDEV_VIRTIO_BLK_H_
+#define _VDEV_VIRTIO_BLK_H_
 
-#ifdef _KERN_
+#include <types.h>
 
-#include <sys/types.h>
-
-#include <sys/virt/vmm.h>
-#include <sys/virt/dev/virtio.h>
+#include "virtio.h"
 
 /* VirtIO block device features */
 #define VIRTIO_BLK_F_BARRIER	(1 << 0)

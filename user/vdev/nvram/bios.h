@@ -1,10 +1,8 @@
-#ifndef _SYS_VIRT_DEV_BIOS_H_
-#define _SYS_VIRT_DEV_BIOS_H_
+#ifndef _VDEV_BIOS_H_
+#define _VDEV_BIOS_H_
 
-#ifdef _KERN_
-
-#include <sys/gcc.h>
-#include <sys/types.h>
+#include <gcc.h>
+#include <types.h>
 
 #define BDA_BASE	0x400
 
@@ -82,6 +80,4 @@ struct bios_data_area {
 #define BDA_KBD_STAT4_NUM_LED	(1<<1)
 #define BDA_KBD_STAT4_SCR_LED	(1<<0)
 
-#endif /* _KERN_ */
-
-#endif /* !_SYS_VIRT_DEV_BIOS_H_*/
+#endif /* !_VDEV_BIOS_H_ */

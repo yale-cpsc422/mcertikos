@@ -48,10 +48,12 @@ ctx_start(struct context *ctx)
 
 	tf_t *tf = &ctx->tf;
 
-	if (ctx->p != NULL)
+	if (ctx->p != NULL) {
 		KERN_ASSERT(spinlock_holding(&ctx->p->lk) == FALSE);
-	else
+	} else {
 		KERN_ASSERT(tf->eip < VM_USERLO);
+		KERN_ASSERT(tf->eflags & FL_IF);
+	}
 
 	trap_return(tf);
 }

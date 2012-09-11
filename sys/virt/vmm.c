@@ -7,10 +7,7 @@
 #include <sys/types.h>
 
 #include <sys/virt/vmm.h>
-#ifdef TRACE_IOIO
 #include <sys/virt/vmm_dev.h>
-#endif
-#include <sys/virt/dev/virtio_blk.h>
 
 #include <dev/tsc.h>
 
@@ -20,7 +17,6 @@ static struct vm vm_pool[4];
 static spinlock_t vm_pool_lock;
 
 static enum {SVM, VMX} virt_type;
-static struct vmm_ops *vmm_ops = NULL;
 
 static bool gcc_inline
 is_intel(void)
@@ -35,15 +31,7 @@ is_amd(void)
 }
 
 static void
-vmm_pre_time_update(struct vm *vm)
-{
-	KERN_ASSERT(vm != NULL);
-
-	/* empty currently */
-}
-
-static void
-vmm_post_time_update(struct vm *vm)
+vmm_update_guest_tsc(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
 
@@ -57,9 +45,6 @@ vmm_post_time_update(struct vm *vm)
 	delta = exit_host_tsc - entry_host_tsc;
 	incr = (delta * VM_TSC_FREQ) / (tsc_per_ms * 1000);
 	vm->tsc += (incr - VM_TSC_ADJUST);
-
-	/* update guest PIT */
-	vpit_update(vm);
 }
 
 int
@@ -138,19 +123,8 @@ vmm_init_vm(void)
 
 	vm->tsc = 0;
 
-	/* initializa virtualized devices */
-	/* XXX: there is no order requirement right now. */
-	vpic_init(&vm->vpic, vm);
-	vkbd_init(&vm->vkbd, vm);
-	vpci_init(&vm->vpci, vm);
-	vnvram_init(&vm->vnvram, vm);
-	vpit_init(&vm->vpit, vm);
-	virtio_blk_init(&vm->blk, vm);
-	/* vserial_init(&vm->vserial, vm); */
-
-#ifdef GUEST_DEBUG_DEV
-	guest_debug_dev_init(&vm->debug_dev, vm);
-#endif
+	/* initialize the virtual device interface  */
+	vdev_init(vm);
 
 #ifdef TRACE_TOTAL_TIME
 	vm->start_tsc = vm->total_tsc = 0;
@@ -161,6 +135,8 @@ vmm_init_vm(void)
 		KERN_DEBUG("Machine-dependent VM initialization failed.\n");
 		return NULL;
 	}
+
+	pcpu[0].vm = vm;
 
 	return vm;
 }
@@ -175,14 +151,14 @@ vmm_run_vm(struct vm *vm)
 	static uint64_t last_dump = 0;
 #endif
 
+	vmm_update(vm);
+
 	while (1) {
 		KERN_ASSERT(vm->handled == TRUE);
 
-		vmm_pre_time_update(vm);
-
 		vmm_ops->vm_run(vm);
 
-		vmm_post_time_update(vm);
+		vmm_update_guest_tsc(vm);
 
 		/*
 		 * If VM exits for interrupts, then enable interrupts in the
@@ -222,11 +198,13 @@ vmm_run_vm(struct vm *vm)
 struct vm *
 vmm_cur_vm(void)
 {
-	struct proc *p;
 	struct vm *vm;
 
 	if (vmm_inited == FALSE)
 		return NULL;
+
+#if 0
+	struct proc *p;
 
 	if ((p = proc_cur()) == NULL)
 		return NULL;
@@ -234,16 +212,11 @@ vmm_cur_vm(void)
 	proc_lock(p);
 	vm = p->vm;
 	proc_unlock(p);
+#else
+	vm = pcpu[0].vm;
+#endif
 
 	return vm;
-}
-
-void
-vmm_set_vm_irq(struct vm *vm, int irq, int level)
-{
-	KERN_ASSERT(vm != NULL);
-
-	vpic_set_irq(&vm->vpic, irq, level);
 }
 
 void
@@ -266,18 +239,39 @@ vmm_update(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
 
+	struct vdev *vdev = &vm->vdev;
 	uint32_t port;
 
-	for (port = 0; port < MAX_IOPORT; port++) {
-		if (vm->iodev[port].dev == NULL)
-			continue;
+	for (port = MAX_IOPORT - 1; port >= 0; port--) {
 		int i;
+		struct proc *read_proc, *write_proc;
+		bool all_disabled = TRUE;
+
 		for (i = 0; i < 3; i++) {
-			if (vm->iodev[port].read_func[i] == NULL &&
-			    vm->iodev[port].write_func[i] == NULL)
-				continue;
-			vmm_ops->vm_intercept_ioio(vm, port, i, TRUE);
+			spinlock_acquire(&vdev->ioport[port][i].read_lk);
+			spinlock_acquire(&vdev->ioport[port][i].write_lk);
+
+			read_proc = vdev->ioport[port][i].read_proc;
+			write_proc = vdev->ioport[port][i].write_proc;
+
+			if (read_proc != NULL || write_proc != NULL) {
+#ifdef DEBUG_GUEST_IOIO
+				KERN_DEBUG("Enable intercepting I/O port %d.\n",
+					   port);
+#endif
+				vmm_ops->vm_intercept_ioio(vm, port, i, TRUE);
+				all_disabled &= FALSE;
+			}
+
+			spinlock_release(&vdev->ioport[port][i].write_lk);
+			spinlock_release(&vdev->ioport[port][i].read_lk);
 		}
+
+		if (all_disabled == TRUE)
+			vmm_ops->vm_intercept_ioio(vm, port, SZ8, FALSE);
+
+		if (port == 0)
+			break;
 	}
 }
 

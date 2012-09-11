@@ -53,8 +53,11 @@
 #define IRQ_SPURIOUS	7	/* Spurious interrupt */
 #define IRQ_MOUSE	12	/* Mouse interrupt */
 #define IRQ_IDE		14	/* IDE disk controller interrupt */
+
 #define IRQ_ERROR	19	/* */
+
 #define IRQ_IPI_RESCHED	20	/* IPI: force another processor to reschedule */
+#define IRQ_IPI_VINTR	21	/* IPI: an interrupt from the virtual PIC */
 
 #ifndef __ASSEMBLER__
 

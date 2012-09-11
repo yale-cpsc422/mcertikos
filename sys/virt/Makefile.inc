@@ -22,4 +22,3 @@ $(KERN_OBJDIR)/virt/%.o: $(KERN_DIR)/virt/%.S
 
 include $(KERN_DIR)/virt/svm/Makefile.inc
 include $(KERN_DIR)/virt/vmx/Makefile.inc
-include $(KERN_DIR)/virt/dev/Makefile.inc

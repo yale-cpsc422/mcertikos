@@ -7,5 +7,6 @@
 pid_t	spawn(uint32_t cpu_idx, uintptr_t exe_addr);
 void	yield(void);
 pid_t	getpid(void);
+int	getchid(pid_t);
 
 #endif /* !_USER_PROC_H_ */

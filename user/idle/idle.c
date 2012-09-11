@@ -7,7 +7,7 @@ main(int argc, char **argv)
 	printf("idle %d.\n", getpid());
 
 	while (1)
-		asm volatile("pause" ::: "memory");
+		yield();
 
 	return 0;
 }

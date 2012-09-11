@@ -1,5 +1,5 @@
 /*
- * QEMU 8253/8254 interval timer emulation
+ * QEMU 8259 interrupt controller emulation
  *
  * Copyright (c) 2003-2004 Fabrice Bellard
  *
@@ -26,57 +26,59 @@
  * Adapted for CertiKOS by Haozhong Zhang at Yale University.
  */
 
-#ifndef _SYS_VIRT_DEV_PIT_H_
-#define _SYS_VIRT_DEV_PIT_H_
+#ifndef _VDEV_8259_H_
+#define _VDEV_8259_H_
 
-#ifdef _KERN_
+#include <types.h>
 
-#include <sys/spinlock.h>
-#ifdef USE_KERN_TIMER
-#include <sys/timer.h>
-#endif
-#include <sys/types.h>
+/* I/O Addresses of the two 8259A programmable interrupt controllers */
+#define IO_PIC1		0x20	/* Master (IRQs 0-7) */
+#define IO_PIC2		0xA0	/* Slave (IRQs 8-15) */
 
-#include <sys/virt/vmm.h>
+#define IRQ_SLAVE	2	/* IRQ at which slave connects to master */
 
-/* virtualized i8254 */
+#define IO_ELCR1	0x4d0
+#define IO_ELCR2	0x4d1
 
-struct vpit;
+struct vpic;
 
-/* structures of i8254 counter channles */
-struct vpit_channel {
-	spinlock_t	lk;
-	struct vpit	*pit;
+struct i8259 {
+	struct vpic	*vpic;
 
-	int32_t		count; /* XXX: valid value range 0x0 ~ 0x10000 */
-	uint16_t	latched_count;
-	uint8_t		count_latched;
-	uint8_t		status_latched;
-	uint8_t		status;
-	uint8_t		read_state;
-	uint8_t		write_state;
-	uint8_t		write_latch;
-	uint8_t		rw_mode;
-	uint8_t		mode;
-	uint8_t		bcd; /* XXX: not implemented yet  */
-	uint8_t		gate;
-	uint64_t	count_load_time;
+	bool		master;
 
-	uint64_t	last_intr_time;
-	bool		last_intr_time_valid;
+	bool		single_mode;
 
-	bool		enabled;
+	uint8_t		init_state;
+	bool		init4;
+
+	uint8_t		lowest_priority;
+
+	uint8_t		irq_base;
+	uint8_t		last_irr;
+	uint8_t		irr;
+	uint8_t		isr;
+	uint8_t		imr;
+	uint8_t		int_out;
+
+	bool		select_isr;
+	bool		poll;
+	bool		auto_eoi_mode;
+	bool		rotate_on_auto_eoi;
+	bool		special_mask_mode;
+	bool		fully_nested_mode;
+	bool		special_fully_nested_mode;
+
+	uint8_t		elcr;
+	uint8_t		elcr_mask;
+
+	bool		ready;
 };
 
-/* structure of the virtualized i8254 */
-struct vpit {
-	struct vm		*vm;
-	struct vpit_channel	channels[3];
+struct vpic {
+	uint8_t		int_out;
+	struct i8259	master;
+	struct i8259	slave;
 };
 
-void vpit_init(struct vpit *, struct vm *);
-void vpit_update(struct vm *);
-
-#endif /* _KERN_ */
-
-#endif /* !_SYS_VIRT_DEV_PIT_H_ */
+#endif /* !_VDEV_8259_H_ */

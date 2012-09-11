@@ -396,9 +396,9 @@ vmx_set_intercept_io(struct vmx *vmx, uint16_t port, data_sz_t sz, bool enable)
 	KERN_ASSERT(sz == SZ8 || sz == SZ16 || sz == SZ32);
 
 #ifdef DEBUG_GUEST_IOIO
-	KERN_DEBUG("%s intercepting I/O port 0x%x, size %d byte%s\n",
-		   enable ? "Enable" : "Disable",
-		   port, (1 << sz), (sz != SZ8) ? "s" : "");
+	if (enable == TRUE)
+		KERN_DEBUG("Enable intercepting I/O port 0x%x, size %d byte%s\n",
+			   port, (1 << sz), (sz != SZ8) ? "s" : "");
 #endif
 
 	uint32_t *bitmap = (uint32_t *) vmx->io_bitmap;
@@ -697,9 +697,12 @@ vmx_init_vm(struct vm *vm)
 	extern uint8_t vmx_return_from_guest[];
 
 	int i, j;
+	struct vdev *vdev;
 	struct vmx_info *vmx_info;
 	struct vmx *vmx;
 	pageinfo_t *vmcs_pi, *ept_pi, *msr_pi, *io_pi;
+
+	vdev = &vm->vdev;
 
 	vmx_info = &vmx_proc_info[pcpu_cpu_idx(pcpu_cur())];
 	KERN_ASSERT(vmx_info->vmx_enabled == TRUE);
@@ -781,12 +784,23 @@ vmx_init_vm(struct vm *vm)
 	memset(vmx->io_bitmap, 0x0, PAGESIZE * 2);
 	KERN_DEBUG("I/O bitmap A @ 0x%08x, I/O bitmap B @ 0x%08x.\n",
 		   vmx->io_bitmap, (uintptr_t) vmx->io_bitmap + PAGESIZE);
-	for (i = 0; i < MAX_IOPORT; i++)
-		if (vm->iodev[i].dev != NULL)
-			for (j = 0; j < 3; j++)
-				if (vm->iodev[i].read_func[j] != NULL ||
-				    vm->iodev[i].write_func[j] != NULL)
-					vmx_set_intercept_io(vmx, i, j, TRUE);
+	for (i = 0; i < MAX_IOPORT; i++) {
+		for (j = 0; j < 3; j++) {
+			spinlock_acquire(&vdev->ioport[i][j].read_lk);
+			spinlock_acquire(&vdev->ioport[i][j].write_lk);
+
+			struct proc *read_proc, *write_proc;
+
+			read_proc = vdev->ioport[i][j].read_proc;
+			write_proc = vdev->ioport[i][j].write_proc;
+
+			if (read_proc != NULL || write_proc != NULL)
+				vmx_set_intercept_io(vmx, i, j, TRUE);
+
+			spinlock_release(&vdev->ioport[i][j].write_lk);
+			spinlock_release(&vdev->ioport[i][j].read_lk);
+		}
+	}
 
 	/*
 	 * Setup VMCS.
@@ -1052,7 +1066,6 @@ vmx_handle_inout(struct vm *vm)
 
 	struct vmx *vmx = (struct vmx *) vm->cookie;
 
-	int ret;
 	uint32_t data;
 	uint16_t port;
 	uint8_t size, dir;
@@ -1084,26 +1097,12 @@ vmx_handle_inout(struct vm *vm)
 		   EXIT_QUAL_IO_STR(vmx->exit_qualification) ? ", STR" : "");
 #endif
 
-	if (dir == EXIT_QUAL_IO_IN) {
-		ret = vmm_iodev_read_port(vm, port, &data, data_size);
+	data = vmx->g_rax;
 
-		if (ret)
-			physical_ioport_read(port, &data, data_size);
-
-		if (size == EXIT_QUAL_IO_ONE_BYTE)
-			*(uint8_t *) &vmx->g_rax = (uint8_t) data;
-		else if (size == EXIT_QUAL_IO_TWO_BYTE)
-			*(uint16_t *) &vmx->g_rax = (uint16_t) data;
-		else
-			*(uint32_t *) &vmx->g_rax = (uint32_t) data;
-	} else {
-		data = (uint32_t) vmx->g_rax;
-
-		ret = vmm_iodev_write_port(vm, port, &data, data_size);
-
-		if (ret)
-			physical_ioport_write(port, &data, data_size);
-	}
+	if (dir == EXIT_QUAL_IO_IN)
+		vdev_ioport_read(vm, port, data_size, (uint32_t *) &vmx->g_rax);
+	else
+		vdev_ioport_write(vm, port, data_size, data);
 
 	vmx->g_rip += vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
 
@@ -1286,12 +1285,15 @@ vmx_intr_assist(struct vm *vm)
 	KERN_ASSERT(vm != NULL);
 
 	struct vmx *vmx = (struct vmx *) vm->cookie;
-	struct vpic *pic = &vm->vpic;
 	int vector, intr_disable, blocked, pending;
 	uint32_t procbased_ctls;
 
-	/* no pending interrupt */
-	if ((vector = vpic_get_irq(pic)) == -1)
+	if (vdev_get_irq(vm, &vector)) {
+		KERN_WARN("Cannot get IRQ from virtual PIC.\n");
+		return;
+	}
+
+	if (vector == -1)
 		return;
 
 	pending = vmcs_read32(VMCS_EXIT_INTERRUPTION_INFO) &
@@ -1335,7 +1337,14 @@ vmx_intr_assist(struct vm *vm)
 		return;
 	}
 
-	vector = vpic_read_irq(pic);
+	if (vdev_read_irq(vm, &vector)) {
+		KERN_WARN("Cannot read IRQ from virtual");
+		return;
+	}
+
+	if (vector == -1)
+		return;
+
 	vmx_inject_event(VMCS_INTERRUPTION_INFO_HW_INTR, vector, 0, 0);
 	vmx->pending_intr = -1;
 
@@ -1498,11 +1507,14 @@ vmx_handle_extint(struct vm *vm, uint8_t irq)
 	KERN_ASSERT(vm->exit_reason == EXIT_FOR_EXTINT &&
 		    vm->handled == FALSE);
 
-	if (vmm_handle_extintr(vm, irq)) {
-		if (vpic_is_ready(&vm->vpic) == TRUE) {
-			vpic_set_irq(&vm->vpic, irq, 0);
-			vpic_set_irq(&vm->vpic, irq, 1);
-		}
+	/*
+	 * Try to notify the virtual device which occupies the interrupt. If no
+	 * virtual device is registered as the source of the interrupt, raise
+	 * corresponding interrupt line of the virtual PIC.
+	 */
+	if (vdev_notify_sync(vm, irq)) {
+		vdev_raise_irq(vm, irq);
+		vdev_lower_irq(vm, irq);
 	}
 
 	vm->handled = TRUE;

@@ -26,11 +26,10 @@
  * Adapted for CertiKOS by Haozhong Zhang at Yale University.
  */
 
-#include <sys/debug.h>
-#include <sys/types.h>
+#include <debug.h>
+#include <types.h>
 
-#include <sys/virt/vmm.h>
-#include <sys/virt/dev/ps2.h>
+#include "ps2.h"
 
 /* Keyboard Commands */
 #define KBD_CMD_SET_LEDS	0xED	/* Set keyboard leds */
@@ -73,30 +72,30 @@
 
 /* Table to convert from PC scancodes to raw scancodes.  */
 static const unsigned char ps2_raw_keycode[128] = {
-  0, 118,  22,  30,  38,  37,  46,  54,  61,  62,  70,  69,  78,  85, 102,  13,
- 21,  29,  36,  45,  44,  53,  60,  67,  68,  77,  84,  91,  90,  20,  28,  27,
- 35,  43,  52,  51,  59,  66,  75,  76,  82,  14,  18,  93,  26,  34,  33,  42,
- 50,  49,  58,  65,  73,  74,  89, 124,  17,  41,  88,   5,   6,   4,  12,   3,
- 11,   2,  10,   1,   9, 119, 126, 108, 117, 125, 123, 107, 115, 116, 121, 105,
-114, 122, 112, 113, 127,  96,  97, 120,   7,  15,  23,  31,  39,  47,  55,  63,
- 71,  79,  86,  94,   8,  16,  24,  32,  40,  48,  56,  64,  72,  80,  87, 111,
- 19,  25,  57,  81,  83,  92,  95,  98,  99, 100, 101, 103, 104, 106, 109, 110
+	0, 118,  22,  30,  38,  37,  46,  54,  61,  62,  70,  69,  78,  85, 102,  13,
+	21,  29,  36,  45,  44,  53,  60,  67,  68,  77,  84,  91,  90,  20,  28,  27,
+	35,  43,  52,  51,  59,  66,  75,  76,  82,  14,  18,  93,  26,  34,  33,  42,
+	50,  49,  58,  65,  73,  74,  89, 124,  17,  41,  88,   5,   6,   4,  12,   3,
+	11,   2,  10,   1,   9, 119, 126, 108, 117, 125, 123, 107, 115, 116, 121, 105,
+	114, 122, 112, 113, 127,  96,  97, 120,   7,  15,  23,  31,  39,  47,  55,  63,
+	71,  79,  86,  94,   8,  16,  24,  32,  40,  48,  56,  64,  72,  80,  87, 111,
+	19,  25,  57,  81,  83,  92,  95,  98,  99, 100, 101, 103, 104, 106, 109, 110
 };
 static const unsigned char ps2_raw_keycode_set3[128] = {
-  0,   8,  22,  30,  38,  37,  46,  54,  61,  62,  70,  69,  78,  85, 102,  13,
- 21,  29,  36,  45,  44,  53,  60,  67,  68,  77,  84,  91,  90,  17,  28,  27,
- 35,  43,  52,  51,  59,  66,  75,  76,  82,  14,  18,  92,  26,  34,  33,  42,
- 50,  49,  58,  65,  73,  74,  89, 126,  25,  41,  20,   7,  15,  23,  31,  39,
- 47,   2,  63,  71,  79, 118,  95, 108, 117, 125, 132, 107, 115, 116, 124, 105,
-114, 122, 112, 113, 127,  96,  97,  86,  94,  15,  23,  31,  39,  47,  55,  63,
- 71,  79,  86,  94,   8,  16,  24,  32,  40,  48,  56,  64,  72,  80,  87, 111,
- 19,  25,  57,  81,  83,  92,  95,  98,  99, 100, 101, 103, 104, 106, 109, 110
+	0,   8,  22,  30,  38,  37,  46,  54,  61,  62,  70,  69,  78,  85, 102,  13,
+	21,  29,  36,  45,  44,  53,  60,  67,  68,  77,  84,  91,  90,  17,  28,  27,
+	35,  43,  52,  51,  59,  66,  75,  76,  82,  14,  18,  92,  26,  34,  33,  42,
+	50,  49,  58,  65,  73,  74,  89, 126,  25,  41,  20,   7,  15,  23,  31,  39,
+	47,   2,  63,  71,  79, 118,  95, 108, 117, 125, 132, 107, 115, 116, 124, 105,
+	114, 122, 112, 113, 127,  96,  97,  86,  94,  15,  23,  31,  39,  47,  55,  63,
+	71,  79,  86,  94,   8,  16,  24,  32,  40,  48,  56,  64,  72,  80,  87, 111,
+	19,  25,  57,  81,  83,  92,  95,  98,  99, 100, 101, 103, 104, 106, 109, 110
 };
 
 void
 ps2_queue(struct PS2 *ps2, int b)
 {
-	KERN_ASSERT(ps2 != NULL);
+	ASSERT(ps2 != NULL);
 
 	struct PS2_queue *q = &ps2->queue;
 
@@ -117,7 +116,7 @@ ps2_queue(struct PS2 *ps2, int b)
 static void
 ps2_put_keycode(struct PS2_kbd *kbd, int keycode)
 {
-	KERN_ASSERT(kbd != NULL);
+	ASSERT(kbd != NULL);
 
 	/* XXX: add support for scancode set 1 */
 	if (!kbd->translate && keycode < 0xe0 && kbd->scancode_set > 1) {
@@ -136,7 +135,7 @@ ps2_put_keycode(struct PS2_kbd *kbd, int keycode)
 uint32_t
 ps2_read_data(struct PS2 *ps2)
 {
-	KERN_ASSERT(ps2 != NULL);
+	ASSERT(ps2 != NULL);
 
 	struct PS2_queue *q;
 	int val, index;
@@ -166,7 +165,7 @@ ps2_read_data(struct PS2 *ps2)
 static void
 ps2_set_ledstate(struct PS2_kbd *kbd, int ledstate)
 {
-	KERN_ASSERT(kbd != NULL);
+	ASSERT(kbd != NULL);
 
 	kbd->ledstate = ledstate;
 	/* TODO: implement kbd_put_ledstate() */
@@ -176,7 +175,7 @@ ps2_set_ledstate(struct PS2_kbd *kbd, int ledstate)
 static void
 ps2_reset_keyboard(struct PS2_kbd *kbd)
 {
-	KERN_ASSERT(kbd != NULL);
+	ASSERT(kbd != NULL);
 
 	kbd->scan_enabled = 1;
 	kbd->scancode_set = 2;
@@ -186,7 +185,7 @@ ps2_reset_keyboard(struct PS2_kbd *kbd)
 void
 ps2_write_keyboard(struct PS2_kbd *kbd, int val)
 {
-	KERN_ASSERT(kbd != NULL);
+	ASSERT(kbd != NULL);
 
 	switch(kbd->common.write_cmd) {
 	default:
@@ -275,14 +274,14 @@ ps2_write_keyboard(struct PS2_kbd *kbd, int val)
 void
 ps2_keyboard_set_translation(struct PS2_kbd *kbd, int mode)
 {
-	KERN_ASSERT(kbd != NULL);
+	ASSERT(kbd != NULL);
 	kbd->translate = mode;
 }
 
 static void
 ps2_mouse_send_packet(struct PS2_mouse *mouse)
 {
-	KERN_ASSERT(mouse != NULL);
+	ASSERT(mouse != NULL);
 
 	unsigned int b;
 	int dx1, dy1, dz1;
@@ -334,7 +333,7 @@ static void
 ps2_mouse_event(struct PS2_mouse *mouse,
 		int dx, int dy, int dz, int buttons_state)
 {
-	KERN_ASSERT(mouse != NULL);
+	ASSERT(mouse != NULL);
 
 	/* check if deltas are recorded when disabled */
 	if (!(mouse->mouse_status & MOUSE_STATUS_ENABLED))
@@ -368,14 +367,14 @@ ps2_mouse_event(struct PS2_mouse *mouse,
 void
 ps2_mouse_fake_event(struct PS2_mouse *mouse)
 {
-	KERN_ASSERT(mouse != NULL);
+	ASSERT(mouse != NULL);
 	ps2_mouse_event(mouse, 1, 0, 0, 0);
 }
 
 void
 ps2_write_mouse(struct PS2_mouse *mouse, int val)
 {
-	KERN_ASSERT(mouse != NULL);
+	ASSERT(mouse != NULL);
 
 	switch(mouse->common.write_cmd) {
 	default:
@@ -500,7 +499,7 @@ ps2_write_mouse(struct PS2_mouse *mouse, int val)
 static void
 ps2_common_reset(struct PS2 *ps2)
 {
-	KERN_ASSERT(ps2 != NULL);
+	ASSERT(ps2 != NULL);
 
 	struct PS2_queue *q;
 	ps2->write_cmd = -1;
@@ -514,7 +513,7 @@ ps2_common_reset(struct PS2 *ps2)
 static void
 ps2_kbd_reset(struct PS2_kbd *kbd)
 {
-	KERN_ASSERT(kbd != NULL);
+	ASSERT(kbd != NULL);
 
 	ps2_common_reset(&kbd->common);
 	kbd->scan_enabled = 0;
@@ -525,7 +524,7 @@ ps2_kbd_reset(struct PS2_kbd *kbd)
 static void
 ps2_mouse_reset(struct PS2_mouse *mouse)
 {
-	KERN_ASSERT(mouse != NULL);
+	ASSERT(mouse != NULL);
 
 	ps2_common_reset(&mouse->common);
 	mouse->mouse_status = 0;
@@ -544,7 +543,7 @@ void
 ps2_kbd_init(struct PS2_kbd *kbd,
 	     void (*update_irq)(void *, int), void *update_arg)
 {
-	KERN_ASSERT(kbd != NULL && update_irq != NULL && update_arg != NULL);
+	ASSERT(kbd != NULL && update_irq != NULL && update_arg != NULL);
 
 	kbd->common.update_irq = update_irq;
 	kbd->common.update_arg = update_arg;
@@ -557,7 +556,7 @@ void
 ps2_mouse_init(struct PS2_mouse *mouse,
 	       void (*update_irq)(void *, int), void *update_arg)
 {
-	KERN_ASSERT(mouse != NULL && update_irq != NULL && update_arg != NULL);
+	ASSERT(mouse != NULL && update_irq != NULL && update_arg != NULL);
 
 	mouse->common.update_irq = update_irq;
 	mouse->common.update_arg = update_arg;

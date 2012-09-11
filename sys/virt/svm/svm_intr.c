@@ -3,7 +3,7 @@
 #include <sys/types.h>
 
 #include <sys/virt/vmm.h>
-#include <sys/virt/dev/pic.h>
+#include <sys/virt/vmm_dev.h>
 
 #include "svm.h"
 #include "svm_handle.h"
@@ -55,11 +55,14 @@ svm_intr_assist(struct vm *vm)
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_control_area *ctrl = &vmcb->control;
 
-	struct vpic *pic = &vm->vpic;
 	int intr_vec;
 
-	/* no interrupt pending */
-	if ((intr_vec = vpic_get_irq(pic)) == -1)
+	if (vdev_get_irq(vm, &intr_vec)) {
+		KERN_WARN("Cannot get IRQ from virtual PIC.\n");
+		return;
+	}
+
+	if (intr_vec == -1)
 		return;
 
 	if (ctrl->event_inj & SVM_EVTINJ_VALID ||
@@ -71,7 +74,14 @@ svm_intr_assist(struct vm *vm)
 		return;
 	}
 
-	intr_vec = vpic_read_irq(pic);
+	if (vdev_read_irq(vm, &intr_vec)) {
+		KERN_WARN("Cannot read IRQ from virtual PIC.\n");
+		return;
+	}
+
+	if (intr_vec == -1)
+		return;
+
 	svm_inject_event(vmcb, SVM_EVTINJ_TYPE_INTR, intr_vec, FALSE, 0);
 	svm->pending_vintr = -1;
 	set_intercept(vmcb, INTERCEPT_VINTR, FALSE);

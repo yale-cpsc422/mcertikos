@@ -7,7 +7,6 @@
 
 #include <sys/virt/vmm.h>
 #include <sys/virt/vmm_dev.h>
-#include <sys/virt/dev/pic.h>
 
 #include <machine/pmap.h>
 
@@ -185,15 +184,14 @@ svm_guest_intr_handler(struct vm *vm, uint8_t irq)
 		   irq, (save->rflags & FL_IF), (read_eflags() & FL_IF));
 #endif
 
-	if (vmm_handle_extintr(vm, irq)) {
-		/*
-		 * If there is no handler for this interrupt, then inject the
-		 * interrupt to the guest.
-		 */
-		if (vpic_is_ready(&vm->vpic) == TRUE) {
-			vpic_set_irq(&vm->vpic, irq, 0);
-			vpic_set_irq(&vm->vpic, irq, 1);
-		}
+	/*
+	 * Try to notify the virtual device which occupies the interrupt. If no
+	 * virtual device is registered as the source of the interrupt, raise
+	 * corresponding interrupt line of the virtual PIC.
+	 */
+	if (vdev_notify_sync(vm, irq)) {
+		vdev_raise_irq(vm, irq);
+		vdev_lower_irq(vm, irq);
 	}
 
 	vm->handled = TRUE;
@@ -235,14 +233,6 @@ svm_handle_exception(struct vm *vm)
 		return FALSE;
 	}
 
-	return TRUE;
-}
-
-bool
-svm_handle_intr(struct vm *vm)
-{
-	KERN_ASSERT(vm != NULL);
-	/* Interrupts should be already handled before. */
 	return TRUE;
 }
 
@@ -297,8 +287,6 @@ svm_handle_ioio(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
 
-	int ret;
-
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_control_area *ctrl = &vmcb->control;
@@ -308,76 +296,24 @@ svm_handle_ioio(struct vm *vm)
 
 	uint32_t port = (exitinfo1 & SVM_EXITINFO1_PORT_MASK) >>
 		SVM_EXITINFO1_PORT_SHIFT;
-
-	int sz32 = exitinfo1 & SVM_EXITINFO1_SZ32;
-	int sz16 = exitinfo1 & SVM_EXITINFO1_SZ16;
-	int sz8 = exitinfo1 & SVM_EXITINFO1_SZ8;
-
+	data_sz_t width =
+		(exitinfo1 & SVM_EXITINFO1_SZ8) ? SZ8 :
+		(exitinfo1 & SVM_EXITINFO1_SZ16) ? SZ16 : SZ32;
 	bool type = exitinfo1 & SVM_EXITINFO1_TYPE_MASK;
-
 	uint32_t data = (uint32_t) save->rax;
-	data_sz_t size = SZ8; /* set the default data size to 1 byte */
-
-#ifdef DEBUG_GUEST_IOIO
-	dprintf("(port=%x, ", port);
-#endif
-
-	if (sz32) {
-#ifdef DEBUG_GUEST_IOIO
-		dprintf("4 bytes, ");
-#endif
-		data = (uint32_t) data;
-		size = SZ32;
-	} else if (sz16) {
-#ifdef DEBUG_GUEST_IOIO
-		dprintf("2 bytes, ");
-#endif
-		data = (uint16_t) data;
-		size = SZ16;
-	} else if (sz8) {
-#ifdef DEBUG_GUEST_IOIO
-		dprintf("1 byte, ");
-#endif
-		data = (uint8_t) data;
-		size = SZ8;
-	} else
-		KERN_PANIC("Invalid data length.\n");
 
 	if (type & SVM_EXITINFO1_TYPE_IN) {
 #ifdef DEBUG_GUEST_IOIO
-		dprintf("in).\n");
+		dprintf(" read port %d, width %d bits.\n",
+			port, 8 * (1 << width));
 #endif
-		ret = vmm_iodev_read_port(vm, port, &data, size);
-
-		if (ret) {
-#ifdef DEBUG_GUEST_IOIO
-			KERN_DEBUG("Passthrough\n");
-#endif
-			physical_ioport_read(port, &data, size);
-		}
+		vdev_ioport_read(vm, port, width, (uint32_t *) &save->rax);
 	} else {
 #ifdef DEBUG_GUEST_IOIO
-		dprintf("out).\n");
+		dprintf(" write port %d, width %d bits, data 0x%x.\n",
+			port, 8 * (1 << width), data);
 #endif
-		ret = vmm_iodev_write_port(vm, port, &data, size);
-
-		if (ret) {
-#ifdef DEBUG_GUEST_IOIO
-			KERN_DEBUG("Passthrough\n");
-#endif
-			physical_ioport_write(port, &data, size);
-		}
-	}
-
-	if (type & SVM_EXITINFO1_TYPE_IN) {
-		if (sz32)
-			*(uint32_t *) &save->rax = (uint32_t) data;
-		else if (sz16)
-			*(uint16_t *) &save->rax = (uint16_t) data;
-		else if (sz8)
-			*(uint8_t *) &save->rax = (uint8_t) data;
-		else
-			KERN_PANIC("Invalid data length.\n");
+		vdev_ioport_write(vm, port, width, data);
 	}
 
 	save->rip = ctrl->exit_info_2;

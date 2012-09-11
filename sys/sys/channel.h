@@ -26,13 +26,15 @@ typedef enum {
 #define CHANNEL_STAT_P1_FREE	0x40U	/* freed by the first process */
 #define CHANNEL_STAT_P2_FREE	0x80U	/* freed by the second process */
 
+#define CHANNEL_BUFFER_SIZE	1024
+
 struct channel {
 	spinlock_t	lk;
 
 	struct proc	*p1, *p2;
 	channel_type	type;
 	uint8_t		state;
-	uint8_t		buf[1024];
+	uint8_t		buf[CHANNEL_BUFFER_SIZE];
 	size_t		size;
 };
 

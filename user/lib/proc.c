@@ -21,3 +21,14 @@ getpid(void)
 {
 	return sys_getpid();
 }
+
+gcc_inline int
+getchid(pid_t pid)
+{
+	int chid;
+
+	if (sys_getchid(pid, &chid))
+		return -1;
+	else
+		return chid;
+}

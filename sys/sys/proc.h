@@ -196,9 +196,10 @@ void proc_save(struct proc *p, tf_t *tf);
  * is trying to send the message, the sending process will be blocked util the
  * channel is idle.
  *
- * @param ch   the channel through which the message will be sent
- * @param msg  the message to be sent
- * @param size the size of the message
+ * @param ch     the channel through which the message will be sent
+ * @oaram sender which process is sending the message
+ * @param msg    the message to be sent
+ * @param size   the size of the message
  *
  * @return 0 if the sending succeeds; otherwise,
  *  return E_CHANNEL_BUSY, if there's pending messages in the channel;
@@ -207,16 +208,21 @@ void proc_save(struct proc *p, tf_t *tf);
  *  return E_CHANNEL_ILL_SENDER, if the sending process is not allowed to send
  *         through the channel.
  */
-int proc_send_msg(struct channel *ch, void *msg, size_t size);
+int proc_send_msg(struct channel *ch,
+		  struct proc *sender, void *msg, size_t size);
 
 /*
- * Receive a message through a channel. If the channel is idle when
- * proc_recv_msg() is trying to receive the message, the receiving process will
- * be blocked until the channel is busy.
+ * Receive a message through a channel. When parameter block is TRUE, the
+ * process will be blocked until a message is received; otherwise, it returns
+ * immediately even if no message is received.
  *
- * @param ch   the channel from which the message will be received
- * @param msg  where the received message will be stored
- * @param size where the size of the received message will be stored
+ * @param ch       the channel from which the message will be received
+ * @param receiver which process is receiving the message
+ * @param msg      where the received message will be stored
+ * @param size     where the size of the received message will be stored
+ * @param block    if TRUE, the process will be blocked until getting the
+ *                 message; if FALSE, the process will immediately return even
+ *                 if no message is received.
  *
  * @return 0 if the receiving succeeds; otherwise,
  *  return E_CHANNEL_IDLE, if there's no message in the channel;
@@ -224,7 +230,8 @@ int proc_send_msg(struct channel *ch, void *msg, size_t size);
  *  return E_CHANNEL_ILL_RECEIVER, if the receiving process is not allowed to
  *         receive from the channel.
  */
-int proc_recv_msg(struct channel *ch, void *msg, size_t *size);
+int proc_recv_msg(struct channel *ch,
+		  struct proc *receiver, void *msg, size_t *size, bool block);
 
 #endif /* _KERN_ */
 

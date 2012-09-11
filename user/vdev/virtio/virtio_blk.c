@@ -1,36 +1,29 @@
-#include <sys/debug.h>
-#include <sys/stdarg.h>
-#include <sys/string.h>
-#include <sys/types.h>
-#include <sys/x86.h>
+#include <debug.h>
+#include <string.h>
+#include <syscall.h>
+#include <types.h>
+#include <x86.h>
 
-#include <sys/virt/vmm.h>
-#include <sys/virt/vmm_dev.h>
-#include <sys/virt/dev/pci.h>
-#include <sys/virt/dev/virtio.h>
-#include <sys/virt/dev/virtio_blk.h>
-
-#include <dev/ahci.h>
-#include <dev/pci.h>
-#include <dev/tsc.h>
-
-#include <machine/trap.h>
+#include "pci.h"
+#include "virtio.h"
+#include "virtio_blk.h"
 
 #ifdef DEBUG_VIRTIO_BLK
 
-#define virtio_blk_debug(fmt...)		\
-	{					\
-		KERN_DEBUG("VIRTIO-BLK: ");	\
-		dprintf(fmt);			\
-	}
+#define virtio_blk_debug(fmt, ...)			\
+	do {						\
+		DEBUG("VIOBLK: "fmt, ##__VA_ARGS__);	\
+	} while (0)
 
 #else
 
 #define virtio_blk_debug(fmt...)		\
-	{					\
-	}
+	do {					\
+	} while (0)
 
 #endif
+
+static uint8_t buf[1024];
 
 static uint16_t unsupported_command =
 	0xf880 /* reserved bits */ | PCI_COMMAND_MEM_ENABLE |
@@ -41,7 +34,7 @@ static uint16_t unsupported_command =
 static void
 virtio_blk_perform_pci_command(struct virtio_blk *blk)
 {
-	KERN_ASSERT(blk != NULL);
+	ASSERT(blk != NULL);
 
 	uint16_t command = blk->common_header.pci_conf.header.command;
 
@@ -67,7 +60,7 @@ virtio_blk_perform_pci_command(struct virtio_blk *blk)
 static uint32_t
 virtio_blk_pci_conf_read(void *opaque, uint32_t addr, data_sz_t size)
 {
-	KERN_ASSERT(opaque != NULL);
+	ASSERT(opaque != NULL);
 
 	struct virtio_device *dev;
 	int len;
@@ -109,7 +102,7 @@ static void
 virtio_blk_pci_conf_write(void *opaque,
 			  uint32_t addr, uint32_t val, data_sz_t size)
 {
-	KERN_ASSERT(opaque != NULL);
+	ASSERT(opaque != NULL);
 
 	struct virtio_device *dev;
 	int len;
@@ -171,7 +164,7 @@ virtio_blk_pci_conf_write(void *opaque,
 static void
 virtio_blk_conf_readb(struct vm *vm, void *dev, uint32_t port, void *data)
 {
-	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
+	ASSERT(vm != NULL && dev != NULL && data != NULL);
 
 	uint32_t iobase;
 	uint8_t *conf;
@@ -179,8 +172,8 @@ virtio_blk_conf_readb(struct vm *vm, void *dev, uint32_t port, void *data)
 
 	blk = (struct virtio_blk *) dev;
 	iobase = blk->common_header.iobase + sizeof(struct virtio_header);
-	KERN_ASSERT(iobase <= port &&
-		    port < iobase + sizeof(struct virtio_blk_config));
+	ASSERT(iobase <= port &&
+	       port < iobase + sizeof(struct virtio_blk_config));
 	conf = (uint8_t *) &blk->blk_header;
 
 	*(uint8_t *) data = conf[port-iobase];
@@ -194,7 +187,7 @@ virtio_blk_conf_readb(struct vm *vm, void *dev, uint32_t port, void *data)
 static void
 virtio_blk_conf_readw(struct vm *vm, void *dev, uint32_t port, void *data)
 {
-	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
+	ASSERT(vm != NULL && dev != NULL && data != NULL);
 
 	uint32_t iobase;
 	uint8_t *conf;
@@ -202,8 +195,8 @@ virtio_blk_conf_readw(struct vm *vm, void *dev, uint32_t port, void *data)
 
 	blk = (struct virtio_blk *) dev;
 	iobase = blk->common_header.iobase + sizeof(struct virtio_header);
-	KERN_ASSERT(iobase <= port &&
-		    port < iobase + sizeof(struct virtio_blk_config) - 1);
+	ASSERT(iobase <= port &&
+	       port < iobase + sizeof(struct virtio_blk_config) - 1);
 	conf = (uint8_t *) &blk->blk_header;
 
 	*(uint16_t *) data =
@@ -218,7 +211,7 @@ virtio_blk_conf_readw(struct vm *vm, void *dev, uint32_t port, void *data)
 static void
 virtio_blk_conf_readl(struct vm *vm, void *dev, uint32_t port, void *data)
 {
-	KERN_ASSERT(vm != NULL && dev != NULL && data != NULL);
+	ASSERT(vm != NULL && dev != NULL && data != NULL);
 
 	uint32_t iobase;
 	uint8_t *conf;
@@ -226,8 +219,8 @@ virtio_blk_conf_readl(struct vm *vm, void *dev, uint32_t port, void *data)
 
 	blk = (struct virtio_blk *) dev;
 	iobase = blk->common_header.iobase + sizeof(struct virtio_header);
-	KERN_ASSERT(iobase <= port &&
-		    port < iobase + sizeof(struct virtio_blk_config) - 3);
+	ASSERT(iobase <= port &&
+	       port < iobase + sizeof(struct virtio_blk_config) - 3);
 	conf = (uint8_t *) &blk->blk_header;
 
 	*(uint32_t *) data =
@@ -252,7 +245,7 @@ unregister_register_read(struct virtio_device *dev,
 static void
 virtio_blk_update_ioport_handlers(struct virtio_device *dev)
 {
-	KERN_ASSERT(dev != NULL);
+	ASSERT(dev != NULL);
 
 	uint16_t base, end, port;
 
@@ -280,7 +273,7 @@ virtio_blk_vrings_amount(struct virtio_device *dev)
 static struct vring *
 virtio_blk_get_vring(struct virtio_device *dev, uint8_t idx)
 {
-	KERN_ASSERT(dev != NULL);
+	ASSERT(dev != NULL);
 
 	if (idx != 0)
 		return NULL;
@@ -291,7 +284,7 @@ virtio_blk_get_vring(struct virtio_device *dev, uint8_t idx)
 static int
 virtio_blk_read_disk(uint64_t lba, uint64_t nsectors, void *buf)
 {
-	KERN_ASSERT(buf != NULL);
+	ASSERT(buf != NULL);
 
 	int ret = ahci_disk_read(0, lba, nsectors, buf);
 
@@ -305,7 +298,7 @@ virtio_blk_read_disk(uint64_t lba, uint64_t nsectors, void *buf)
 static int
 virtio_blk_write_disk(uint64_t lba, uint64_t nsectors, void *buf)
 {
-	KERN_ASSERT(buf != NULL);
+	ASSERT(buf != NULL);
 
 	int ret = ahci_disk_write(0, lba, nsectors, buf);
 
@@ -319,7 +312,7 @@ virtio_blk_write_disk(uint64_t lba, uint64_t nsectors, void *buf)
 static void
 virtio_blk_get_id(void *buf, uint32_t len)
 {
-	KERN_ASSERT(buf != NULL);
+	ASSERT(buf != NULL);
 
 	char *p;
 	uint32_t size;
@@ -340,7 +333,7 @@ static void
 virtio_blk_dump_req(struct vm *vm, struct virtio_blk *blk, uint16_t desc_id)
 {
 #ifdef DEBUG_VIRTIO_BLK
-	KERN_ASSERT(vm != NULL && blk != NULL);
+	ASSERT(vm != NULL && blk != NULL);
 
 	uint16_t cur;
 	struct vring_desc *desc;
@@ -398,7 +391,7 @@ static int
 virtio_blk_handle_req(struct virtio_device *dev,
 		      uint8_t vq_idx, uint16_t desc_idx)
 {
-	KERN_ASSERT(dev != NULL);
+	ASSERT(dev != NULL);
 
 	struct vm *vm;
 	struct virtio_blk *blk;
@@ -421,17 +414,17 @@ virtio_blk_handle_req(struct virtio_device *dev,
 
 	/* 1st ring descriptor: request type */
 	req_desc = vring_get_desc(vm, &blk->vring, desc_idx);
-	KERN_ASSERT(!(req_desc->flags & VRING_DESC_F_WRITE));
-	KERN_ASSERT(req_desc->flags & VRING_DESC_F_NEXT);
+	ASSERT(!(req_desc->flags & VRING_DESC_F_WRITE));
+	ASSERT(req_desc->flags & VRING_DESC_F_NEXT);
 	req = (struct virtio_blk_outhdr *)
 		vmm_translate_gp2hp(vm, req_desc->addr);
 
 	/* 2nd ring descriptor: buffer address, buffer length */
 	buf_desc = vring_get_desc(vm, &blk->vring, req_desc->next);
-	KERN_ASSERT(buf_desc->flags & VRING_DESC_F_NEXT);
+	ASSERT(buf_desc->flags & VRING_DESC_F_NEXT);
 	buf = (uint8_t *) vmm_translate_gp2hp(vm, buf_desc->addr);
 	if (req->type == VIRTIO_BLK_T_IN || req->type == VIRTIO_BLK_T_OUT)
-		KERN_ASSERT(buf_desc->len >= ATA_SECTOR_SIZE);
+		ASSERT(buf_desc->len >= ATA_SECTOR_SIZE);
 	nsectors = buf_desc->len / ATA_SECTOR_SIZE;
 
 	/* 3rd ring descriptor: status address */
@@ -496,14 +489,15 @@ static struct virtio_device_ops virtio_blk_ops =
 		.handle_req		= virtio_blk_handle_req,
 	};
 
-int
-virtio_blk_init(struct virtio_blk *blk, struct vm *vm)
+static int
+virtio_blk_init(struct virtio_blk *blk, struct vpci_host *vpci_host)
 {
-	KERN_ASSERT(blk != NULL && vm != NULL);
+	ASSERT(blk != NULL);
+	ASSERT(vpci_host != NULL);
 
 	struct virtio_device *dev = &blk->common_header;
 
-	if (virtio_device_init(dev, vm, &virtio_blk_ops)) {
+	if (virtio_device_init(dev, vm, &virtio_blk_ops, vpci_host)) {
 		virtio_blk_debug("failed to initialize virtio device.\n");
 		return 1;
 	}
@@ -529,6 +523,130 @@ virtio_blk_init(struct virtio_blk *blk, struct vm *vm)
 	blk->vring.queue_size = VIRTIO_BLK_QUEUE_SIZE;
 
 	smp_wmb();
+
+	return 0;
+}
+
+static gcc_inline void
+virtio_blk_handle_ioport(struct virtio_blk *blk, int channel_id,
+			  uint16_t port, data_sz_t width, void *data, int write)
+{
+	struct virtio_device *device;
+	uint16_t io_end;
+
+	struct ioport_read_ret *ret;
+
+	device = &blk->common_header;
+	io_end = device->iobase +
+		sizeof(struct virtio_header) + sizeof(struct virtio_header);
+
+	if (write)
+		return;
+
+	ret = (struct ioport_read_ret *) buf;
+
+	switch (width) {
+	case SZ8:
+		virtio_blk_conf_readb(blk, port, &ret->data);
+		break;
+	case SZ16:
+		if (port < end - 1)
+			virtio_blk_conf_readw(blk, port, &ret->data);
+		break;
+	case SZ32:
+		if (port < end - 3)
+			virtio_blk_conf_readl(blk, port, &ret->data);
+		break;
+	default:
+		break;
+	}
+
+	ret->magic = MAGIC_IOPORT_READ_RET;
+	sys_send(parent_chid, ret, sizeof(struct ioport_read_ret));
+}
+
+static void
+_virtio_blk_handle_ioport(struct virtio_blk *blk, int channel_id,
+			  uint16_t port, data_sz_t width, void *data, int write)
+{
+	ASSERT(blk != NULL);
+	ASSERT(blk->common_header.iobase <= port &&
+	       port < blk->common_header.iobase + blk->common_header.iosize);
+
+	struct virtio_device *device;
+	uint16_t iobase, blkbase;
+
+	device = &blk->common_header;
+	iobase = device->iobase;
+	blkbase = iobase + sizeof(struct virtio_header);
+
+	if (iobase <= port && port < blkbase)
+		virtio_handle_ioprt
+			(device, channel_id, port, width, data, write);
+	else if (blkbase <= port &&
+		 port < blkbase + sizeof(struct virtio_blk_config))
+		virtio_blk_handle_ioport
+			(blk, channel_id, port, width, data, write);
+}
+
+int
+main(int argc, char **argv)
+{
+	struct vpci_host vpci_host;
+	struct virtio_blk blk;
+	struct virtio_device *device;
+
+	int parent_chid;
+
+	size_t size;
+
+	uint16_t port;
+
+	struct ioport_rw_req *rw_req;
+	struct ioport_read_ret *ret;
+
+	vpci_init(&vpci_host);
+	virtio_blk_init(&blk, &vpci_host);
+
+	device = &blk.common_header;
+
+	parent_chid = sys_getpchid();
+
+	while (1) {
+		if (sys_recv(parent_chid, buf, &size))
+			continue;
+
+		switch (((uint32_t *) buf)[0]) {
+		case MAGIC_IOPORT_RW_REQ:
+			rw_req = (struct ioport_rw_req *) buf;
+			port = rw_req->port;
+
+			if (size != sizeof(struct ioport_rw_req))
+				continue;
+
+			if (rw_req->width != SZ8 &&
+			    rw_req->width != SZ16 &&
+			    rw_req->width != SZ32)
+				continue;
+
+			if (PCI_CONFIG_ADDR <= port && port < PCI_CONFIG_DATA+4)
+				vpci_handle_ioport
+					(&vpci_host, parent_chid,
+					 port, rw_req->width,
+					 &rw_req->data, rw_req->write);
+			else if (device->iobase <= port &&
+				 port < device->iobase + device->iosize)
+				_virtio_blk_handle_ioport
+					(&vpci_host, parent_chid,
+					 port, rw_req->width,
+					 &rw_req->data, rw_req->write);
+
+			continue;
+
+		default:
+			continue;
+		}
+	}
 
 	return 0;
 }

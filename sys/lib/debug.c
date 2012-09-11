@@ -1,5 +1,6 @@
 #include <sys/debug.h>
 #include <sys/intr.h>
+#include <sys/pcpu.h>
 #include <sys/spinlock.h>
 #include <sys/stdarg.h>
 #include <sys/types.h>
@@ -90,7 +91,7 @@ debug_panic(const char *file, int line, const char *fmt,...)
 	for (i = 0; i < DEBUG_TRACEFRAMES && eips[i] != 0; i++)
 		cprintf("\tfrom 0x%08x\n", eips[i]);
 
-	cprintf("Kernel Panic!!!\n");
+	cprintf("Kernel Panic on CPU%d !!!\n", pcpu_cpu_idx(pcpu_cur()));
 
 	intr_local_disable();
 	spinlock_release(&debug_lk);

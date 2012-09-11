@@ -30,7 +30,7 @@ spinlock_acquire(spinlock_t *lk)
 void
 spinlock_release(spinlock_t *lk)
 {
-	if (spinlock_holding(lk))
+	if (spinlock_holding(lk) == FALSE)
 		return;
 
 	xchg(lk, 0);

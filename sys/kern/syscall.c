@@ -10,6 +10,7 @@
 #include <sys/x86.h>
 
 #include <sys/virt/vmm.h>
+#include <sys/virt/vmm_dev.h>
 
 #include <machine/pmap.h>
 
@@ -17,36 +18,55 @@
 
 static char *syscall_name[256] =
 	{
-		[SYS_puts]	= "sys_puts",
-		[SYS_getc]	= "sys_getc",
-		[SYS_spawn]	= "sys_spawn",
-		[SYS_yield]	= "sys_yield",
-		[SYS_getpid]	= "sys_getpid",
-		[SYS_send]	= "sys_send",
-		[SYS_recv]	= "sys_recv",
-		[SYS_ncpus]	= "sys_ncpus",
-		[SYS_getpchid]	= "sys_getpchid",
-		[SYS_allocvm]	= "sys_allocvm",
-		[SYS_execvm]	= "sys_execvm",
-		[SYS_test]	= "sys_test",
+		[SYS_puts]		= "sys_puts",
+		[SYS_getc]		= "sys_getc",
+		[SYS_spawn]		= "sys_spawn",
+		[SYS_yield]		= "sys_yield",
+		[SYS_getpid]		= "sys_getpid",
+		[SYS_send]		= "sys_send",
+		[SYS_recv]		= "sys_recv",
+		[SYS_recv_nonblock]	= "sys_recv_nonblock",
+		[SYS_ncpus]		= "sys_ncpus",
+		[SYS_getpchid]		= "sys_getpchid",
+		[SYS_allocvm]		= "sys_allocvm",
+		[SYS_execvm]		= "sys_execvm",
+		[SYS_test]		= "sys_test",
+		[SYS_register_ioport]	= "sys_register_ioport",
+		[SYS_unregister_ioport]	= "sys_unregister_ioport",
+		[SYS_register_irq]	= "sys_register_irq",
+		[SYS_unregister_irq]	= "sys_unregister_irq",
+		[SYS_register_pic]	= "sys_register_pic",
+		[SYS_unregister_pic]	= "sys_unregister_pic",
+		[SYS_register_mmio]	= "sys_register_mmio",
+		[SYS_unregister_mmio]	= "sys_unregister_mmio",
+		[SYS_read_ioport]	= "sys_read_ioport",
+		[SYS_write_ioport]	= "sys_write_ioport",
+		[SYS_raise_irq]		= "sys_raise_irq",
+		[SYS_trigger_irq]	= "sys_trigger_irq",
+		[SYS_lower_irq]		= "sys_lower_irq",
+		[SYS_notify_irq]	= "sys_notify_irq",
+		[SYS_read_guest_tsc]	= "sys_read_guest_tsc",
+		[SYS_guest_tsc_freq]	= "sys_guest_tsc_freq",
+		[SYS_guest_mem_size]	= "sys_guest_mem_size",
+		[SYS_getchid]		= "sys_getchid",
 	};
 
-#define SYSCALL_DEBUG(fmt, args...)			\
+#define SYSCALL_DEBUG(fmt, ...)				\
 	do {						\
 		KERN_DEBUG("CPU%d:PID%d: "fmt,		\
 			   pcpu_cpu_idx(pcpu_cur()),	\
 			   proc_cur()->pid,		\
-			   args);			\
+			   ##__VA_ARGS__);		\
 	} while (0)
 
-#define NR_DEBUG(nr, fmt, args...)					\
+#define NR_DEBUG(nr, fmt, ...)						\
 	do {								\
 		KERN_DEBUG("CPU%d:PID%d:%s(nr %d): "fmt,		\
 			   pcpu_cpu_idx(pcpu_cur()),			\
 			   proc_cur()->pid,				\
 			   (0 <= nr && nr < 256) ? syscall_name[nr] : "null", \
 			   nr,						\
-			   args);					\
+			   ##__VA_ARGS__);				\
 	} while (0)
 
 #else
@@ -174,7 +194,7 @@ sys_puts(char *buf)
 		return E_MEM_FAIL;
 
 	((char *) (c->sys_buf))[PAGE_SIZE - 1] = '\0';
-	cprintf("%s", (char *) c->sys_buf);
+	KERN_INFO("%s", (char *) c->sys_buf);
 
 	return E_SUCC;
 }
@@ -331,7 +351,7 @@ sys_send(int channel_id, void *msg, size_t size)
 	if (msg == NULL || size == 0)
 		return E_EMPTY_MSG;
 
-	errno = proc_send_msg(ch, msg, size);
+	errno = proc_send_msg(ch, proc_cur(), msg, size);
 
 	switch (errno) {
 	case E_CHANNEL_MSG_TOO_LARGE:
@@ -345,8 +365,8 @@ sys_send(int channel_id, void *msg, size_t size)
 	}
 }
 
-static int
-sys_recv(int channel_id, void *msg, size_t *size)
+static gcc_inline int
+sys_recv_helper(int channel_id, void *msg, size_t *size, bool blocking)
 {
 	int errno;
 	struct channel *ch;
@@ -359,7 +379,7 @@ sys_recv(int channel_id, void *msg, size_t *size)
 	if (msg == NULL || size == NULL)
 		return E_EMPTY_MSG;
 
-	errno = proc_recv_msg(ch, msg, size);
+	errno = proc_recv_msg(ch, proc_cur(), msg, size, blocking);
 
 	switch (errno) {
 	case E_CHANNEL_ILL_RECEIVER:
@@ -369,6 +389,315 @@ sys_recv(int channel_id, void *msg, size_t *size)
 	default:
 		return E_SUCC;
 	}
+}
+
+static int
+sys_recv(int channel_id, void *msg, size_t *size)
+{
+	return sys_recv_helper(channel_id, msg, size, TRUE);
+}
+
+static int
+sys_recv_nonblock(int channel_id, void *msg, size_t *size)
+{
+	return sys_recv_helper(channel_id, msg, size, FALSE);
+}
+
+int
+sys_register_ioport(uint16_t port, data_sz_t width, int write)
+{
+	struct vm *vm = vmm_cur_vm();
+
+	if (vm == NULL)
+		return E_NO_VM;
+
+	if (port >= MAX_IOPORT)
+		return E_INVAL_IOPORT;
+
+	if (width != SZ8 && width != SZ16 && width != SZ32)
+		return E_INVAL_WIDTH;
+
+	if (vdev_register_ioport(vm, proc_cur(),
+				 port, width, (write != 0) ? TRUE : FALSE))
+		return E_REG_FAIL;
+
+	return E_SUCC;
+}
+
+int
+sys_unregister_ioport(uint16_t port, data_sz_t width, int write)
+{
+	struct vm *vm = vmm_cur_vm();
+
+	if (vm == NULL)
+		return E_NO_VM;
+
+	if (port >= MAX_IOPORT)
+		return E_INVAL_IOPORT;
+
+	if (width != SZ8 && width != SZ16 && width != SZ32)
+		return E_INVAL_WIDTH;
+
+	if (vdev_unregister_ioport(vm, proc_cur(),
+				   port, width, (write != 0) ? TRUE : FALSE))
+		return E_UNREG_FAIL;
+
+	return E_SUCC;
+}
+
+int
+sys_register_irq(uint8_t irq)
+{
+	struct vm *vm = vmm_cur_vm();
+
+	if (vm == NULL)
+		return E_NO_VM;
+
+	if (irq >= MAX_IRQ)
+		return E_INVAL_IRQ;
+
+	if (vdev_register_irq(vm, proc_cur(), irq))
+		return E_REG_FAIL;
+
+	return E_SUCC;
+}
+
+int
+sys_unregister_irq(uint8_t irq)
+{
+	struct vm *vm = vmm_cur_vm();
+
+	if (vm == NULL)
+		return E_NO_VM;
+
+	if (irq >= MAX_IRQ)
+		return E_INVAL_IRQ;
+
+	if (vdev_unregister_irq(vm, proc_cur(), irq))
+		return E_UNREG_FAIL;
+
+	return E_SUCC;
+}
+
+int
+sys_register_pic(void)
+{
+	struct vm *vm = vmm_cur_vm();
+
+	if (vm == NULL)
+		return E_NO_VM;
+
+	if (vdev_register_pic(vm, proc_cur()))
+		return E_REG_FAIL;
+
+	return E_SUCC;
+}
+
+int
+sys_unregister_pic(void)
+{
+	struct vm *vm = vmm_cur_vm();
+
+	if (vm == NULL)
+		return E_NO_VM;
+
+	if (vdev_unregister_pic(vm, proc_cur()))
+		return E_UNREG_FAIL;
+
+	return E_SUCC;
+}
+
+int
+sys_register_mmio(uintptr_t gpa, uintptr_t hla, size_t size)
+{
+	KERN_PANIC("Not implemented yet.\n");
+	return 0;
+}
+
+int
+sys_unregister_mmio(uintptr_t gpa, size_t size)
+{
+	KERN_PANIC("Not implemented yet.\n");
+	return 0;
+}
+
+int
+sys_read_ioport(uint16_t port, data_sz_t width, void *buf)
+{
+	uint32_t data;
+	struct vm *vm = vmm_cur_vm();
+
+	if (vm == NULL)
+		return E_NO_VM;
+
+	if (port >= MAX_IOPORT)
+		return E_INVAL_IOPORT;
+
+	if (width != SZ8 && width != SZ16 && width != SZ32)
+		return E_INVAL_WIDTH;
+
+	vdev_host_ioport_read(vm, port, width, &data);
+
+	if (copy_to_user(buf, &data, 1 << width) == NULL)
+		return E_MEM_FAIL;
+
+	return E_SUCC;
+}
+
+int
+sys_write_ioport(uint16_t port, data_sz_t width, void *buf)
+{
+	uint32_t data;
+	struct vm *vm = vmm_cur_vm();
+
+	if (vm == NULL)
+		return E_NO_VM;
+
+	if (port >= MAX_IOPORT)
+		return E_INVAL_IOPORT;
+
+	if (width != SZ8 && width != SZ16 && width != SZ32)
+		return E_INVAL_WIDTH;
+
+	if (copy_from_user(&data, buf, 1 << width) == NULL)
+		return E_MEM_FAIL;
+
+	vdev_host_ioport_write(vm, port, width, data);
+
+	return E_SUCC;
+}
+
+int
+sys_raise_irq(uint8_t irq)
+{
+	struct vm *vm = vmm_cur_vm();
+
+	if (vm == NULL)
+		return E_NO_VM;
+
+	if (irq >= MAX_IRQ)
+		return E_INVAL_IRQ;
+
+	if (vdev_raise_irq(vm, irq))
+		return E_IRQ_FAIL;
+
+	return E_SUCC;
+}
+
+int
+sys_trigger_irq(uint8_t irq)
+{
+	struct vm *vm = vmm_cur_vm();
+
+	if (vm == NULL)
+		return E_NO_VM;
+
+	if (irq >= MAX_IRQ)
+		return E_INVAL_IRQ;
+
+	if (vdev_trigger_irq(vm, irq))
+		return E_IRQ_FAIL;
+
+	return E_SUCC;
+}
+
+int
+sys_lower_irq(uint8_t irq)
+{
+	struct vm *vm = vmm_cur_vm();
+
+	if (vm == NULL)
+		return E_NO_VM;
+
+	if (irq >= MAX_IRQ)
+		return E_INVAL_IRQ;
+
+	if (vdev_lower_irq(vm, irq))
+		return E_IRQ_FAIL;
+
+	return E_SUCC;
+}
+
+int
+sys_notify_irq(void)
+{
+	struct vm *vm = vmm_cur_vm();
+
+	if (vm == NULL)
+		return E_NO_VM;
+
+	if (vdev_notify_irq(vm))
+		return E_IRQ_FAIL;
+
+	return E_SUCC;
+}
+
+static int
+sys_read_guest_tsc(uint64_t *tsc)
+{
+	struct vm *vm = vmm_cur_vm();
+	uint64_t guest_tsc;
+
+	if (vm == NULL)
+		return E_NO_VM;
+
+	guest_tsc = vmm_rdtsc(vm);
+
+	if (copy_to_user(tsc, &guest_tsc, sizeof(uint64_t)) == NULL)
+		return E_MEM_FAIL;
+
+	return E_SUCC;
+}
+
+static int
+sys_guest_tsc_freq(uint64_t *freq)
+{
+	struct vm *vm = vmm_cur_vm();
+	uint64_t guest_freq;
+
+	if (vm == NULL)
+		return E_NO_VM;
+
+	guest_freq = VM_TSC_FREQ;
+
+	if (copy_to_user(freq, &guest_freq, sizeof(uint64_t)) == NULL)
+		return E_MEM_FAIL;
+
+	return E_SUCC;
+}
+
+static int
+sys_guest_mem_size(uint64_t *memsize)
+{
+	struct vm *vm = vmm_cur_vm();
+	uint64_t size;
+
+	if (vm == NULL)
+		return E_NO_VM;
+
+	size = VM_PHY_MEMORY_SIZE;
+
+	if (copy_to_user(memsize, &size, sizeof(uint64_t)) == NULL)
+		return E_MEM_FAIL;
+
+	return E_SUCC;
+}
+
+static int
+sys_getchid(pid_t pid, int *chid)
+{
+	int child_chid;
+	struct proc *child_proc = proc_pid2proc(pid);
+
+	if (child_proc == NULL || child_proc->parent != proc_cur())
+		child_chid = -1;
+	else
+		child_chid = channel_getid(child_proc->parent_ch);
+
+	if (copy_to_user(chid, &child_chid, sizeof(int)) == NULL)
+		return E_MEM_FAIL;
+
+	return E_SUCC;
 }
 
 /*
@@ -469,6 +798,18 @@ syscall_handler(struct context *ctx)
 		errno = sys_recv((int) a[0], (void *) a[1], (size_t *) a[2]);
 		break;
 
+	case SYS_recv_nonblock:
+		/*
+		 * Receive a meesage from a channel.
+		 * a[0]: the channel id
+		 * a[1]: the address where the received message will be stored
+		 * a[2]: the address where the size of the message will be
+		 *       stored
+		 */
+		errno = sys_recv_nonblock
+			((int) a[0], (void *) a[1], (size_t *) a[2]);
+		break;
+
 	case SYS_allocvm:
 		/*
 		 * Create a virtual machine in the current process.
@@ -498,6 +839,168 @@ syscall_handler(struct context *ctx)
 		 * a[0]: the address where the channel id will be returned
 		 */
 		errno = sys_getpchid((int *) a[0]);
+		break;
+
+	case SYS_register_ioport:
+		/*
+		 * Register the caller to handle the I/O port readings/writings
+		 * from the virtual machine.
+		 * a[0]: the I/O port number
+		 * a[1]: the data width,
+		 *       0 for 1 bytes, 1 for 2 bytes, 2 for 4 bytes
+		 * a[2]: 1 for writings, 0 for readings
+		 */
+		errno = sys_register_ioport
+			((uint16_t) a[0], (data_sz_t) a[1], (int) a[2]);
+		break;
+
+	case SYS_unregister_ioport:
+		/*
+		 * Unregister the caller from handling the I/O port readings/
+		 * writings from the virtual machine.
+		 * a[0]: the I/O port number
+		 * a[1]: the data width,
+		 *       0 for 1 bytes, 1 for 2 bytes, 2 for 4 bytes
+		 * a[2]: 1 for writings, 0 for readings
+		 */
+		errno = sys_unregister_ioport
+			((uint16_t) a[0], (data_sz_t) a[1], (int) a[2]);
+		break;
+
+	case SYS_register_irq:
+		/*
+		 * Register the caller as the source of an interrupt.
+		 * a[0]: the IRQ number
+		 */
+		errno = sys_register_irq((uint8_t) a[0]);
+		break;
+
+	case SYS_unregister_irq:
+		/*
+		 * Unregister the caller as the source of an interrupt.
+		 * a[0]: the IRQ number
+		 */
+		errno = sys_unregister_irq((uint8_t) a[0]);
+		break;
+
+	case SYS_register_pic:
+		/*
+		 * Register the caller as the virtual PIC of the virtual machine
+		 */
+		errno = sys_register_pic();
+		break;
+
+	case SYS_unregister_pic:
+		/*
+		 * Unregister the caller as the virtual PIC of the virtual
+		 * machine.
+		 */
+		errno = sys_unregister_pic();
+		break;
+
+	case SYS_register_mmio:
+		/*
+		 * a[0]: the start guest physical address of the memory region
+		 * a[1]: the host linear address where the memory region is
+		 *       mapped to
+		 * a[2]: the size in bytes of the memory region
+		 */
+		errno = sys_register_mmio
+			((uintptr_t) a[0], (uintptr_t) a[1], (size_t) a[2]);
+		break;
+
+	case SYS_unregister_mmio:
+		/*
+		 * a[0]: the start guest physical address of the memory region
+		 * a[1]: the size in bytes of the memory region
+		 */
+		errno = sys_unregister_mmio((uintptr_t) a[0], (size_t) a[1]);
+		break;
+
+	case SYS_read_ioport:
+		/*
+		 * Read the physical I/O port.
+		 * a[0]: the I/O port number
+		 * a[1]: the data width
+		 * a[2]: the buffer where the data will be stored
+		 */
+		errno = sys_read_ioport
+			((uint16_t) a[0], (data_sz_t) a[1], (void *) a[2]);
+		break;
+
+	case SYS_write_ioport:
+		/*
+		 * Write to the host I/O port.
+		 * a[0]: the I/O port number
+		 * a[1]: the data width
+		 * a[2]: where the data is
+		 */
+		errno = sys_write_ioport
+			((uint16_t) a[0], (data_sz_t) a[1], (void *) a[2]);
+		break;
+
+	case SYS_raise_irq:
+		/*
+		 * Raise the IRQ line of the virtual PIC.
+		 * a[0]: the IRQ number
+		 */
+		errno = sys_raise_irq((uint8_t) a[0]);
+		break;
+
+	case SYS_trigger_irq:
+		/*
+		 * Trigger the IRQ line of the virtual PIC.
+		 * a[0]: the IRQ number
+		 */
+		errno = sys_trigger_irq((uint8_t) a[0]);
+		break;
+
+	case SYS_lower_irq:
+		/*
+		 * Lower the IRQ line of the virtual PIC.
+		 * a[0]: the IRQ number
+		 */
+		errno = sys_lower_irq((uint8_t) a[0]);
+		break;
+
+	case SYS_notify_irq:
+		/*
+		 * Notify the virtual machine an interrupt comes.
+		 */
+		errno = sys_notify_irq();
+		break;
+
+	case SYS_read_guest_tsc:
+		/*
+		 * Read the guest TSC.
+		 * a[0]: where the guest TSC is returned
+		 */
+		errno = sys_read_guest_tsc((uint64_t *) a[0]);
+		break;
+
+	case SYS_guest_tsc_freq:
+		/*
+		 * Get the frequency of the guest TSC.
+		 * a[0]: where the frequency is returned
+		 */
+		errno = sys_guest_tsc_freq((uint64_t *) a[0]);
+		break;
+
+	case SYS_guest_mem_size:
+		/*
+		 * Get the physical memory size of the guest.
+		 * a[0]: where the memory size is returned
+		 */
+		errno = sys_guest_mem_size((uint64_t *) a[0]);
+		break;
+
+	case SYS_getchid:
+		/*
+		 * Get ID of the channel to a child process.
+		 * a[0]: PID of the child process
+		 * a[1]: where the channel ID is returned
+		 */
+		errno = sys_getchid((pid_t) a[0], (int *) a[1]);
 		break;
 
 	default:

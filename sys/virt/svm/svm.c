@@ -8,9 +8,6 @@
 
 #include <sys/virt/vmm.h>
 #include <sys/virt/vmm_dev.h>
-#include <sys/virt/dev/kbd.h>
-#include <sys/virt/dev/pci.h>
-#include <sys/virt/dev/pic.h>
 
 #include <machine/pmap.h>
 
@@ -202,12 +199,18 @@ set_intercept_ioio(struct vmcb *vmcb, uint32_t port, data_sz_t size, bool enable
 {
 	KERN_ASSERT(vmcb != NULL);
 
+#ifdef DEBUG_GUEST_IOIO
+	if (enable == TRUE)
+		KERN_DEBUG("Enable intercepting I/O port %d, width %d bits.\n",
+			   port, 8 * (1 << size));
+#endif
+
 	uint32_t *iopm = (uint32_t *)(uintptr_t) vmcb->control.iopm_base_pa;
 
 	int i;
 	int port1, entry, bit;
 
-	for (i = 0; i <= size; i++) {
+	for (i = 0; i < (1 << size); i++) {
 		port1 = port + i;
 		entry = port1 / 32;
 		bit = port1 - entry *32;
@@ -215,7 +218,7 @@ set_intercept_ioio(struct vmcb *vmcb, uint32_t port, data_sz_t size, bool enable
 		if (enable == TRUE)
 			iopm[entry] |= (1 << bit);
 		else
-			iopm[entry] |= ~(1 << bit);
+			iopm[entry] &= ~(uint32_t) (1 << bit);
 	}
 }
 
@@ -284,8 +287,6 @@ setup_intercept(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
 
-	int i, j;
-
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 
@@ -298,14 +299,6 @@ setup_intercept(struct vm *vm)
 	}
 
 	KERN_DEBUG("IOPM is at %x.\n", vmcb->control.iopm_base_pa);
-
-	/* setup IOIO intercept */
-	for (i = 0 ; i < MAX_IOPORT; i++)
-		if (vm->iodev[i].dev != NULL)
-			for (j = 0; j < 3; j++)
-				if (vm->iodev[i].read_func[j] != NULL ||
-				    vm->iodev[i].write_func[j] != NULL)
-					set_intercept_ioio(vmcb, i, j, TRUE);
 
 	/* create MSRPM */
 	vmcb->control.msrpm_base_pa = alloc_permission_map(SVM_MSRPM_SIZE);
@@ -518,6 +511,10 @@ vm_run(struct vm *vm)
 	load_host_segment(gs, svm->h_gs);
 	lldt(svm->h_ldt);
 
+#ifdef DEBUG_VMEXIT
+	KERN_DEBUG("VMEXIT reason 0x%x.\n", ctrl->exit_code);
+#endif
+
 	if(ctrl->exit_code == SVM_EXIT_INTR) {
 		vm->exit_reason = EXIT_FOR_EXTINT;
 		vm->handled = FALSE;
@@ -591,7 +588,7 @@ svm_handle_exit(struct vm *vm)
 		break;
 
 	case SVM_EXIT_INTR:
-		/* kernel interrupt handlers should come before here */
+		/* the interrupt should be already handled */
 #ifdef DEBUG_GUEST_INTR
 		KERN_DEBUG("[%x:%llx] ",
 			   svm->vmcb->save.cs.selector, svm->vmcb->save.rip);
@@ -599,7 +596,6 @@ svm_handle_exit(struct vm *vm)
 #endif
 		KERN_ASSERT(vm->exit_reason == EXIT_FOR_EXTINT &&
 			    vm->handled == TRUE);
-		svm_handle_intr(vm);
 		break;
 
 	case SVM_EXIT_VINTR:

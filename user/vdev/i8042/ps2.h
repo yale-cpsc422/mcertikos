@@ -26,12 +26,11 @@
  * Adapted for CertiKOS by Haozhong Zhang at Yale University.
  */
 
-#ifndef _SYS_VIRT_PS2_H_
-#define _SYS_VIRT_PS2_H_
+#ifndef _VDEV_PS2_H_
+#define _VDEV_PS2_H_
 
-#ifdef _KERN_
-
-#include <sys/gcc.h>
+#include <gcc.h>
+#include <types.h>
 
 #define PS2_QUEUE_SIZE 256
 
@@ -84,6 +83,4 @@ void ps2_write_mouse(struct PS2_mouse *, int);
 void ps2_kbd_init(struct PS2_kbd *, void (*update_irq)(void *, int), void *);
 void ps2_mouse_init(struct PS2_mouse *, void (*update_irq)(void *, int), void *);
 
-#endif /* _KERN_ */
-
-#endif /* !_SYS_VIRT_PS2_H_ */
+#endif /* !_VDEV_PS2_H_ */

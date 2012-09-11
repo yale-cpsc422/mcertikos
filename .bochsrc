@@ -1,5 +1,5 @@
-cpu: count=2, ips=10000000
-cpuid: mmx=1, pcid=1, sep=1, x86_64=1, vmx=2
+cpu: model=corei7_ivy_bridge_3770k, count=2, ips=50000000, ignore_bad_msrs=1
+cpuid: x86_64=1, vmx=1, avx=1, pcid=1, apic=xapic, aes=1, mmx=1, sep=1
 
 megs: 1024
 
@@ -28,7 +28,3 @@ keyboard_mapping: enabled=0, map=
 mouse: enabled=0
 
 com1: enabled=1, mode=file, dev=log
-
-# romimage: file=misc/bios.bin
-
-com1: enabled=1, mode=file, dev=bochs.log

@@ -114,7 +114,8 @@ channel_send(struct channel *ch, struct proc *p, void *msg, size_t size)
 	KERN_ASSERT(size > 0);
 
 	if (size > 1024) {
-		CHANNEL_DEBUG("Size of the message (%d) is too large.\n", size);
+		CHANNEL_DEBUG("(%d) Size of the message (%d) is too large.\n",
+			      p->pid, size);
 		return E_CHANNEL_MSG_TOO_LARGE;
 	}
 
@@ -122,14 +123,15 @@ channel_send(struct channel *ch, struct proc *p, void *msg, size_t size)
 
 	if ((ch->type == CHANNEL_TYPE_P1_P2 && ch->p1 != p) ||
 	    (ch->type == CHANNEL_TYPE_P2_P1 && ch->p2 != p)) {
-		spinlock_release(&ch->lk);
 		CHANNEL_DEBUG("Illegal sending process %d.\n", p->pid);
+		spinlock_release(&ch->lk);
 		return E_CHANNEL_ILL_SENDER;
 	}
 
 	if (ch->state & (CHANNEL_STAT_P1_BUSY | CHANNEL_STAT_P2_BUSY)) {
+		CHANNEL_DEBUG("(%d) There's a pending message in channel %d.\n",
+			      p->pid, channel_getid(ch));
 		spinlock_release(&ch->lk);
-		CHANNEL_DEBUG("There's a pending message in the channel.\n");
 		return E_CHANNEL_BUSY;
 	}
 
@@ -140,9 +142,10 @@ channel_send(struct channel *ch, struct proc *p, void *msg, size_t size)
 	ch->state |=
 		(ch->p1 == p) ? CHANNEL_STAT_P1_BUSY : CHANNEL_STAT_P2_BUSY;
 
-	spinlock_release(&ch->lk);
+	CHANNEL_DEBUG("(%d) %d bytes are sent to channel %d.\n",
+		      p->pid, size, channel_getid(ch));
 
-	CHANNEL_DEBUG("%d bytes are sent.\n", size);
+	spinlock_release(&ch->lk);
 
 	return 0;
 }
@@ -161,15 +164,16 @@ channel_receive(struct channel *ch, struct proc *p, void *msg, size_t *size)
 
 	if ((ch->type == CHANNEL_TYPE_P1_P2 && ch->p2 != p) ||
 	    (ch->type == CHANNEL_TYPE_P2_P1 && ch->p1 != p)) {
-		spinlock_release(&ch->lk);
 		CHANNEL_DEBUG("Illegal receiving process %d.\n", p->pid);
+		spinlock_release(&ch->lk);
 		return E_CHANNEL_ILL_RECEIVER;
 	}
 
 	if ((ch->p1 == p && !(ch->state & CHANNEL_STAT_P2_BUSY)) ||
 	    (ch->p2 == p && !(ch->state & CHANNEL_STAT_P1_BUSY))) {
+		CHANNEL_DEBUG("(%d) There's no message in channel %d.\n",
+			      p->pid, channel_getid(ch));
 		spinlock_release(&ch->lk);
-		CHANNEL_DEBUG("There's no message in the channel.\n");
 		return E_CHANNEL_IDLE;
 	}
 
@@ -178,9 +182,10 @@ channel_receive(struct channel *ch, struct proc *p, void *msg, size_t *size)
 	ch->state &=
 		~((ch->p1 == p) ? CHANNEL_STAT_P2_BUSY : CHANNEL_STAT_P1_BUSY);
 
-	spinlock_release(&ch->lk);
+	CHANNEL_DEBUG("(%d) %d bytes are received from channel %d.\n",
+		      p->pid, *size, channel_getid(ch));
 
-	CHANNEL_DEBUG("%d bytes are received.\n", *size);
+	spinlock_release(&ch->lk);
 
 	return 0;
 }

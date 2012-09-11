@@ -9,14 +9,23 @@
 #include <sys/x86.h>
 
 #include <sys/virt/vmm.h>
+#include <sys/virt/vmm_dev.h>
 
 #include <machine/pmap.h>
-#include <machine/trap.h>
 #include <machine/vm.h>
 
 #include <dev/kbd.h>
 #include <dev/lapic.h>
 #include <dev/tsc.h>
+
+static gcc_inline bool
+trap_from_guest(tf_t *tf)
+{
+	return (tf->eip < VM_USERLO &&
+		proc_cur()->vm != NULL &&
+		proc_cur()->vm->exit_reason == EXIT_FOR_EXTINT &&
+		proc_cur()->vm->handled == FALSE) ? TRUE : FALSE;
+}
 
 /*
  * Trap handler entry for traps from userspace.
@@ -60,10 +69,13 @@ trap_user(tf_t *tf)
 static gcc_inline gcc_noreturn void
 trap_kern(tf_t *tf)
 {
-	KERN_ASSERT(tf->trapno >= T_IRQ0);
+	if (tf->trapno < T_IRQ0) {
+		trap_dump(tf);
+		KERN_PANIC("Exeception %d from kernel.\n", tf->trapno);
+	}
+
 	KERN_ASSERT(vmm_cur_vm() != NULL);
-	KERN_ASSERT(vmm_cur_vm()->exit_reason == EXIT_FOR_EXTINT &&
-		    vmm_cur_vm()->handled == FALSE);
+	KERN_ASSERT(trap_from_guest(tf) == TRUE);
 
 	struct vm *vm;
 	trap_cb_t f;
@@ -78,6 +90,10 @@ trap_kern(tf_t *tf)
 	if (f) {
 		f(NULL);
 	} else {
+		/*
+		 * If no handler is registered for the interrupt, call
+		 * the default handler in the virtualization module.
+		 */
 		vm = vmm_cur_vm();
 		KERN_ASSERT(vm != NULL);
 		KERN_ASSERT(vm->exit_reason == EXIT_FOR_EXTINT &&
@@ -89,6 +105,10 @@ trap_kern(tf_t *tf)
 		vmm_handle_intr(vm, irq);
 	}
 
+	/*
+	 * Make sure the interrupts are disabled when returning from the
+	 * interrupt.
+	 */
 	tf->eflags &= ~(uint32_t) FL_IF;
 	trap_return(tf);
 }
@@ -103,17 +123,14 @@ trap(tf_t *tf)
 
 	KERN_ASSERT(tf != NULL);
 
-	if (tf->trapno == T_IRQ0+IRQ_TIMER && tf->eip >= VM_USERLO)
-		proc_sched_update();
-
 	if (tf->trapno < T_IRQ0) {
 		if (tf->trapno == T_PGFLT)
 			KERN_DEBUG("Page fault @ 0x%08x on CPU%d.\n",
 				   rcr2(), pcpu_cpu_idx(pcpu_cur()));
 		/* trap_dump(tf); */
 	} else if (tf->trapno == T_IRQ0+IRQ_IPI_RESCHED) {
-		KERN_DEBUG("IRQ_IPI_RESCHED on CPU%d.\n",
-			   pcpu_cpu_idx(pcpu_cur()));
+		/* KERN_DEBUG("IRQ_IPI_RESCHED on CPU%d, EIP 0x%08x.\n", */
+		/* 	   pcpu_cpu_idx(pcpu_cur()), tf->eip); */
 		/* trap_dump(tf); */
 	}
 
@@ -242,21 +259,25 @@ timer_intr_handler(struct context *ctx)
 {
 	/* timer_handle_timeout(); */
 
+	intr_eoi();
+
 	struct vm *vm = vmm_cur_vm();
-	bool from_guest = (vm != NULL &&
-			   vm->exit_reason == EXIT_FOR_EXTINT) ? TRUE : FALSE;
+	bool from_guest = trap_from_guest(&ctx->tf);
 
 	if (from_guest == TRUE) {
 		vmm_handle_intr(vm, IRQ_TIMER);
 	} else {
+		proc_sched_update();
+
 		struct pcpu *c = pcpu_cur();
 		sched_lock(c);
-		if (c->sched.run_ticks > SCHED_SLICE)
+		if (c->sched.run_ticks > SCHED_SLICE) {
+			/* KERN_DEBUG("Resched on CPU%d (run ticks %lld).\n", */
+			/* 	   pcpu_cpu_idx(pcpu_cur()), c->sched.run_ticks); */
 			proc_sched(FALSE);
+		}
 		sched_unlock(c);
 	}
-
-	intr_eoi();
 
 	return 0;
 }
@@ -264,16 +285,15 @@ timer_intr_handler(struct context *ctx)
 int
 kbd_intr_handler(struct context *ctx)
 {
-	struct vm *vm = vmm_cur_vm();
-	bool from_guest = (vm != NULL &&
-			   vm->exit_reason == EXIT_FOR_EXTINT) ? TRUE : FALSE;
-
-	if (from_guest != TRUE) { /* for a normal application */
-		kbd_intr();
-	} else /* for a guest */
-		vmm_handle_intr(vm, IRQ_KBD);
-
 	intr_eoi();
+
+	struct vm *vm = vmm_cur_vm();
+	bool from_guest = trap_from_guest(&ctx->tf);
+
+	if (from_guest != TRUE)
+		kbd_intr();
+	else
+		vmm_handle_intr(vm, IRQ_KBD);
 
 	return 0;
 }
@@ -281,11 +301,26 @@ kbd_intr_handler(struct context *ctx)
 int
 ipi_resched_handler(struct context *ctx)
 {
-	sched_lock(pcpu_cur());
-	proc_sched(TRUE);
-	sched_unlock(pcpu_cur());
-
 	intr_eoi();
+
+	if (trap_from_guest(&ctx->tf)) {
+		vmm_cur_vm()->handled = TRUE;
+	} else {
+		sched_lock(pcpu_cur());
+		proc_sched(TRUE);
+		sched_unlock(pcpu_cur());
+	}
+
+	return 0;
+}
+
+int
+ipi_vintr_handler(struct context *ctx)
+{
+	intr_eoi();
+
+	if (trap_from_guest(&ctx->tf))
+		vmm_cur_vm()->handled = TRUE;
 
 	return 0;
 }
