@@ -14,7 +14,7 @@
 #define VM_TSC_ADJUST		0
 
 #define VM_PIT_FREQ		(1193182)
-#define VM_TSC_FREQ		(800 * 1000 * 1000 / VM_TIME_SCALE)
+#define VM_TSC_FREQ		(1800 * 1000 * 1000 / VM_TIME_SCALE)
 
 #define MAX_IOPORT		0x10000
 #define MAX_IRQ			0x100
