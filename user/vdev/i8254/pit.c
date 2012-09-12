@@ -774,8 +774,7 @@ vpit_channel_update(struct vpit_channel *ch, uint64_t current_time)
 			ch->last_intr_time_valid = TRUE;
 			ch->last_intr_time = intr_time;
 
-			/* vpit_debug("Trigger IRQ_TIMER.\n"); */
-			DEBUG("Trigger IRQ_TIMER.\n");
+			vpit_debug("Trigger IRQ_TIMER.\n");
 			sys_trigger_irq(IRQ_TIMER);
 		}
 	}
