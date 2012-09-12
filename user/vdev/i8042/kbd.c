@@ -34,11 +34,11 @@
 #include "kbd.h"
 #include "ps2.h"
 
-#ifdef DEUBG_VKBD
+#ifdef DEBUG_VKBD
 
-#define vkbd_debug(fmt...)			\
+#define vkbd_debug(fmt, ...)			\
 	do {					\
-		debug(fmt);			\
+		DEBUG(fmt, ##__VA_ARGS__);	\
 	} while (0)
 
 #else
@@ -373,10 +373,12 @@ vkbd_write_data(struct vkbd *vkbd, uint32_t data)
 
 	switch(vkbd->write_cmd) {
 	case 0:
+		vkbd_debug("0\n");
 		ps2_write_keyboard(&vkbd->kbd, data);
 		break;
 
 	case KBD_CCMD_WRITE_MODE:
+		vkbd_debug("KBD_CCMD_WRITE_MODE\n");
 		vkbd->mode = data;
 		ps2_keyboard_set_translation(&vkbd->kbd, (vkbd->mode & KBD_MODE_KCC) != 0);
 		/* ??? */
@@ -384,18 +386,22 @@ vkbd_write_data(struct vkbd *vkbd, uint32_t data)
 		break;
 
 	case KBD_CCMD_WRITE_OBUF:
+		vkbd_debug("KBD_CCMD_WRITE_OBUF\n");
 		vkbd_queue(vkbd, data, 0);
 		break;
 
 	case KBD_CCMD_WRITE_AUX_OBUF:
+		vkbd_debug("KBD_CCMD_WRITE_AUX_OBUF\n");
 		vkbd_queue(vkbd, data, 1);
 		break;
 
 	case KBD_CCMD_WRITE_OUTPORT:
+		vkbd_debug("KBD_CCMD_WRITE_OUTPORT\n");
 		outport_write(vkbd, data);
 		break;
 
 	case KBD_CCMD_WRITE_MOUSE:
+		vkbd_debug("KBD_CCMD_WRITE_MOUSE\n");
 		ps2_write_mouse(&vkbd->mouse, data);
 		break;
 
@@ -417,7 +423,7 @@ _vkbd_ioport_read(struct vkbd *vkbd, uint16_t port, void *data)
 	else
 		*(uint8_t *) data = vkbd_read_data(vkbd);
 
-	/* vkbd_debug("Read port=%x, data=%x.\n", port, *(uint8_t *) data); */
+	vkbd_debug("Read port=%x, data=%x.\n", port, *(uint8_t *) data);
 }
 
 static void
@@ -426,7 +432,7 @@ _vkbd_ioport_write(struct vkbd *vkbd, uint16_t port, void *data)
 	ASSERT(vkbd != NULL && data != NULL);
 	ASSERT(port == KBCMDP || port == KBDATAP);
 
-	/* vkbd_debug("Write port=%x, data=%x.\n", port, *(uint8_t *) data); */
+	vkbd_debug("Write port=%x, data=%x.\n", port, *(uint8_t *) data);
 
 	if (port == KBDATAP)
 		vkbd_write_data(vkbd, *(uint8_t *) data);
@@ -503,12 +509,21 @@ main(int argc, char **argv)
 		switch (((uint32_t *) buf)[0]) {
 		case MAGIC_IOPORT_RW_REQ:
 			rw_req = (struct ioport_rw_req *) buf;
+
 			if (rw_req->port != KBSTATP &&
 			    rw_req->port != KBDATAP &&
-			    rw_req->port != KBCMDP)
+			    rw_req->port != KBCMDP) {
+				vkbd_debug("Ignore unknown port 0x%x.\n",
+					   rw_req->port);
 				continue;
-			if (rw_req->width != SZ8)
+			}
+
+			if (rw_req->width != SZ8) {
+				vkbd_debug("Ignore unknown data width %d.\n",
+					   rw_req->width);
 				continue;
+			}
+
 			ret = (struct ioport_read_ret *) buf;
 			if (rw_req->write) {
 				_vkbd_ioport_write(&vkbd,
