@@ -8,6 +8,7 @@
 
 #include <sys/virt/vmm.h>
 #include <sys/virt/vmm_dev.h>
+#include <sys/virt/dev/pic.h>
 
 #include <dev/tsc.h>
 
@@ -74,9 +75,10 @@ vmm_init(void)
 		return 1;
 	}
 
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < MAX_VMID; i++) {
 		memset(&vm_pool[i], 0x0, sizeof(struct vm));
 		vm_pool[i].used = FALSE;
+		vm_pool[i].vmid = i;
 	}
 
 	spinlock_init(&vm_pool_lock);
@@ -123,6 +125,9 @@ vmm_init_vm(void)
 
 	vm->tsc = 0;
 
+	/* initialize the virtual PIC */
+	vpic_init(&vm->vdev.vpic, vm);
+
 	/* initialize the virtual device interface  */
 	vdev_init(vm);
 
@@ -150,8 +155,6 @@ vmm_run_vm(struct vm *vm)
 #if defined (TRACE_IOIO) || defined (TRACE_TOTAL_TIME)
 	static uint64_t last_dump = 0;
 #endif
-
-	vmm_update(vm);
 
 	while (1) {
 		KERN_ASSERT(vm->handled == TRUE);
@@ -234,51 +237,39 @@ vmm_rdtsc(struct vm *vm)
 	return vm->tsc;
 }
 
-void
-vmm_update(struct vm *vm)
-{
-	KERN_ASSERT(vm != NULL);
-
-	struct vdev *vdev = &vm->vdev;
-	uint32_t port;
-
-	for (port = MAX_IOPORT - 1; port >= 0; port--) {
-		int i;
-		struct proc *read_proc, *write_proc;
-		bool all_disabled = TRUE;
-
-		for (i = 0; i < 3; i++) {
-			spinlock_acquire(&vdev->ioport[port][i].read_lk);
-			spinlock_acquire(&vdev->ioport[port][i].write_lk);
-
-			read_proc = vdev->ioport[port][i].read_proc;
-			write_proc = vdev->ioport[port][i].write_proc;
-
-			if (read_proc != NULL || write_proc != NULL) {
-#ifdef DEBUG_GUEST_IOIO
-				KERN_DEBUG("Enable intercepting I/O port %d.\n",
-					   port);
-#endif
-				vmm_ops->vm_intercept_ioio(vm, port, i, TRUE);
-				all_disabled &= FALSE;
-			}
-
-			spinlock_release(&vdev->ioport[port][i].write_lk);
-			spinlock_release(&vdev->ioport[port][i].read_lk);
-		}
-
-		if (all_disabled == TRUE)
-			vmm_ops->vm_intercept_ioio(vm, port, SZ8, FALSE);
-
-		if (port == 0)
-			break;
-	}
-}
-
 uintptr_t
 vmm_translate_gp2hp(struct vm *vm, uintptr_t gp)
 {
 	KERN_ASSERT(vm != NULL);
 
 	return vmm_ops->vm_translate_gp2hp(vm, gp);
+}
+
+struct vm *
+vmm_get_vm(vmid_t vmid)
+{
+	if (!(0 <= vmid && vmid < MAX_VMID))
+		return NULL;
+	return &vm_pool[vmid];
+}
+
+void
+vmm_set_irq(struct vm *vm, uint8_t irq, int mode)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(0 <= irq && irq < MAX_IRQ);
+	KERN_ASSERT(0 <= mode && mode < 3);
+
+	struct vdev *vdev = &vm->vdev;
+
+	spinlock_acquire(&vdev->pic_lk);
+	if (mode == 0) {
+		vpic_set_irq(&vdev->vpic, irq, 1);
+	} else if (mode == 1) {
+		vpic_set_irq(&vdev->vpic, irq, 0);
+	} else {
+		vpic_set_irq(&vdev->vpic, irq, 0);
+		vpic_set_irq(&vdev->vpic, irq, 1);
+	}
+	spinlock_release(&vdev->pic_lk);
 }

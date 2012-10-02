@@ -292,22 +292,18 @@ setup_intercept(struct vm *vm)
 
 	/* create IOPM */
 	vmcb->control.iopm_base_pa = alloc_permission_map(SVM_IOPM_SIZE);
-
 	if (vmcb->control.iopm_base_pa == 0x0) {
 		KERN_DEBUG("Failed to create IOPM.\n");
 		return 1;
 	}
-
 	KERN_DEBUG("IOPM is at %x.\n", vmcb->control.iopm_base_pa);
 
 	/* create MSRPM */
 	vmcb->control.msrpm_base_pa = alloc_permission_map(SVM_MSRPM_SIZE);
-
 	if (vmcb->control.msrpm_base_pa == 0x0) {
 		KERN_DEBUG("Failed to create MSRPM.\n");
 		return 1;
 	}
-
 	KERN_DEBUG("MSRPM is at %x.\n", vmcb->control.msrpm_base_pa);
 
 	/* enable interceptions */

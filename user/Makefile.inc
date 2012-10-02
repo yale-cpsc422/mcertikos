@@ -12,11 +12,10 @@ USER_LDFLAGS	:= $(LDFLAGS) -m elf_i386 -Ttext=0x40000000 -e _start
 
 include $(USER_DIR)/lib/Makefile.inc
 include $(USER_DIR)/idle/Makefile.inc
-include $(USER_DIR)/test/Makefile.inc
 include $(USER_DIR)/vdev/Makefile.inc
 include $(USER_DIR)/guest/Makefile.inc
 
-user: lib idle test vdev guest
+user: lib idle vdev guest
 	@echo All targets of user are done.
 
 install_user:

@@ -184,14 +184,16 @@ svm_guest_intr_handler(struct vm *vm, uint8_t irq)
 		   irq, (save->rflags & FL_IF), (read_eflags() & FL_IF));
 #endif
 
+	vid_t vid = vm->vdev.irq[irq].vid;
+
 	/*
 	 * Try to notify the virtual device which occupies the interrupt. If no
 	 * virtual device is registered as the source of the interrupt, raise
 	 * corresponding interrupt line of the virtual PIC.
 	 */
-	if (vdev_notify_sync(vm, irq)) {
-		vdev_raise_irq(vm, irq);
-		vdev_lower_irq(vm, irq);
+	if (vdev_sync_dev(vm, vid)) {
+		vdev_raise_irq(vm, vid, irq);
+		vdev_lower_irq(vm, vid, irq);
 	}
 
 	vm->handled = TRUE;
@@ -301,19 +303,21 @@ svm_handle_ioio(struct vm *vm)
 		(exitinfo1 & SVM_EXITINFO1_SZ16) ? SZ16 : SZ32;
 	bool type = exitinfo1 & SVM_EXITINFO1_TYPE_MASK;
 	uint32_t data = (uint32_t) save->rax;
+	vid_t vid = vm->vdev.ioport[port].vid;
 
 	if (type & SVM_EXITINFO1_TYPE_IN) {
 #ifdef DEBUG_GUEST_IOIO
 		dprintf(" read port %d, width %d bits.\n",
 			port, 8 * (1 << width));
 #endif
-		vdev_ioport_read(vm, port, width, (uint32_t *) &save->rax);
+		vdev_read_guest_ioport(vm, vid,
+				       port, width, (uint32_t *) &save->rax);
 	} else {
 #ifdef DEBUG_GUEST_IOIO
 		dprintf(" write port %d, width %d bits, data 0x%x.\n",
 			port, 8 * (1 << width), data);
 #endif
-		vdev_ioport_write(vm, port, width, data);
+		vdev_write_guest_ioport(vm, vid, port, width, data);
 	}
 
 	save->rip = ctrl->exit_info_2;

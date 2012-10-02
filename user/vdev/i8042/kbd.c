@@ -30,6 +30,7 @@
 #include <gcc.h>
 #include <string.h>
 #include <syscall.h>
+#include <types.h>
 
 #include "kbd.h"
 #include "ps2.h"
@@ -170,10 +171,10 @@ vkbd_update_irq(struct vkbd *vkbd)
 	/* the interrupts from i8042 are edge-triggered */
 
 	if (irq_kbd_level)
-		sys_trigger_irq(IRQ_KBD);
+		sys_set_irq(IRQ_KBD, 2);
 
 	if (irq_mouse_level)
-		sys_trigger_irq(IRQ_MOUSE);
+		sys_set_irq(IRQ_MOUSE, 2);
 }
 
 static void
@@ -427,17 +428,17 @@ _vkbd_ioport_read(struct vkbd *vkbd, uint16_t port, void *data)
 }
 
 static void
-_vkbd_ioport_write(struct vkbd *vkbd, uint16_t port, void *data)
+_vkbd_ioport_write(struct vkbd *vkbd, uint16_t port, uint8_t data)
 {
-	ASSERT(vkbd != NULL && data != NULL);
+	ASSERT(vkbd != NULL);
 	ASSERT(port == KBCMDP || port == KBDATAP);
 
-	vkbd_debug("Write port=%x, data=%x.\n", port, *(uint8_t *) data);
+	vkbd_debug("Write port=%x, data=%x.\n", port, data);
 
 	if (port == KBDATAP)
-		vkbd_write_data(vkbd, *(uint8_t *) data);
+		vkbd_write_data(vkbd, data);
 	else
-		vkbd_write_command(vkbd, *(uint8_t *) data);
+		vkbd_write_command(vkbd, data);
 }
 
 static void
@@ -457,11 +458,10 @@ vkbd_sync_kbd(struct vkbd *vkbd)
 
 	/* synchronize the state of physical i8042 to virtualized i8042 */
 	while (1) {
-		if (sys_read_ioport(KBSTATP, SZ8, &status))
-			break;
+		status = sys_host_in(KBSTATP, SZ8);
 		if (!(status & KBD_STAT_OBF))
 			break;
-		sys_read_ioport(KBDATAP, SZ8, &c);
+		c = sys_host_in(KBDATAP, SZ8);
 		vkbd_queue(vkbd, c, 0);
 	}
 }
@@ -471,16 +471,10 @@ main(int argc, char **argv)
 {
 	struct vkbd vkbd;
 
-	int parent_chid;
-
-	uint8_t buf[1024];
-	size_t size;
-
-	struct ioport_rw_req *rw_req;
-	struct ioport_read_ret *ret;
-	struct sync_req *sync_req;
-	struct device_ready *dev_rdy;
-	struct sync_complete *sync_compl;
+	dev_req_t req;
+	struct read_ioport_req *read_req;
+	struct write_ioport_req *write_req;
+	uint32_t data;
 
 	memset(&vkbd, 0, sizeof(vkbd));
 	vkbd.status = KBD_STAT_CMD | KBD_STAT_UNLOCKED;
@@ -489,76 +483,39 @@ main(int argc, char **argv)
 	ps2_kbd_init(&vkbd.kbd, vkbd_update_kbd_irq, &vkbd);
 	ps2_mouse_init(&vkbd.mouse, vkbd_update_aux_irq, &vkbd);
 
-	sys_register_ioport(KBSTATP, SZ8, 0);
-	sys_register_ioport(KBDATAP, SZ8, 0);
-	sys_register_ioport(KBCMDP, SZ8, 1);
-	sys_register_ioport(KBDATAP, SZ8, 1);
-	sys_register_irq(IRQ_KBD);
-	sys_register_irq(IRQ_MOUSE);
+	sys_attach_port(KBSTATP, SZ8);
+	sys_attach_port(KBDATAP, SZ8);
+	sys_attach_irq(IRQ_KBD);
+	sys_attach_irq(IRQ_MOUSE);
 
-	parent_chid = sys_getpchid();
-
-	dev_rdy = (struct device_ready *) buf;
-	dev_rdy->magic = MAGIC_DEVICE_READY;
-	sys_send(parent_chid, dev_rdy, sizeof(struct device_ready));
+	sys_dev_ready();
 
 	while (1) {
-		if (sys_recv(parent_chid, buf, &size, TRUE))
+		if (sys_recv_req(&req, TRUE))
 			continue;
 
-		switch (((uint32_t *) buf)[0]) {
-		case MAGIC_IOPORT_RW_REQ:
-			rw_req = (struct ioport_rw_req *) buf;
-
-			if (rw_req->port != KBSTATP &&
-			    rw_req->port != KBDATAP &&
-			    rw_req->port != KBCMDP) {
-				vkbd_debug("Ignore unknown port 0x%x.\n",
-					   rw_req->port);
-				continue;
-			}
-
-			if (rw_req->width != SZ8) {
-				vkbd_debug("Ignore unknown data width %d.\n",
-					   rw_req->width);
-				continue;
-			}
-
-			ret = (struct ioport_read_ret *) buf;
-			if (rw_req->write) {
-				_vkbd_ioport_write(&vkbd,
-						   rw_req->port,
-						   &rw_req->data);
-			} else {
-				_vkbd_ioport_read(&vkbd,
-						  rw_req->port,
-						  &ret->data);
-				ret->magic = MAGIC_IOPORT_READ_RET;
-				sys_send(parent_chid,
-					 ret, sizeof(struct ioport_read_ret));
-			}
+		switch (((uint32_t *) &req)[0]) {
+		case READ_IOPORT_REQ:
+			read_req = (struct read_ioport_req *) &req;
+			if (unlikely(read_req->port != KBSTATP &&
+				     read_req->port != KBDATAP))
+				data = 0xffffffff;
+			else
+				_vkbd_ioport_read(&vkbd, read_req->port, &data);
+			sys_ret_in(read_req->port, read_req->width, data);
 			continue;
 
-		case MAGIC_SYNC_IRQ:
-			sync_req = (struct sync_req *) buf;
+		case WRITE_IOPORT_REQ:
+			write_req = (struct write_ioport_req *) &req;
+			if (write_req->port == KBCMDP ||
+			    write_req->port == KBDATAP)
+				_vkbd_ioport_write(&vkbd, write_req->port,
+						   write_req->val);
+			continue;
 
-			if (sync_req->irq != IRQ_KBD &&
-			    sync_req->irq != IRQ_MOUSE) {
-				vkbd_debug("Ignore unknown IRQ %d.\n",
-					   sync_req->irq);
-				continue;
-			}
-
-			if (sync_req->irq == IRQ_KBD)
-				vkbd_sync_kbd(&vkbd);
-
-			vkbd_debug("Send SYNC_COMPLETE.\n");
-			sync_compl = (struct sync_complete *) buf;
-			sync_compl->irq = sync_req->irq;
-			sync_compl->magic = MAGIC_SYNC_COMPLETE;
-			sys_send(parent_chid,
-				 sync_compl, sizeof(struct sync_complete));
-
+		case DEV_SYNC_REQ:
+			vkbd_sync_kbd(&vkbd);
+			sys_sync_done();
 			continue;
 
 		default:

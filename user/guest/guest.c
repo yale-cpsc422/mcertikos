@@ -1,81 +1,79 @@
 #include <proc.h>
+#include <session.h>
 #include <stdio.h>
 #include <syscall.h>
+#include <types.h>
 
-uint8_t buf[1024];
-
-static void
-wait_for_device_ready(int chid)
+static vid_t
+attach_vdev(sid_t sid, uintptr_t exe, char *desc)
 {
-	size_t size;
+	pid_t pid;
+	vid_t vid;
 
-	while (1) {
-		if (sys_recv(chid, buf, &size, TRUE))
-			continue;
-
-		if (size == sizeof(struct device_ready) &&
-		    ((uint32_t *) buf)[0] == MAGIC_DEVICE_READY)
-			break;
+	printf("Create %s process ... ");
+	if ((pid = spawn(1, sid, exe)) == -1) {
+		printf("failed.\n");
+		return -1;
 	}
+	printf("done (pid %d).\n", pid);
+
+	printf("Attach process %d to VM in session %d ... ", pid, sid);
+	if ((vid = sys_attach_vdev(pid)) == -1) {
+		printf("failed.\n");
+		return -1;
+	}
+	printf("done (vid %d).\n", vid);
+
+	return vid;
 }
 
 int
 main(int argc, char **argv)
 {
-	extern uint8_t _binary___obj_user_vdev_i8259_i8259_start[],
-		_binary___obj_user_vdev_i8042_i8042_start[],
+	extern uint8_t _binary___obj_user_vdev_i8042_i8042_start[],
 		_binary___obj_user_vdev_i8254_i8254_start[],
 		_binary___obj_user_vdev_nvram_nvram_start[],
-		_binary___obj_user_vdev_pci_pci_start[];
+		_binary___obj_user_vdev_virtio_virtio_start[];
 
-	pid_t pid = getpid();
-	pid_t pic_proc, kbd_proc, pit_proc, nvram_proc, pci_proc;
+#define ELF_8042	((uintptr_t) _binary___obj_user_vdev_i8042_i8042_start)
+#define ELF_8254	((uintptr_t) _binary___obj_user_vdev_i8254_i8254_start)
+#define ELF_NVRAM	((uintptr_t) _binary___obj_user_vdev_nvram_nvram_start)
+#define ELF_VIRTIO	((uintptr_t) _binary___obj_user_vdev_virtio_virtio_start)
 
-	printf("guest %d: create VM ... ", pid);
-	if (sys_allocvm()) {
+	sid_t vm_sid;
+	pid_t my_pid;
+	vmid_t vmid;
+	vid_t vid;
+
+	my_pid = getpid();
+
+	printf("Guest %d: create VM session ... ", my_pid);
+	if ((vm_sid = session(SESSION_VM)) == -1) {
 		printf("failed.\n");
 		return 1;
 	}
-	printf("done.\n");
+	printf("done (sid %d).\n", vm_sid);
 
-	pic_proc =
-		spawn(1, (uintptr_t) _binary___obj_user_vdev_i8259_i8259_start);
-	printf("Start process %d for i8259. (channel %d)\n",
-	       pic_proc, getchid(pic_proc));
-	wait_for_device_ready(getchid(pic_proc));
-	printf("i8259 is ready.\n");
+	printf("Guest %d: create VM ... ", my_pid);
+	if ((vmid = sys_newvm()) == -1) {
+		printf("failed.\n");
+		return 1;
+	}
+	printf("done (vmid %d).\n", vmid);
 
-	kbd_proc =
-		spawn(1, (uintptr_t) _binary___obj_user_vdev_i8042_i8042_start);
-	printf("Start process %d for i8042. (channel %d)\n",
-	       kbd_proc, getchid(kbd_proc));
-	wait_for_device_ready(getchid(kbd_proc));
-	printf("i8042 is ready.\n");
+	if ((vid = attach_vdev(vm_sid, ELF_8042, "i8042")) == -1)
+		return 1;
+	if ((vid = attach_vdev(vm_sid, ELF_8254, "i8254")) == -1)
+		return 1;
+	if ((vid = attach_vdev(vm_sid, ELF_NVRAM, "NVRAM")) == -1)
+		return 1;
+	if ((vid = attach_vdev(vm_sid, ELF_VIRTIO, "VirtIO")) == -1)
+		return 1;
 
-	pit_proc =
-		spawn(1, (uintptr_t) _binary___obj_user_vdev_i8254_i8254_start);
-	printf("Start process %d for i8254. (channel %d)\n",
-	       pit_proc, getchid(pit_proc));
-	wait_for_device_ready(getchid(pit_proc));
-	printf("NVRAM is ready.\n");
-
-	nvram_proc =
-		spawn(1, (uintptr_t) _binary___obj_user_vdev_nvram_nvram_start);
-	printf("Start process %d for NVRAM. (channel %d)\n",
-	       nvram_proc, getchid(nvram_proc));
-	wait_for_device_ready(getchid(nvram_proc));
-	printf("i8254 is ready.\n");
-
-	pci_proc =
-		spawn(1, (uintptr_t) _binary___obj_user_vdev_pci_pci_start);
-	printf("Start process %d for PCI host. (channel %d)\n",
-	       pci_proc, getchid(pci_proc));
-	wait_for_device_ready(getchid(pci_proc));
-	printf("PCI host is ready.\n");
-
-	printf("guest %d: start VM ... ", pid);
-	sys_execvm();
-	printf("done.\n");
+	if ((sys_runvm())) {
+		printf("Cannot run VM.\n");
+		return 1;
+	}
 
 	return 0;
 }

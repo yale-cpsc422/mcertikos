@@ -20,5 +20,6 @@ $(KERN_OBJDIR)/virt/%.o: $(KERN_DIR)/virt/%.S
 	@mkdir -p $(@D)
 	$(V)$(CC) $(KERN_CFLAGS) -c -o $@ $<
 
+include $(KERN_DIR)/virt/dev/Makefile.inc
 include $(KERN_DIR)/virt/svm/Makefile.inc
 include $(KERN_DIR)/virt/vmx/Makefile.inc

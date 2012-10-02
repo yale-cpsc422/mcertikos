@@ -22,6 +22,4 @@ typedef __int32_t		__ssize_t;
 
 typedef __uint32_t		__reg_t;
 
-typedef __uint32_t		__pid_t;
-
 #endif /* !_MACHINE_TYPES_H_ */

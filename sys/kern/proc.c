@@ -16,6 +16,7 @@
 #include <sys/pcpu.h>
 #include <sys/proc.h>
 #include <sys/queue.h>
+#include <sys/session.h>
 #include <sys/spinlock.h>
 #include <sys/string.h>
 #include <sys/types.h>
@@ -226,6 +227,7 @@ proc_init(void)
 	}
 
 	channel_init();
+	session_init();
 
 	proc_inited = TRUE;
 
@@ -250,13 +252,14 @@ proc_sched_init(struct sched *sched)
 }
 
 struct proc *
-proc_spawn(struct pcpu *c, uintptr_t binary)
+proc_spawn(struct pcpu *c, uintptr_t binary, struct session *s)
 {
 	KERN_ASSERT(proc_inited == TRUE);
 	KERN_ASSERT(c != NULL);
+	KERN_ASSERT(s != NULL);
 
 	struct proc *p;
-	pageinfo_t *pi;
+	pageinfo_t *user_pi, *buf_pi;
 
 	/* get a free PCB */
 	if ((p = proc_alloc()) == NULL) {
@@ -280,15 +283,27 @@ proc_spawn(struct pcpu *c, uintptr_t binary)
 	}
 	kstack_init_proc(p, c, proc_spawn_return);
 
-	/* allocate memory for the userspace stack */
-	if ((pi = mem_page_alloc()) == NULL) {
-		PROC_DEBUG("Cannot allocate memory for userspace stack.\n");
+	/* allocate memory for the syscall buffer */
+	if ((buf_pi = mem_page_alloc()) == NULL) {
+		PROC_DEBUG("Cannot allocate memory for syscall buffer.\n");
 		pmap_free(p->pmap);
 		kstack_free(p->kstack);
 		proc_free(p);
 		return NULL;
 	}
-	pmap_insert(p->pmap, pi, VM_STACKHI - PAGESIZE, PTE_P | PTE_U | PTE_W);
+	p->sys_buf = (uint8_t *) mem_pi2ptr(buf_pi);
+
+	/* allocate memory for the userspace stack */
+	if ((user_pi = mem_page_alloc()) == NULL) {
+		PROC_DEBUG("Cannot allocate memory for userspace stack.\n");
+		mem_page_free(buf_pi);
+		pmap_free(p->pmap);
+		kstack_free(p->kstack);
+		proc_free(p);
+		return NULL;
+	}
+	pmap_insert(p->pmap, user_pi,
+		    VM_STACKHI - PAGESIZE, PTE_P | PTE_U | PTE_W);
 
 	/* load the execution file */
 	elf_load(binary, p->pmap);
@@ -304,20 +319,20 @@ proc_spawn(struct pcpu *c, uintptr_t binary)
 
 	/* maintain the process tree */
 	p->parent = pcpu_cur()->sched.cur_proc;
-	if (p->parent != NULL) {
+	if (p->parent != NULL)
 		TAILQ_INSERT_TAIL(&p->parent->child_list, p, child_entry);
-		p->parent_ch =
-			channel_alloc(p->parent, p, CHANNEL_TYPE_BIDIRECT);
-	}
+	else
+		p->parent = p;
 	TAILQ_INIT(&p->child_list);
 
-	/* put the process on the ready queue */
+	/* put the process on the ready queue and the process session */
 	sched_lock(c);
 	proc_ready(p, c, TRUE);
+	session_add_proc(s, p);
 	sched_unlock(c);
 
-	PROC_DEBUG("Process %d is spawned on CPU%d.\n",
-		   p->pid, pcpu_cpu_idx(c));
+	PROC_DEBUG("Process %d is spawned on CPU%d in session %d.\n",
+		   p->pid, pcpu_cpu_idx(c), s->sid);
 
 	return p;
 }
@@ -350,11 +365,6 @@ proc_block(struct proc *p, block_reason_t reason, struct channel *ch)
 		   p->pid, (reason == WAITING_FOR_SENDING) ? "sending to" :
 		   "receiving from", channel_getid(ch));
 
-	/* KERN_DEBUG("Process %d is blocked for %s channel %d.\n", */
-	/* 	   p->pid, (reason == WAITING_FOR_SENDING) ? "sending to" : */
-	/* 	   "receiving from", channel_getid(ch)); */
-
-
 	proc_sched(TRUE);
 }
 
@@ -376,6 +386,8 @@ proc_unblock(struct proc *p)
 
 	proc_ready(p, p->cpu, TRUE);
 
+	PROC_DEBUG("Process %d is unblocked.\n", p->pid);
+
 	/*
 	 * If the process is on another processor, send an IPI to trigger the
 	 * scheduler on the processor.
@@ -384,10 +396,8 @@ proc_unblock(struct proc *p)
 		lapic_send_ipi(p->cpu->arch_info.lapicid,
 			       T_IRQ0+IRQ_IPI_RESCHED,
 			       LAPIC_ICRLO_FIXED, LAPIC_ICRLO_NOBCAST);
-
-	PROC_DEBUG("Process %d is unblocked.\n", p->pid);
-
-	/* KERN_DEBUG("Process %d is unblocked.\n", p->pid); */
+	else
+		proc_sched(TRUE);
 }
 
 /*
@@ -499,6 +509,15 @@ proc_pid2proc(pid_t pid)
 	return &process[pid];
 }
 
+struct channel *
+proc_create_channel(struct proc *p1, struct proc *p2, channel_type type)
+{
+	KERN_ASSERT(p1 != NULL && p2 != NULL);
+	if (p1->session != p2->session)
+		return NULL;
+	return channel_alloc(p1, p2, type);
+}
+
 /*
  * XXX: If the receiver is waiting for the message, proc_send_msg() will wake up
  *      it by moving it from the blocked queue to the head of the ready queue.
@@ -518,9 +537,6 @@ proc_send_msg(struct channel *ch, struct proc *sender, void *msg, size_t size)
 		PROC_DEBUG("Process %d: channel %d is busy, wait for a while.\n",
 			   sender->pid, channel_getid(ch));
 
-		/* KERN_DEBUG("Process %d: channel %d is busy, wait for a while.\n", */
-		/* 	   sender->pid, channel_getid(ch)); */
-
 		sched_lock(pcpu_cur());
 		proc_block(sender, WAITING_FOR_SENDING, ch);
 		sched_unlock(pcpu_cur());
@@ -539,18 +555,12 @@ proc_send_msg(struct channel *ch, struct proc *sender, void *msg, size_t size)
 			PROC_DEBUG("Unblock process %d to receive from "
 				   "channel %d.\n",
 				   receiver->pid, channel_getid(ch));
-			/* KERN_DEBUG("Unblock process %d to receive from " */
-			/* 	   "channel %d.\n", */
-			/* 	   receiver->pid, channel_getid(ch)); */
 			proc_unblock(receiver);
 		}
 		sched_unlock(receiver->cpu);
 	} else {
 		PROC_DEBUG("Process %d: cannot send to channel %d, errno %d.\n",
 			   sender->pid, channel_getid(ch), rc);
-
-		/* KERN_DEBUG("Process %d: cannot send to channel %d, errno %d.\n", */
-		/* 	   sender->pid, channel_getid(ch), rc); */
 	}
 
 	return rc;
@@ -573,7 +583,8 @@ proc_recv_msg(struct channel *ch,
 
 	int rc;
 
-	while ((rc = channel_receive(ch, receiver, msg, size)) == E_CHANNEL_IDLE) {
+	while ((rc = channel_receive(ch, receiver, msg, size))
+	       == E_CHANNEL_IDLE) {
 		PROC_DEBUG("Process %d: channel %d is empty, %s.\n",
 			   receiver->pid, channel_getid(ch),
 			   (block == TRUE) ?
@@ -600,8 +611,6 @@ proc_recv_msg(struct channel *ch,
 		    sender->block_channel == ch) {
 			PROC_DEBUG("Unblock process %d to send to channel %d.\n",
 				   sender->pid, channel_getid(ch));
-			/* KERN_DEBUG("Unblock process %d to send to channel %d.\n", */
-			/* 	   sender->pid, channel_getid(ch)); */
 			proc_unblock(sender);
 		}
 		sched_unlock(sender->cpu);

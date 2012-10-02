@@ -57,12 +57,7 @@ svm_intr_assist(struct vm *vm)
 
 	int intr_vec;
 
-	if (vdev_get_irq(vm, &intr_vec)) {
-		KERN_WARN("Cannot get IRQ from virtual PIC.\n");
-		return;
-	}
-
-	if (intr_vec == -1)
+	if ((intr_vec = vdev_peep_intout(vm)) == -1)
 		return;
 
 	if (ctrl->event_inj & SVM_EVTINJ_VALID ||
@@ -74,12 +69,7 @@ svm_intr_assist(struct vm *vm)
 		return;
 	}
 
-	if (vdev_read_irq(vm, &intr_vec)) {
-		KERN_WARN("Cannot read IRQ from virtual PIC.\n");
-		return;
-	}
-
-	if (intr_vec == -1)
+	if ((intr_vec = vdev_read_intout(vm)) == -1)
 		return;
 
 	svm_inject_event(vmcb, SVM_EVTINJ_TYPE_INTR, intr_vec, FALSE, 0);

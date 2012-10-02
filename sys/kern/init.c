@@ -6,6 +6,8 @@
 #include <sys/mem.h>
 #include <sys/mmu.h>
 #include <sys/pcpu.h>
+#include <sys/proc.h>
+#include <sys/session.h>
 #include <sys/spinlock.h>
 #include <sys/string.h>
 #include <sys/timer.h>
@@ -35,13 +37,15 @@ extern uint8_t _binary___obj_user_idle_idle_start[];
 
 static void kern_main_ap(void);
 
+static struct session *idle_session = NULL;
+static struct session *init_session = NULL;
+
 /*
  * The main function of the kernel on BSP and is called by kern_init().
  */
 static void
 kern_main(void)
 {
-	pageinfo_t *pi;
 	struct pcpu *c;
 	struct proc *guest_proc, *idle_proc;
 	struct kstack *ap_kstack;
@@ -49,15 +53,6 @@ kern_main(void)
 
 	c = pcpu_cur();
 	KERN_ASSERT(c != NULL && c->booted == TRUE);
-
-	/* allocate memory for system call buffer */
-	KERN_INFO("[BSP KERN] Prepare buffer for handling system calls ... ");
-	if ((pi = mem_page_alloc()) == NULL)
-		KERN_PANIC("Cannot allocate memory for buffer.\n");
-	spinlock_acquire(&c->lk);
-	c->sys_buf = (uint8_t *) mem_pi2phys(pi);
-	spinlock_release(&c->lk);
-	KERN_INFO("done.\n");
 
 	/* register trap handlers */
 	trap_init_array(c);
@@ -107,16 +102,30 @@ kern_main(void)
 	intr_enable(IRQ_IPI_RESCHED, 0);
 	KERN_INFO("done.\n");
 
+	KERN_INFO("Create IDLE session ... ");
+	if ((idle_session = session_new(SESSION_NORMAL)) == NULL)
+		KERN_PANIC("Cannot create IDLE session.\n");
+	else
+		KERN_INFO("done.\n");
+
+	KERN_INFO("Create INIT session ... ");
+	if ((init_session = session_new(SESSION_NORMAL)) == NULL)
+		KERN_PANIC("Cannot create INIT session.\n");
+	else
+		KERN_INFO("done.\n");
+
 	/* create the first user process */
-	guest_proc = proc_spawn(c, (uintptr_t)
-			       _binary___obj_user_guest_guest_start);
-	if (guest_proc == NULL)
-		KERN_PANIC("Cannot create the guest process on BSP.\n");
 	idle_proc = proc_spawn(c, (uintptr_t)
-			       _binary___obj_user_idle_idle_start);
+			       _binary___obj_user_idle_idle_start,
+			       idle_session);
 	if (idle_proc == NULL)
 		KERN_PANIC("Cannot create the idle process on BSP.\n");
 
+	guest_proc = proc_spawn(c, (uintptr_t)
+				_binary___obj_user_guest_guest_start,
+				init_session);
+	if (guest_proc == NULL)
+		KERN_PANIC("Cannot create the guest process on BSP.\n");
 
 	/* boot APs  */
 	for (i = 1; i < pcpu_ncpu(); i++) {
@@ -146,24 +155,13 @@ kern_main(void)
 static void
 kern_main_ap(void)
 {
-	pageinfo_t *pi;
 	struct pcpu *c;
 	int cpu_idx;
-	struct proc *init_proc;
+	struct proc *idle_proc;
 
 	c = pcpu_cur();
 	KERN_ASSERT(c != NULL && c->booted == FALSE);
 	cpu_idx = pcpu_cpu_idx(c);
-
-	/* allocate buffer for handling system calls */
-	KERN_INFO("[AP%d KERN] Prepare buffer for handling system calls ... ",
-		  cpu_idx);
-	if ((pi = mem_page_alloc()) == NULL)
-		KERN_PANIC("Cannot allocate memory for handling system calls.\n");
-	spinlock_acquire(&c->lk);
-	c->sys_buf = (uint8_t *) mem_pi2phys(pi);
-	spinlock_release(&c->lk);
-	KERN_INFO("done.\n");
 
 	/* register trap handlers */
 	trap_init_array(c);
@@ -217,9 +215,10 @@ kern_main_ap(void)
 
 	/* jump to userspace */
 	KERN_INFO("[AP%d KERN] Go to userspace ... \n", cpu_idx);
-	init_proc = proc_spawn(c,
-			       (uintptr_t) _binary___obj_user_idle_idle_start);
-	if (init_proc == NULL)
+	idle_proc = proc_spawn(c,
+			       (uintptr_t) _binary___obj_user_idle_idle_start,
+			       idle_session);
+	if (idle_proc == NULL)
 		KERN_PANIC("Cannot create idle process on AP%d.\n", cpu_idx);
 	sched_lock(c);
 	proc_sched(FALSE);

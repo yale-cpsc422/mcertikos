@@ -46,10 +46,7 @@ vnvram_ioport_read(struct vnvram *nvram, uint16_t port)
 	if (nvram->data_valid == TRUE) {
 		return nvram->data;
 	} else {
-		uint8_t data;
-		/* DEBUG("Passthrough\n"); */
-		sys_read_ioport(port, SZ8, &data);
-		return data;
+		return sys_host_in(port, SZ8);
 	}
 }
 
@@ -100,7 +97,7 @@ vnvram_ioport_write(struct vnvram *nvram, uint16_t port, uint8_t data)
 	default:
 		VNVRAM_DEBUG("Passthrough index 0x%x.\n", idx);
 		nvram->data_valid = FALSE;
-		sys_write_ioport(port, SZ8, data);
+		sys_host_out(port, SZ8, data);
 		return;
 	}
 
@@ -119,14 +116,14 @@ _vnvram_ioport_read(struct vnvram *nvram, uint16_t port, void *data)
 }
 
 static void
-_vnvram_ioport_write(struct vnvram *nvram, uint16_t port, void *data)
+_vnvram_ioport_write(struct vnvram *nvram, uint16_t port, uint8_t data)
 {
-	ASSERT(nvram != NULL && data != NULL);
+	ASSERT(nvram != NULL);
 	ASSERT(port == CMOS_INDEX_PORT);
 
-	VNVRAM_DEBUG("Write I/O port %d, val 0x%08x.\n", port, *(uint8_t *) data);
+	VNVRAM_DEBUG("Write I/O port %d, val 0x%08x.\n", port, data);
 
-	vnvram_ioport_write(nvram, port, *(uint8_t *) data);
+	vnvram_ioport_write(nvram, port, data);
 }
 
 int
@@ -134,14 +131,10 @@ main(int argc, char **argv)
 {
 	struct vnvram vnvram;
 
-	int parent_chid;
-
-	uint8_t buf[1024];
-	size_t size;
-
-	struct ioport_rw_req *rw_req;
-	struct ioport_read_ret *ret;
-	struct device_ready *dev_rdy;
+	dev_req_t req;
+	struct read_ioport_req *read_req;
+	struct write_ioport_req *write_req;
+	uint32_t data;
 
 	uint64_t phy_mem_size;
 
@@ -149,7 +142,7 @@ main(int argc, char **argv)
 
 	vnvram.data_valid = FALSE;
 
-	sys_guest_mem_size(&phy_mem_size);
+	phy_mem_size = sys_guest_mem_size();
 	if (phy_mem_size > 0x100000000ULL) { /* above 4 GB */
 		vnvram.highmem_size = phy_mem_size - 0x100000000ULL;
 		phy_mem_size -= vnvram.highmem_size;
@@ -168,58 +161,33 @@ main(int argc, char **argv)
 		     vnvram.extmem2_size,
 		     vnvram.highmem_size);
 
-	sys_register_ioport(CMOS_DATA_PORT, SZ8, 0);
-	sys_register_ioport(CMOS_DATA_PORT, SZ8, 1);
-	sys_register_ioport(CMOS_INDEX_PORT, SZ8, 0);
-	sys_register_ioport(CMOS_INDEX_PORT, SZ8, 1);
+	sys_attach_port(CMOS_DATA_PORT, SZ8);
+	sys_attach_port(CMOS_INDEX_PORT, SZ8);
 
-	parent_chid = sys_getpchid();
-
-	dev_rdy = (struct device_ready *) buf;
-	dev_rdy->magic = MAGIC_DEVICE_READY;
-	sys_send(parent_chid, dev_rdy, sizeof(struct device_ready));
+	sys_dev_ready();
 
 	while (1) {
-		if (sys_recv(parent_chid, buf, &size, TRUE))
+		if (sys_recv_req(&req, TRUE))
 			continue;
 
-		switch (((uint32_t *) buf)[0]) {
-		case MAGIC_IOPORT_RW_REQ:
-			rw_req = (struct ioport_rw_req *) buf;
-
-			if (rw_req->port != CMOS_DATA_PORT &&
-			    rw_req->port != CMOS_INDEX_PORT) {
-				VNVRAM_DEBUG("Ignore unknown port %d.\n",
-					     rw_req->port);
-				continue;
-			}
-
-			if (rw_req->width != SZ8) {
-				VNVRAM_DEBUG("Ignore unknown data width %d.\n",
-					     rw_req->width);
-				continue;
-			}
-
-			VNVRAM_DEBUG("Receive IOPORT_RW request: "
-				     "port %d, write %d.\n",
-				     rw_req->port, rw_req->write);
-
-			ret = (struct ioport_read_ret *) buf;
-
-			if (rw_req->write && rw_req->port == CMOS_INDEX_PORT) {
-				_vnvram_ioport_write(&vnvram,
-						     rw_req->port,
-						     &rw_req->data);
-			} else if (rw_req->write == 0 &&
-				   rw_req->port == CMOS_DATA_PORT) {
+		switch (((uint32_t *) &req)[0]) {
+		case READ_IOPORT_REQ:
+			read_req = (struct read_ioport_req *) &req;
+			if (unlikely(read_req->port != CMOS_DATA_PORT &&
+				     read_req->port != CMOS_INDEX_PORT))
+				data = 0xffffffff;
+			else
 				_vnvram_ioport_read(&vnvram,
-						    rw_req->port,
-						    &ret->data);
-				ret->magic = MAGIC_IOPORT_READ_RET;
-				sys_send(parent_chid,
-					 ret, sizeof(struct ioport_read_ret));
-			}
+						    read_req->port, &data);
+			sys_ret_in(read_req->port, read_req->width, data);
+			continue;
 
+		case WRITE_IOPORT_REQ:
+			write_req = (struct write_ioport_req *) &req;
+			if (write_req->port == CMOS_DATA_PORT ||
+			    write_req->port == CMOS_INDEX_PORT)
+				_vnvram_ioport_write(&vnvram, write_req->port,
+						     write_req->val);
 			continue;
 
 		default:

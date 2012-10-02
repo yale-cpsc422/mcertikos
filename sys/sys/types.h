@@ -1,9 +1,7 @@
 #ifndef _KERN_TYPES_H_
 #define _KERN_TYPES_H_
 
-#ifndef _KERN_
-#error "This is a kernel header file; do not include it in userspace program."
-#endif /* !_KERN_ */
+#ifdef _KERN_
 
 #include <sys/gcc.h>
 
@@ -27,7 +25,7 @@ typedef __ssize_t	ssize_t;
 
 typedef __reg_t		reg_t;
 
-typedef __pid_t		pid_t;
+typedef int32_t		pid_t;
 
 /*
  * do_div() is NOT a C function. It wants to return
@@ -98,5 +96,21 @@ typedef uint8_t		bool;
 #define FALSE		((bool) 0)
 
 #define NULL		0
+
+/*
+ * Types for VMM
+ */
+
+typedef int32_t vmid_t;
+typedef int32_t vid_t;
+typedef int32_t sid_t;
+
+typedef enum data_sz_t {
+	SZ8, 	/* 1 byte */
+	SZ16, 	/* 2 byte */
+	SZ32	/* 4 byte */
+} data_sz_t;
+
+#endif /* _KERN_ */
 
 #endif /* !_KERN_TYPES_H_ */

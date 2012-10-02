@@ -36,240 +36,277 @@
 
 #include <sys/virt/vmm.h>
 
+#include <machine/pmap.h>
+
 /*
  * Initialize the virtual device structures of a virtual machine.
  */
 void vdev_init(struct vm *);
 
 /*
- * Registration/Unregistration Interface.
+ * Register/Unregister a process as a virtual device of a virtual machine.
+ *
+ * @param vm which virtual machine the virtual device belongs to
+ * @param p  which process is being registered
+ *
+ * @return a valid virtual device id (>= 0) if successful; otherwise, return -1.
  */
+vid_t vdev_register_device(struct vm *vm, struct proc *p);
+void  vdev_unregister_device(struct vm *vm, vid_t vid);
 
 /*
- * Register/Unregister a process to handle I/O port readings/writings.
+ * Register/Unregister a process to handle accesses to I/O ports.
  *
- * @param vm    the virtual machine to which the process is registered
- * @param p     the process responsible for the readings/writings
- * @param port  the I/O port being read/written
+ * @param vm    the virtual machine to be operating on
+ * @param port  the I/O port to be accessed
  * @param width the data width
- * @param write is it the reading or the writing operation?
+ * @param vid   the virtual device responsible for the I/O port
  *
  * @return 0 if the registration/unregistration succeeds; otherwise, return a
  *         non-zero value.
  */
-int vdev_register_ioport(struct vm *vm, struct proc *p,
-			 uint16_t port, data_sz_t width, bool write);
-int vdev_unregister_ioport(struct vm *vm, struct proc *p,
-			   uint16_t port, data_sz_t width, bool write);
+int vdev_register_ioport(struct vm *vm,
+			 uint16_t port, data_sz_t width, vid_t vid);
+int vdev_unregister_ioport(struct vm *vm,
+			   uint16_t port, data_sz_t width, vid_t vid);
 
 /*
  * Register/Unregister a process as the source of an interrupt.
  *
- * @param vm  the virtual machine to which the process is registered
- * @param p   the process which is the source of the interrupt
+ * @param vm  the virtual machine to be operating on
  * @param irq the interrupt number (PIC/APIC vector number, not IDT vector
  *            number)
+ * @param vid the virtual device responsible for the interrupt
  *
  * @return 0 if the registration/unregistration succeeds; otherwise, return a
  *           non-zero value.
  */
-int vdev_register_irq(struct vm *vm, struct proc *p, uint8_t irq);
-int vdev_unregister_irq(struct vm *vm, struct proc *p, uint8_t irq);
+int vdev_register_irq(struct vm *vm, uint8_t irq, vid_t vid);
+int vdev_unregister_irq(struct vm *vm, uint8_t irq, vid_t vid);
 
 /*
- * Register/Unregister a process as the programmable interrupt controller.
+ * Read/Write the guest I/O port.
  *
- * @param vm the virtual machine to which the process is registered
- * @param p  the process which is the programmable interrupt controller
- *
- * @param 0 if the registration/unregistraion succeeds; otherwise, return a
- *        non-zero value.
- */
-int vdev_register_pic(struct vm *vm, struct proc *p);
-int vdev_unregister_pic(struct vm *vm, struct proc *p);
-
-/*
- * Register/Unregister a process to handle the memory readings/writings to a
- * range of the guest physical memory.
- *
- * @param vm   the virtual machine to which the process is registered
- * @param p    the process responsible for the readings/writings
- * @param gpa  the start guest physical address of the memory region
- * @param hla  the host linear address where the memory region is mapped to
- * @param size the size in bytes of the memory region
- *
- * @return 0 if the registration/unregistration succeeds; otherwise, return a
- *         non-zero value.
- */
-int vdev_register_mmio(struct vm *vm, struct proc *p,
-		       uintptr_t gpa, uintptr_t hla, size_t size);
-int vdev_unregister_mmio(struct vm *vm, struct proc *p,
-			 uintptr_t gpa, size_t size);
-
-/*
- * Virtual Device Interface
- */
-
-/*
- * Read/Write an I/O port of a virtual device.
- *
- * @param vm    the virtual machine to be operated on
- * @param port  the I/O port to be read/written
+ * @param vm    the virtual machine operating on
+ * @param vid   the virtual device responsible for the I/O port
+ * @param port  the I/O port accessed
  * @param width the data width
- * @param data  where the data comes from or goes to
+ * @param data  the data read/written
  *
- * @return 0 if the reading/writing succeeds; otherwise, return a non-zero value.
+ * @return 0 if successful; otherwise, return a non-zero value
  */
-int vdev_ioport_read(struct vm *vm,
-		     uint16_t port, data_sz_t width, uint32_t *data);
-int vdev_ioport_write(struct vm *vm,
-		      uint16_t port, data_sz_t width, uint32_t data);
+int vdev_read_guest_ioport(struct vm *vm, vid_t vid,
+			   uint16_t port, data_sz_t width, uint32_t *data);
+int vdev_write_guest_ioport(struct vm *vm, vid_t vid,
+			    uint16_t port, data_sz_t width, uint32_t data);
+
+/*
+ * Return the data on the guest I/O port.
+ *
+ * @param vm    the virtual machine operating on
+ * @param vid   the virtual machine responsible for the I/O port
+ * @param port  the I/O port accessed
+ * @param width the data width
+ *
+ * @return 0 if successful; otherwise, return a non-zero value.
+ */
+int vdev_return_guest_ioport(struct vm *vm, vid_t vid,
+			     uint16_t port, data_sz_t width, uint32_t val);
 
 /*
  * Read/Write the host I/O port.
  *
- * @param vm    the virtual machine to which the virtual device is attached
- * @param port  the port to be read/written
+ * @param vm    the virtual machine operating on
+ * @param vid   the virtual device responsible for the I/O port
+ * @param port  the I/O port accessed
  * @param width the data width
- * @param data  where the data is
+ * @param data  the data read/written
  *
- * @return 0 if the operation succeeds; otherwise, return a non-zero value.
+ * @return 0 if successful; otherwise, return a non-zero value
  */
-int vdev_host_ioport_read(struct vm *vm,
+int vdev_read_host_ioport(struct vm *vm, vid_t vid,
 			  uint16_t port, data_sz_t width, uint32_t *data);
-int vdev_host_ioport_write(struct vm *vm,
+int vdev_write_host_ioport(struct vm *vm, vid_t vid,
 			   uint16_t port, data_sz_t width, uint32_t data);
 
 /*
- * Raise/Lower an IRQ line/vector of the virtual programmable interrupt
- * controller.
+ * Set the interrupt line of the virtual PIC.
  *
- * @param vm  the virtual machine to be operated on
+ * @param vm   the virtual machine operating on
+ * @param vid  the virtual device as the source of interrupt
+ * @param irq  the interrupt to be raised
+ * @param mode 0: raise the interrupt line;
+ *             1: lower the interruot line;
+ *             2: trigger the interrupt line
+ *
+ * @return 0 if successful; otherwise, return a non-zero value.
+ */
+int vdev_set_irq(struct vm *vm, vid_t vid, uint8_t irq, int mode);
+#define vdev_raise_irq(vm, vid, irq)	vdev_set_irq((vm), (vid), (irq), 0)
+#define vdev_lower_irq(vm, vid, irq)	vdev_set_irq((vm), (vid), (irq), 1)
+#define vdev_trigger_irq(vm, vid, irq)	vdev_set_irq((vm), (vid), (irq), 2)
+
+/*
+ * Read/Peep the INTOUT line of the virtual PIC. Read operation has the side
+ * effect, which will clear the INTOUT line; peep operation has no side effect.
+ *
+ * @param vm     the virtual machine operating on
+ * @param intout return the data on the INTOUT line
+ *
+ * @return 0 if successful; otherwise, return a non-zero value.
+ */
+int vdev_get_intout(struct vm *vm, int peep);
+#define vdev_peep_intout(vm)	vdev_get_intout((vm), 0)
+#define vdev_read_intout(vm)	vdev_get_intout((vm), 1)
+
+/*
+ * Notify the guest an interrupt comes.
+ *
+ * @param vm  the virtual machine operating on
+ * @param vid the virtual PIC
  * @param irq the interrupt number
  *
- * @return 0 if the operation succeeds; otherwise, return a non-zero value.
+ * @return 0 if successful; otherwise, return a non-zero value.
  */
-int vdev_raise_irq(struct vm *vm, uint8_t irq);
-int vdev_trigger_irq(struct vm *vm, uint8_t irq);
-int vdev_lower_irq(struct vm *vm, uint8_t irq);
+int vdev_notify_irq(struct vm *vm, vid_t vid, uint8_t irq);
 
 /*
- * Notify the virtual machine an interrupt comes from the virtual PIC.
+ * Transfer data between the guest physical address space and the host linear
+ * address space.
  *
- * vdev_notify_irq() doesn't send the IRQ number to the virtual machine.
- * Instead, the virtual machine uses vdev_get_irq() and vdev_read_irq() to
- * get the IRQ number from the virtual PIC.
+ * @param vm   the virtual machine operating on
+ * @param gpa  the start guest physical address
+ * @param pmap
+ * @param la   the start host liear address
+ * @param size the number of bytes to transfer
  *
- * @param vm  the virtual machine where the interrupt comes to
- *
- * @return 0 if the notification is sent; otherwise, return a non-zero value.
+ * @return 0 if successful; otherwise, return a non-zero value.
  */
-int vdev_notify_irq(struct vm *vm);
+int vdev_rw_guest_mem(struct vm *vm, uintptr_t gpa,
+		      pmap_t *pmap, uintptr_t la, size_t size, int write);
+#define vdev_read_guest_mem(vm, gpa, pmap, la, size)			\
+	vdev_rw_guest_mem((vm), (gpa), (pmap), (la), (size), 0)
+#define vdev_write_guest_mem(vm, gpa, pmap, la, size)			\
+	vdev_rw_guest_mem((vm), (gpa), (pmap), (la), (size), 1)
 
 /*
- * Get the highest-priority interrupt from the virtual PIC.
+ * Notify a virtual device to synchronize with the host device.
  *
- * vdev_get_irq() has no side-effect, i.e. it doesn't change the states of the
- * virtual PIC.
+ * @param vm  the virtual machine operating on
+ * @param vid the virtual device
  *
- * @param vm  the virtual machine to which the virtual PIC is attached
- * @param irq where the interrupt number will be returned to; if -1 is returned,
- *            then there is no interrupt.
- *
- * @return 0 if the operation succeeds; otherwise, return a non-zero value.
+ * @return 0 if successful; otherwise, return a non-zero value.
  */
-int vdev_get_irq(struct vm *vm, int *irq);
+int vdev_sync_dev(struct vm *vm, vid_t vid);
 
 /*
- * Read the highest-priority interrupt from the virtual PIC.
+ * Notify the virtual machine a virtual device completes the synchronization.
  *
- * vdev_read_irq may have side-effects, e.g. it may clear the most significant
- * bit of IRR and set the corresponding bit of ISR of the virtual PIC. Which
- * side-effects would happen depends on the implementation of the virtual PIC.
+ * @param vm  the virtual machine operating on
+ * @param vid the virtual device
  *
- * @param vm  the virtual machine to which the virtual PIC is attached
- * @param irq where the interrupt number will be returned to; if -1 is returned,
- *            then there is no interrupt.
- *
- * @return 0 if the operation succeeds; otherwise, return a non-zero value.
+ * @return 0 if successful; otherwise, return a non-zero value.
  */
-int vdev_read_irq(struct vm *vm, int *irq);
+int vdev_sync_complete(struct vm *vm, vid_t vid);
 
 /*
- * Notify a virtual device to synchronize with the physical device.
+ * Notify the virtual machine a virtual device is ready to work.
  *
- * The notifications are always triggered by physical external interrupts. When
- * an physical external interrupt comes, if a virtual device is registered as
- * the source of the same interrupt, CertiKOS will notify the virtual device to
- * synchronize with the physical devices.
+ * @param vm  the virtual machine operating on
+ * @param vid the virtual device
  *
- * @param vm  the virtual machine to which the virtual device is attached
- * @param irq the interrupt number
- *
- * @return 0 if the notification succeeds; otherwise, return a non-zero value
+ * @return 0 if successful; otherwise, return a non-zero value.
  */
-int vdev_notify_sync(struct vm *vm, uint8_t irq);
+int vdev_device_ready(struct vm *vm, vid_t vid);
+
+/*
+ * Get the process of a virtual device.
+ */
+struct proc *vdev_get_dev(struct vm *vm, vid_t vid);
 
 #else /* !_KERN_ */
 
 #include <types.h>
 
+typedef int vid_t;
+
 #endif /* _KERN_ */
 
-#define MAGIC_IOPORT_RW_REQ	0x76540001
-#define MAGIC_IOPORT_READ_RET	0x76540002
-#define MAGIC_IRQ_REQ		0x76540003
-#define MAGIC_SYNC_IRQ		0x76540004
-#define MAGIC_IRQ_READ_REQ	0x76540005
-#define MAGIC_IRQ_READ_RET	0x76540006
-#define MAGIC_DEVICE_READY	0x76540007
-#define MAGIC_SYNC_COMPLETE	0x76540008
+enum vdev_msg_magic {
+	RAISE_IRQ_REQ = 0xabcd0001,
+	LOWER_IRQ_REQ,
+	TRIGGER_IRQ_REQ,
+	READ_IOPORT_REQ,
+	WRITE_IOPORT_REQ,
+	RETURN_IOPORT,
+	DEVIDE_READY,
+	DEV_SYNC_REQ,
+	DEV_SYNC_COMPLETE
+};
 
-struct ioport_rw_req {
+struct raise_irq_req {
+	uint32_t	magic;
+	uint8_t		irq;
+};
+
+struct lower_irq_req {
+	uint32_t	magic;
+	uint8_t		irq;
+};
+
+struct trigger_irq_req {
+	uint32_t	magic;
+	uint8_t		irq;
+};
+
+struct read_ioport_req {
 	uint32_t	magic;
 	uint16_t	port;
 	uint8_t		width;
-	int		write;
-	uint32_t	data;
 };
 
-struct ioport_read_ret {
+struct write_ioport_req {
 	uint32_t	magic;
-	uint32_t	data;
+	uint16_t	port;
+	uint8_t		width;
+	uint32_t	val;
 };
 
-struct irq_req {
+struct return_ioport {
 	uint32_t	magic;
-	uint8_t		irq;
-	int		trigger;/* -1: lower the irq line;
-				    0: first lower and then raise the irq line;
-				    1: raise the irq line. */
+	uint16_t	port;
+	uint8_t		width;
+	uint32_t	val;
 };
 
-struct sync_req {
+struct device_rdy {
 	uint32_t	magic;
-	uint8_t		irq;
+	vid_t		vid;
 };
 
-struct sync_complete {
+struct dev_sync_req {
 	uint32_t	magic;
-	uint8_t		irq;
+	vid_t		vid;
 };
 
-struct irq_read_req {
+struct dev_sync_complete {
 	uint32_t	magic;
-	int		read;	/* If read = 1, the request is sent by
-				   vdev_read_irq(); if read = 0, the request is
-				   sent bby vdev_get_irq(). */
+	vid_t		vid;
 };
 
-struct irq_read_ret {
-	uint32_t	magic;
-	int		irq;
-};
+typedef union {
+	struct raise_irq_req	__req0;
+	struct lower_irq_req	__req1;
+	struct trigger_irq_req	__req2;
+	struct read_ioport_req	__req3;
+	struct write_ioport_req	__req4;
+	struct dev_sync_req	__req5;
+} dev_req_t;
 
-struct device_ready {
-	uint32_t	magic;
-};
+typedef union {
+	struct return_ioport	__ack0;
+	struct device_rdy	__ack1;
+	struct dev_sync_complete __ack2;
+} dev_ack_t;
 
 #endif /* !_SYS_VIRT_VMM_IODEV_H_ */

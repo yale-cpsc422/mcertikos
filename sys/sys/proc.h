@@ -8,17 +8,19 @@
 #include <sys/gcc.h>
 #include <sys/pcpu.h>
 #include <sys/queue.h>
-#include <sys/signal.h>
+#include <sys/session.h>
 #include <sys/spinlock.h>
 #include <sys/trap.h>
 #include <sys/types.h>
+
+#include <sys/virt/vmm.h>
 
 #include <machine/pmap.h>
 
 #define MAX_PID		64
 #define MAX_MSG		8
 
-#define PID_INV		(~(pid_t) 0)
+#define PID_INV		((pid_t) -1)
 
 struct proc;
 typedef int (*trap_cb_t) (struct context *);
@@ -70,6 +72,8 @@ typedef int (*unblock_cb_t) (struct proc *);
  * - s: protected by the scheduler lock
  */
 struct proc {
+	spinlock_t	lk;	/* (*) process lock */
+
 	pid_t		pid;	/* (c) process id */
 	struct kstack	*kstack;/* (c) kernel stack for this process */
 	pmap_t		*pmap;	/* (c) page table */
@@ -83,21 +87,24 @@ struct proc {
 	struct vm	*vm;	/* (a) which virtual machine is running in this
 				   process */
 
+	vid_t		vid;	/* (a) the virtual device ID, if this process is
+				   registered as a virtual device; otherwise,
+				   -1 */
+
 	block_reason_t	block_reason;	/* (s) why the process is blocked */
 	struct channel	*block_channel;	/* (s) which channel the process is
 					   blocked on */
 
-	struct proc	*parent;    /* (s) the parent process of this process */
-	struct channel	*parent_ch; /* (a) bidirection channel to the parent */
+	uint8_t		*sys_buf;	/* buffer for handler system calls */
 
 	/*
+	 * (s) parent: the parent process of this process
 	 * (s) child_list: all children process of this process
 	 * (s) child_entry: child_list entry in the parent's child_list
 	 */
+	struct proc	*parent;    /* (s) the parent process of this process */
 	TAILQ_HEAD(children, proc) child_list;
 	TAILQ_ENTRY(proc)          child_entry;
-
-	spinlock_t	lk;	/* (*) process lock */
 
 	/*
 	 * A process can be in either of the free processes list, the ready
@@ -105,6 +112,13 @@ struct proc {
 	 * list.
 	 */
 	TAILQ_ENTRY(proc) entry;/* (s) linked list entry in scheduler queue */
+
+	/*
+	 * (s) session: the process session this process belongs to
+	 * (s) session_entty: the entry in the process session
+	 */
+	struct session	*session;
+	LIST_ENTRY(proc) session_entry;
 };
 
 #define proc_lock(p)				\
@@ -140,10 +154,11 @@ int proc_sched_init(struct sched *);
  *
  * @param c     the processor on which the process will run
  * @param start the start address of the execution file.
+ * @param s     the session to which the process belongs
  *
  * @return PCB of the process if spawn succeeds; otherwise, return NULL.
  */
-struct proc *proc_spawn(struct pcpu *c, uintptr_t start);
+struct proc *proc_spawn(struct pcpu *c, uintptr_t start, struct session *s);
 
 /*
  * Block a process.
@@ -190,6 +205,19 @@ struct proc *proc_pid2proc(pid_t);
  * Save the context of a process.
  */
 void proc_save(struct proc *p, tf_t *tf);
+
+/*
+ * Create a channel between two processes, which must be in the same session.
+ *
+ * @param p1   one end point of the channel
+ * @param p2   another end point of the channel
+ * @oaram type the type of the channel
+ *
+ * @return the pointer to the channel structure if successful; otherwise, return
+ *         NULL.
+ */
+struct channel *proc_create_channel(struct proc *p1, struct proc *p2,
+				    channel_type type);
 
 /*
  * Send a messags through a channel. If the channel is busy when proc_send_msg()

@@ -21,10 +21,14 @@
 static gcc_inline bool
 trap_from_guest(tf_t *tf)
 {
-	return (tf->eip < VM_USERLO &&
-		proc_cur()->vm != NULL &&
-		proc_cur()->vm->exit_reason == EXIT_FOR_EXTINT &&
-		proc_cur()->vm->handled == FALSE) ? TRUE : FALSE;
+#if 0
+	return (proc_cur()->session->type == SESSION_VM &&
+		proc_cur()->session->vm != NULL) ? TRUE : FALSE;
+#else
+	return (tf->eip < VM_USERLO && vmm_cur_vm() != NULL &&
+		vmm_cur_vm()->exit_reason == EXIT_FOR_EXTINT &&
+		vmm_cur_vm()->handled == FALSE) ? TRUE : FALSE;
+#endif
 }
 
 /*

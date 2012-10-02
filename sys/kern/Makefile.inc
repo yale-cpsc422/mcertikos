@@ -13,6 +13,7 @@ KERN_SRCFILES	+= $(KERN_DIR)/kern/intr.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/timer.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/syscall.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/channel.c
+KERN_SRCFILES	+= $(KERN_DIR)/kern/session.c
 
 # Targets
 

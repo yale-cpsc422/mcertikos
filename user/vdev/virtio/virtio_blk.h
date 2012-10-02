@@ -5,6 +5,8 @@
 
 #include "virtio.h"
 
+#define ATA_SECTOR_SIZE		512
+
 /* VirtIO block device features */
 #define VIRTIO_BLK_F_BARRIER	(1 << 0)
 #define VIRTIO_BLK_F_SIZE_MAX	(1 << 1)
@@ -65,9 +67,5 @@ struct virtio_blk {
 	/* are there unhandled requests in the virtqueue? */
 	bool pending_req;
 };
-
-int virtio_blk_init(struct virtio_blk *, struct vm *);
-
-#endif /* _KERN_ */
 
 #endif /* !_SYS_VIRT_DEV_VIRTIO_BLK_H_ */

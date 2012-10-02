@@ -51,21 +51,12 @@ struct vm;
 
 struct pcpu {
 	spinlock_t	lk;
-
 	bool		inited;		/* is pcpu structure initialized? */
 	volatile bool	booted;		/* does this processor boot up ? */
-
 	struct kstack	*kstack;	/* bootstrap kernel stack */
-
 	struct pcpuinfo	arch_info;	/* arch-dependent information */
-
 	struct sched	sched;		/* process scheduler */
-
-	uint8_t		*sys_buf;	/* buffer for passing parameters and
-					   return values of system calls */
-
 	trap_cb_t	**trap_handler;	/* arrays of trap handlers */
-
 	struct vm	*vm;
 };
 

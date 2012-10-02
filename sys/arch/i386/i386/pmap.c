@@ -493,28 +493,42 @@ size_t
 pmap_copy(pmap_t *d_pmap, uintptr_t d_va,
 	  pmap_t *s_pmap, uintptr_t s_va, size_t size)
 {
-	if (pmap_checkrange(d_pmap, d_va, size) == FALSE ||
-	    pmap_checkrange(s_pmap, s_va, size) == FALSE)
+	/* KERN_DEBUG("Copy %d bytes from 0x%08x:0x%08x to 0x%08x:0x%08x\n", */
+	/* 	   size, s_pmap, s_va, d_pmap, d_va); */
+
+	size_t copied_bytes = 0;
+	uintptr_t d_cur_va = d_va, s_cur_va = s_va;
+	uintptr_t d_cur_pa, s_cur_pa;
+
+	if (size == 0 ||
+	    d_cur_va + size <= d_cur_va || s_cur_va + size <= s_cur_va)
 		return 0;
 
-	size_t copyed_bytes = 0;
-	uintptr_t d_cur_va = d_va, s_cur_va = s_va;
+	d_cur_pa = pmap_la2pa(d_pmap, d_cur_va);
+	s_cur_pa = pmap_la2pa(s_pmap, s_cur_va);
 
-	while (copyed_bytes < size) {
-		uintptr_t d_cur_pa =
-			PGADDR(pmap_lookup(d_pmap, d_cur_va)) + PGOFF(d_cur_va);
-		uintptr_t s_cur_pa =
-			PGADDR(pmap_lookup(s_pmap, s_cur_va)) + PGOFF(s_cur_va);
+	do {
+		/* KERN_DEBUG("  copy from 0x%08x to 0x%08x\n", */
+		/* 	   s_cur_pa, d_cur_pa); */
 
 		*(uint8_t *) d_cur_pa = *(uint8_t *) s_cur_pa;
 
+		d_cur_pa++;
+		s_cur_pa++;
 		d_cur_va++;
 		s_cur_va++;
+		copied_bytes++;
 
-		copyed_bytes++;
-	}
+		if (copied_bytes == size)
+			break;
 
-	return copyed_bytes;
+		if (d_cur_va == ROUNDDOWN(d_cur_va, PAGESIZE))
+			d_cur_pa = pmap_la2pa(d_pmap, d_cur_va);
+		if (s_cur_va == ROUNDDOWN(s_cur_va, PAGESIZE))
+			s_cur_pa = pmap_la2pa(s_pmap, s_cur_va);
+	} while (copied_bytes < size);
+
+	return copied_bytes;
 }
 
 /*
@@ -552,10 +566,26 @@ pmap_memset(pmap_t *pmap, uintptr_t va, char c, size_t size)
 uintptr_t
 pmap_la2pa(pmap_t *pmap, uintptr_t la)
 {
+	pageinfo_t *pi;
 	pte_t pte = pmap_lookup(pmap, la);
+	int perm;
 
-	if (pte == PTE_INV)
-		KERN_PANIC("Invalid linear address: la=%x.\n", la);
+	if (pte == PTE_INV) {
+		if ((pi = mem_page_alloc()) == NULL)
+			KERN_PANIC("Cannot allocate physical memory.\n");
 
-	return PGADDR(pte)+PGOFF(la);
+		perm = PTE_W |
+			((VM_USERLO <= la && la < VM_USERHI) ? PTE_U : 0);
+
+		if (pmap_insert(pmap, pi, ROUNDDOWN(la,PAGESIZE), perm) == NULL)
+			KERN_PANIC("Cannot map linear address 0x%08x to "
+				   "physical address 0x%08x.\n",
+				   ROUNDDOWN(la,PAGESIZE), mem_pi2phys(pi));
+
+		pmap_install(pmap);
+
+		return ROUNDDOWN(mem_pi2phys(pi), PAGESIZE) + PGOFF(la);
+	} else {
+		return PGADDR(pte) + PGOFF(la);
+	}
 }

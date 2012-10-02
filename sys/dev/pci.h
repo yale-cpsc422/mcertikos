@@ -505,6 +505,8 @@ struct pci_general {
 	uint8_t max_latency;
 } gcc_packed;
 
+#ifdef _KERN_
+
 // PCI subsystem interface
 enum { pci_res_bus, pci_res_mem, pci_res_io, pci_res_max };
 
@@ -533,5 +535,7 @@ int  pci_init(void);
 void pci_func_enable(struct pci_func *f);
 void pci_iterate(int (*hook)(struct pci_func *f));
 uint32_t pci_conf_read(struct pci_func *f,uint32_t off);
+
+#endif /* _KERN_ */
 
 #endif /* !_KERN_DEV_PCI_H_ */

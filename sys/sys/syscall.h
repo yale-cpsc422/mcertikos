@@ -16,93 +16,108 @@ int syscall_handler(struct context *);
 
 #define T_SYSCALL	48
 
-/*
- * System calls for I/O
- */
-#define SYS_puts	0	/* output a string to the console */
-#define SYS_getc	1	/* input a character from the console */
-
-/*
- * Systam calls for the process
- */
-#define SYS_spawn	2	/* spawn a process */
-#define SYS_yield	3	/* yield to another process */
-#define SYS_getpid	4	/* get my process id */
-#define SYS_send	5	/* send a message to another process */
-#define SYS_recv	6	/* receive a message */
-#define SYS_ncpus	7	/* get the number of processors */
-#define SYS_getpchid	8	/* get ID of the channel to the parent process */
-#define SYS_getchid	9	/* get ID of the channel to a child process */
-#define SYS_recv_nonblock 10	/* receive a message in a non-blocking way */
-
-/*
- * System calls for the virtual machine
- */
-#define SYS_allocvm	32	/* allocate a virtual machine */
-#define SYS_execvm	33	/* execute the virtual machine */
-
-/*
- * System calls for the virtual device
- */
-#define SYS_register_ioport	34
-#define SYS_unregister_ioport	35
-#define SYS_register_irq	36
-#define SYS_unregister_irq	37
-#define SYS_register_pic	38
-#define SYS_unregister_pic	39
-#define SYS_register_mmio	40
-#define SYS_unregister_mmio	41
-#define SYS_read_ioport		42
-#define SYS_raise_irq		43
-#define SYS_lower_irq		44
-#define SYS_notify_irq		45
-#define SYS_read_guest_tsc	46
-#define SYS_guest_tsc_freq	47
-#define SYS_guest_mem_size	48
-#define SYS_write_ioport	49
-#define SYS_trigger_irq		50
-
-/*
- * System calss for testing
- */
-#define SYS_test	255
+enum __syscall_nr {
+	/*
+	 * common system calls
+	 */
+	SYS_puts = 0,	/* output a string to the screen */
+	SYS_getc,	/* input a character */
+	SYS_spawn,	/* create a new process */
+	SYS_yield,	/* yield to another process */
+	SYS_getpid,	/* get the process id of the calling process */
+	SYS_getppid,	/* get the process id of the parent process of the
+			   calling process */
+	SYS_session,	/* create a new session */
+	SYS_getsid,	/* get the session id of the calling process */
+	SYS_disk_op,	/* operate on the disk drive */
+	SYS_disk_read,	/* read the disk drive */
+	SYS_disk_write,	/* write the disk drive */
+	SYS_disk_capacity, /* get the size of the disk drive */
+	/*
+	 * system calls to setup the virtual machines
+	 */
+	SYS_new_vm,	/* create a new virtual machine */
+	SYS_run_vm,	/* start a virtual machine */
+	SYS_attach_vdev,/* attach a virtual device to a virtual machine */
+	SYS_detach_vdev,/* detach a virtual device from a virtual machine */
+	SYS_attach_port,/* attach an I/O port to a virtual device */
+	SYS_detach_port,/* detach an I/O port from a virtual device */
+	SYS_attach_irq,	/* attach an IRQ to a virtual device */
+	SYS_detach_irq,	/* detach an IRQ from a virtual device */
+	/*
+	 * system calls for virtual devices to commnicate with virtual machines
+	 */
+	SYS_recv_req,	/* receive requests from the virtual machine */
+	SYS_guest_in,	/* read from a guest I/O port */
+	SYS_guest_out,	/* write to a guest I/O port */
+	SYS_ret_in,	/* return the value on an guest I/O port */
+	SYS_host_in,	/* read from a host I/O port */
+	SYS_host_out,	/* write to a host I/O port */
+	SYS_set_irq,	/* set an IRQ line of the guest interrupt controller */
+	SYS_guest_read,	/* transfer data from the guest physical address space */
+	SYS_guest_write,/* transfer data to the guest physical address space */
+	SYS_sync_done,	/* notify the virtual machine of the completion of the
+			   virtual device synchronization */
+	SYS_dev_ready,	/* notify the virtual machine a virtual device is ready */
+	SYS_guest_rdtsc,/* read the guest TSC */
+	SYS_guest_tsc_freq, /* get the guest TSC frequency */
+	SYS_guest_mem_size, /* get the size in bytes of the guest physical
+			       memory */
+	MAX_SYSCALL_NR	/* XXX: always put it at the end of __syscall_nr */
+};
 
 /*
  * Error codes
  */
-#define E_SUCC		0	/* no error */
 
-/* common error codes  */
-#define E_INVAL_NR	1	/* invalid system call */
-#define E_MEM_FAIL	2	/* memory failure */
+enum __error_nr {
+	E_SUCC,		/* no errors */
+	E_MEM,		/* memory failure */
+	E_INVAL_CALLNR,	/* invalid syscall number */
+	E_INVAL_CPU,	/* invalid CPU index */
+	E_INVAL_SID,	/* invalid session ID */
+	E_INVAL_ADDR,	/* invalid address */
+	E_INVAL_PID,	/* invalid process ID */
+	E_INVAL_VMID,	/* invalid virtual machine */
+	E_INVAL_VID,	/* invalid virtual device ID */
+	E_INVAL_IRQ,	/* invalid IRQ */
+	E_INVAL_MODE,	/* invalid mode */
+	E_ATTACH,	/* fail to attach a virtual device/IO port/IRQ/PIC */
+	E_DETACH,	/* fail to detach a virtual device/IO port/IRQ/PIC */
+	E_IOPORT,	/* fail to access an I/O port */
+	E_PIC,		/* errors related to the virtual PIC */
+	E_DEV_SYNC,	/* fail to send DEV_SYNC_COMPLETE */
+	E_DEV_RDY,	/* fail to send DEVIDE_READY */
+	E_RECV,		/* fail to receive */
+	E_DISK_OP	/* disk operation failure */
+};
 
-/* error codes specific for SYS_spawn */
-#define E_SPAWN_FAIL	3	/* fail to spawn a process */
+struct user_proc {
+	uint32_t	cpu_idx;
+	sid_t		sid;
+	uintptr_t	exe_bin;
+};
 
-/* error codes specific for SYS_allocvm */
-#define E_VM_ON_AP	4	/* not on bootstrap processor */
-#define E_VM_EXIST	5	/* a VM is already there */
-#define E_VM_INIT_FAIL	6	/* fail to initialize the VM */
+struct user_ioport {
+	uint16_t	port;
+	data_sz_t	width;
+};
 
-/* error codes specific for SYS_execvm */
-#define E_NO_VM		7	/* no VM */
-
-/* error codes specific for SYS_getpchid */
-#define E_INVAL_PROC	8	/* caller is not an valid process */
-#define E_NO_CHANNEL	9	/* no channel */
-
-/* error codes specific for SYS_send & SYS_recv */
-#define E_SEND_BUSY	10	/* the channel is busy */
-#define E_RECV_IDLE	11	/* the channel is idle */
-#define E_NO_PERM	12	/* the caller has no permission */
-#define E_LARGE_MSG	13	/* the message is too large */
-#define E_EMPTY_MSG	14	/* the message is empty */
-
-#define E_INVAL_IOPORT	15	/* the I/O port number is invalid */
-#define E_INVAL_WIDTH	16	/* the data width is invalid */
-#define E_REG_FAIL	17	/* registration failure */
-#define E_UNREG_FAIL	18	/* unregistration failure */
-#define E_INVAL_IRQ	19	/* the IRQ number is invalid */
-#define E_IRQ_FAIL	20	/* IRQ raise/lower failure */
+struct user_disk_op {
+	/*
+	 * Operation types:
+	 * - DISK_READ:  read n sectors from the disk logical block address lba
+	 *               to the memory address indicated by the liear address la
+	 * - DISK_WRITE: write n sectors from the memory address indicated by
+	 *               the linear address la to the disk logical block address
+	 *               lba.
+	 * - DISK_CAP:   get the capability (in sectors) of the host disk drive,
+	 *               and save it to the linear address la.
+	 */
+	enum { DISK_READ, DISK_WRITE, DISK_CAP } type;
+	uint64_t	lba;
+	uint64_t	n;
+	uintptr_t	la;
+};
 
 #endif /* !_SYS_SYSCALL_H_ */

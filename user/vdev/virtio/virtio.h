@@ -34,11 +34,13 @@
 /*
  * A VirtIO device is recognized as a PCI device with vendor ID 0x1af4 and
  * device ID 0x1000 ~ 0x103f. BAR0 of a VirtIO device points to a VirtIO header
- * which describes the basic inforamtion of this device.
+ * which describes the basic inforamtion of this device and is accessed through
+ * reading/writing I/O ports.
+ *
  *
  *                Device Configuration
  * PCI BAR0 ----> +---------------+  offset: 0x0
- *                |               |
+ * (I/O port)     |               |
  *                | VirtIO Header |  (struct virtio_header) -------------------+
  *                |               |                                            |
  *                +---------------+  offset: 0x14                              |
@@ -50,16 +52,18 @@
  *                |               |                                            |
  *                | Device Header |  (strcut virtio_blk_config, ...)           |
  *                |               |                                            |
- *                +---------------+                                            |
- *                                                                             |
- * VirtIO Header (struct virtio_header)                                        V
+ *                +---------------+     +--------------------------------------+
+ *                                      |
+ *  /-----------------------------------^-------------------------------------\
+ * /                                                                           \
+ * VirtIO Header (struct virtio_header) (I/O port)
  * 0x14  0x13     0x12     0x10      0xe     0xc       0x8        0x4        0x0
  * +--------+--------+--------+--------+-------+---------+----------+----------+
  * |  ISR   | Device | Queue  | Queue  | Queue |  Queue  |  Guest   |  Device  |
  * | Status | Status | Notify | Select |  Size | Address | Features | Features |
  * +--------+--------+--------+--------+-------+---------+----------+----------+
  *                                                  |
- *              VRing (struct vring)                | x 4096
+ *              VRing (MMIO)                        | x 4096
  *              +----------------------+ <----------+
  *          +-- |   VRing Descriptor0  | (struct vring_desc)
  *          |   :         ...          :
@@ -72,9 +76,10 @@
  *    +--^--^-- |    Used Rings Info   | (struct vring_used)
  *    |  |  |   +----------------------+
  *    |  |  |
- *    |  |  +-------------------------------------+
- *    |  |                                        |
- *    |  |      VRing Descriptor 0                V
+ *    |  |  +--------------------+
+ *    |  |                       |
+ *    |  |      /----------------^----------------\
+ *    |  |      VRing Descriptor 0 (MMIO)
  *    |  |      0x10 0xe     0xc      0x8       0x0
  *    |  |      +------+-------+--------+---------+
  *    |  |      | next | flags | length | address |
@@ -82,7 +87,7 @@
  *    |  |          |
  *    |  |          +-----------------------------+
  *    |  |                                        |
- *    |  |      VRing Descriptor 1                V
+ *    |  |      VRing Descriptor 1 (MMIO)         V
  *    |  |      0x10 0xe     0xc      0x8       0x0
  *    |  |      +------+-------+--------+---------+
  *    |  |      | next | flags | length | address |
@@ -90,17 +95,19 @@
  *    |  |
  *    |  |                     ...
  *    |  |
- *    |  +-------------------------------------------------------------+
- *    |                                                                |
- *    |         Available Rings Info (struct vring_avail)              V
+ *    |  +--------------------------------+
+ *    |                                   |
+ *    |         /-------------------------^----------------------------\
+ *    |         Available Rings Info (struct vring_avail) (MMIO)
  *    |                                      0x6     0x4     0x2     0x0
  *    |         +------------+-------+---------+-------+-------+-------+
  *    |         | Used Event | RingN |   ...   | Ring0 | index | flags |
  *    |         +------------+-------+---------+-------+-------+-------+
  *    |
- *    +-----------------------------------------------------------------------+
- *                                                                            |
- *              Used Rings Info (struct vring_used)                           V
+ *    +--------------------------------------+
+ *                                           |
+ *              /----------------------------^--------------------------------\
+ *              Used Rings Info (struct vring_used) (MMIO)
  *                                               0xc        0x4     0x2     0x0
  *              +-------------+----------+---------+----------+-------+-------+
  *              | Avail Event | idN,lenN |   ...   | id0,len0 | index | flags |
@@ -203,10 +210,9 @@ struct virtio_device_ops {
 	 *                 will be truncated according to parameter sz
 	 * @param sz       the width of the data to be accessed
 	 */
-	uint32_t (*pci_conf_read)(void *dev, uint32_t pci_addr,
-				  enum data_sz_t sz);
+	uint32_t (*pci_conf_read)(void *dev, uint32_t pci_addr, data_sz_t sz);
 	void (*pci_conf_write)(void *dev, uint32_t pci_addr,
-			       uint32_t val, enum data_sz_t sz);
+			       uint32_t val, data_sz_t sz);
 
 	/*
 	 * I/O port handlers for reading/writing the device header.
@@ -260,24 +266,34 @@ struct virtio_device {
 /*
  * Get the descriptor #idx of virtqueue/vring #ring.
  */
-struct vring_desc *
-vring_get_desc(struct vm *, struct vring *ring, uint16_t idx);
+int vring_get_desc(struct vring *ring, uint16_t idx, struct vring_desc *desc);
 
 /*
  * Get the avail structure of virtqueue/vring #ring.
  */
-struct vring_avail *vring_get_avail(struct vm *, struct vring *ring);
+int vring_get_avail(struct vring *ring, struct vring_avail *avail);
 
 /*
  * Get the used structure of virtqueue/vring #ring.
  */
-struct vring_used *vring_get_used(struct vm *, struct vring *ring);
+int vring_get_used(struct vring *ring, struct vring_used *used);
+
+int vring_set_used(struct vring *, struct vring_used *);
+
+int vring_get_used_elem(struct vring *, int idx, struct vring_used_elem *);
+
+int vring_set_used_elem(struct vring *, int idx, struct vring_used_elem *);
 
 /*
  * Do the common intialization for a virtio device.
  */
 int virtio_device_init(struct virtio_device *, struct virtio_device_ops *,
 		       struct vpci_host *);
+
+void virtio_handle_guest_in(struct virtio_device *dev,
+			    uint16_t port, data_sz_t width, void *data);
+void virtio_handle_guest_out(struct virtio_device *dev,
+			     uint16_t port, data_sz_t width, uint32_t data);
 
 /*
  * Reregister I/O port handlers for reading/writing the device configuration

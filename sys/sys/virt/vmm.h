@@ -8,6 +8,10 @@
 #include <sys/trap.h>
 #include <sys/types.h>
 
+#include <sys/virt/dev/pic.h>
+
+#define MAX_VMID		32
+
 #define VM_PHY_MEMORY_SIZE	(256 * 1024 * 1024)
 
 #define VM_TIME_SCALE		1
@@ -18,12 +22,6 @@
 
 #define MAX_IOPORT		0x10000
 #define MAX_IRQ			0x100
-
-typedef enum data_sz_t {
-	SZ8, 	/* 1 byte */
-	SZ16, 	/* 2 byte */
-	SZ32	/* 4 byte */
-} data_sz_t;
 
 typedef enum {
 	HYPERCALL_BITAND,
@@ -41,29 +39,43 @@ typedef enum {
 	EXIT_FOR_OTHERS		/* exit for other reasons */
 } exit_reason_t;;
 
+struct vm;
+
 typedef void (*iodev_read_func_t)(struct vm *,
 				  void *iodev, uint32_t port, void *data);
 typedef void (*iodev_write_func_t)(struct vm *,
 				   void *iodev, uint32_t port, void *data);
 typedef void (*intr_handle_t)(struct vm *);
 
-struct vdev {
-	struct {
-		struct proc	*read_proc, *write_proc;
-		spinlock_t	read_lk, write_lk;
-	} ioport[MAX_IOPORT][3];
+#define MAX_VID		32
 
+struct vdev {
+	/* all virtual devices */
+	struct proc	*dev[MAX_VID];
+	struct channel	*ch[MAX_VID];
+	spinlock_t	dev_lk;
+
+	/* virtual devices for I/O ports */
 	struct {
-		struct proc	*irq_proc;
+		vid_t		vid;
+		spinlock_t	ioport_lk;
+	} ioport[MAX_IOPORT];
+
+	/* virtual PIC (in kernel) */
+	struct vpic	vpic;
+	spinlock_t	pic_lk;
+
+	/* virtual devices for IRQs */
+	struct {
+		vid_t		vid;
 		spinlock_t	irq_lk;
 	} irq[MAX_IRQ];
-
-	struct proc		*pic_proc;
-	spinlock_t		pic_lk;
 };
 
 struct vm {
 	void		*cookie;	/* processor-specific data */
+
+	vmid_t		vmid;		/* the virtual machine ID */
 
 	struct proc	*proc;		/* the process hosting the VM */
 
@@ -226,14 +238,19 @@ void vmm_handle_intr(struct vm *, uint8_t irqno);
 uint64_t vmm_rdtsc(struct vm *);
 
 /*
- * Update the interception setup.
- */
-void vmm_update(struct vm *);
-
-/*
  * Translate the guest physical address to the host physical address.
  */
 uintptr_t vmm_translate_gp2hp(struct vm *, uintptr_t);
+
+/*
+ * Get the vm structure.
+ */
+struct vm* vmm_get_vm(vmid_t);
+
+/*
+ * Setup the IRQ line of the virtual interrupt handler (PIC/APIC).
+ */
+void vmm_set_irq(struct vm *, uint8_t irq, int mode);
 
 #endif /* _KERN_ */
 

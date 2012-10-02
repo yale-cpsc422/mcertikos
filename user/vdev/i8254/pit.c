@@ -105,7 +105,7 @@ vpit_get_count(struct vpit_channel *ch)
 	int32_t counter = 0;
 	uint16_t d0, d1;
 
-	sys_read_guest_tsc(&guest_tsc);
+	guest_tsc = sys_guest_rdtsc();
 
 	d = muldiv64(guest_tsc - ch->count_load_time, PIT_FREQ, guest_tsc_freq);
 	count = (uint64_t)(uint32_t) ch->count;
@@ -298,7 +298,7 @@ vpit_set_gate(struct vpit *pit, int channel, int val)
 	struct vpit_channel *ch = &pit->channels[channel];
 	uint64_t load_time;
 
-	sys_read_guest_tsc(&load_time);
+	load_time = sys_guest_rdtsc();
 
 	ASSERT(spinlock_holding(&ch->lk) == TRUE);
 
@@ -380,7 +380,7 @@ vpit_load_count(struct vpit_channel *ch, uint16_t val)
 
 	if (count == 0)
 		count = 0x10000;
-	sys_read_guest_tsc(&ch->count_load_time);
+	ch->count_load_time = sys_guest_rdtsc();
 	ch->count = count;
 	vpit_debug("[%llx] Set counter: %x.\n",
 		   ch->count_load_time, ch->count);
@@ -495,9 +495,7 @@ vpit_ioport_write(struct vpit *pit, uint16_t port, uint8_t data)
 						continue;
 					}
 
-					uint64_t tsc;
-					sys_read_guest_tsc(&tsc);
-					int out = vpit_get_out(ch, tsc);
+					int out = vpit_get_out(ch, sys_guest_rdtsc());
 
 					ch->status =
 						(out << 7) |(ch->rw_mode << 4) |
@@ -682,8 +680,7 @@ vpit_gate_ioport_read(struct vpit *pit)
 
 	struct vpit_channel *ch = &pit->channels[2];
 
-	uint64_t current_time;
-	sys_read_guest_tsc(&current_time);
+	uint64_t current_time = sys_guest_rdtsc();
 
 	spinlock_acquire(&ch->lk);
 	uint8_t ret =
@@ -733,19 +730,19 @@ _vpit_ioport_read(struct vpit *pit, uint16_t port, void *data)
 }
 
 static void
-_vpit_ioport_write(struct vpit *pit, uint16_t port, void *data)
+_vpit_ioport_write(struct vpit *pit, uint16_t port, uint8_t data)
 {
-	ASSERT(pit != NULL && data != NULL);
+	ASSERT(pit != NULL);
 	ASSERT(port == PIT_CONTROL_PORT || port == PIT_CHANNEL0_PORT ||
 	       port == PIT_CHANNEL1_PORT || port == PIT_CHANNEL2_PORT ||
 	       port == PIT_GATE_PORT);
 
-	vpit_debug("Write: port=%x, data=%x.\n", port, *(uint8_t *) data);
+	vpit_debug("Write: port=%x, data=%x.\n", port, data);
 
 	if (port == PIT_GATE_PORT)
-		vpit_gate_ioport_write(pit, *(uint8_t *) data);
+		vpit_gate_ioport_write(pit, data);
 	else
-		vpit_ioport_write(pit, port, *(uint8_t *) data);
+		vpit_ioport_write(pit, port, data);
 }
 
 static void
@@ -775,7 +772,7 @@ vpit_channel_update(struct vpit_channel *ch, uint64_t current_time)
 			ch->last_intr_time = intr_time;
 
 			vpit_debug("Trigger IRQ_TIMER.\n");
-			sys_trigger_irq(IRQ_TIMER);
+			sys_set_irq(IRQ_TIMER, 2);
 		}
 	}
 
@@ -831,8 +828,7 @@ vpit_update(struct vpit *vpit)
 {
 	ASSERT(vpit != NULL);
 
-	uint64_t tsc;
-	sys_read_guest_tsc(&tsc);
+	uint64_t tsc = sys_guest_rdtsc();
 
 	int i;
 	for (i = 0; i < 3; i++) {
@@ -852,16 +848,10 @@ main(int argc, char **argv)
 {
 	struct vpit vpit;
 
-	int parent_chid;
-
-	uint8_t buf[1024];
-	size_t size;
-
-	struct ioport_rw_req *rw_req;
-	struct ioport_read_ret *ret;
-	struct sync_req *sync_req;
-	struct device_ready *dev_rdy;
-	struct sync_complete *sync_compl;
+	dev_req_t req;
+	struct read_ioport_req *read_req;
+	struct write_ioport_req *write_req;
+	uint32_t data;
 
 	memset(&vpit, 0, sizeof(vpit));
 
@@ -884,91 +874,48 @@ main(int argc, char **argv)
 	vpit.channels[2].last_intr_time_valid = FALSE;
 
 	/* register virtualized device (handlers of I/O ports & IRQ) */
-	sys_register_ioport(PIT_CONTROL_PORT, SZ8, 0);
-	sys_register_ioport(PIT_CHANNEL0_PORT, SZ8, 0);
-	sys_register_ioport(PIT_CHANNEL1_PORT, SZ8, 0);
-	sys_register_ioport(PIT_CHANNEL2_PORT, SZ8, 0);
-	sys_register_ioport(PIT_GATE_PORT, SZ8, 0);
-	sys_register_ioport(PIT_CONTROL_PORT, SZ8, 1);
-	sys_register_ioport(PIT_CHANNEL0_PORT, SZ8, 1);
-	sys_register_ioport(PIT_CHANNEL1_PORT, SZ8, 1);
-	sys_register_ioport(PIT_CHANNEL2_PORT, SZ8, 1);
-	sys_register_ioport(PIT_GATE_PORT, SZ8, 1);
-	sys_register_irq(IRQ_TIMER);
+	sys_attach_port(PIT_CONTROL_PORT, SZ8);
+	sys_attach_port(PIT_CHANNEL0_PORT, SZ8);
+	sys_attach_port(PIT_CHANNEL1_PORT, SZ8);
+	sys_attach_port(PIT_CHANNEL2_PORT, SZ8);
+	sys_attach_port(PIT_GATE_PORT, SZ8);
+	sys_attach_irq(IRQ_TIMER);
 
-	sys_guest_tsc_freq(&guest_tsc_freq);
+	guest_tsc_freq = sys_guest_tsc_freq();
 
-	parent_chid = sys_getpchid();
-
-	dev_rdy = (struct device_ready *) buf;
-	dev_rdy->magic = MAGIC_DEVICE_READY;
-	sys_send(parent_chid, dev_rdy, sizeof(struct device_ready));
+	sys_dev_ready();
 
 	while (1) {
-		if (sys_recv(parent_chid, buf, &size, FALSE)) {
-			/* yield(); */
-			continue;
-		}
-
-		switch (((uint32_t *) buf)[0]) {
-		case MAGIC_IOPORT_RW_REQ:
-			rw_req = (struct ioport_rw_req *) buf;
-
-			if (rw_req->port != PIT_CONTROL_PORT &&
-			    rw_req->port != PIT_CHANNEL0_PORT &&
-			    rw_req->port != PIT_CHANNEL1_PORT &&
-			    rw_req->port != PIT_CHANNEL2_PORT &&
-			    rw_req->port != PIT_GATE_PORT) {
-				vpit_debug("Ignore unknown port %d.\n",
-					   rw_req->port);
-				continue;
-			}
-
-			if (rw_req->width != SZ8) {
-				vpit_debug("Ignore unknown data width %d.\n",
-					   rw_req->width);
-				continue;
-			}
-
-			ret = (struct ioport_read_ret *) buf;
-
-			vpit_debug("Receive I/O port read request.\n");
-
-			if (rw_req->write) {
-				_vpit_ioport_write(&vpit,
-						   rw_req->port,
-						   &rw_req->data);
-			} else {
-				_vpit_ioport_read(&vpit,
-						  rw_req->port,
-						  &ret->data);
-				ret->magic = MAGIC_IOPORT_READ_RET;
-				sys_send(parent_chid,
-					 ret, sizeof(struct ioport_read_ret));
-			}
-
+		if (sys_recv_req(&req, FALSE))
 			continue;
 
-		case MAGIC_SYNC_IRQ:
-			sync_req = (struct sync_req *) buf;
-			vpit_debug("Receive SYNC_IRQ %d.\n", sync_req->irq);
-			if (sync_req->irq != IRQ_TIMER) {
-				vpit_debug("Ignore unknown IRQ %d.\n",
-					   sync_req->irq);
-				continue;
-			}
+		switch (((uint32_t *) &req)[0]) {
+		case READ_IOPORT_REQ:
+			read_req = (struct read_ioport_req *) &req;
+			if (unlikely(read_req->port != PIT_CONTROL_PORT &&
+				     read_req->port != PIT_CHANNEL0_PORT &&
+				     read_req->port != PIT_CHANNEL1_PORT &&
+				     read_req->port != PIT_CHANNEL2_PORT &&
+				     read_req->port != PIT_GATE_PORT))
+				data = 0xffffffff;
+			else
+				_vpit_ioport_read(&vpit, read_req->port, &data);
+			sys_ret_in(read_req->port, read_req->width, data);
+			continue;
 
+		case WRITE_IOPORT_REQ:
+			write_req = (struct write_ioport_req *) &req;
+			if (read_req->port == PIT_CONTROL_PORT &&
+			    read_req->port == PIT_CHANNEL0_PORT &&
+			    read_req->port == PIT_CHANNEL1_PORT &&
+			    read_req->port == PIT_CHANNEL2_PORT &&
+			    read_req->port == PIT_GATE_PORT)
+				_vpit_ioport_write(&vpit, write_req->port,
+						   write_req->val);
+			continue;
+
+		case DEV_SYNC_REQ:
 			vpit_update(&vpit);
-
-			vpit_debug("SYNC is done.\n");
-
-			vpit_debug("Send SYNC_COMPLETE.\n");
-			sync_compl = (struct sync_complete *) buf;
-			sync_compl->irq = sync_req->irq;
-			sync_compl->magic = MAGIC_SYNC_COMPLETE;
-			sys_send(parent_chid,
-				 sync_compl, sizeof(struct sync_complete));
-
 			continue;
 
 		default:

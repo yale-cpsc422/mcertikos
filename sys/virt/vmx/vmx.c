@@ -40,6 +40,7 @@
 
 #include <sys/virt/vmm.h>
 #include <sys/virt/vmm_dev.h>
+#include <sys/virt/dev/pic.h>
 
 #include "ept.h"
 #include "vmcs.h"
@@ -696,13 +697,9 @@ vmx_init_vm(struct vm *vm)
 
 	extern uint8_t vmx_return_from_guest[];
 
-	int i, j;
-	struct vdev *vdev;
 	struct vmx_info *vmx_info;
 	struct vmx *vmx;
 	pageinfo_t *vmcs_pi, *ept_pi, *msr_pi, *io_pi;
-
-	vdev = &vm->vdev;
 
 	vmx_info = &vmx_proc_info[pcpu_cpu_idx(pcpu_cur())];
 	KERN_ASSERT(vmx_info->vmx_enabled == TRUE);
@@ -784,23 +781,6 @@ vmx_init_vm(struct vm *vm)
 	memset(vmx->io_bitmap, 0x0, PAGESIZE * 2);
 	KERN_DEBUG("I/O bitmap A @ 0x%08x, I/O bitmap B @ 0x%08x.\n",
 		   vmx->io_bitmap, (uintptr_t) vmx->io_bitmap + PAGESIZE);
-	for (i = 0; i < MAX_IOPORT; i++) {
-		for (j = 0; j < 3; j++) {
-			spinlock_acquire(&vdev->ioport[i][j].read_lk);
-			spinlock_acquire(&vdev->ioport[i][j].write_lk);
-
-			struct proc *read_proc, *write_proc;
-
-			read_proc = vdev->ioport[i][j].read_proc;
-			write_proc = vdev->ioport[i][j].write_proc;
-
-			if (read_proc != NULL || write_proc != NULL)
-				vmx_set_intercept_io(vmx, i, j, TRUE);
-
-			spinlock_release(&vdev->ioport[i][j].write_lk);
-			spinlock_release(&vdev->ioport[i][j].read_lk);
-		}
-	}
 
 	/*
 	 * Setup VMCS.
@@ -1066,43 +1046,40 @@ vmx_handle_inout(struct vm *vm)
 
 	struct vmx *vmx = (struct vmx *) vm->cookie;
 
-	uint32_t data;
 	uint16_t port;
 	uint8_t size, dir;
-	data_sz_t data_size;
+	data_sz_t width;
+	vid_t vid;
 
 	port = EXIT_QUAL_IO_PORT(vmx->exit_qualification);
 	size = EXIT_QUAL_IO_SIZE(vmx->exit_qualification);
 	dir = EXIT_QUAL_IO_DIR(vmx->exit_qualification);
+	vid = vm->vdev.ioport[port].vid;
 
 	KERN_ASSERT(size == EXIT_QUAL_IO_ONE_BYTE ||
 		    size == EXIT_QUAL_IO_TWO_BYTE ||
 		    size == EXIT_QUAL_IO_FOUR_BYTE);
 
 	if (size == EXIT_QUAL_IO_ONE_BYTE)
-		data_size = SZ8;
+		width = SZ8;
 	else if (size == EXIT_QUAL_IO_TWO_BYTE)
-		data_size = SZ16;
+		width = SZ16;
 	else
-		data_size = SZ32;
+		width = SZ32;
 
 #ifdef DEBUG_GUEST_IOIO
-	KERN_DEBUG("Intercept IO: %s, port 0x%x, %d byte%c%s%s.\n",
+	KERN_DEBUG("Intercept IO: %s, port 0x%x, %d bytes%s%s.\n",
 		   (dir == EXIT_QUAL_IO_OUT) ? "OUT" : "IN",
-		   port,
-		   (size == EXIT_QUAL_IO_ONE_BYTE) ? 1 :
-		   (size == EXIT_QUAL_IO_TWO_BYTE) ? 2 : 4,
-		   (size != EXIT_QUAL_IO_ONE_BYTE) ? 's' : ' ',
+		   port, (1 << width),
 		   EXIT_QUAL_IO_REP(vmx->exit_qualification) ? ", REP" : "",
 		   EXIT_QUAL_IO_STR(vmx->exit_qualification) ? ", STR" : "");
 #endif
 
-	data = vmx->g_rax;
-
 	if (dir == EXIT_QUAL_IO_IN)
-		vdev_ioport_read(vm, port, data_size, (uint32_t *) &vmx->g_rax);
+		vdev_read_guest_ioport(vm, vid,
+				       port, width, (uint32_t *) &vmx->g_rax);
 	else
-		vdev_ioport_write(vm, port, data_size, data);
+		vdev_write_guest_ioport(vm, vid, port, width, (uint32_t) vmx->g_rax);
 
 	vmx->g_rip += vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
 
@@ -1288,12 +1265,7 @@ vmx_intr_assist(struct vm *vm)
 	int vector, intr_disable, blocked, pending;
 	uint32_t procbased_ctls;
 
-	if (vdev_get_irq(vm, &vector)) {
-		KERN_WARN("Cannot get IRQ from virtual PIC.\n");
-		return;
-	}
-
-	if (vector == -1)
+	if ((vector = vdev_peep_intout(vm)) == -1)
 		return;
 
 	pending = vmcs_read32(VMCS_EXIT_INTERRUPTION_INFO) &
@@ -1337,12 +1309,7 @@ vmx_intr_assist(struct vm *vm)
 		return;
 	}
 
-	if (vdev_read_irq(vm, &vector)) {
-		KERN_WARN("Cannot read IRQ from virtual");
-		return;
-	}
-
-	if (vector == -1)
+	if ((vector = vdev_read_intout(vm)) == -1)
 		return;
 
 	vmx_inject_event(VMCS_INTERRUPTION_INFO_HW_INTR, vector, 0, 0);
@@ -1507,14 +1474,16 @@ vmx_handle_extint(struct vm *vm, uint8_t irq)
 	KERN_ASSERT(vm->exit_reason == EXIT_FOR_EXTINT &&
 		    vm->handled == FALSE);
 
+	vid_t vid = vm->vdev.irq[irq].vid;
+
 	/*
 	 * Try to notify the virtual device which occupies the interrupt. If no
 	 * virtual device is registered as the source of the interrupt, raise
 	 * corresponding interrupt line of the virtual PIC.
 	 */
-	if (vdev_notify_sync(vm, irq)) {
-		vdev_raise_irq(vm, irq);
-		vdev_lower_irq(vm, irq);
+	if (vdev_sync_dev(vm, vid)) {
+		vdev_raise_irq(vm, vid, irq);
+		vdev_lower_irq(vm, vid, irq);
 	}
 
 	vm->handled = TRUE;

@@ -26,21 +26,14 @@
  * Adapted for CertiKOS by Haozhong Zhang at Yale University.
  */
 
-#ifndef _VDEV_8259_H_
-#define _VDEV_8259_H_
+#ifndef _SYS_VIRT_PIC_H_
+#define _SYS_VIRT_PIC_H_
 
-#include <types.h>
+#ifdef _KERN_
 
-/* I/O Addresses of the two 8259A programmable interrupt controllers */
-#define IO_PIC1		0x20	/* Master (IRQs 0-7) */
-#define IO_PIC2		0xA0	/* Slave (IRQs 8-15) */
+#include <sys/types.h>
 
-#define IRQ_SLAVE	2	/* IRQ at which slave connects to master */
-
-#define IO_ELCR1	0x4d0
-#define IO_ELCR2	0x4d1
-
-struct vpic;
+struct vm;
 
 struct i8259 {
 	struct vpic	*vpic;
@@ -81,4 +74,15 @@ struct vpic {
 	struct i8259	slave;
 };
 
-#endif /* !_VDEV_8259_H_ */
+void vpic_init(struct vpic *, struct vm *);
+int  vpic_read_ioport(struct vpic *, uint16_t port, uint8_t *data);
+int  vpic_write_ioport(struct vpic *, uint16_t port, uint8_t data);
+bool vpic_has_irq(struct vpic *);
+int  vpic_read_irq(struct vpic *);
+int  vpic_get_irq(struct vpic *);
+void vpic_set_irq(struct vpic *, int irq, int level);
+bool vpic_is_ready(struct vpic *);
+
+#endif /* _KERN_ */
+
+#endif /* !_SYS_VIRT_PIC_H_ */

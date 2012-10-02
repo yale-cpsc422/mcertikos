@@ -26,25 +26,32 @@
  * Adapted for CertiKOS by Haozhong Zhang at Yale University.
  */
 
-#include <debug.h>
-#include <gcc.h>
-#include <syscall.h>
-#include <types.h>
+#include <sys/debug.h>
+#include <sys/gcc.h>
+#include <sys/stdarg.h>
+#include <sys/types.h>
 
-#include "pic.h"
+#include <sys/virt/vmm.h>
+#include <sys/virt/vmm_dev.h>
+#include <sys/virt/dev/pic.h>
 
-#ifdef DEBUG_VPIC_VERBOSE
+#include <dev/pic.h>
 
-#define i8259_debug(chip, fmt, ...)					\
-	do {								\
-		DEBUG("%s 8259: "fmt,					\
-		      (chip->master == TRUE) ? "Master" : "Slave",	\
-		      ##__VA_ARGS__);					\
+#ifdef DEBUG_VPIC
+
+#define i8259_debug(chip, fmt...)				\
+	do {							\
+		struct i8259 *_chip = (struct i8259 *) (chip);	\
+		if (_chip->master == TRUE)			\
+			KERN_DEBUG("Master 8259: ");		\
+		else						\
+			KERN_DEBUG("Slave 8259: ");		\
+		dprintf(fmt);					\
 	} while (0)
 
 #else
 
-#define i8259_debug(chip, fmt, ...)		\
+#define i8259_debug(chip, fmt...)		\
 	{					\
 	}
 
@@ -96,7 +103,7 @@
 static uint8_t
 i8259_get_priority(struct i8259 *chip, uint8_t mask)
 {
-	ASSERT(chip != NULL);
+	KERN_ASSERT(chip != NULL);
 
 	i8259_debug(chip, "mask %02x, lowest %02x\n",
 		    mask, chip->lowest_priority & 7);
@@ -131,7 +138,7 @@ i8259_get_priority(struct i8259 *chip, uint8_t mask)
 static int
 i8259_get_irq(struct i8259 *chip)
 {
-	ASSERT(chip != NULL);
+	KERN_ASSERT(chip != NULL);
 
 	int mask, cur_priority, priority;
 
@@ -169,7 +176,7 @@ i8259_get_irq(struct i8259 *chip)
 static void
 i8259_update_irq(struct i8259 *chip)
 {
-	ASSERT(chip != NULL);
+	KERN_ASSERT(chip != NULL);
 
 	int irq;
 
@@ -177,7 +184,6 @@ i8259_update_irq(struct i8259 *chip)
 	if (irq >= 0) {
 		i8259_debug(chip, "Set INT_OUT for IRQ %x.\n", irq);
 		chip->int_out = 1;
-		/* sys_notify_irq(); */
 	} else {
 		i8259_debug(chip, "Clear INT_OUT.\n");
 		chip->int_out = 0;
@@ -190,7 +196,7 @@ i8259_update_irq(struct i8259 *chip)
 static void
 i8259_set_irq(struct i8259 *chip, int irq, int level)
 {
-	ASSERT(chip != NULL);
+	KERN_ASSERT(chip != NULL);
 
 	uint8_t mask = 1 << irq;
 
@@ -237,7 +243,7 @@ i8259_set_irq(struct i8259 *chip, int irq, int level)
 static void
 i8259_intack(struct i8259 *chip, int irq)
 {
-	ASSERT(chip != NULL);
+	KERN_ASSERT(chip != NULL);
 
 	i8259_debug(chip, "INTA\n");
 
@@ -262,7 +268,7 @@ i8259_intack(struct i8259 *chip, int irq)
 static void
 i8259_init_reset(struct i8259 *chip)
 {
-	ASSERT(chip != NULL);
+	KERN_ASSERT(chip != NULL);
 
 	chip->last_irr = 0;
 	chip->irr = 0;
@@ -288,7 +294,7 @@ i8259_init_reset(struct i8259 *chip)
 static void
 i8259_reset(struct i8259 *chip)
 {
-	ASSERT(chip != NULL);
+	KERN_ASSERT(chip != NULL);
 
 	i8259_init_reset(chip);
 	chip->elcr = 0;
@@ -297,9 +303,9 @@ i8259_reset(struct i8259 *chip)
 static void
 vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 {
-	ASSERT(vpic != NULL);
-	ASSERT(port == IO_PIC1 || port == IO_PIC1+1 ||
-	       port == IO_PIC2 || port == IO_PIC2+1);
+	KERN_ASSERT(vpic != NULL);
+	KERN_ASSERT(port == IO_PIC1 || port == IO_PIC1+1 ||
+		    port == IO_PIC2 || port == IO_PIC2+1);
 
 	bool master_slave =
 		(port == IO_PIC1 || port == IO_PIC1+1) ? TRUE : FALSE;
@@ -332,7 +338,7 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 			chip->init4 = (data & 1) ? TRUE : FALSE;
 			chip->single_mode = (data & 2) ? TRUE : FALSE;
 			if (data & 0x08)
-				PANIC("Level triggered mode not supported.\n");
+				KERN_PANIC("Level triggered mode not supported.\n");
 		} else if ((data & 0x18) == 0x8) {
 			/*
 			 * OCW3
@@ -367,11 +373,11 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 
 			if (special_mask == 0x2) { /* reset special mask mode */
 				i8259_debug(chip, "OCW3: Reset special mask mode, port=%x.\n",
-					    port);
+						  port);
 				chip->special_mask_mode = FALSE;
 			} else if (special_mask == 0x3) { /* set specal mask */
 				i8259_debug(chip, "OCW3: Set special mask mode, port=%x.\n",
-					    port);
+						  port);
 				chip->special_mask_mode = TRUE;
 			}
 		} else {
@@ -395,13 +401,13 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 			switch (cmd) {
 			case 0: /* rotate on automatic EOI (clear) */
 				i8259_debug(chip, "OCW2: Clear rotate on automatic EOI, port=%x.\n",
-					    port);
+						  port);
 				chip->rotate_on_auto_eoi = FALSE;
 				break;
 
 			case 4: /* rotate on automatic EOI (set) */
 				i8259_debug(chip, "OCW2: Set rotate on automatic EOI, port=%x.\n",
-					    port);
+						  port);
 				chip->rotate_on_auto_eoi = TRUE;
 				break;
 
@@ -418,7 +424,7 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 				chip->isr &= ~(1 << irq);
 				if (cmd == 5) {
 					i8259_debug(chip, "OCW2: Rotate to %x, port=%x.\n",
-						    (irq + 1) % 7, port);
+							  (irq + 1) % 7, port);
 					chip->lowest_priority = (irq + 1) & 7;
 				}
 				i8259_update_irq(chip);
@@ -426,7 +432,7 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 
 			case 3: /* specific EOI */
 				i8259_debug(chip, "OCW2: EOI for IRQ%x, port=%x.\n",
-					    data & 7, port);
+						  data & 7, port);
 				irq = data & 7;
 				i8259_debug(chip, "Clear bit %x of ISR.\n", irq);
 				chip->isr &= ~(1 << irq);
@@ -435,14 +441,14 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 
 			case 6: /* set priority */
 				i8259_debug(chip, "OCW2: Set priority to %x, port=%x.\n",
-					    (data + 1) & 7, port);
+						  (data + 1) & 7, port);
 				chip->lowest_priority = (data + 1) & 7;
 				i8259_update_irq(chip);
 				break;
 
 			case 7: /* rotate on specific EOI */
 				i8259_debug(chip, "OCW2: Rotate to %x, port=%x.\n",
-					    (data + 1) & 7, port);
+						  (data + 1) & 7, port);
 				irq = data & 7;
 				i8259_debug(chip, "Clear bit %x of ISR.\n", irq);
 				chip->isr &= ~(1 << irq);
@@ -469,7 +475,7 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 
 		case 1: /* ICW2 */
 			i8259_debug(chip, "ICW2: Set IRQ base=%x, port=%x.\n",
-				    data & 0xf8, port);
+					  data & 0xf8, port);
 			chip->irq_base = data & 0xf8;
 			chip->init_state =
 				chip->single_mode ? (chip->init4 ? 3 : 0) : 2;
@@ -502,7 +508,7 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 			 *         0 - MCS-80/85 mode
 			 */
 			i8259_debug(chip, "ICW4: SFN mode=%x, AEOI=%x, port=%x.\n",
-				    (data >> 4) & 1, (data >> 1) & 1, port);
+					  (data >> 4) & 1, (data >> 1) & 1, port);
 			chip->special_fully_nested_mode = (data >> 4) & 1;
 			chip->auto_eoi_mode = (data >> 1) & 1;
 			chip->init_state = 0;
@@ -513,16 +519,16 @@ vpic_ioport_write(struct vpic *vpic, uint8_t port, uint8_t data)
 		break;
 
 	default:
-		PANIC("Unknown i8259 port %x.\n", port);
+		KERN_PANIC("Unknown i8259 port %x.\n", port);
 	}
 }
 
 static uint32_t
 vpic_ioport_read(struct vpic *vpic, uint8_t port)
 {
-	ASSERT(vpic != NULL);
-	ASSERT(port == IO_PIC1 || port == IO_PIC1+1 ||
-	       port == IO_PIC2 || port == IO_PIC2+1);
+	KERN_ASSERT(vpic != NULL);
+	KERN_ASSERT(port == IO_PIC1 || port == IO_PIC1+1 ||
+		    port == IO_PIC2 || port == IO_PIC2+1);
 
 	bool master_slave =
 		(port == IO_PIC1 || port == IO_PIC1+1) ? TRUE : FALSE;
@@ -548,11 +554,11 @@ vpic_ioport_read(struct vpic *vpic, uint8_t port)
 			if (chip->select_isr == TRUE) {
 				ret = chip->isr;
 				i8259_debug(chip, "Read ISR: data=%x, port=%x.\n",
-					    ret, port);
+						  ret, port);
 			} else {
 				ret = chip->irr;
 				i8259_debug(chip, "Read IRR: data=%x, port=%x.\n",
-					    ret, port);
+						  ret, port);
 			}
 		} else {
 			ret = chip->imr;
@@ -566,76 +572,82 @@ vpic_ioport_read(struct vpic *vpic, uint8_t port)
 static void
 elcr_ioport_write(struct vpic *vpic, uint8_t port, uint32_t data)
 {
-	ASSERT(vpic != NULL);
-	ASSERT(port == IO_ELCR1 || port == IO_ELCR2);
+	KERN_ASSERT(vpic != NULL);
+	KERN_ASSERT(port == IO_ELCR1 || port == IO_ELCR2);
 
 	struct i8259 *chip = (port == IO_ELCR1) ? &vpic->master : &vpic->slave;
 
 	chip->elcr = data & chip->elcr_mask;
-#ifdef DEBUG_VPIC
-	DEBUG("Set ELCR: data=%x, port=%x.\n", chip->elcr, port);
-#endif
+	KERN_DEBUG("Set ELCR: data=%x, port=%x.\n", chip->elcr, port);
 }
 
 static uint32_t
 elcr_ioport_read(struct vpic *vpic, uint8_t port)
 {
-	ASSERT(vpic != NULL);
-	ASSERT(port == IO_ELCR1 || port == IO_ELCR2);
+	KERN_ASSERT(vpic != NULL);
+	KERN_ASSERT(port == IO_ELCR1 || port == IO_ELCR2);
 
 	struct i8259 *chip = (port == IO_ELCR1) ? &vpic->master : &vpic->slave;
 
-#ifdef DEBUG_VPIC
-	DEBUG("Read ELCR: data=%x, port=%x.\n", chip->elcr, port);
-#endif
+	KERN_DEBUG("Read ELCR: data=%x, port=%x.\n", chip->elcr, port);
 	return chip->elcr;
 }
 
-static void
-_vpic_ioport_read(struct vpic *vpic, uint16_t port, void *data)
+void
+vpic_init(struct vpic *vpic, struct vm *vm)
 {
-	ASSERT(vpic != NULL && data != NULL);
-	ASSERT(port == IO_PIC1 || port == IO_PIC2 ||
-	       port == IO_PIC1+1 || port == IO_PIC2+1 ||
-	       port == IO_ELCR1 || port == IO_ELCR2);
+	KERN_ASSERT(vpic != NULL);
 
-#ifdef DEBUG_VPIC
-	DEBUG("Receive I/O port read request (port %d).\n", port);
-#endif
+	KERN_DEBUG("Master: %x, ISR@%x, IRR@%x, IMR@%x\n", &vpic->master,
+		   &vpic->master.isr, &vpic->master.irr, &vpic->master.imr);
+	KERN_DEBUG("Slave: %x, ISR@%x, IRR@%x, IMR@%x\n", &vpic->slave,
+		   &vpic->slave.isr, &vpic->slave.irr, &vpic->slave.imr);
 
-	if (port == IO_ELCR1 || port == IO_ELCR2)
-		*(uint8_t *) data = elcr_ioport_read(vpic, port);
-	else
-		*(uint8_t *) data = vpic_ioport_read(vpic, port);
+	i8259_reset(&vpic->master);
+	vpic->master.master = TRUE;
+	i8259_reset(&vpic->slave);
+	vpic->slave.master = FALSE;
+	vpic->master.vpic = vpic->slave.vpic = vpic;
 }
 
-static void
-_vpic_ioport_write(struct vpic *vpic, uint16_t port, void *data)
+int
+vpic_read_ioport(struct vpic *vpic, uint16_t port, uint8_t *data)
 {
-	ASSERT(vpic != NULL && data != NULL);
-	ASSERT(port == IO_PIC1 || port == IO_PIC2 ||
-	       port == IO_PIC1+1 || port == IO_PIC2+1 ||
-	       port == IO_ELCR1 || port == IO_ELCR2);
+	KERN_ASSERT(vpic != NULL && data != NULL);
 
-#ifdef DEBUG_VPIC
-	DEBUG("Receive I/O port write request (port %d, data 0x%x).\n",
-	      port, *(uint8_t *) data);
-#endif
-
-	if (port == IO_ELCR1 || port == IO_ELCR2)
-		elcr_ioport_write(vpic, port, *(uint8_t *) data);
+	if (port == IO_PIC1 || port == IO_PIC1+1 ||
+	    port == IO_PIC2 || port == IO_PIC2+1)
+		*data = vpic_ioport_read(vpic, port);
+	else if (port == IO_ELCR1 || port == IO_ELCR2)
+		*data = elcr_ioport_read(vpic, port);
 	else
-		vpic_ioport_write(vpic, port, *(uint8_t *) data);
+		*data = 0xff;
+
+	return 0;
+}
+
+int
+vpic_write_ioport(struct vpic *vpic, uint16_t port, uint8_t data)
+{
+	KERN_ASSERT(vpic != NULL && data != NULL);
+
+	if (port == IO_PIC1 || port == IO_PIC2 ||
+	    port == IO_PIC1+1 || port == IO_PIC2+1)
+		vpic_ioport_write(vpic, port, data);
+	else if (port == IO_ELCR1 || port == IO_ELCR2)
+		elcr_ioport_write(vpic, port, data);
+
+	return 0;
 }
 
 /*
  * Read the IRQ with the highest priority and send INTA to virtualized i8259
  * chips (then i8259 will set and clear corresponding bit of ISR and IRR).
  */
-static int
+int
 vpic_read_irq(struct vpic *vpic)
 {
-	ASSERT(vpic != NULL);
+	KERN_ASSERT(vpic != NULL);
 
 	int irq, irq2, intno;
 
@@ -665,10 +677,6 @@ vpic_read_irq(struct vpic *vpic)
 		intno = vpic->master.irq_base + irq;
 	}
 
-#ifdef DEBUG_VPIC_VERBOSE
-	DEBUG("Read IRQ %d.\n", intno);
-#endif
-
 	return intno;
 }
 
@@ -676,10 +684,10 @@ vpic_read_irq(struct vpic *vpic)
  * Get the pending irq vector number. It does not change the state of VPIC.
  * @return the vector number; or -1, if no pending irq.
  */
-static int
+int
 vpic_get_irq(struct vpic *vpic)
 {
-	ASSERT(vpic != NULL);
+	KERN_ASSERT(vpic != NULL);
 
 	int irq, irq2, intno;
 
@@ -700,22 +708,33 @@ vpic_get_irq(struct vpic *vpic)
 	} else
 		intno = -1;
 
-#ifdef DEBUG_VPIC_VERBOSE
-	DEBUG("Get IRQ %d.\n", intno);
-#endif
-
 	return intno;
 }
 
-static void
+/*
+ * Check wheter there is IRQ from virtualized PIC.
+ */
+bool
+vpic_has_irq(struct vpic *vpic)
+{
+	KERN_ASSERT(vpic != NULL);
+
+	if (vpic->master.int_out == 1)
+		KERN_DEBUG("master.INT_OUT is set.\n");
+
+	return (vpic->master.int_out != 0) ? TRUE : FALSE;
+}
+
+
+/*
+ * Set/Unset an IR line of the virtualized i8259. If the slave i8259 is
+ * set/unset, this function will conseqently set/unset the master i8259.
+ */
+void
 vpic_set_irq(struct vpic *vpic, int irq, int level)
 {
-	ASSERT(vpic != NULL);
-	ASSERT(0 <= irq && irq < 16);
-
-#ifdef DEBUG_VPIC
-	DEBUG("%s IRQ %d.\n", (level != 0) ? "Raise" : "Lower", irq);
-#endif
+	KERN_ASSERT(vpic != NULL);
+	KERN_ASSERT(0 <= irq && irq < 16);
 
 	if (irq < 8) {
 		i8259_set_irq(&vpic->master, irq, level);
@@ -728,153 +747,13 @@ vpic_set_irq(struct vpic *vpic, int irq, int level)
 	}
 }
 
-int
-main(int argc, char **argv)
+bool
+vpic_is_ready(struct vpic *vpic)
 {
-	struct vpic vpic;
+	KERN_ASSERT(vpic != NULL);
 
-	int parent_chid;
-
-	uint8_t buf[1024];
-	size_t size;
-
-	struct ioport_rw_req *rw_req;
-	struct ioport_read_ret *ret;
-	struct irq_req *irq_req;
-	struct irq_read_req *irq_read_req;
-	struct irq_read_ret *irq_read_ret;
-	struct device_ready *dev_rdy;
-
-	i8259_reset(&vpic.master);
-	vpic.master.master = TRUE;
-	i8259_reset(&vpic.slave);
-	vpic.slave.master = FALSE;
-	vpic.master.vpic = vpic.slave.vpic = &vpic;
-
-	sys_register_ioport(IO_PIC1, SZ8, 0);
-	sys_register_ioport(IO_PIC1+1, SZ8, 0);
-	sys_register_ioport(IO_PIC2, SZ8, 0);
-	sys_register_ioport(IO_PIC2+1, SZ8, 0);
-	sys_register_ioport(IO_ELCR1, SZ8, 0);
-	sys_register_ioport(IO_PIC1, SZ8, 1);
-	sys_register_ioport(IO_PIC1+1, SZ8, 1);
-	sys_register_ioport(IO_PIC2, SZ8, 1);
-	sys_register_ioport(IO_PIC2+1, SZ8, 1);
-	sys_register_ioport(IO_ELCR2, SZ8, 1);
-
-	sys_register_pic();
-
-	parent_chid = sys_getpchid();
-
-	dev_rdy = (struct device_ready *) buf;
-	dev_rdy->magic = MAGIC_DEVICE_READY;
-	sys_send(parent_chid, dev_rdy, sizeof(struct device_ready));
-
-	while (1) {
-		if (sys_recv(parent_chid, buf, &size, TRUE))
-			continue;
-
-#ifdef DEBUG_VPIC
-		DEBUG("Receive request (magic 0x%x).\n", ((uint32_t *) buf)[0]);
-#endif
-
-		switch (((uint32_t *) buf)[0]) {
-		case MAGIC_IOPORT_RW_REQ:
-			rw_req = (struct ioport_rw_req *) buf;
-
-			if (rw_req->port != IO_PIC1 &&
-			    rw_req->port != IO_PIC1+1 &&
-			    rw_req->port != IO_PIC2 &&
-			    rw_req->port != IO_PIC2+1 &&
-			    rw_req->port != IO_ELCR1 &&
-			    rw_req->port != IO_ELCR2) {
-#ifdef DEBUG_VPIC
-				DEBUG("Ingore unknown port %d.\n", rw_req->port);
-#endif
-				continue;
-			}
-
-			if (rw_req->width != SZ8) {
-#ifdef DEBUG_VPIC
-				DEBUG("Ignore unknown data width %d.\n",
-				      rw_req->width);
-#endif
-				continue;
-			}
-
-			ret = (struct ioport_read_ret *) buf;
-
-			if (rw_req->write) {
-				_vpic_ioport_write(&vpic,
-						   rw_req->port,
-						   &rw_req->data);
-			} else {
-				_vpic_ioport_read(&vpic,
-						  rw_req->port,
-						  &ret->data);
-
-				ret->magic = MAGIC_IOPORT_READ_RET;
-				sys_send(parent_chid,
-					 ret, sizeof(struct ioport_read_ret));
-			}
-			continue;
-
-		case MAGIC_IRQ_REQ:
-			irq_req = (struct irq_req *) buf;
-
-			if (irq_req->irq >= 16) {
-#ifdef DEBUG_VPIC
-				DEBUG("Ignore unknown IRQ %d.\n", irq_req->irq);
-#endif
-				continue;
-			}
-
-			switch (irq_req->trigger) {
-			case -1:
-				vpic_set_irq(&vpic, irq_req->irq, 0);
-				break;
-			case 0:
-				vpic_set_irq(&vpic, irq_req->irq, 0);
-				vpic_set_irq(&vpic, irq_req->irq, 1);
-				break;
-			case 1:
-				vpic_set_irq(&vpic, irq_req->irq, 1);
-				break;
-			default:
-				continue;
-			}
-
-			continue;
-
-		case MAGIC_IRQ_READ_REQ:
-			irq_read_req = (struct irq_read_req *) buf;
-			irq_read_ret = (struct irq_read_ret *) buf;
-
-			if (irq_read_req->read != 0)
-				irq_read_ret->irq = vpic_read_irq(&vpic);
-			else
-				irq_read_ret->irq = vpic_get_irq(&vpic);
-
-			irq_read_ret->magic = MAGIC_IRQ_READ_RET;
-
-#ifdef DEBUG_VPIC
-			DEBUG("Send IRQ_READ_RET %d to channel %d.\n",
-				   irq_read_ret->irq, parent_chid);
-#endif
-
-			sys_send(parent_chid,
-				 irq_read_ret, sizeof(struct irq_read_req));
-
-			continue;
-
-		default:
-#ifdef DEBUG_VPIC
-			DEBUG("Ignore unknown request (magic 0x%x).\n",
-			      ((uint32_t *) buf)[0]);
-#endif
-			continue;
-		}
-	}
-
-	return 0;
+	if (vpic->master.ready == TRUE && vpic->slave.ready == TRUE)
+		return TRUE;
+	else
+		return FALSE;
 }

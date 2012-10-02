@@ -1,16 +1,19 @@
-#include <sys/context.h>
 #include <sys/debug.h>
+#include <sys/mmu.h>
 #include <sys/pcpu.h>
 #include <sys/proc.h>
-#include <sys/spinlock.h>
 #include <sys/string.h>
+#include <sys/session.h>
 #include <sys/syscall.h>
+#include <sys/trap.h>
 #include <sys/types.h>
 #include <sys/vm.h>
 #include <sys/x86.h>
 
 #include <sys/virt/vmm.h>
 #include <sys/virt/vmm_dev.h>
+
+#include <dev/ahci.h>
 
 #include <machine/pmap.h>
 
@@ -23,32 +26,30 @@ static char *syscall_name[256] =
 		[SYS_spawn]		= "sys_spawn",
 		[SYS_yield]		= "sys_yield",
 		[SYS_getpid]		= "sys_getpid",
-		[SYS_send]		= "sys_send",
-		[SYS_recv]		= "sys_recv",
-		[SYS_recv_nonblock]	= "sys_recv_nonblock",
-		[SYS_ncpus]		= "sys_ncpus",
-		[SYS_getpchid]		= "sys_getpchid",
-		[SYS_allocvm]		= "sys_allocvm",
-		[SYS_execvm]		= "sys_execvm",
-		[SYS_test]		= "sys_test",
-		[SYS_register_ioport]	= "sys_register_ioport",
-		[SYS_unregister_ioport]	= "sys_unregister_ioport",
-		[SYS_register_irq]	= "sys_register_irq",
-		[SYS_unregister_irq]	= "sys_unregister_irq",
-		[SYS_register_pic]	= "sys_register_pic",
-		[SYS_unregister_pic]	= "sys_unregister_pic",
-		[SYS_register_mmio]	= "sys_register_mmio",
-		[SYS_unregister_mmio]	= "sys_unregister_mmio",
-		[SYS_read_ioport]	= "sys_read_ioport",
-		[SYS_write_ioport]	= "sys_write_ioport",
-		[SYS_raise_irq]		= "sys_raise_irq",
-		[SYS_trigger_irq]	= "sys_trigger_irq",
-		[SYS_lower_irq]		= "sys_lower_irq",
-		[SYS_notify_irq]	= "sys_notify_irq",
-		[SYS_read_guest_tsc]	= "sys_read_guest_tsc",
+		[SYS_getppid]		= "sys_getppid",
+		[SYS_session]		= "sys_session",
+		[SYS_getsid]		= "sys_getsid",
+		[SYS_new_vm]		= "sys_new_vm",
+		[SYS_run_vm]		= "sys_run_vm",
+		[SYS_attach_vdev]	= "sys_attach_vdev",
+		[SYS_detach_vdev]	= "sys_detach_vdev",
+		[SYS_attach_port]	= "sys_attach_port",
+		[SYS_detach_port]	= "sys_detach_port",
+		[SYS_attach_irq]	= "sys_attach_irq",
+		[SYS_detach_irq]	= "sys_detach_irq",
+		[SYS_ret_in]		= "sys_ret_in",
+		[SYS_host_in]		= "sys_host_in",
+		[SYS_host_out]		= "sys_host_out",
+		[SYS_set_irq]		= "sys_set_irq",
+		[SYS_guest_read]	= "sys_guest_read",
+		[SYS_guest_write]	= "sys_guest_write",
+		[SYS_sync_done]		= "sys_sync_done",
+		[SYS_dev_ready]		= "sys_device_ready",
+		[SYS_guest_rdtsc]	= "sys_guest_rdtsc",
 		[SYS_guest_tsc_freq]	= "sys_guest_tsc_freq",
 		[SYS_guest_mem_size]	= "sys_guest_mem_size",
-		[SYS_getchid]		= "sys_getchid",
+		[SYS_recv_req]		= "sys_recv_req",
+		[SYS_disk_op]		= "sys_disk_op",
 	};
 
 #define SYSCALL_DEBUG(fmt, ...)				\
@@ -61,11 +62,12 @@ static char *syscall_name[256] =
 
 #define NR_DEBUG(nr, fmt, ...)						\
 	do {								\
-		KERN_DEBUG("CPU%d:PID%d:%s(nr %d): "fmt,		\
+		KERN_DEBUG("%s(nr %d, CPU%d, PID%d) "fmt,		\
+			   (0 <= nr && nr < MAX_SYSCALL_NR) ?		\
+			   syscall_name[nr] : "null",			\
+			   nr,						\
 			   pcpu_cpu_idx(pcpu_cur()),			\
 			   proc_cur()->pid,				\
-			   (0 <= nr && nr < 256) ? syscall_name[nr] : "null", \
-			   nr,						\
 			   ##__VA_ARGS__);				\
 	} while (0)
 
@@ -82,142 +84,128 @@ static char *syscall_name[256] =
 #endif
 
 /*
- * Copy data from user's virtual address space to kernel's virtual address
- * space.
+ * Transfer data between the user linear address space to the kernel physical
+ * address space.
  *
- * @param dest kernel's virtual address
- * @param src user's virtual address
- * @param size the size of the data
+ * @param pa   the physical address where the data is transfered to/from
+ * @param pmap
+ * @param la   the linear address where the data is transfered from/to
+ * @param size how many bytes is transfered
  *
- * @return the kernel's virtual address if copy succeed; otherwise, NULL.
+ * @return the number of bytes that are actually transfered
  */
-static void *
-copy_from_user(void *dest, void *src, size_t size)
+static size_t
+rw_user(uintptr_t pa, pmap_t *pmap, uintptr_t la, size_t size, int write)
 {
-	if (dest == NULL || src == NULL || size == 0 ||
-	    (uintptr_t) dest + size > VM_USERLO || (uintptr_t) src < VM_USERLO)
-		return NULL;
+	KERN_ASSERT(pa + size <= VM_USERLO);
+	KERN_ASSERT(pmap != NULL);
 
-	struct proc *user_proc;
-	pmap_t *user_pmap;
+	uintptr_t from, to, from_pa, to_pa;
+	size_t remaining, copied;
 
-	user_proc = proc_cur();
+	if (la < VM_USERLO || VM_USERLO - size > la)
+		return 0;
 
-	user_pmap = user_proc->pmap;
-	KERN_ASSERT(user_pmap == (pmap_t *) rcr3());
+	remaining = size;
+	from = write ? pa : la;
+	from_pa = write ? from : pmap_la2pa(pmap, from);
+	to = write ? la : pa;
+	to_pa = write ? pmap_la2pa(pmap, to) : to;
 
-	if (pmap_checkrange(user_pmap, (uintptr_t) dest, size) == FALSE) {
-		SYSCALL_DEBUG("%x ~ %x do not fit in the kernel address space.\n",
-			      dest, dest+size);
-		return NULL;
+	while (remaining) {
+		copied = MIN(remaining,
+			     write ?
+			     PAGESIZE - (to - ROUNDDOWN(to, PAGESIZE)) :
+			     PAGESIZE - (from - ROUNDDOWN(from, PAGESIZE)));
+		memcpy((void *) to_pa, (void *) from_pa, copied);
+
+		from += copied;
+		from_pa += copied;
+		to += copied;
+		to_pa += copied;
+		remaining -= copied;
+
+		if (remaining == 0)
+			break;
+
+		if (write && ROUNDDOWN(to, PAGESIZE) == to)
+			to_pa = pmap_la2pa(pmap, la);
+		else if (write == 0 && ROUNDDOWN(from, PAGESIZE) == from)
+			from_pa = pmap_la2pa(pmap, from);
 	}
 
-	if (pmap_checkrange(user_pmap, (uintptr_t) src, size) == FALSE) {
-		SYSCALL_DEBUG("%x ~ %x do not fit in the user address space.\n",
-			      src, src+size);
-		return NULL;
-	}
-
-	memcpy(dest, src, size);
-
-	return dest;
+	return size;
 }
 
-/*
- * Copy data from kernel's virtual address space to user's virtual address
- * space. If there is not enough virtual space in user's virtual address space,
- * try to allocate more space for user.
- *
- * @param dest user's virtual address
- * @param src kernel's virtual address
- * @param size the size in bytes of the data
- *
- * @return the user's virtual address if copy succeed; otherwise, NULL.
- */
-static void *
-copy_to_user(void *dest, void *src, size_t size)
-{
-	if (dest == NULL || src == NULL || size == 0 ||
-	    (uintptr_t) dest < VM_USERLO || (uintptr_t) src + size > VM_USERLO)
-		return NULL;
+#define copy_from_user(pa, pmap, la, size)	\
+	rw_user((pa), (pmap), (la), (size), 0)
 
-	struct proc *user_proc;
-	pmap_t *user_pmap;
-
-	user_proc = proc_cur();
-
-	user_pmap = user_proc->pmap;
-	KERN_ASSERT(user_pmap == (pmap_t *) rcr3());
-
-	if (pmap_checkrange(user_pmap, (uintptr_t) src, size) == FALSE) {
-		SYSCALL_DEBUG("%x ~ %x do not fit in the kernel address space.\n",
-			      src, src+size);
-		return NULL;
-	}
-
-	if (pmap_checkrange(user_pmap, (uintptr_t) dest, size) == FALSE) {
-		SYSCALL_DEBUG("%x ~ %x do not fit in the user address space.\n",
-			      dest, dest+size);
-		return NULL;
-	}
-
-	memcpy(dest, src, size);
-
-	return dest;
-}
+#define copy_to_user(pmap, la, pa, size)	\
+	rw_user((pa), (pmap), (la), (size), 1)
 
 static int
-sys_test(uint32_t arg)
+sys_puts(uintptr_t str_la)
 {
-	NR_DEBUG(SYS_test, "arg0 0x%08x\n", arg);
+	struct proc *p = proc_cur();
+
+	if (copy_from_user((uintptr_t) p->sys_buf,
+			   p->pmap, str_la, PAGESIZE) == NULL)
+		return E_MEM;
+
+	((char *) (p->sys_buf))[PAGESIZE - 1] = '\0';
+	KERN_INFO("%s", (char *) p->sys_buf);
+
 	return E_SUCC;
 }
 
 static int
-sys_getc(char *buf)
+sys_getc(uintptr_t buf_la)
 {
-	struct pcpu *c = pcpu_cur();
+	struct proc *p = proc_cur();
+	char c;
 
-	*(char *) c->sys_buf = getchar();
-	if (copy_to_user(buf, c->sys_buf, sizeof(char)) == NULL)
-		return E_MEM_FAIL;
+	c = getchar();
+	if (copy_to_user(p->pmap, buf_la, (uintptr_t) &c, sizeof(char)) == NULL)
+		return E_MEM;
 	else
 		return E_SUCC;
 }
 
 static int
-sys_puts(char *buf)
+sys_spawn(uintptr_t user_proc_la, uintptr_t pid_la)
 {
-	struct pcpu *c = pcpu_cur();
+	struct proc *p, *new_proc;
+	struct user_proc info;
 
-	if (copy_from_user(c->sys_buf, buf, PAGE_SIZE) == NULL)
-		return E_MEM_FAIL;
+	if (user_proc_la < VM_USERLO || user_proc_la >= VM_USERHI ||
+	    pid_la < VM_USERLO || pid_la >= VM_USERHI)
+		return E_INVAL_ADDR;
 
-	((char *) (c->sys_buf))[PAGE_SIZE - 1] = '\0';
-	KERN_INFO("%s", (char *) c->sys_buf);
+	p = proc_cur();
+
+	if (copy_from_user((uintptr_t) &info, p->pmap,
+			   user_proc_la, sizeof(struct user_proc)) == NULL)
+		return E_MEM;
+
+	if (info.cpu_idx >= pcpu_ncpu())
+		return E_INVAL_CPU;
+
+	if (info.sid != p->session->sid)
+		return E_INVAL_SID;
+
+	if (info.exe_bin < VM_USERLO || info.exe_bin >= VM_USERHI)
+		return E_INVAL_ADDR;
+
+	new_proc = proc_spawn(&pcpu[info.cpu_idx], info.exe_bin, p->session);
+
+	if (new_proc == NULL)
+		return E_INVAL_PID;
+
+	if (copy_to_user(p->pmap, pid_la,
+			 (uintptr_t) &new_proc->pid, sizeof(pid_t)) == NULL)
+		return E_MEM;
 
 	return E_SUCC;
-}
-
-static int
-sys_spawn(uint32_t cpu_idx, uintptr_t exe, pid_t *pid)
-{
-	int rc = E_SUCC;
-	struct pcpu *cur_cpu = pcpu_cur();
-	struct pcpu *c = &pcpu[cpu_idx];
-	struct proc *child;
-
-	if ((child = proc_spawn(c, exe)) == NULL) {
-		*(pid_t *) cur_cpu->sys_buf = PID_INV;
-		rc = E_SPAWN_FAIL;
-	} else {
-		*(pid_t *) cur_cpu->sys_buf = child->pid;
-	}
-
-	if (copy_to_user(pid, cur_cpu->sys_buf, sizeof(pid_t)) == NULL)
-		rc = E_MEM_FAIL;
-
-	return rc;
 }
 
 static int
@@ -228,474 +216,608 @@ sys_yield(void)
 }
 
 static int
-sys_getpid(pid_t *pid)
+sys_getpid(uintptr_t pid_la)
 {
-	struct pcpu *c = pcpu_cur();
+	if (pid_la < VM_USERLO || pid_la + sizeof(pid_t) > VM_USERHI)
+		return E_INVAL_ADDR;
+
 	struct proc *p = proc_cur();
 
-	*(pid_t *) c->sys_buf = p->pid;
-
-	if (copy_to_user(pid, c->sys_buf, sizeof(pid_t)) == NULL)
-		return E_MEM_FAIL;
+	if (copy_to_user(p->pmap, pid_la,
+			 (uintptr_t) &p->pid, sizeof(pid_t)) == NULL)
+		return E_MEM;
 	else
 		return E_SUCC;
 }
 
 static int
-sys_allocvm(void)
+sys_getppid(uintptr_t ppid_la)
+{
+	if (ppid_la < VM_USERLO || ppid_la + sizeof(pid_t) > VM_USERHI)
+		return E_INVAL_ADDR;
+
+	struct proc *p = proc_cur();
+
+	if (copy_to_user(p->pmap, ppid_la,
+			 (uintptr_t) &p->parent->pid, sizeof(pid_t)) == NULL)
+		return E_MEM;
+	else
+		return E_SUCC;
+}
+
+static int
+sys_session(int type, uintptr_t sid_la)
+{
+	if (sid_la < VM_USERLO || sid_la + sizeof(sid_t) > VM_USERHI)
+		return E_INVAL_ADDR;
+
+	struct proc *p = proc_cur();
+	struct session *s, *old_s;
+
+	if ((s = session_new(type)) == NULL)
+		return E_INVAL_SID;
+
+	old_s = p->session;
+
+	if (session_remove_proc(old_s, p)) {
+		session_free(s);
+		return E_INVAL_SID;
+	}
+
+	if (session_add_proc(s, p)) {
+		session_free(s);
+		session_add_proc(old_s, p);
+		return E_INVAL_SID;
+	}
+
+	if (copy_to_user(p->pmap, sid_la,
+			 (uintptr_t) &s->sid, sizeof(int)) == NULL)
+		return E_MEM;
+
+	return E_SUCC;
+
+}
+
+static int
+sys_getsid(uintptr_t sid_la)
+{
+	if (sid_la < VM_USERLO || sid_la + sizeof(sid_t) > VM_USERHI)
+		return E_INVAL_ADDR;
+
+	struct proc *p = proc_cur();
+
+	if (copy_to_user(p->pmap, sid_la,
+			 (uintptr_t) &p->session->sid, sizeof(sid_t)) == NULL)
+		return E_MEM;
+	else
+		return E_SUCC;
+}
+
+static int
+sys_new_vm(uintptr_t vmid_la)
 {
 	struct proc *p = proc_cur();
 
-	if (pcpu_onboot() != TRUE) {
-		NR_DEBUG(SYS_allocvm,
-			 "Process %d is not on the bootstrap processor.\n",
-			 p->pid);
-		return E_VM_ON_AP;
-	}
+	if (p->vm != NULL)
+		return E_INVAL_PID;
 
-	proc_lock(p);
+	struct session *s = p->session;
 
-	if (p->vm != NULL) {
-		NR_DEBUG(SYS_allocvm,
-			 "A virtual machine is already running in process %d.\n",
-			 p->pid);
-		proc_unlock(p);
-		return E_VM_EXIST;
-	}
+	if (s->type != SESSION_VM)
+		return E_INVAL_SID;
 
 	if ((p->vm = vmm_init_vm()) == NULL) {
-		NR_DEBUG(SYS_allocvm,
-			 "Cannot initialize a virtual machine in process %d.\n",
-			 p->pid);
 		proc_unlock(p);
-		return E_VM_INIT_FAIL;
+		return E_INVAL_VMID;
 	}
 
-	proc_unlock(p);
+	if (copy_to_user(p->pmap, vmid_la,
+			 (uintptr_t) &p->vm->vmid, sizeof(vmid_t)) == NULL)
+		return E_MEM;
+
 	return E_SUCC;
 }
 
 static int
-sys_execvm(void)
+sys_run_vm(void)
 {
 	struct proc *p = proc_cur();
+	struct pcpu *c = p->cpu;
 
-	if (pcpu_onboot() != TRUE) {
-		NR_DEBUG(SYS_execvm,
-			 "Process %d is not on the bootstrap processor.\n",
-			 p->pid);
-		return E_VM_ON_AP;
-	}
+	if (c->vm != NULL || p->vm == NULL)
+		return E_INVAL_VMID;
 
-	proc_lock(p);
-
-	if (p->vm == NULL) {
-		NR_DEBUG(SYS_execvm,
-			 "No virtual machine in process %d.\n", p->pid);
-		proc_unlock(p);
-		return E_NO_VM;
-	}
-
-	proc_unlock(p);
 	vmm_run_vm(p->vm);
 
 	return E_SUCC;
 }
 
 static int
-sys_ncpus(uint32_t *n)
+sys_attach_vdev(pid_t pid, uintptr_t vid_la)
 {
-	struct pcpu *c = pcpu_cur();
-	*(uint32_t *) c->sys_buf = pcpu_ncpu();
-	if (copy_to_user(n, c->sys_buf, sizeof(uint32_t)) == NULL)
-		return E_MEM_FAIL;
-	else
-		return E_SUCC;
+	struct proc *dev_p = proc_pid2proc(pid);
+	struct proc *vm_p = proc_cur();
+	vid_t vid;
+
+	if (dev_p == NULL)
+		return E_INVAL_PID;
+
+	if (vm_p->vm == NULL)
+		return E_INVAL_VMID;
+
+	if (dev_p->session != vm_p->vm->proc->session)
+		return E_INVAL_SID;
+
+	if ((vid = vdev_register_device(vm_p->vm, dev_p)) == -1)
+		return E_INVAL_VID;
+
+	if (copy_to_user(proc_cur()->pmap, vid_la,
+			 (uintptr_t) &vid, sizeof(vid_t)) == NULL)
+		return E_MEM;
+
+	return E_SUCC;
 }
 
 static int
-sys_getpchid(int *chid)
+sys_detach_vdev(vid_t vid)
 {
-	struct pcpu *c = pcpu_cur();
-	struct proc *cur_proc = proc_cur();;
-	int errno;
+	struct proc *p = proc_cur();
 
-	if ((cur_proc = proc_cur()) == NULL) {
-		*(int *) c->sys_buf = -1;
-		errno = E_INVAL_PROC;
-	} else if (cur_proc->parent == NULL || cur_proc->parent_ch == NULL) {
-		*(int *) c->sys_buf = -1;
-		errno = E_NO_CHANNEL;
+	if (p->vm == NULL)
+		return E_INVAL_VMID;
+
+	if (vdev_get_dev(p->vm, vid) == NULL)
+		return E_INVAL_VID;
+
+	vdev_unregister_device(p->vm, vid);
+	return E_SUCC;
+}
+
+static int
+sys_setup_port(uint16_t port, data_sz_t width, int attach)
+{
+	struct proc *dev_p;
+	struct session *session;
+	vid_t vid;
+	struct vm *vm;
+
+	dev_p = proc_cur();
+	session = dev_p->session;
+	vm = session->vm;
+	vid = dev_p->vid;
+
+	if (vm == NULL)
+		return E_INVAL_SID;
+
+	if (vid == -1)
+		return E_INVAL_VID;
+
+	if (attach) {
+		if (vdev_register_ioport(vm, port, width, vid))
+			return E_ATTACH;
 	} else {
-		*(int *) c->sys_buf = channel_getid(cur_proc->parent_ch);
-		errno = E_SUCC;
+		if (vdev_unregister_ioport(vm, port, width, vid))
+			return E_DETACH;
 	}
 
-	if (copy_to_user(chid, c->sys_buf, sizeof(int)) == NULL)
-		errno = E_MEM_FAIL;
+	return E_SUCC;
+}
 
-	return errno;
+#define sys_attach_port(port, width)	sys_setup_port((port), (width), 1)
+#define sys_detach_port(port, width)	sys_setup_port((port), (width), 0)
+
+static int
+sys_setup_irq(uint8_t irq, int attach)
+{
+	struct proc *dev_p;
+	struct session *session;
+	vid_t vid;
+	struct vm *vm;
+
+	dev_p = proc_cur();
+	session = dev_p->session;
+	vm = session->vm;
+	vid = dev_p->vid;
+
+	if (vm == NULL)
+		return E_INVAL_SID;
+
+	if (vid == -1)
+		return E_INVAL_VID;
+
+	if (!(0 <= irq && irq < MAX_IRQ))
+		return E_INVAL_IRQ;
+
+	if (attach) {
+		if (vdev_register_irq(vm, irq, vid))
+			return E_ATTACH;
+	} else {
+		if (vdev_unregister_irq(vm, irq, vid))
+			return E_DETACH;
+	}
+
+	return E_SUCC;
+}
+
+#define sys_attach_irq(irq)	sys_setup_irq((irq), 1)
+#define sys_detach_irq(irq)	sys_setup_irq((irq), 0)
+
+static int
+sys_ioport_inout(uintptr_t user_ioport_la, uintptr_t val_la,
+		 int in, int host)
+{
+	struct proc *dev_p = proc_cur();
+	struct vm *vm;
+	int rc;
+
+	struct user_ioport portinfo;
+	uint32_t val;
+
+	if ((vm = dev_p->session->vm) == NULL)
+		return E_INVAL_VMID;
+
+	if (dev_p->session != vm->proc->session)
+		return E_INVAL_SID;
+
+	if (dev_p->vid == -1)
+		return E_INVAL_VID;
+
+	if ((copy_from_user((uintptr_t) &portinfo, dev_p->pmap, user_ioport_la,
+			    sizeof(struct user_ioport))) == NULL)
+		return E_MEM;
+
+	if (in) {
+		rc = host ?
+			vdev_read_host_ioport(vm, dev_p->vid, portinfo.port,
+					      portinfo.width, &val) :
+			vdev_read_guest_ioport(vm, dev_p->vid, portinfo.port,
+					       portinfo.width, &val);
+
+		if (rc)
+			return E_IOPORT;
+
+		if (copy_to_user(dev_p->pmap, val_la,
+				 (uintptr_t) &val, 1 << portinfo.width) == NULL)
+			return E_MEM;
+	} else {
+		val = val_la;
+
+		rc = host ?
+			vdev_write_host_ioport(vm, dev_p->vid, portinfo.port,
+					       portinfo.width, val) :
+			vdev_write_guest_ioport(vm, dev_p->vid, portinfo.port,
+						portinfo.width, val);
+
+		if (rc)
+			return E_IOPORT;
+	}
+
+	return E_SUCC;
+}
+
+#define sys_guest_in(port, val)		sys_ioport_inout((port), (val), 1, 0)
+#define sys_guest_out(port, val)	sys_ioport_inout((port), (val), 0, 0)
+#define sys_host_in(port, val)		sys_ioport_inout((port), (val), 1, 1)
+#define sys_host_out(port, val)		sys_ioport_inout((port), (val), 0, 1)
+
+static int
+sys_ret_in(uintptr_t user_ioport_la, uint32_t val)
+{
+	struct proc *dev_p = proc_cur();
+	struct vm *vm = dev_p->session->vm;
+	struct user_ioport portinfo;
+
+	if (vm == NULL)
+		return E_INVAL_VMID;
+
+	if (dev_p->session != vm->proc->session)
+		return E_INVAL_SID;
+
+	if (dev_p->vid == -1)
+		return E_INVAL_VID;
+
+	if (copy_from_user((uintptr_t) &portinfo, dev_p->pmap,
+			   user_ioport_la, sizeof(struct user_ioport)) == NULL)
+		return E_MEM;
+
+	if (vdev_return_guest_ioport(vm, dev_p->vid,
+				     portinfo.port, portinfo.width, val))
+		return E_IOPORT;
+
+	return E_SUCC;
 }
 
 static int
-sys_send(int channel_id, void *msg, size_t size)
+sys_set_irq(uint8_t irq, int mode)
 {
-	int errno;
+	struct proc *dev_p = proc_cur();
+	struct vm *vm = dev_p->session->vm;
+
+	if (vm == NULL)
+		return E_INVAL_VMID;
+
+	if (dev_p->session != vm->proc->session)
+		return E_INVAL_SID;
+
+	if (dev_p->vid == -1)
+		return E_INVAL_VID;
+
+	if (!(0 <= irq && irq < MAX_IRQ))
+		return E_INVAL_IRQ;
+
+	if (!(0 <= mode && mode < 3))
+		return E_INVAL_MODE;
+
+	if (vdev_set_irq(vm, dev_p->vid, irq, mode))
+		return E_PIC;
+
+	return E_SUCC;
+}
+
+static int
+sys_guest_rw(uintptr_t gpa, uintptr_t la, size_t size, int write)
+{
+	struct proc *dev_p = proc_cur();
+	struct vm *vm = dev_p->session->vm;
+
+	if (la < VM_USERLO || la > VM_USERHI - size ||
+	    VM_PHY_MEMORY_SIZE - la < size)
+		return E_INVAL_ADDR;
+
+	if (vm == NULL)
+		return E_INVAL_VMID;
+
+	if (dev_p->session != vm->proc->session)
+		return E_INVAL_SID;
+
+	if (dev_p->vid == -1)
+		return E_INVAL_VID;
+
+	if (vdev_rw_guest_mem(vm, gpa, dev_p->pmap, la, size, write))
+		return E_MEM;
+
+	return E_SUCC;
+}
+
+#define sys_guest_read(gpa, la, size)	sys_guest_rw((gpa), (la), (size), 0)
+#define sys_guest_write(gpa, la, size)	sys_guest_rw((gpa), (la), (size), 1)
+
+static int
+sys_sync_done(void)
+{
+	struct proc *dev_p = proc_cur();
+	struct vm *vm = dev_p->session->vm;
+
+	if (vm == NULL)
+		return E_INVAL_VMID;
+
+	if (dev_p->session != vm->proc->session)
+		return E_INVAL_SID;
+
+	if (dev_p->vid == -1)
+		return E_INVAL_VID;
+
+	if (vdev_sync_dev(vm, dev_p->vid))
+		return E_DEV_SYNC;
+
+	return E_SUCC;
+}
+
+static int
+sys_dev_ready(void)
+{
+	struct proc *dev_p = proc_cur();
+	struct vm *vm = dev_p->session->vm;
+
+	if (vm == NULL)
+		return E_INVAL_VMID;
+
+	if (dev_p->session != vm->proc->session)
+		return E_INVAL_SID;
+
+	if (dev_p->vid == -1)
+		return E_INVAL_VID;
+
+	if (vdev_device_ready(vm, dev_p->vid))
+		return E_DEV_RDY;
+
+	return E_SUCC;
+}
+
+static int
+sys_recv_req(uintptr_t dev_req_la, bool blocking)
+{
+	struct proc *dev_p = proc_cur();
+	struct vm *vm = dev_p->session->vm;
+	vid_t vid;
 	struct channel *ch;
+	uint8_t recv_buf[CHANNEL_BUFFER_SIZE];
+	size_t recv_size;
 
-	ch = channel_getch(channel_id);
-
-	if (ch == NULL || (ch->state & CHANNEL_STAT_INITED) == 0)
-		return E_NO_PERM;
-
-	if (msg == NULL || size == 0)
-		return E_EMPTY_MSG;
-
-	errno = proc_send_msg(ch, proc_cur(), msg, size);
-
-	switch (errno) {
-	case E_CHANNEL_MSG_TOO_LARGE:
-		return E_LARGE_MSG;
-	case E_CHANNEL_ILL_SENDER:
-		return E_NO_PERM;
-	case E_CHANNEL_BUSY:
-		return E_SEND_BUSY;
-	default:
-		return E_SUCC;
-	}
-}
-
-static gcc_inline int
-sys_recv_helper(int channel_id, void *msg, size_t *size, bool blocking)
-{
-	int errno;
-	struct channel *ch;
-
-	ch = channel_getch(channel_id);
-
-	if (ch == NULL || (ch->state & CHANNEL_STAT_INITED) == 0)
-		return E_NO_PERM;
-
-	if (msg == NULL || size == NULL)
-		return E_EMPTY_MSG;
-
-	errno = proc_recv_msg(ch, proc_cur(), msg, size, blocking);
-
-	switch (errno) {
-	case E_CHANNEL_ILL_RECEIVER:
-		return E_NO_PERM;
-	case E_CHANNEL_IDLE:
-		return E_RECV_IDLE;
-	default:
-		return E_SUCC;
-	}
-}
-
-static int
-sys_recv(int channel_id, void *msg, size_t *size)
-{
-	return sys_recv_helper(channel_id, msg, size, TRUE);
-}
-
-static int
-sys_recv_nonblock(int channel_id, void *msg, size_t *size)
-{
-	return sys_recv_helper(channel_id, msg, size, FALSE);
-}
-
-int
-sys_register_ioport(uint16_t port, data_sz_t width, int write)
-{
-	struct vm *vm = vmm_cur_vm();
+	if (dev_req_la < VM_USERLO || dev_req_la >= VM_USERHI)
+		return E_MEM;
 
 	if (vm == NULL)
-		return E_NO_VM;
+		return E_INVAL_VMID;
 
-	if (port >= MAX_IOPORT)
-		return E_INVAL_IOPORT;
+	if ((vid = dev_p->vid) == -1)
+		return E_INVAL_VID;
 
-	if (width != SZ8 && width != SZ16 && width != SZ32)
-		return E_INVAL_WIDTH;
+	if ((ch = vm->vdev.ch[vid]) == NULL)
+		return E_INVAL_VID;
 
-	if (vdev_register_ioport(vm, proc_cur(),
-				 port, width, (write != 0) ? TRUE : FALSE))
-		return E_REG_FAIL;
+	if (proc_recv_msg(ch, dev_p, recv_buf, &recv_size, blocking) ||
+	    recv_size > sizeof(dev_req_t))
+		return E_RECV;
 
-	return E_SUCC;
-}
+	if (dev_req_la + recv_size > VM_USERHI)
+		return E_MEM;
 
-int
-sys_unregister_ioport(uint16_t port, data_sz_t width, int write)
-{
-	struct vm *vm = vmm_cur_vm();
-
-	if (vm == NULL)
-		return E_NO_VM;
-
-	if (port >= MAX_IOPORT)
-		return E_INVAL_IOPORT;
-
-	if (width != SZ8 && width != SZ16 && width != SZ32)
-		return E_INVAL_WIDTH;
-
-	if (vdev_unregister_ioport(vm, proc_cur(),
-				   port, width, (write != 0) ? TRUE : FALSE))
-		return E_UNREG_FAIL;
-
-	return E_SUCC;
-}
-
-int
-sys_register_irq(uint8_t irq)
-{
-	struct vm *vm = vmm_cur_vm();
-
-	if (vm == NULL)
-		return E_NO_VM;
-
-	if (irq >= MAX_IRQ)
-		return E_INVAL_IRQ;
-
-	if (vdev_register_irq(vm, proc_cur(), irq))
-		return E_REG_FAIL;
-
-	return E_SUCC;
-}
-
-int
-sys_unregister_irq(uint8_t irq)
-{
-	struct vm *vm = vmm_cur_vm();
-
-	if (vm == NULL)
-		return E_NO_VM;
-
-	if (irq >= MAX_IRQ)
-		return E_INVAL_IRQ;
-
-	if (vdev_unregister_irq(vm, proc_cur(), irq))
-		return E_UNREG_FAIL;
-
-	return E_SUCC;
-}
-
-int
-sys_register_pic(void)
-{
-	struct vm *vm = vmm_cur_vm();
-
-	if (vm == NULL)
-		return E_NO_VM;
-
-	if (vdev_register_pic(vm, proc_cur()))
-		return E_REG_FAIL;
-
-	return E_SUCC;
-}
-
-int
-sys_unregister_pic(void)
-{
-	struct vm *vm = vmm_cur_vm();
-
-	if (vm == NULL)
-		return E_NO_VM;
-
-	if (vdev_unregister_pic(vm, proc_cur()))
-		return E_UNREG_FAIL;
-
-	return E_SUCC;
-}
-
-int
-sys_register_mmio(uintptr_t gpa, uintptr_t hla, size_t size)
-{
-	KERN_PANIC("Not implemented yet.\n");
-	return 0;
-}
-
-int
-sys_unregister_mmio(uintptr_t gpa, size_t size)
-{
-	KERN_PANIC("Not implemented yet.\n");
-	return 0;
-}
-
-int
-sys_read_ioport(uint16_t port, data_sz_t width, void *buf)
-{
-	uint32_t data;
-	struct vm *vm = vmm_cur_vm();
-
-	if (vm == NULL)
-		return E_NO_VM;
-
-	if (port >= MAX_IOPORT)
-		return E_INVAL_IOPORT;
-
-	if (width != SZ8 && width != SZ16 && width != SZ32)
-		return E_INVAL_WIDTH;
-
-	vdev_host_ioport_read(vm, port, width, &data);
-
-	if (copy_to_user(buf, &data, 1 << width) == NULL)
-		return E_MEM_FAIL;
-
-	return E_SUCC;
-}
-
-int
-sys_write_ioport(uint16_t port, data_sz_t width, void *buf)
-{
-	uint32_t data;
-	struct vm *vm = vmm_cur_vm();
-
-	if (vm == NULL)
-		return E_NO_VM;
-
-	if (port >= MAX_IOPORT)
-		return E_INVAL_IOPORT;
-
-	if (width != SZ8 && width != SZ16 && width != SZ32)
-		return E_INVAL_WIDTH;
-
-	if (copy_from_user(&data, buf, 1 << width) == NULL)
-		return E_MEM_FAIL;
-
-	vdev_host_ioport_write(vm, port, width, data);
-
-	return E_SUCC;
-}
-
-int
-sys_raise_irq(uint8_t irq)
-{
-	struct vm *vm = vmm_cur_vm();
-
-	if (vm == NULL)
-		return E_NO_VM;
-
-	if (irq >= MAX_IRQ)
-		return E_INVAL_IRQ;
-
-	if (vdev_raise_irq(vm, irq))
-		return E_IRQ_FAIL;
-
-	return E_SUCC;
-}
-
-int
-sys_trigger_irq(uint8_t irq)
-{
-	struct vm *vm = vmm_cur_vm();
-
-	if (vm == NULL)
-		return E_NO_VM;
-
-	if (irq >= MAX_IRQ)
-		return E_INVAL_IRQ;
-
-	if (vdev_trigger_irq(vm, irq))
-		return E_IRQ_FAIL;
-
-	return E_SUCC;
-}
-
-int
-sys_lower_irq(uint8_t irq)
-{
-	struct vm *vm = vmm_cur_vm();
-
-	if (vm == NULL)
-		return E_NO_VM;
-
-	if (irq >= MAX_IRQ)
-		return E_INVAL_IRQ;
-
-	if (vdev_lower_irq(vm, irq))
-		return E_IRQ_FAIL;
-
-	return E_SUCC;
-}
-
-int
-sys_notify_irq(void)
-{
-	struct vm *vm = vmm_cur_vm();
-
-	if (vm == NULL)
-		return E_NO_VM;
-
-	if (vdev_notify_irq(vm))
-		return E_IRQ_FAIL;
+	if (copy_to_user(dev_p->pmap, dev_req_la,
+			 (uintptr_t) recv_buf, recv_size) == NULL)
+		return E_MEM;
 
 	return E_SUCC;
 }
 
 static int
-sys_read_guest_tsc(uint64_t *tsc)
+sys_guest_rdtsc(uintptr_t tsc_la)
 {
-	struct vm *vm = vmm_cur_vm();
+	struct proc *dev_p = proc_cur();
+	struct vm *vm = dev_p->session->vm;
+
 	uint64_t guest_tsc;
 
+	if (tsc_la < VM_USERLO || VM_USERHI - tsc_la < sizeof(uint64_t))
+		return E_INVAL_ADDR;
+
 	if (vm == NULL)
-		return E_NO_VM;
+		return E_INVAL_VMID;
+
+	if (dev_p->session != vm->proc->session)
+		return E_INVAL_SID;
+
+	if (dev_p->vid == -1)
+		return E_INVAL_VID;
 
 	guest_tsc = vmm_rdtsc(vm);
 
-	if (copy_to_user(tsc, &guest_tsc, sizeof(uint64_t)) == NULL)
-		return E_MEM_FAIL;
+	if (copy_to_user(dev_p->pmap, tsc_la,
+			 (uintptr_t) &guest_tsc, sizeof(uint64_t)))
+		return E_MEM;
 
 	return E_SUCC;
 }
 
 static int
-sys_guest_tsc_freq(uint64_t *freq)
+sys_guest_tsc_freq(uintptr_t freq_la)
 {
-	struct vm *vm = vmm_cur_vm();
-	uint64_t guest_freq;
+	struct proc *dev_p = proc_cur();
+	struct vm *vm = dev_p->session->vm;
+
+	uint64_t freq;
+
+	if (freq_la < VM_USERLO || VM_USERHI - freq_la < sizeof(uint64_t))
+		return E_INVAL_ADDR;
 
 	if (vm == NULL)
-		return E_NO_VM;
+		return E_INVAL_VMID;
 
-	guest_freq = VM_TSC_FREQ;
+	if (dev_p->session != vm->proc->session)
+		return E_INVAL_SID;
 
-	if (copy_to_user(freq, &guest_freq, sizeof(uint64_t)) == NULL)
-		return E_MEM_FAIL;
+	if (dev_p->vid == -1)
+		return E_INVAL_VID;
+
+	freq = VM_TSC_FREQ;
+
+	if (copy_to_user(dev_p->pmap, freq_la,
+			 (uintptr_t) &freq, sizeof(uint64_t)))
+		return E_MEM;
 
 	return E_SUCC;
 }
 
 static int
-sys_guest_mem_size(uint64_t *memsize)
+sys_guest_mem_size(uintptr_t size_la)
 {
-	struct vm *vm = vmm_cur_vm();
+	struct proc *dev_p = proc_cur();
+	struct vm *vm = dev_p->session->vm;
+
 	uint64_t size;
 
+	if (size_la < VM_USERLO || VM_USERHI - size_la < sizeof(uint64_t))
+		return E_INVAL_ADDR;
+
 	if (vm == NULL)
-		return E_NO_VM;
+		return E_INVAL_VMID;
+
+	if (dev_p->session != vm->proc->session)
+		return E_INVAL_SID;
+
+	if (dev_p->vid == -1)
+		return E_INVAL_VID;
 
 	size = VM_PHY_MEMORY_SIZE;
 
-	if (copy_to_user(memsize, &size, sizeof(uint64_t)) == NULL)
-		return E_MEM_FAIL;
+	if (copy_to_user(dev_p->pmap, size_la,
+			 (uintptr_t) &size, sizeof(uint64_t)))
+		return E_MEM;
 
 	return E_SUCC;
 }
 
 static int
-sys_getchid(pid_t pid, int *chid)
+sys_disk_op(uintptr_t dop_la)
 {
-	int child_chid;
-	struct proc *child_proc = proc_pid2proc(pid);
+	struct proc *dev_p = proc_cur();
+	struct vm *vm = dev_p->session->vm;
+	pmap_t *pmap;
 
-	if (child_proc == NULL || child_proc->parent != proc_cur())
-		child_chid = -1;
-	else
-		child_chid = channel_getid(child_proc->parent_ch);
+	struct user_disk_op dop;
+	uint64_t sector;
+	uintptr_t la;
+	uint8_t buf[ATA_SECTOR_SIZE];
+	uint64_t nsectors;
 
-	if (copy_to_user(chid, &child_chid, sizeof(int)) == NULL)
-		return E_MEM_FAIL;
+	int rc = 0;
+
+	if (dop_la < VM_USERLO || dop_la + sizeof(dop) > VM_USERHI)
+		return E_INVAL_ADDR;
+
+	if (vm == NULL)
+		return E_INVAL_VMID;
+
+	if (dev_p->session != vm->proc->session)
+		return E_INVAL_SID;
+
+	if (dev_p->vid == -1)
+		return E_INVAL_VID;
+
+	pmap = dev_p->pmap;
+
+	if (copy_from_user((uintptr_t) &dop, pmap, dop_la, sizeof(dop)) == NULL)
+		return E_MEM;
+
+	if (dop.la < VM_USERLO ||
+	    VM_USERHI - dop.la < dop.n * ATA_SECTOR_SIZE)
+		return E_INVAL_ADDR;
+
+	switch (dop.type) {
+	case DISK_READ:
+	case DISK_WRITE:
+		for (sector = dop.lba, la = dop.la;
+		     sector < dop.lba+dop.n; sector++, la += ATA_SECTOR_SIZE) {
+			if (dop.type == DISK_WRITE &&
+			    !copy_from_user((uintptr_t) buf,
+					    pmap, la, ATA_SECTOR_SIZE))
+				return E_MEM;
+
+			if ((rc = (dop.type == DISK_READ) ?
+			     ahci_disk_read(0, sector, 1, buf) :
+			     ahci_disk_write(0, sector, 1, buf)))
+				break;
+
+			if (dop.type == DISK_READ &&
+			    !copy_to_user(pmap, la,
+					  (uintptr_t) buf, ATA_SECTOR_SIZE))
+				return E_MEM;
+		}
+		break;
+
+	case DISK_CAP:
+		nsectors = ahci_disk_capacity(0);
+		if (!copy_to_user(pmap, dop.la,
+				  (uintptr_t) &nsectors, sizeof(nsectors)))
+			return E_MEM;
+		break;
+
+	default:
+		rc = 1;
+	}
+
+	if (rc)
+		return E_DISK_OP;
 
 	return E_SUCC;
 }
@@ -704,19 +826,16 @@ sys_getchid(pid_t pid, int *chid)
  * Syetem calls in CertiKOS follow the convention below.
  *
  * - The system call number is passed through the first argument of the user
- *   context, i.e. %eax in the i386 architecture.
+ *   context, e.g. %eax on i386 arch.
  *
  * - Each system call can have at most three parameters, which are passed
  *   through the second argument to the fourth argument of the user context
- *   respectively, i.e. %ebx, %ecx, and %edx in the i386 architecture.
+ *   respectively, e.g. %ebx, %ecx, and %edx on i386 arch.
  *
- * - The error number of the syscall is returned through the first argument of
- *   the user context, i.e. %eax in the i386 architecture. If the error number
- *   is zero, it means no error.
+ * - The error code of the syscall is returned through the first argument of
+ *   the user context, i.e. %eax on i386 arch. Error code 0 means no errors.
  *
- * - Other return value can be passed through the second argument to the fourth
- *   argument. Which one/ones is/are used by a system call is decided by the
- *   system call.
+ * - Changes to other arguments maybe not returned to the caller.
  */
 int
 syscall_handler(struct context *ctx)
@@ -726,294 +845,297 @@ syscall_handler(struct context *ctx)
 	uint32_t nr = ctx_arg1(ctx);
 	uint32_t a[3] =
 		{ctx_arg2(ctx), ctx_arg3(ctx), ctx_arg4(ctx)};
-	uint32_t errno = 0;
+	uint32_t errno = E_SUCC;
 
-	NR_DEBUG(nr, "called from 0x%08x.\n", ctx->tf.eip);
+	NR_DEBUG(nr, "from 0x%08x.\n", ctx->tf.eip);
 	/* ctx_dump(ctx); */
 
 	switch (nr) {
-	case SYS_test:
-		errno = sys_test(a[0]);
-		break;
-
-	case SYS_getc:
-		/*
-		 * Read a character from the console.
-		 * a[0]: the address where the character will be stored.
-		 */
-		errno = sys_getc((char *) a[0]);
-		break;
-
 	case SYS_puts:
 		/*
-		 * Output a string to the console.
-		 * a[0]: the address where the string is stored.
+		 * Output a string to the screen.
+		 * a[0]: the linear address where the string is
 		 */
-		errno = sys_puts((char *) a[0]);
+		errno = sys_puts((uintptr_t) a[0]);
 		break;
-
+	case SYS_getc:
+		/*
+		 * Input a character from the keyboard.
+		 * a[0]: the linear address where the input will be returned to
+		 */
+		errno = sys_getc((uintptr_t) a[0]);
+		break;
 	case SYS_spawn:
 		/*
-		 * Spawn a process and put it on the ready queue.
-		 * a[0]: the index of the processor where the process will run
-		 * a[1]: the base address of the execution image
-		 * a[2]: the address where the process id will be returned.
+		 * Create a new process. An object of type struct user_proc must
+		 * be provided by the caller to indicate the basic configuration
+		 * of the process.
+		 * a[0]: the linear address where the user_proc object is
+		 * a[1]: the linear address where the process id will be
+		 *       returned to
 		 */
-		errno = sys_spawn(a[0], a[1], (pid_t *) a[2]);
+		errno = sys_spawn((uintptr_t) a[0], (uintptr_t) a[1]);
 		break;
-
 	case SYS_yield:
 		/*
-		 * Yield currently running process to other processes.
+		 * Called by a process to abandon its CPU slice.
 		 */
 		errno = sys_yield();
 		break;
-
 	case SYS_getpid:
 		/*
-		 * Get the process id of currently running process.
-		 * a[0]: the address where the process id will be returned
+		 * Get the process id of the caller.
+		 * a[0]: the linear address where the process id will be
+		 *       returned to
 		 */
-		errno = sys_getpid((pid_t *) a[0]);
+		errno = sys_getpid((uintptr_t) a[0]);
 		break;
-
-	case SYS_send:
+	case SYS_getppid:
 		/*
-		 * Send a meesage to a channel.
-		 * a[0]: the channel id
-		 * a[1]: the start address of the message
-		 * a[2]: the size of the message
+		 * Get the process id of the parent process of the caller.
+		 * a[0]: the linear address where the process id will be
+		 *       returned to
 		 */
-		errno = sys_send((int) a[0], (void *) a[1], (size_t) a[2]);
+		errno = sys_getppid((uintptr_t) a[0]);
 		break;
-
-	case SYS_recv:
+	case SYS_session:
 		/*
-		 * Receive a meesage from a channel.
-		 * a[0]: the channel id
-		 * a[1]: the address where the received message will be stored
-		 * a[2]: the address where the size of the message will be
-		 *       stored
+		 * Create a new session. The caller will be moved from its
+		 * current session to the new session after a successful
+		 * creation.
+		 * a[0]: the type of the session:
+		 *       0 indicates a normal session,
+		 *       1 indicates a session for a virtual machine
+		 * a[1]: the linear address where the session id of the new
+		 *       session will be returned to
 		 */
-		errno = sys_recv((int) a[0], (void *) a[1], (size_t *) a[2]);
+		errno = sys_session((int) a[0], (uintptr_t) a[1]);
 		break;
-
-	case SYS_recv_nonblock:
+	case SYS_getsid:
 		/*
-		 * Receive a meesage from a channel.
-		 * a[0]: the channel id
-		 * a[1]: the address where the received message will be stored
-		 * a[2]: the address where the size of the message will be
-		 *       stored
+		 * Get the session id of the caller.
+		 * a[0]: the linear address where the session id will be
+		 *       returned to
 		 */
-		errno = sys_recv_nonblock
-			((int) a[0], (void *) a[1], (size_t *) a[2]);
-		break;
-
-	case SYS_allocvm:
+		errno = sys_getsid((uintptr_t) a[0]);
+	case SYS_new_vm:
 		/*
-		 * Create a virtual machine in the current process.
+		 * Create a new virtual machine in the session of the caller.
+		 * a[0]: the linear address where the virtual machine id will be
+		 *       returned to
 		 */
-		errno = sys_allocvm();
+		errno = sys_new_vm((uintptr_t) a[0]);
 		break;
-
-	case SYS_execvm:
+	case SYS_run_vm:
 		/*
-		 * Execute the virtual machine in the current process.
+		 * Run the virtual machine in the session of the caller.
 		 */
-		errno = sys_execvm();
+		errno = sys_run_vm();
 		break;
-
-	case SYS_ncpus:
+	case SYS_attach_vdev:
 		/*
-		 * Get the number of processors.
-		 * a[0]: the address where the number will be returned to
+		 * Attach a process as a virtual device to the virtual machine
+		 * in the session of the caller. A virtual device id will be
+		 * be allocated for the virtual device.
+		 * a[0]: the process id
+		 * a[1]: the linear address where the virtual device id is
+		 *       returned to
 		 */
-		errno = sys_ncpus((uint32_t *) a[0]);
+		errno = sys_attach_vdev((pid_t) a[0], (uintptr_t) a[1]);
 		break;
-
-	case SYS_getpchid:
+	case SYS_detach_vdev:
 		/*
-		 * Get the id of the channel between the current process and its
-		 * parent.
-		 * a[0]: the address where the channel id will be returned
+		 * Detach a virtual device from the virtual machine in the
+		 * session of the caller.
+		 * a[0]: the virtual device id
 		 */
-		errno = sys_getpchid((int *) a[0]);
+		errno = sys_detach_vdev((vid_t) a[0]);
 		break;
-
-	case SYS_register_ioport:
+	case SYS_attach_port:
 		/*
-		 * Register the caller to handle the I/O port readings/writings
-		 * from the virtual machine.
-		 * a[0]: the I/O port number
-		 * a[1]: the data width,
-		 *       0 for 1 bytes, 1 for 2 bytes, 2 for 4 bytes
-		 * a[2]: 1 for writings, 0 for readings
+		 * Attach an I/O port to a virtual device of the virtual machine
+		 * in the session of the caller.
+		 * a[0]: the I/O port
+		 * a[1]: the data width
 		 */
-		errno = sys_register_ioport
-			((uint16_t) a[0], (data_sz_t) a[1], (int) a[2]);
+		errno = sys_attach_port((uint16_t) a[0], (data_sz_t) a[1]);
 		break;
-
-	case SYS_unregister_ioport:
+	case SYS_detach_port:
 		/*
-		 * Unregister the caller from handling the I/O port readings/
-		 * writings from the virtual machine.
-		 * a[0]: the I/O port number
-		 * a[1]: the data width,
-		 *       0 for 1 bytes, 1 for 2 bytes, 2 for 4 bytes
-		 * a[2]: 1 for writings, 0 for readings
+		 * Detach an I/O port from a virtual device of the virtual
+		 * machine in the session of the caller.
+		 * a[0]: the I/O port
+		 * a[1]: the data width
 		 */
-		errno = sys_unregister_ioport
-			((uint16_t) a[0], (data_sz_t) a[1], (int) a[2]);
+		errno = sys_detach_port((uint16_t) a[0], (data_sz_t) a[1]);
 		break;
-
-	case SYS_register_irq:
+	case SYS_attach_irq:
 		/*
-		 * Register the caller as the source of an interrupt.
+		 * Assign an IRQ to a virtual device.
 		 * a[0]: the IRQ number
 		 */
-		errno = sys_register_irq((uint8_t) a[0]);
+		errno = sys_attach_irq((uint8_t) a[0]);
 		break;
-
-	case SYS_unregister_irq:
+	case SYS_detach_irq:
 		/*
-		 * Unregister the caller as the source of an interrupt.
+		 * Remove an IRQ from a virtual device.
 		 * a[0]: the IRQ number
 		 */
-		errno = sys_unregister_irq((uint8_t) a[0]);
+		errno = sys_detach_irq((uint8_t) a[0]);
 		break;
-
-	case SYS_register_pic:
+#if 0
+	case SYS_guest_in:
 		/*
-		 * Register the caller as the virtual PIC of the virtual machine
+		 * Read a guest I/O port. The information of the I/O port
+		 * must be provided in an object of type struct user_ioport
+		 * by the caller.
+		 * a[0]: the linear address where the user_ioport object is
+		 * a[1]: the linear address where the read value will be
+		 *       returned to
 		 */
-		errno = sys_register_pic();
+		errno = sys_guest_in((uintptr_t) a[0], (uintptr_t) a[1]);
 		break;
-
-	case SYS_unregister_pic:
+	case SYS_guest_out:
 		/*
-		 * Unregister the caller as the virtual PIC of the virtual
-		 * machine.
+		 * Write a guest I/O port. The information of the I/O port
+		 * must be provided in an object of type struct user_ioport by
+		 * the caller.
+		 * a[0]: the linear address where the user_ioport object is
+		 * a[1]: the value which will be written to the I/O port
 		 */
-		errno = sys_unregister_pic();
+		errno = sys_guest_out((uintptr_t) a[0], (uint32_t) a[1]);
 		break;
-
-	case SYS_register_mmio:
+#endif
+	case SYS_host_in:
 		/*
-		 * a[0]: the start guest physical address of the memory region
-		 * a[1]: the host linear address where the memory region is
-		 *       mapped to
-		 * a[2]: the size in bytes of the memory region
+		 * Read a host I/O port. The information of the I/O port
+		 * must be provided in an object of type struct user_ioport
+		 * by the caller.
+		 * a[0]: the linear address where the user_ioport object is
+		 * a[1]: the linear address where the read value will be
+		 *       returned to
 		 */
-		errno = sys_register_mmio
+		errno = sys_host_in((uintptr_t) a[0], (uintptr_t) a[1]);
+		break;
+	case SYS_host_out:
+		/*
+		 * Write a host I/O port. The information of the I/O port
+		 * must be provided in an object of type struct user_ioport by
+		 * the caller.
+		 * a[0]: the linear address where the user_ioport object is
+		 * a[1]: the value which will be written to the I/O port
+		 */
+		errno = sys_host_out((uintptr_t) a[0], (uint32_t) a[1]);
+		break;
+	case SYS_ret_in:
+		/*
+		 * Response to a guest I/O port read request. The information of
+		 * the I/O port must be provided in an object of type struct
+		 * user_ioport.
+		 * a[0]: the linear address where the user_ioport object is
+		 * a[1]: the value read from the guest I/O port
+		 */
+		errno = sys_ret_in((uintptr_t) a[0], (uint32_t) a[1]);
+		break;
+	case SYS_set_irq:
+		/*
+		 * Set the IRQ line of the virtual PIC.
+		 * a[0]: the IRQ number
+		 * a[1]: 0 indicates raising the IRQ line,
+		 *       1 indicates lowering the IRQ line,
+		 *       2 indicates trigger the IRQ line
+		 */
+		errno = sys_set_irq((uint8_t) a[0], (int) a[1]);
+		break;
+	case SYS_guest_read:
+		/*
+		 * Transfer data from the guest physical address to the host
+		 * linear address.
+		 * a[0]: the guest physical address
+		 * a[1]: the host linear address
+		 * a[2]: how many bytes will be transferred
+		 */
+		errno = sys_guest_read
 			((uintptr_t) a[0], (uintptr_t) a[1], (size_t) a[2]);
 		break;
-
-	case SYS_unregister_mmio:
+	case SYS_guest_write:
 		/*
-		 * a[0]: the start guest physical address of the memory region
-		 * a[1]: the size in bytes of the memory region
+		 * Transfer data from the host linear address to the guest
+		 * physical address.
+		 * a[0]: the guest physical address
+		 * a[1]: the host linear address
+		 * a[2]: how many bytes will be transferred
 		 */
-		errno = sys_unregister_mmio((uintptr_t) a[0], (size_t) a[1]);
+		errno = sys_guest_write
+			((uintptr_t) a[0], (uintptr_t) a[1], (size_t) a[2]);
 		break;
-
-	case SYS_read_ioport:
+	case SYS_sync_done:
 		/*
-		 * Read the physical I/O port.
-		 * a[0]: the I/O port number
-		 * a[1]: the data width
-		 * a[2]: the buffer where the data will be stored
+		 * Notify the virtual machine the caller has synchronized the
+		 * virtual device with the physical device.
 		 */
-		errno = sys_read_ioport
-			((uint16_t) a[0], (data_sz_t) a[1], (void *) a[2]);
+		errno = sys_sync_done();
 		break;
-
-	case SYS_write_ioport:
+	case SYS_dev_ready:
 		/*
-		 * Write to the host I/O port.
-		 * a[0]: the I/O port number
-		 * a[1]: the data width
-		 * a[2]: where the data is
+		 * Notify the virtual machine the caller has initialized a
+		 * virtual device.
 		 */
-		errno = sys_write_ioport
-			((uint16_t) a[0], (data_sz_t) a[1], (void *) a[2]);
+		errno = sys_dev_ready();
 		break;
-
-	case SYS_raise_irq:
+	case SYS_recv_req:
 		/*
-		 * Raise the IRQ line of the virtual PIC.
-		 * a[0]: the IRQ number
+		 * Get the request sent to the virtual device attached to the
+		 * caller.
+		 * a[0]: the linear address where the request will be returned
+		 *       to
+		 * a[1]: TRUE indicates the receiving is blocking,
+		 *       FALSE indicates the receiving is non-blocking
 		 */
-		errno = sys_raise_irq((uint8_t) a[0]);
+		errno = sys_recv_req((uintptr_t) a[0], (bool) a[1]);
 		break;
-
-	case SYS_trigger_irq:
-		/*
-		 * Trigger the IRQ line of the virtual PIC.
-		 * a[0]: the IRQ number
-		 */
-		errno = sys_trigger_irq((uint8_t) a[0]);
-		break;
-
-	case SYS_lower_irq:
-		/*
-		 * Lower the IRQ line of the virtual PIC.
-		 * a[0]: the IRQ number
-		 */
-		errno = sys_lower_irq((uint8_t) a[0]);
-		break;
-
-	case SYS_notify_irq:
-		/*
-		 * Notify the virtual machine an interrupt comes.
-		 */
-		errno = sys_notify_irq();
-		break;
-
-	case SYS_read_guest_tsc:
+	case SYS_guest_rdtsc:
 		/*
 		 * Read the guest TSC.
-		 * a[0]: where the guest TSC is returned
+		 * a[0]: the linear address where the valuse of guest TSC will
+		 *       be returned to
 		 */
-		errno = sys_read_guest_tsc((uint64_t *) a[0]);
+		errno = sys_guest_rdtsc((uintptr_t) a[0]);
 		break;
-
 	case SYS_guest_tsc_freq:
 		/*
-		 * Get the frequency of the guest TSC.
-		 * a[0]: where the frequency is returned
+		 * Get the frequency of guest TSC.
+		 * a[0]: the linear address where the frequency will be returned
+		 *       to
 		 */
-		errno = sys_guest_tsc_freq((uint64_t *) a[0]);
+		errno = sys_guest_tsc_freq((uintptr_t) a[0]);
 		break;
-
 	case SYS_guest_mem_size:
 		/*
-		 * Get the physical memory size of the guest.
-		 * a[0]: where the memory size is returned
+		 * Get the size of the guest physical memory.
+		 * a[0]: the linear address where the size will be returned to
 		 */
-		errno = sys_guest_mem_size((uint64_t *) a[0]);
+		errno = sys_guest_mem_size((uintptr_t) a[0]);
 		break;
-
-	case SYS_getchid:
+	case SYS_disk_op:
 		/*
-		 * Get ID of the channel to a child process.
-		 * a[0]: PID of the child process
-		 * a[1]: where the channel ID is returned
+		 * Disk operation. The operation information must be provided in
+		 * an object of type struct user_disk_op by the caller.
+		 * a[0]: the linear address where the user_disk_op is
 		 */
-		errno = sys_getchid((pid_t) a[0], (int *) a[1]);
+		errno = sys_disk_op((uintptr_t) a[0]);
 		break;
 
 	default:
-		errno = E_INVAL_NR;
+		errno = E_INVAL_CALLNR;
 		break;
 	}
 
 	ctx_set_retval(ctx, errno);
 
 	if (errno)
-		NR_DEBUG(nr, "failed (errno=%d)\n", errno);
-
-	memset(pcpu_cur()->sys_buf, 0, PAGE_SIZE);
-
+		NR_DEBUG(nr, "failed (errno=%d).\n", errno);
+	else
+		NR_DEBUG(nr, "done.\n");
 	return errno;
 }
