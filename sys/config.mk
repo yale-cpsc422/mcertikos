@@ -195,6 +195,11 @@ ifneq "$(strip $(DEBUG_CHANNEL) $(DEBUG_ALL))" ""
 KERN_CFLAGS	+= -DDEBUG_CHANNEL
 endif
 
+# If set, enable debugging sessions
+ifneq "$(strip $(DEBUG_SESSION) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_SESSION
+endif
+
 # If set, enable debugging virtual devices
 ifneq "$(strip $(DEBUG_VDEV) $(DEBUG_ALL) $(DEBUG_VIRT))" ""
 KERN_CFLAGS	+= -DDEBUG_VDEV

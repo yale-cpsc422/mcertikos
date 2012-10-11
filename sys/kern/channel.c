@@ -112,6 +112,7 @@ channel_send(struct channel *ch, struct proc *p, void *msg, size_t size)
 	KERN_ASSERT(p != NULL && p->state != PROC_INVAL);
 	KERN_ASSERT(msg != NULL);
 	KERN_ASSERT(size > 0);
+	KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
 
 	if (size > 1024) {
 		CHANNEL_DEBUG("(%d) Size of the message (%d) is too large.\n",
@@ -119,19 +120,15 @@ channel_send(struct channel *ch, struct proc *p, void *msg, size_t size)
 		return E_CHANNEL_MSG_TOO_LARGE;
 	}
 
-	spinlock_acquire(&ch->lk);
-
 	if ((ch->type == CHANNEL_TYPE_P1_P2 && ch->p1 != p) ||
 	    (ch->type == CHANNEL_TYPE_P2_P1 && ch->p2 != p)) {
 		CHANNEL_DEBUG("Illegal sending process %d.\n", p->pid);
-		spinlock_release(&ch->lk);
 		return E_CHANNEL_ILL_SENDER;
 	}
 
 	if (ch->state & (CHANNEL_STAT_P1_BUSY | CHANNEL_STAT_P2_BUSY)) {
 		CHANNEL_DEBUG("(%d) There's a pending message in channel %d.\n",
 			      p->pid, channel_getid(ch));
-		spinlock_release(&ch->lk);
 		return E_CHANNEL_BUSY;
 	}
 
@@ -145,8 +142,6 @@ channel_send(struct channel *ch, struct proc *p, void *msg, size_t size)
 	CHANNEL_DEBUG("(%d) %d bytes are sent to channel %d.\n",
 		      p->pid, size, channel_getid(ch));
 
-	spinlock_release(&ch->lk);
-
 	return 0;
 }
 
@@ -159,13 +154,11 @@ channel_receive(struct channel *ch, struct proc *p, void *msg, size_t *size)
 	KERN_ASSERT(p != NULL && p->state != PROC_INVAL);
 	KERN_ASSERT(msg != NULL);
 	KERN_ASSERT(size != NULL);
-
-	spinlock_acquire(&ch->lk);
+	KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
 
 	if ((ch->type == CHANNEL_TYPE_P1_P2 && ch->p2 != p) ||
 	    (ch->type == CHANNEL_TYPE_P2_P1 && ch->p1 != p)) {
 		CHANNEL_DEBUG("Illegal receiving process %d.\n", p->pid);
-		spinlock_release(&ch->lk);
 		return E_CHANNEL_ILL_RECEIVER;
 	}
 
@@ -173,7 +166,6 @@ channel_receive(struct channel *ch, struct proc *p, void *msg, size_t *size)
 	    (ch->p2 == p && !(ch->state & CHANNEL_STAT_P1_BUSY))) {
 		CHANNEL_DEBUG("(%d) There's no message in channel %d.\n",
 			      p->pid, channel_getid(ch));
-		spinlock_release(&ch->lk);
 		return E_CHANNEL_IDLE;
 	}
 
@@ -184,8 +176,6 @@ channel_receive(struct channel *ch, struct proc *p, void *msg, size_t *size)
 
 	CHANNEL_DEBUG("(%d) %d bytes are received from channel %d.\n",
 		      p->pid, *size, channel_getid(ch));
-
-	spinlock_release(&ch->lk);
 
 	return 0;
 }

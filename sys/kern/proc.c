@@ -252,18 +252,17 @@ proc_sched_init(struct sched *sched)
 }
 
 struct proc *
-proc_spawn(struct pcpu *c, uintptr_t binary, struct session *s)
+proc_new(uintptr_t binary, struct session *s)
 {
 	KERN_ASSERT(proc_inited == TRUE);
-	KERN_ASSERT(c != NULL);
 	KERN_ASSERT(s != NULL);
 
 	struct proc *p;
 	pageinfo_t *user_pi, *buf_pi;
 
-	/* get a free PCB */
+	/* allocate a PCB */
 	if ((p = proc_alloc()) == NULL) {
-		PROC_DEBUG("Cannot get a free PCB.\n");
+		PROC_DEBUG("Cannot create a PCB.\n");
 		return NULL;
 	}
 
@@ -281,7 +280,6 @@ proc_spawn(struct pcpu *c, uintptr_t binary, struct session *s)
 		proc_free(p);
 		return NULL;
 	}
-	kstack_init_proc(p, c, proc_spawn_return);
 
 	/* allocate memory for the syscall buffer */
 	if ((buf_pi = mem_page_alloc()) == NULL) {
@@ -312,7 +310,6 @@ proc_spawn(struct pcpu *c, uintptr_t binary, struct session *s)
 	ctx_init(p, (void (*)(void)) elf_entry(binary), VM_STACKHI - PAGESIZE);
 
 	/* other fields */
-	p->cpu = c;
 	p->vm = NULL;
 	spinlock_init(&p->lk);
 	p->state = PROC_INITED;
@@ -325,14 +322,50 @@ proc_spawn(struct pcpu *c, uintptr_t binary, struct session *s)
 		p->parent = p;
 	TAILQ_INIT(&p->child_list);
 
-	/* put the process on the ready queue and the process session */
+	/* set session */
+	session_add_proc(s, p);
+
+	PROC_DEBUG("Process %d is created in session %d.\n",
+		   p->pid, p->session->sid);
+
+	return p;
+}
+
+void
+proc_run(struct pcpu *c, struct proc *p)
+{
+	KERN_ASSERT(proc_inited == TRUE);
+	KERN_ASSERT(c != NULL);
+	KERN_ASSERT(p != NULL && p->state == PROC_INITED);
+
+	proc_lock(p);
+	kstack_init_proc(p, c, proc_spawn_return);
+	p->cpu = c;
+	proc_unlock(p);
+
 	sched_lock(c);
 	proc_ready(p, c, TRUE);
-	session_add_proc(s, p);
 	sched_unlock(c);
 
-	PROC_DEBUG("Process %d is spawned on CPU%d in session %d.\n",
-		   p->pid, pcpu_cpu_idx(c), s->sid);
+	PROC_DEBUG("Process %d is put on the ready queue of CPU %d.\n",
+		   p->pid, pcpu_cpu_idx(c));
+}
+
+struct proc *
+proc_spawn(struct pcpu *c, uintptr_t binary, struct session *s)
+{
+	KERN_ASSERT(proc_inited == TRUE);
+	KERN_ASSERT(c != NULL && s != NULL);
+
+	struct proc *p;
+
+	if ((p = proc_new(binary, s)) == NULL) {
+		PROC_DEBUG("Cannot create a new process in session %d.\n",
+			   s->sid);
+		return NULL;
+	}
+
+	proc_run(c, p);
 
 	return p;
 }
@@ -352,6 +385,7 @@ proc_block(struct proc *p, block_reason_t reason, struct channel *ch)
 	KERN_ASSERT(p->state == PROC_RUNNING);
 	KERN_ASSERT(p->cpu == pcpu_cur());
 	KERN_ASSERT(spinlock_holding(&pcpu_cur()->sched.lk) == TRUE);
+	KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
 
 	struct sched *sched = &pcpu_cur()->sched;
 
@@ -360,6 +394,8 @@ proc_block(struct proc *p, block_reason_t reason, struct channel *ch)
 	p->state = PROC_BLOCKED;
 
 	TAILQ_INSERT_TAIL(&sched->blocked_queue, p, entry);
+
+	spinlock_release(&ch->lk);
 
 	PROC_DEBUG("Process %d is blocked for %s channel %d.\n",
 		   p->pid, (reason == WAITING_FOR_SENDING) ? "sending to" :
@@ -497,6 +533,7 @@ struct proc *
 proc_cur(void)
 {
 	KERN_ASSERT(proc_inited == TRUE);
+	KERN_ASSERT(pcpu_cur() != NULL);
 	return pcpu_cur()->sched.cur_proc;
 }
 
@@ -529,9 +566,12 @@ proc_send_msg(struct channel *ch, struct proc *sender, void *msg, size_t size)
 	KERN_ASSERT(sender != NULL);
 	KERN_ASSERT(ch != NULL);
 	KERN_ASSERT(msg != NULL);
+	KERN_ASSERT((uintptr_t) msg + size < VM_USERLO);
 	KERN_ASSERT(size > 0);
 
 	int rc;
+
+	spinlock_acquire(&ch->lk);
 
 	while ((rc = channel_send(ch, sender, msg, size)) == E_CHANNEL_BUSY) {
 		PROC_DEBUG("Process %d: channel %d is busy, wait for a while.\n",
@@ -539,8 +579,11 @@ proc_send_msg(struct channel *ch, struct proc *sender, void *msg, size_t size)
 
 		sched_lock(pcpu_cur());
 		proc_block(sender, WAITING_FOR_SENDING, ch);
+		spinlock_acquire(&ch->lk);
 		sched_unlock(pcpu_cur());
 	}
+
+	spinlock_release(&ch->lk);
 
 	if (rc == 0) {
 		PROC_DEBUG("Process %d: %d bytes are sent to channel %d.\n",
@@ -579,9 +622,12 @@ proc_recv_msg(struct channel *ch,
 	KERN_ASSERT(receiver != NULL);
 	KERN_ASSERT(ch != NULL);
 	KERN_ASSERT(msg != NULL);
+	KERN_ASSERT((uintptr_t) msg + CHANNEL_BUFFER_SIZE <= VM_USERLO);
 	KERN_ASSERT(size != NULL);
 
 	int rc;
+
+	spinlock_acquire(&ch->lk);
 
 	while ((rc = channel_receive(ch, receiver, msg, size))
 	       == E_CHANNEL_IDLE) {
@@ -593,11 +639,15 @@ proc_recv_msg(struct channel *ch,
 		if (block == TRUE) {
 			sched_lock(pcpu_cur());
 			proc_block(receiver, WAITING_FOR_RECEIVING, ch);
+			spinlock_acquire(&ch->lk);
 			sched_unlock(pcpu_cur());
 		} else {
+			spinlock_release(&ch->lk);
 			return rc;
 		}
 	}
+
+	spinlock_release(&ch->lk);
 
 	if (rc == 0) {
 		PROC_DEBUG("Process %d: %d bytes are received from channel %d.\n",

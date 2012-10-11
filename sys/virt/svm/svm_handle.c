@@ -172,8 +172,9 @@ int
 svm_guest_intr_handler(struct vm *vm, uint8_t irq)
 {
 	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(vm->exit_reason == EXIT_FOR_EXTINT &&
-		    vm->handled == FALSE);
+	KERN_ASSERT(vm->state == VM_RUNNING);
+	/* KERN_ASSERT(vm->exit_reason == EXIT_FOR_EXTINT && */
+	/* 	    vm->handled == FALSE); */
 
 	KERN_ASSERT(irq >= 0);
 #ifdef DEBUG_GUEST_INTR
@@ -307,14 +308,14 @@ svm_handle_ioio(struct vm *vm)
 
 	if (type & SVM_EXITINFO1_TYPE_IN) {
 #ifdef DEBUG_GUEST_IOIO
-		dprintf(" read port %d, width %d bits.\n",
+		dprintf(" read port 0x%x, width %d bits.\n",
 			port, 8 * (1 << width));
 #endif
 		vdev_read_guest_ioport(vm, vid,
 				       port, width, (uint32_t *) &save->rax);
 	} else {
 #ifdef DEBUG_GUEST_IOIO
-		dprintf(" write port %d, width %d bits, data 0x%x.\n",
+		dprintf(" write port 0x%x, width %d bits, data 0x%x.\n",
 			port, 8 * (1 << width), data);
 #endif
 		vdev_write_guest_ioport(vm, vid, port, width, data);

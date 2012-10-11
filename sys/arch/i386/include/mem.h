@@ -7,19 +7,20 @@
 #include <sys/mmu.h>
 #include <sys/types.h>
 
-typedef
-struct pmmap_t {
-	uintptr_t	start;
-	uintptr_t	end;
-	uint32_t	type;
-	struct pmmap_t	*next;
-	struct pmmap_t	*type_next;
-} pmmap_t;
+typedef enum {
+	PG_RESERVED,		/* reserved physical memory page */
+	PG_KERNEL,		/* occupoed by kernel code and data */
+	PG_NORMAL		/* normal physical memory page */
+} pg_type;
 
-pmmap_t pmmap[128];
-pmmap_t *pmmap_usable, *pmmap_resv, *pmmap_acpi, *pmmap_nvs;
+struct page_info {
+	pg_type	type;		/* type of the physical memory page */
+	int	used;		/* is the memory page in use? */
+	int	refcount;	/* the amount of users of the physical
+				   memory page */
+	struct page_info *prev, *next;
+};
 
-struct page_info;
 typedef struct page_info pageinfo_t;
 
 uintptr_t   mem_pi2phys(pageinfo_t *);

@@ -488,7 +488,7 @@ main(int argc, char **argv)
 	sys_attach_irq(IRQ_KBD);
 	sys_attach_irq(IRQ_MOUSE);
 
-	sys_dev_ready();
+	sys_send_ready();
 
 	while (1) {
 		if (sys_recv_req(&req, TRUE))
@@ -515,7 +515,6 @@ main(int argc, char **argv)
 
 		case DEV_SYNC_REQ:
 			vkbd_sync_kbd(&vkbd);
-			sys_sync_done();
 			continue;
 
 		default:

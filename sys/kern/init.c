@@ -10,7 +10,6 @@
 #include <sys/session.h>
 #include <sys/spinlock.h>
 #include <sys/string.h>
-#include <sys/timer.h>
 #include <sys/trap.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
@@ -335,11 +334,6 @@ kern_init(mboot_info_t *mbi)
 		else
 			KERN_INFO("done.\n");
 	}
-
-	/* Initialize timer */
-	KERN_INFO("Initialize timer event list ... ");
-	timer_init();
-	KERN_INFO("done.\n");
 
 	/* Initialize PCI bus */
 	KERN_INFO("Initialize PCI ... \n");

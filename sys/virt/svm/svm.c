@@ -146,18 +146,23 @@ static pmap_t *
 alloc_nested_ptable(void)
 {
 	uintptr_t addr;
-	pmap_t *pmap = pmap_new_empty();
+	pageinfo_t *pmap_pi;
+	pmap_t *pmap;
 
-	if (pmap == NULL) {
-		KERN_DEBUG("Failed to allocate memory for nested page table.\n");
+	if ((pmap_pi = mem_page_alloc()) == NULL) {
+		KERN_DEBUG("Cannot allocate memory for nested page table.\n");
 		return NULL;
 	}
+	pmap = mem_pi2ptr(pmap_pi);
 
 	for (addr = 0x0; addr < VM_PHY_MEMORY_SIZE; addr += PAGESIZE) {
+		/* KERN_DEBUG("Map guest physical address 0x%08x.\n", addr); */
 		if (addr >= 0xa0000 && addr <= 0xbffff) {
 			/* identically map VGA display memory to the host */
-			pmap_insert(pmap,
-				    mem_phys2pi(addr), addr, PTE_G | PTE_W | PTE_U);
+			if (pmap_insert(pmap, mem_phys2pi(addr),
+					addr, PTE_G | PTE_W | PTE_U) == NULL)
+				KERN_PANIC("Cannot map guest physical address "
+					   "0x%08x.\n", addr);
 		} else if (pmap_reserve(pmap, addr,
 					PTE_G | PTE_W | PTE_U) == NULL) {
 			KERN_DEBUG("Failed to map guest memory page at %x.\n",
@@ -165,6 +170,9 @@ alloc_nested_ptable(void)
 			pmap_free(pmap);
 			return NULL;
 		}
+
+		if (addr == 0xfffff000)
+			break;
 	}
 
 	return pmap;

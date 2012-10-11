@@ -7,7 +7,7 @@ VDEV_NVRAM_SRC	+= $(VDEV_SRCDIR)/nvram/nvram.c
 VDEV_NVRAM_OBJ	:= $(patsubst %.c, $(OBJDIR)/%.o, $(VDEV_NVRAM_SRC))
 VDEV_NVRAM_OBJ	:= $(patsubst %.S, $(OBJDIR)/%.o, $(VDEV_NVRAM_OBJ))
 
-GUEST_BINFILES	+= $(VDEV_OBJDIR)/nvram/nvram
+KERN_BINFILES	+= $(VDEV_OBJDIR)/nvram/nvram
 
 nvram: $(VDEV_OBJDIR)/nvram/nvram
 

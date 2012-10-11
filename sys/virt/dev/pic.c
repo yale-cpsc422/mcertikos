@@ -570,7 +570,7 @@ vpic_ioport_read(struct vpic *vpic, uint8_t port)
 }
 
 static void
-elcr_ioport_write(struct vpic *vpic, uint8_t port, uint32_t data)
+elcr_ioport_write(struct vpic *vpic, uint16_t port, uint32_t data)
 {
 	KERN_ASSERT(vpic != NULL);
 	KERN_ASSERT(port == IO_ELCR1 || port == IO_ELCR2);
@@ -582,7 +582,7 @@ elcr_ioport_write(struct vpic *vpic, uint8_t port, uint32_t data)
 }
 
 static uint32_t
-elcr_ioport_read(struct vpic *vpic, uint8_t port)
+elcr_ioport_read(struct vpic *vpic, uint16_t port)
 {
 	KERN_ASSERT(vpic != NULL);
 	KERN_ASSERT(port == IO_ELCR1 || port == IO_ELCR2);

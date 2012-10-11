@@ -9,7 +9,7 @@ VDEV_VIRTIO_SRC	+= $(VDEV_SRCDIR)/virtio/virtio_blk.c
 VDEV_VIRTIO_OBJ	:= $(patsubst %.c, $(OBJDIR)/%.o, $(VDEV_VIRTIO_SRC))
 VDEV_VIRTIO_OBJ	:= $(patsubst %.S, $(OBJDIR)/%.o, $(VDEV_VIRTIO_OBJ))
 
-GUEST_BINFILES	+= $(VDEV_OBJDIR)/virtio/virtio
+KERN_BINFILES	+= $(VDEV_OBJDIR)/virtio/virtio
 
 virtio: $(VDEV_OBJDIR)/virtio/virtio
 

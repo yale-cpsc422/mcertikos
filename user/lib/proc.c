@@ -3,9 +3,9 @@
 #include <types.h>
 
 pid_t
-spawn(uint32_t cpu_idx, sid_t sid, uintptr_t exec)
+spawn(uint32_t cpu_idx, uintptr_t exec)
 {
-	return sys_spawn(cpu_idx, sid, exec);
+	return sys_spawn(cpu_idx, exec);
 }
 
 void

@@ -30,24 +30,26 @@ vdev_init(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
 
-	uint16_t port;
-	uint8_t irq;
+	uint32_t port;
+	uint16_t irq;
 
-	memzero(vm->vdev.dev, sizeof(struct proc *) * MAX_VID);
-	memzero(vm->vdev.ch, sizeof(struct channel *) * MAX_VID);
+	KERN_DEBUG("Initialize virtual i8259.\n");
+	spinlock_init(&vm->vdev.vpic_lk);
+	vpic_init(&vm->vdev.vpic, vm);
+
+	KERN_DEBUG("Initialize other virtual devices.\n");
 	spinlock_init(&vm->vdev.dev_lk);
-
+	memzero(vm->vdev.dev, sizeof(struct proc *) * MAX_VID);
+	memzero(vm->vdev.data_ch, sizeof(struct channel *) * MAX_VID);
+	memzero(vm->vdev.sync_ch, sizeof(struct channel *) * MAX_VID);
 	for (port = 0; port < MAX_IOPORT; port++) {
-		vm->vdev.ioport[port].vid = -1;
 		spinlock_init(&vm->vdev.ioport[port].ioport_lk);
+		vm->vdev.ioport[port].vid = -1;
 	}
-
 	for (irq = 0; irq < MAX_IRQ; irq++) {
-		vm->vdev.irq[port].vid = -1;
-		spinlock_init(&vm->vdev.irq[port].irq_lk);
+		spinlock_init(&vm->vdev.irq[irq].irq_lk);
+		vm->vdev.irq[irq].vid = -1;
 	}
-
-	spinlock_init(&vm->vdev.pic_lk);
 }
 
 vid_t
@@ -62,17 +64,14 @@ vdev_register_device(struct vm *vm, struct proc *p)
 	for (vid = 0; vid < MAX_VID; vid++)
 		if (vm->vdev.dev[vid] == NULL) {
 			vm->vdev.dev[vid] = p;
-			vm->vdev.ch[vid] =
+			vm->vdev.data_ch[vid] =
+				channel_alloc(vm->proc, p, CHANNEL_TYPE_BIDIRECT);
+			vm->vdev.sync_ch[vid] =
 				channel_alloc(vm->proc, p, CHANNEL_TYPE_BIDIRECT);
 
 			proc_lock(p);
 			p->vid = vid;
 			proc_unlock(p);
-
-			if (vm->vdev.ch[vid] == NULL) {
-				vm->vdev.dev[vid] = NULL;
-				vid = MAX_VID;
-			}
 
 			break;
 		}
@@ -81,6 +80,8 @@ vdev_register_device(struct vm *vm, struct proc *p)
 
 	if (vid == MAX_VID)
 		return -1;
+
+	VDEV_DEBUG("Attach process %d to device %d.\n", p->pid, vid);
 
 	return vid;
 }
@@ -91,14 +92,17 @@ vdev_unregister_device(struct vm *vm, vid_t vid)
 	KERN_ASSERT(vm != NULL);
 	KERN_ASSERT(0 <= vid && vid < MAX_VID);
 
-	uint16_t port;
-	uint8_t irq;
+	uint32_t port;
+	uint16_t irq;
 
 	spinlock_acquire(&vm->vdev.dev_lk);
 
-	channel_free(vm->vdev.ch[vid], vm->proc);
-	channel_free(vm->vdev.ch[vid], vm->vdev.dev[vid]);
-	vm->vdev.ch[vid] = NULL;
+	channel_free(vm->vdev.data_ch[vid], vm->proc);
+	channel_free(vm->vdev.data_ch[vid], vm->vdev.dev[vid]);
+	vm->vdev.data_ch[vid] = NULL;
+	channel_free(vm->vdev.sync_ch[vid], vm->proc);
+	channel_free(vm->vdev.sync_ch[vid], vm->vdev.dev[vid]);
+	vm->vdev.sync_ch[vid] = NULL;
 
 	vm->vdev.dev[vid] = NULL;
 
@@ -109,6 +113,8 @@ vdev_unregister_device(struct vm *vm, vid_t vid)
 	for (irq = 0; irq < MAX_IRQ; irq++)
 		if (vm->vdev.irq[irq].vid == vid)
 			vdev_unregister_irq(vm, irq, vid);
+
+	VDEV_DEBUG("Detach device %d.\n", vid);
 
 	spinlock_release(&vm->vdev.dev_lk);
 }
@@ -135,7 +141,7 @@ vdev_register_ioport(struct vm *vm, uint16_t port, data_sz_t width, vid_t vid)
 	for (port1 = port; port1 < port + (1 << width); port1++) {
 		spinlock_acquire(&vdev->ioport[port1].ioport_lk);
 
-		if (vdev->ioport[port].vid != -1) {
+		if (vdev->ioport[port1].vid != -1) {
 			VDEV_DEBUG("Virtual device %d has already been "
 				   "registered for I/O port 0x%x.\n",
 				   vdev->ioport[port1].vid, port1);
@@ -280,13 +286,13 @@ vdev_read_guest_ioport(struct vm *vm, vid_t vid,
 		return vpic_read_ioport(&vm->vdev.vpic, port, (uint8_t *) data);
 
 	int rc = 0;
-	uint8_t recv_buf[CHANNEL_BUFFER_SIZE];
+
+	pageinfo_t *recv_pi;
+	uint8_t *recv_buf;
 	size_t recv_size;
 
 	struct vdev *vdev = &vm->vdev;
 	struct return_ioport *result;
-
-	spinlock_acquire(&vdev->ioport[port].ioport_lk);
 
 	if (vdev->ioport[port].vid != vid) {
 		VDEV_DEBUG("Unmatched vid %d (expect %d).\n",
@@ -297,7 +303,9 @@ vdev_read_guest_ioport(struct vm *vm, vid_t vid,
 
 	struct read_ioport_req req = { .magic = READ_IOPORT_REQ,
 				       .port  = port, .width = width };
-	rc = proc_send_msg(vdev->ch[vid], vm->proc,
+	VDEV_DEBUG("Send READ_IOPORT_REQ (port 0x%x, width %d bytes) to "
+		   "virtual device %d.\n", port, 1 << width, vid);
+	rc = proc_send_msg(vdev->data_ch[vid], vm->proc,
 			   &req, sizeof(req));
 	if (rc) {
 		VDEV_DEBUG("Cannot send READ_IOPORT_REQ (port 0x%x, "
@@ -306,23 +314,36 @@ vdev_read_guest_ioport(struct vm *vm, vid_t vid,
 		goto ret;
 	}
 
-	rc = proc_recv_msg(vdev->ch[vid], vm->proc, recv_buf, &recv_size, TRUE);
+	if ((recv_pi = mem_page_alloc()) == NULL) {
+		VDEV_DEBUG("Cannot allocate memory for receive buffer.\n");
+		rc = 1;
+		goto ret;
+	}
+	recv_buf = mem_pi2ptr(recv_pi);
+
+	VDEV_DEBUG("Wait for RETURN_IOPORT from virtual device %d.\n", vid);
+
+	rc = proc_recv_msg(vdev->data_ch[vid], vm->proc, recv_buf, &recv_size, TRUE);
 	result = (struct return_ioport *) recv_buf;
+
 	if (rc || recv_size != sizeof(struct return_ioport) ||
-	    result->magic == RETURN_IOPORT) {
+	    result->magic != RETURN_IOPORT) {
 		VDEV_DEBUG("Cannot receive RETURN_IOPORT (port 0x%x, "
 			   "width %d bytes) from process %d.\n",
 			   port, 1 << width, vdev->dev[vid]->pid);
 		rc = 1;
+		mem_page_free(recv_pi);
 		goto ret;
 	}
 
 	SET_IOPORT_DATA(data, result->val, width);
+	mem_page_free(recv_pi);
 
  ret:
 	if (rc)
 		SET_IOPORT_DATA(data, 0xffffffff, width);
-	spinlock_release(&vdev->ioport[port].ioport_lk);
+	VDEV_DEBUG("Read guest I/O port 0x%x, width %d bytes, val 0x%x, "
+		   "vid %d.\n", port, 1 << width, *data, vid);
 	return rc;
 }
 
@@ -333,38 +354,35 @@ vdev_write_guest_ioport(struct vm *vm, vid_t vid,
 	KERN_ASSERT(vm != NULL);
 	KERN_ASSERT(0 <= vid && vid < MAX_VID);
 
+	int rc = 0;
+
 	if (port == IO_PIC1 || port == IO_PIC1+1 ||
 	    port == IO_PIC2 || port == IO_PIC2+1 ||
 	    port == IO_ELCR1 || port == IO_ELCR2)
 		return vpic_write_ioport(&vm->vdev.vpic, port, data);
 
-	int rc = 0;
-
 	struct vdev *vdev = &vm->vdev;
-
-	spinlock_acquire(&vdev->ioport[port].ioport_lk);
 
 	if (vdev->ioport[port].vid != vid) {
 		VDEV_DEBUG("Unmatched vid %d (expect %d).\n",
 			   vdev->ioport[port].vid, vid);
-		rc = 1;
-		goto ret;
+		return 1;
 	}
 
 	struct write_ioport_req req = {	.magic = WRITE_IOPORT_REQ,
 					.port  = port, .width = width };
 	SET_IOPORT_DATA(&req.val, data, width);
-	rc = proc_send_msg(vdev->ch[vid], vm->proc, &req, sizeof(req));
+	rc = proc_send_msg(vdev->data_ch[vid], vm->proc, &req, sizeof(req));
 	if (rc) {
 		VDEV_DEBUG("Cannot send WRITE_IOPORT_REQ (port 0x%x, "
 			   "width %d bytes, data 0x%x) to process %d.\n",
 			   port, 1 << width, req.val, vdev->dev[vid]->pid);
-		goto ret;
+		return rc;
 	}
 
- ret:
-	spinlock_release(&vdev->ioport[port].ioport_lk);
-	return rc;
+	VDEV_DEBUG("Write guest I/O port 0x%x, width %d bytes, val 0x%x, "
+		   "vid %d.\n", port, 1 << width, data, vid);
+	return 0;
 }
 
 int
@@ -389,14 +407,17 @@ vdev_return_guest_ioport(struct vm *vm, vid_t vid,
 	struct return_ioport result = { .magic = RETURN_IOPORT,
 					.port = port, .width = width };
 	SET_IOPORT_DATA(&result.val, val, width);
-	rc = proc_send_msg(vdev->ch[vid], vdev->dev[vid],
+	rc = proc_send_msg(vdev->data_ch[vid], vdev->dev[vid],
 			   &result, sizeof(result));
 	if (rc) {
 		VDEV_DEBUG("Cannot send RETURN_IOPORT (port 0x%x, "
 			   "width %d bytes, val 0x%x) from process %d.\n",
-			   port, width, result.data, vdev->dev[vid]->pid);
+			   port, width, result.val, vdev->dev[vid]->pid);
 		goto ret;
 	}
+
+	VDEV_DEBUG("Return guest I/O port 0x%x, width %d bytes, val 0x%x.\n",
+		   port, 1 << width, result.val);
 
  ret:
 	spinlock_release(&vdev->ioport[port].ioport_lk);
@@ -411,7 +432,6 @@ vdev_read_host_ioport(struct vm *vm, vid_t vid,
 	KERN_ASSERT(0 <= vid && vid < MAX_VID);
 	KERN_ASSERT(data != NULL);
 
-	int rc = 0;
 	struct vdev *vdev = &vm->vdev;
 
 	spinlock_acquire(&vdev->ioport[port].ioport_lk);
@@ -419,8 +439,8 @@ vdev_read_host_ioport(struct vm *vm, vid_t vid,
 	if (vdev->ioport[port].vid != vid) {
 		VDEV_DEBUG("Unmatched vid %d (expect %d).\n",
 			   vdev->ioport[port].vid, vid);
-		rc = 1;
-		goto ret;
+		spinlock_release(&vdev->ioport[port].ioport_lk);
+		return 1;
 	}
 
 	if (width == SZ32)
@@ -430,9 +450,10 @@ vdev_read_host_ioport(struct vm *vm, vid_t vid,
 	else if (width == SZ8)
 		*(uint8_t *) data = inb(port);
 
- ret:
+	VDEV_DEBUG("Read host I/O port 0x%x, width %d bytes, val 0x%x.\n",
+		   port, 1 << width, *data);
 	spinlock_release(&vdev->ioport[port].ioport_lk);
-	return rc;
+	return 0;
 }
 
 int
@@ -442,7 +463,6 @@ vdev_write_host_ioport(struct vm *vm, vid_t vid,
 	KERN_ASSERT(vm != NULL);
 	KERN_ASSERT(0 <= vid && vid < MAX_VID);
 
-	int rc = 0;
 	struct vdev *vdev = &vm->vdev;
 
 	spinlock_acquire(&vdev->ioport[port].ioport_lk);
@@ -450,8 +470,8 @@ vdev_write_host_ioport(struct vm *vm, vid_t vid,
 	if (vdev->ioport[port].vid != vid) {
 		VDEV_DEBUG("Unmatched vid %d (expect %d).\n",
 			   vdev->ioport[port].vid, vid);
-		rc = 1;
-		goto ret;
+		spinlock_release(&vdev->ioport[port].ioport_lk);
+		return 1;
 	}
 
 	if (width == SZ32)
@@ -461,9 +481,10 @@ vdev_write_host_ioport(struct vm *vm, vid_t vid,
 	else if (width == SZ8)
 		outb(port, (uint8_t) val);
 
- ret:
+	VDEV_DEBUG("Write host I/O port 0x%x, width %d bytes, val 0x%x.\n",
+		   port, 1 << width, val);
 	spinlock_release(&vdev->ioport[port].ioport_lk);
-	return rc;
+	return 0;
 }
 
 int
@@ -487,6 +508,9 @@ vdev_set_irq(struct vm *vm, vid_t vid, uint8_t irq, int mode)
 	}
 	vmm_set_irq(vm, irq, mode);
 
+	VDEV_DEBUG("%s virtual IRQ line %d.\n",
+		   mode == 0 ? "Raise" : mode == 1 ? "Lower" : "Trigger", irq);
+
  ret1:
 	spinlock_release(&vdev->irq[irq].irq_lk);
 	return rc;
@@ -500,14 +524,16 @@ vdev_get_intout(struct vm *vm, int peep)
 	struct vdev *vdev = &vm->vdev;
 	int intout;
 
-	spinlock_acquire(&vdev->pic_lk);
+	spinlock_acquire(&vdev->vpic_lk);
 
 	if (peep)
 		intout = vpic_get_irq(&vdev->vpic);
 	else
 		intout = vpic_read_irq(&vdev->vpic);
 
-	spinlock_release(&vdev->pic_lk);
+	VDEV_DEBUG("%s virtual INTOUT %d.\n", peep ? "Peep" : "Read", intout);
+
+	spinlock_release(&vdev->vpic_lk);
 
 	return intout;
 }
@@ -533,6 +559,11 @@ vdev_rw_guest_mem(struct vm *vm, uintptr_t gpa,
 			   size, VM_PHY_MEMORY_SIZE - gpa);
 		return 1;
 	}
+
+	VDEV_DEBUG("%s guest physical address 0x%08x %s "
+		   "host linear address 0x%08x, size %d bytes.\n",
+		   write ? "Write" : "Read", gpa, write ? "from" : "to",
+		   la, size);
 
 	remaining = size;
 	from = write ? la : gpa;
@@ -575,11 +606,10 @@ vdev_sync_dev(struct vm *vm, vid_t vid)
 
 	int rc = 0;
 	struct vdev *vdev = &vm->vdev;
-	struct channel *dev_ch;
+	struct channel *ch;
 
-	struct dev_sync_complete *result;
-	uint8_t recv_buf[CHANNEL_BUFFER_SIZE];
-	size_t size;
+	if (vm->proc->state != PROC_RUNNING)
+		return 0;
 
 	spinlock_acquire(&vdev->dev_lk);
 
@@ -589,83 +619,39 @@ vdev_sync_dev(struct vm *vm, vid_t vid)
 		return 1;
 	}
 
-	if ((dev_ch = vdev->ch[vid]) == NULL) {
+	if ((ch = vdev->sync_ch[vid]) == NULL) {
 		VDEV_DEBUG("No available channel.\n");
 		spinlock_release(&vdev->dev_lk);
 		return 1;
 	}
 
-	spinlock_release(&vdev->dev_lk);
+	VDEV_DEBUG("Synchronize virtual device %d.\n", vid);
+
+	/*
+	 * We use channel_send() instead of proc_send_msg() here, because when
+	 * sync request is being sent, the process hosting the virtual machine
+	 * maybe already blocked.
+	 */
 
 	struct dev_sync_req req = { .magic = DEV_SYNC_REQ, .vid = vid };
-	rc = proc_send_msg(dev_ch, vm->proc, &req, sizeof(req));
+	spinlock_acquire(&ch->lk);
+	rc = channel_send(ch, vm->proc, &req, sizeof(req));
+	spinlock_release(&ch->lk);
 
-	if (rc) {
-		VDEV_DEBUG("Cannot send DEV_SYNC_REQ (vid %d) "
-			   "from process %d to process %d.\n",
-			   vid, vm->proc->pid, dev_proc->pid);
-		return rc;
-	}
-
-	rc = proc_recv_msg(dev_ch, vm->proc, recv_buf, &size, TRUE);
-	result = (struct dev_sync_complete *) recv_buf;
-	if (rc || size != sizeof(struct dev_sync_complete) ||
-	    result->magic != DEV_SYNC_COMPLETE) {
-		VDEV_DEBUG("Cannot receive DEV_SYNC_COMPLETE from "
-			   "process %d.\n", dev_proc->pid);
-		return 1;
-	}
+	spinlock_release(&vdev->dev_lk);
 
 	return rc;
 }
 
 int
-vdev_sync_complete(struct vm *vm, vid_t vid)
+vdev_send_device_ready(struct vm *vm, vid_t vid)
 {
 	KERN_ASSERT(vm != NULL);
 	KERN_ASSERT(0 <= vid && vid < MAX_VID);
 
 	int rc = 0;
 	struct vdev *vdev = &vm->vdev;
-	struct proc *dev_proc;
-	struct channel *dev_ch;
-
-	spinlock_acquire(&vdev->dev_lk);
-
-	if (vdev->dev[vid] == NULL) {
-		VDEV_DEBUG("No virtual device %d.\n", vid);
-		spinlock_release(&vdev->dev_lk);
-		return 1;
-	}
-
-	dev_proc = vdev->dev[vid];
-	dev_ch = vdev->ch[vid];
-
-	spinlock_release(&vdev->dev_lk);
-
-	struct dev_sync_complete result =
-		{ .magic = DEV_SYNC_COMPLETE, .vid = vid };
-	rc = proc_send_msg(dev_ch, dev_proc, &result, sizeof(result));
-
-	if (rc) {
-		VDEV_DEBUG("Cannot send DEV_SYNC_COMPLETE (vid %d) "
-			   "from process %d to process %d.\n",
-			   vid, dev_proc->pid, vm->proc->pid);
-		return rc;
-	}
-
-	return 0;
-}
-
-int
-vdev_device_ready(struct vm *vm, vid_t vid)
-{
-	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(0 <= vid && vid < MAX_VID);
-
-	int rc = 0;
-	struct vdev *vdev = &vm->vdev;
-	struct channel *dev_ch;
+	struct channel *ch;
 	struct proc *dev_proc;
 
 	spinlock_acquire(&vdev->dev_lk);
@@ -677,12 +663,14 @@ vdev_device_ready(struct vm *vm, vid_t vid)
 	}
 
 	dev_proc = vdev->dev[vid];
-	dev_ch = vdev->ch[vid];
+	ch = vdev->sync_ch[vid];
+
+	VDEV_DEBUG("Send DEVICE_RDY from virtual device %d.\n", vid);
 
 	spinlock_release(&vdev->dev_lk);
 
 	struct device_rdy result = { .magic = DEVIDE_READY, .vid = vid };
-	rc = proc_send_msg(dev_ch, dev_proc, &result, sizeof(result));
+	rc = proc_send_msg(ch, dev_proc, &result, sizeof(result));
 
 	if (rc) {
 		VDEV_DEBUG("Cannot send DEVICE_READY (vid %d) "
@@ -703,4 +691,54 @@ vdev_get_dev(struct vm *vm, vid_t vid)
 		return NULL;
 
 	return vm->vdev.dev[vid];
+}
+
+int
+vdev_wait_all_devices_ready(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct vdev *vdev = &vm->vdev;
+	vid_t vid;
+	struct proc *p;
+	struct channel *ch;
+
+	pageinfo_t *recv_pi;
+	uint8_t *recv_buf;
+	size_t recv_size;
+	struct device_rdy *rdy;
+
+	if ((recv_pi = mem_page_alloc()) == NULL) {
+		VDEV_DEBUG("Cannot allocate memory for receive buffer.\n");
+		return 1;
+	}
+	recv_buf = mem_pi2ptr(recv_pi);
+
+	for (vid = 0; vid < MAX_VID; vid++) {
+		p = vdev->dev[vid];
+		ch = vdev->sync_ch[vid];
+
+		if (p == NULL || ch == NULL)
+			continue;
+
+		VDEV_DEBUG("Waiting for DEVICE_RDY from virtual device %d.\n",
+			   vid);
+
+		if (proc_recv_msg(ch, vm->proc, recv_buf, &recv_size, TRUE) ||
+		    recv_size != sizeof(struct device_rdy)) {
+			VDEV_DEBUG("Cannot receve DEVICE_RDY from process %d.\n",
+				   p->pid);
+			continue;
+		}
+
+		rdy = (struct device_rdy *) recv_buf;
+
+		if (rdy->vid != vid)
+			continue;
+
+		VDEV_DEBUG("Virtual device %d is ready.\n", vid);
+	}
+
+	mem_page_free(recv_pi);
+	return 0;
 }

@@ -481,38 +481,9 @@ void
 vpci_init(struct vpci_host *vpci_host)
 {
 	ASSERT(vpci_host != NULL);
-
-	uint16_t port;
-
 	memset(vpci_host, 0x0, sizeof(struct vpci_host));
-
-	for (port = PCI_CONFIG_ADDR; port < PCI_CONFIG_ADDR+4; port++) {
-		sys_attach_port(port, SZ8);
-
-		if (PCI_CONFIG_ADDR + 4 - port > 1)
-			sys_attach_port(port, SZ16);
-		else
-			sys_attach_port(port, SZ16);
-
-		if (port == PCI_CONFIG_ADDR)
-			sys_attach_port(port, SZ32);
-		else
-			sys_attach_port(port, SZ32);
-	}
-
-	for (port = PCI_CONFIG_DATA; port < PCI_CONFIG_DATA+4; port++) {
-		sys_attach_port(port, SZ8);
-
-		if (PCI_CONFIG_DATA + 4 - port > 1)
-			sys_attach_port(port, SZ16);
-		else
-			sys_attach_port(port, SZ16);
-
-		if (port == PCI_CONFIG_DATA)
-			sys_attach_port(port, SZ32);
-		else
-			sys_attach_port(port, SZ32);
-	}
+	sys_attach_port(PCI_CONFIG_ADDR, SZ32);
+	sys_attach_port(PCI_CONFIG_DATA, SZ32);
 }
 
 void

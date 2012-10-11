@@ -41,20 +41,28 @@ static uint8_t
 vnvram_ioport_read(struct vnvram *nvram, uint16_t port)
 {
 	ASSERT(nvram != NULL);
-	ASSERT(port == CMOS_DATA_PORT);
+	ASSERT(port == CMOS_INDEX_PORT || port == CMOS_DATA_PORT);
 
-	if (nvram->data_valid == TRUE) {
-		return nvram->data;
-	} else {
+	if (port == CMOS_INDEX_PORT)
 		return sys_host_in(port, SZ8);
-	}
+
+	if (nvram->data_valid == TRUE)
+		return nvram->data;
+	else
+		return sys_host_in(port, SZ8);
 }
 
 static void
 vnvram_ioport_write(struct vnvram *nvram, uint16_t port, uint8_t data)
 {
 	ASSERT(nvram != NULL);
-	ASSERT(port == CMOS_INDEX_PORT);
+	ASSERT(port == CMOS_INDEX_PORT || port == CMOS_DATA_PORT);
+
+	if (port == CMOS_DATA_PORT) {
+		VNVRAM_DEBUG("Write host I/O port 0x%x.\n", port);
+		sys_host_out(port, SZ8, data);
+		return;
+	}
 
 	uint8_t idx = data & ~(uint8_t) CMOS_NMI_DISABLE_BIT;
 
@@ -108,20 +116,20 @@ static void
 _vnvram_ioport_read(struct vnvram *nvram, uint16_t port, void *data)
 {
 	ASSERT(nvram != NULL && data != NULL);
-	ASSERT(port == CMOS_DATA_PORT);
+	ASSERT(port == CMOS_INDEX_PORT || port == CMOS_DATA_PORT);
 
 	*(uint8_t *) data = vnvram_ioport_read(nvram, port);
 
-	VNVRAM_DEBUG("Read I/O port %d, val 0x%x.\n", port, *(uint8_t *) data);
+	VNVRAM_DEBUG("Read I/O port 0x%x, val 0x%x.\n", port, *(uint8_t *) data);
 }
 
 static void
 _vnvram_ioport_write(struct vnvram *nvram, uint16_t port, uint8_t data)
 {
 	ASSERT(nvram != NULL);
-	ASSERT(port == CMOS_INDEX_PORT);
+	ASSERT(port == CMOS_INDEX_PORT || port == CMOS_DATA_PORT);
 
-	VNVRAM_DEBUG("Write I/O port %d, val 0x%08x.\n", port, data);
+	VNVRAM_DEBUG("Write I/O port 0x%x, val 0x%08x.\n", port, data);
 
 	vnvram_ioport_write(nvram, port, data);
 }
@@ -142,6 +150,11 @@ main(int argc, char **argv)
 
 	vnvram.data_valid = FALSE;
 
+	sys_attach_port(CMOS_DATA_PORT, SZ8);
+	sys_attach_port(CMOS_INDEX_PORT, SZ8);
+
+	sys_send_ready();
+
 	phy_mem_size = sys_guest_mem_size();
 	if (phy_mem_size > 0x100000000ULL) { /* above 4 GB */
 		vnvram.highmem_size = phy_mem_size - 0x100000000ULL;
@@ -161,11 +174,6 @@ main(int argc, char **argv)
 		     vnvram.extmem2_size,
 		     vnvram.highmem_size);
 
-	sys_attach_port(CMOS_DATA_PORT, SZ8);
-	sys_attach_port(CMOS_INDEX_PORT, SZ8);
-
-	sys_dev_ready();
-
 	while (1) {
 		if (sys_recv_req(&req, TRUE))
 			continue;
@@ -173,24 +181,34 @@ main(int argc, char **argv)
 		switch (((uint32_t *) &req)[0]) {
 		case READ_IOPORT_REQ:
 			read_req = (struct read_ioport_req *) &req;
+			VNVRAM_DEBUG("Receive READ_IOPORT_REQ (port 0x%x, "
+				     "width %d bytes).\n",
+				     read_req->port, 1 << read_req->width);
 			if (unlikely(read_req->port != CMOS_DATA_PORT &&
 				     read_req->port != CMOS_INDEX_PORT))
 				data = 0xffffffff;
 			else
 				_vnvram_ioport_read(&vnvram,
 						    read_req->port, &data);
+			VNVRAM_DEBUG("Send result 0x%x.\n", data);
 			sys_ret_in(read_req->port, read_req->width, data);
 			continue;
 
 		case WRITE_IOPORT_REQ:
 			write_req = (struct write_ioport_req *) &req;
+			VNVRAM_DEBUG("Receive WRITE_IOPORT_REQ (port 0x%x, "
+				     "width %d bytes, val 0x%x).\n",
+				     write_req->port, 1 << write_req->width,
+				     write_req->val);
 			if (write_req->port == CMOS_DATA_PORT ||
 			    write_req->port == CMOS_INDEX_PORT)
 				_vnvram_ioport_write(&vnvram, write_req->port,
 						     write_req->val);
+			VNVRAM_DEBUG("Write is done.\n");
 			continue;
 
 		default:
+			VNVRAM_DEBUG("Ignore unknown request.\n");
 			continue;
 		}
 	}

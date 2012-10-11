@@ -38,6 +38,8 @@
 
 #include <sys/mem.h>
 
+#include <sys/virt/vmm.h>
+
 #define	EPT_PWLEVELS	4		/* page walk levels */
 #define	EPTP(pml4)	((pml4) | (EPT_PWLEVELS - 1) << 3 | PAT_WRITE_BACK)
 
@@ -50,6 +52,8 @@ size_t    ept_copy_to_guest(uint64_t *pml4ept,
 			    uintptr_t dest, uintptr_t src, size_t);
 uintptr_t ept_gpa_to_hpa(uint64_t *pml4ept, uintptr_t gpa);
 int       ept_set_permission(uint64_t *pml4ept, uintptr_t gpa, uint8_t perm);
+int       ept_mmap(struct vm *, uintptr_t gpa, uintptr_t hpa);
+int       ept_unmmap(struct vm *, uintptr_t gpa);
 
 #endif /* _KERN_ */
 

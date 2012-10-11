@@ -38,7 +38,10 @@
 #include <sys/types.h>
 #include <sys/x86.h>
 
+#include <sys/virt/vmm.h>
+
 #include "ept.h"
+#include "vmx.h"
 #include "vmx_msr.h"
 #include "x86.h"
 
@@ -174,10 +177,7 @@ ept_invalidate_mappings(uint64_t pml4ept)
 }
 
 /*
- * Create EPT page structures.
- *
- * - The lowest 2MB guest physical address is mapped by 4KB EPT pages.
- * - Other guest physical address is mapped by 2MB EPT pages.
+ * Create EPT page structures. 4KB EPT pages are used.
  */
 int
 ept_create_mappings(uint64_t *pml4ept, size_t mem_size)
@@ -189,8 +189,13 @@ ept_create_mappings(uint64_t *pml4ept, size_t mem_size)
 	uintptr_t gpa;
 
 	/*
-	 * The lowest 2MB guest physical memory is mapped by 4KB EPT pages.
+	 * Guest VGA RAM 0xa0000 ~ 0xbffff is mapped to host VGA RAM 0xa0000
+	 * ~ 0xbffff.
 	 */
+	for (gpa = 0xa0000; gpa < 0xc0000 && gpa < mem_size; gpa += PAGESIZE)
+		if (ept_add_mapping(pml4ept, gpa, gpa, PAT_UNCACHEABLE, FALSE))
+			return 1;
+
 	for (gpa = 0; gpa < 0xa0000 && gpa < mem_size; gpa += PAGESIZE) {
 		if ((pi = mem_page_alloc()) == NULL)
 			return 2;
@@ -198,14 +203,8 @@ ept_create_mappings(uint64_t *pml4ept, size_t mem_size)
 				    PAT_WRITE_BACK, FALSE))
 			return 1;
 	}
-	/*
-	 * Guest VGA RAM 0xa0000 ~ 0xbffff is mapped to host VGA RAM 0xa0000
-	 * ~ 0xbffff.
-	 */
-	for (gpa = 0xa0000; gpa < 0xc0000 && gpa < mem_size; gpa += PAGESIZE)
-		if (ept_add_mapping(pml4ept, gpa, gpa, PAT_UNCACHEABLE, FALSE))
-			return 1;
-	for (gpa = 0xc0000; gpa < 0x200000 && gpa < mem_size; gpa += PAGESIZE) {
+
+	for (gpa = 0xc0000; gpa < mem_size && gpa < 0xf0000000; gpa += PAGESIZE) {
 		if ((pi = mem_page_alloc()) == NULL)
 			return 2;
 		if (ept_add_mapping(pml4ept, gpa, mem_pi2phys(pi),
@@ -214,16 +213,9 @@ ept_create_mappings(uint64_t *pml4ept, size_t mem_size)
 	}
 
 	/*
-	 * Guest physical memory above 2MB is mapped by 2MB EPT pages.
+	 * Memory from 0xf0000000 to 0xffffffff is mapped on demand by the EPT
+	 * fault handler.
 	 */
-	for (gpa = 0x200000; gpa < mem_size && gpa < 0xf0000000;
-	     gpa += PAGESIZE * 512) {
-		if ((pi = mem_pages_alloc_align(512, 9)) == NULL)
-			return 2;
-		if (ept_add_mapping(pml4ept, gpa, mem_pi2phys(pi),
-				    PAT_WRITE_BACK, TRUE))
-			return 1;
-	}
 
 	return 0;
 }
@@ -458,6 +450,68 @@ ept_set_permission(uint64_t *pml4ept, uintptr_t gpa, uint8_t perm)
 		return 1;
 
 	*entry = (*entry & ~(uint64_t) 0x7) | (perm & 0x7);
+
+	return 0;
+}
+
+int
+ept_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct vmx *vmx;
+	uint64_t *pml4ept;
+	uint64_t *pg_entry;
+
+	/*
+	 * XXX: ASSUME 4KB pages are used in both the EPT and the host page
+	 *      structures.
+	 */
+	KERN_ASSERT(gpa == ROUNDDOWN(gpa, PAGESIZE));
+	KERN_ASSERT(hpa == ROUNDDOWN(hpa, PAGESIZE));
+
+	vmx = (struct vmx *) vm->cookie;
+	pml4ept = vmx->pml4ept;
+
+	if ((pg_entry = ept_get_page_entry(pml4ept, gpa))) {
+		KERN_WARN("Guest page 0x%08x is already mapped to 0x%08x.\n",
+			  gpa, (*pg_entry & EPT_ADDR_MASK));
+		return 1;
+	}
+
+	return ept_add_mapping(pml4ept, gpa, hpa, PAT_WRITE_BACK, FALSE);
+}
+
+int
+ept_unmmap(struct vm *vm, uintptr_t gpa)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct vmx *vmx;
+	uint64_t *pml4ept;
+	uint64_t *pg_entry;
+	uintptr_t gpa1, gpa2;
+
+	vmx = (struct vmx *) vm->cookie;
+	pml4ept = vmx->pml4ept;
+
+	/* XXX: ASSUME 4KB EPT pages are used. */
+	gpa1 = ROUNDDOWN(gpa, PAGESIZE);
+	if (gpa > 0xffffffff - PAGESIZE)
+		gpa2 = 0xf0000000;
+	else
+		gpa2 = ROUNDDOWN(gpa+PAGESIZE, PAGESIZE);
+
+	if ((pg_entry = ept_get_page_entry(pml4ept, gpa1)) == NULL)
+		return 1;
+	*pg_entry &= ~(uint64_t) (EPT_PG_RD | EPT_PG_WR | EPT_PG_EX);
+
+	if (gpa2 == gpa1)
+		return 0;
+
+	if ((pg_entry = ept_get_page_entry(pml4ept, gpa2)) == NULL)
+		return 1;
+	*pg_entry &= ~(uint64_t) (EPT_PG_RD | EPT_PG_WR | EPT_PG_EX);
 
 	return 0;
 }

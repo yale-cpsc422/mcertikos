@@ -883,7 +883,7 @@ main(int argc, char **argv)
 
 	guest_tsc_freq = sys_guest_tsc_freq();
 
-	sys_dev_ready();
+	sys_send_ready();
 
 	while (1) {
 		if (sys_recv_req(&req, FALSE))
@@ -905,10 +905,10 @@ main(int argc, char **argv)
 
 		case WRITE_IOPORT_REQ:
 			write_req = (struct write_ioport_req *) &req;
-			if (read_req->port == PIT_CONTROL_PORT &&
-			    read_req->port == PIT_CHANNEL0_PORT &&
-			    read_req->port == PIT_CHANNEL1_PORT &&
-			    read_req->port == PIT_CHANNEL2_PORT &&
+			if (read_req->port == PIT_CONTROL_PORT ||
+			    read_req->port == PIT_CHANNEL0_PORT ||
+			    read_req->port == PIT_CHANNEL1_PORT ||
+			    read_req->port == PIT_CHANNEL2_PORT ||
 			    read_req->port == PIT_GATE_PORT)
 				_vpit_ioport_write(&vpit, write_req->port,
 						   write_req->val);
@@ -922,7 +922,6 @@ main(int argc, char **argv)
 			vpit_debug("Ignore unknown request.\n");
 			continue;
 		}
-
 	}
 
 	return 0;

@@ -159,6 +159,8 @@ int proc_sched_init(struct sched *);
  * @return PCB of the process if spawn succeeds; otherwise, return NULL.
  */
 struct proc *proc_spawn(struct pcpu *c, uintptr_t start, struct session *s);
+struct proc *proc_new(uintptr_t start, struct session *s);
+void         proc_run(struct pcpu *c, struct proc *p);
 
 /*
  * Block a process.

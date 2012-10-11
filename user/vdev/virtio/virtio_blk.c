@@ -24,8 +24,6 @@
 
 #endif
 
-static uint8_t buf[1024];
-
 static uint16_t unsupported_command =
 	0xf880 /* reserved bits */ | PCI_COMMAND_MEM_ENABLE |
 	PCI_COMMAND_SPECIAL_ENABLE | PCI_COMMAND_INVALIDATE_ENABLE |
@@ -313,41 +311,11 @@ virtio_blk_get_vring(struct virtio_device *dev, uint8_t idx)
 static int
 virtio_blk_disk_rw(uint64_t lba, uint64_t nsectors, uintptr_t gpa, int write)
 {
-	ASSERT(buf != NULL);
-
-	uint64_t sector;
-	uintptr_t addr;
-	uint8_t buf[ATA_SECTOR_SIZE];
-	int rc;
-
-	for (sector = lba, addr = gpa;
-	     sector < lba + nsectors; sector++, addr += ATA_SECTOR_SIZE) {
-		if (write && sys_copy_from_guest(buf, addr, ATA_SECTOR_SIZE)) {
-			virtio_blk_debug("Cannot copy data from guest.\n");
-			return 1;
-		}
-
-		rc = write ?
-			sys_disk_write(sector, 1, buf) :
-			sys_disk_read(sector, 1, buf);
-		if (rc) {
-			virtio_blk_debug("Cannot %s sector %d, errno %d.\n",
-					 write ? "write" : "read",
-					 sector, rc);
-			return 1;
-		}
-
-		if (!write && sys_copy_to_guest(addr, buf, ATA_SECTOR_SIZE)) {
-			virtio_blk_debug("Cannot copy data to guest.\n");
-			return 1;
-		}
-	}
-
-	smp_wmb();
-
-	virtio_blk_debug("%s OK.\n", write ? "Write" : "Read");
-
-	return 0;
+	int rc = write ? sys_guest_disk_write(lba, gpa, nsectors) :
+		sys_guest_disk_read(gpa, lba, nsectors);
+	virtio_blk_debug("%s %s.\n",
+			 write ? "Write" : "Read", rc ? "failed" : "OK");
+	return rc;
 }
 
 static gcc_inline int
@@ -568,7 +536,7 @@ virtio_blk_init(struct virtio_blk *blk, struct vpci_host *vpci_host)
 		VIRTIO_BLK_F_SIZE_MAX |
 		VIRTIO_BLK_F_SEG_MAX |
 		VIRTIO_BLK_F_BLK_SIZE;
-	blk->blk_header.capacity = sys_disk_capacity();
+	blk->blk_header.capacity = sys_guest_disk_capacity();
 	blk->blk_header.size_max = 4096;
 	blk->blk_header.seg_max = 1;
 	blk->blk_header.blk_size = 512;
@@ -684,7 +652,7 @@ main(int argc, char **argv)
 
 	device = &blk.common_header;
 
-	sys_dev_ready();
+	sys_send_ready();
 
 	while (1) {
 		if (sys_recv_req(&req, TRUE))

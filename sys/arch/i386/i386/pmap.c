@@ -15,8 +15,7 @@
 typedef pmap_t pde_t;
 typedef pmap_t pte_t;
 
-//static pde_t pmap_bootpdir[NPDENTRIES] gcc_aligned(PAGESIZE);
-static pmap_t pmap_bootpdir[NPDENTRIES] gcc_aligned(PAGESIZE);
+static pmap_t pmap_boot[NPDENTRIES] gcc_aligned(PAGESIZE);
 
 #define PTE_INV		(~((pte_t) 0))
 #define PTE_NULL	((pte_t) NULL)
@@ -82,147 +81,85 @@ pmap_walk(pde_t *pdir, uintptr_t la, bool write)
 
 		/* otherwise, create a new page table */
 		pageinfo_t *pi = (pageinfo_t *) mem_page_alloc();
-		if (pi == NULL)
+		if (pi == NULL) {
+			KERN_PANIC("Cannot allocate memory for page table "
+				   "mapping la 0x%08x.\n", la);
 			return NULL;
+		}
 		mem_incref(pi);
 		ptab = (pte_t *) mem_pi2phys(pi);
 		memset(ptab, 0x0, PAGESIZE);
+		/* KERN_DEBUG("Create page table at 0x%08x for " */
+		/* 	   "linear address 0x%08x ~ 0x%08x.\n", */
+		/* 	   ptab, la, la + PAGESIZE * NPTENTRIES); */
 		*pde = ((uintptr_t) ptab) | PTE_P | PTE_A | PTE_W | PTE_U;
 	}
+
+	/* KERN_DEBUG("ptab 0x%08x, index %d, val 0x%08x, size %d.\n", */
+	/* 	   ptab, PTX(la), ptab[PTX(la)], sizeof(ptab[PTX(la)])); */
 
 	return &ptab[PTX(la)];
 }
 
 /*
- * Create the kernel page table. It identically maps the address from 0x0 to
- * max(maximum physical memory address, 0x4000_0000). In addition, it also
- * identically maps the ACPI address space, IOAPIC address space, and
- * 0xf000_0000 to 0xffff_ffff.
- *
- * XXX: all these pages are marked as global pages (PTE_G=1) so that "move to
- *      CR3" can not invalidate the TLB entries for them.
- *
- * @param pmap the kernel page table
- *
- * @return the kernel page table, if succeed; otherwise, NULL.
+ * Initialize the bootstap page map. It identically maps the linear address
+ * below VM_USERLO and the linear addres above VM_USERHI.
  */
 static pmap_t *
-pmap_init_bootpdir(pmap_t *pmap)
+pmap_init_boot(void)
 {
-	KERN_ASSERT(pmap != NULL);
+	uintptr_t addr;
+	size_t memsize = mem_max_phys();
 
-	pmmap_t *e820_ent, *e820_last_ent;
-	uint32_t addr;
-	pmap_t *rc;
+	memset(pmap_boot, 0, PAGESIZE);
 
-	for (e820_ent = pmmap, e820_last_ent = NULL;
-	     e820_ent != NULL;
-	     e820_last_ent = e820_ent, e820_ent = e820_ent->next) {
-		uint32_t start, end, type, addr;
-		pmap_t *rc;
+	KERN_DEBUG("Bootstrap pmap at 0x%08x.\n", pmap_boot);
 
-		start = e820_ent->start;
-		end = e820_ent->end - 1;
-		type = e820_ent->type;
-
-		if (ROUNDDOWN(start, PAGESIZE) >= 0xf0000000)
-			break;
-
-		if (ROUNDDOWN(end, PAGESIZE) >= 0xf0000000)
-			end = 0xefffffff;
-
-		KERN_DEBUG("0x%08x ~ 0x%08x ==> ", start, end);
-
-		if (e820_last_ent == NULL) {
-			start = ROUNDDOWN(start, PAGESIZE);
-
-			if (type == MEM_RAM)
-				end = ROUNDDOWN(end, PAGESIZE) - 1;
-			else
-				end = ROUNDDOWN(end, PAGESIZE);
-		} else {
-			if (type == MEM_RAM) {
-				start = ROUNDDOWN(start, PAGESIZE);
-				if (e820_last_ent->type != MEM_RAM &&
-				    e820_last_ent->end-1 > start)
-					start += PAGESIZE;
-
-				end = ROUNDDOWN(end, PAGESIZE) - 1;
-			} else {
-				start = ROUNDDOWN(start, PAGESIZE);
-				if (e820_last_ent->type != MEM_RAM &&
-				    e820_last_ent->end-1 > start)
-					start += PAGESIZE;
-
-				end = ROUNDDOWN(end, PAGESIZE);
-			}
-		}
-
-		dprintf("0x%08x ~ 0x%08x", start, end);
-
-		for (addr = start;
-		     addr < ((type == MEM_RAM) ? MIN(end, VM_USERLO) : end);
-		     addr += PAGESIZE) {
-			/* KERN_DEBUG("map 0x%08x\n", addr); */
-
-			rc = pmap_insert(pmap, mem_phys2pi(addr), addr,
-					 PTE_W | PTE_G);
-
-			if (rc == NULL) {
-				pmap_free(pmap);
-				return NULL;
-			}
-		}
-
-		dprintf(" done.\n");
-	}
-
-	/* map the lowest 1MB address */
-	KERN_DEBUG("0x00000000 ~ 0x00100000 ==> 0x00000000 ~ 0x00100000 ");
-	for (addr = 0x00000000; addr < 0x00100000; addr += PAGESIZE)
-		pmap_insert(pmap, mem_phys2pi(addr), addr, PTE_W | PTE_G);
-	dprintf("done.\n");
-
-	/* map the memory hole above 0xf000_0000 */
-	KERN_DEBUG("0xf0000000 ~ 0xffffffff ==> 0xf0000000 ~ 0xffffffff ");
-	for (addr = 0xf0000000; addr < 0xffffffff; addr += PAGESIZE) {
-		rc = pmap_insert(pmap, mem_phys2pi(addr), addr,
-				 PTE_W | PTE_G);
-
-		if (rc == NULL) {
-			pmap_free(pmap);
+	for (addr = 0; addr < MIN(VM_USERLO, memsize); addr += PAGESIZE)
+		if (pmap_insert(pmap_boot,
+				mem_phys2pi(addr), addr, PTE_W | PTE_G) == NULL)
 			return NULL;
-		}
+
+	for (addr = VM_USERHI; addr < 0xffffffff; addr += PAGESIZE) {
+		if (pmap_insert(pmap_boot,
+				mem_phys2pi(addr), addr, PTE_W | PTE_G) == NULL)
+			return NULL;
 
 		if (addr == 0xfffff000)
 			break;
 	}
-	dprintf("done.\n");
 
-	/* map address used by IOAPIC */
-	int ioapic_no;
-	ioapic_t *ioapic;
-	for (ioapic_no = 0; ioapic_no < ioapic_number(); ioapic_no++) {
-		ioapic = ioapic_get(ioapic_no);
+	return pmap_boot;
+}
 
-		if (ioapic == NULL) {
-			KERN_WARN("NULL IOAPIC %x.\n", ioapic_no);
-			continue;
-		}
+/*
+ * Initialize the kernel page map. It's a copy of the bootstrap page map in
+ * addition of the identical mappings for liear address which satisfies the
+ * condition "the physical address to which it's identically mappaed is in
+ * the reserved memory pages".
+ */
+static pmap_t *
+pmap_init_kern(void)
+{
+	uintptr_t addr;
+	pageinfo_t *pi;
 
-		KERN_DEBUG("0x%08x ~ 0x%08x ==> 0x%08x ~ 0x%08x ",
-			   (uintptr_t) ioapic, (uintptr_t) ioapic + PAGESIZE,
-			   (uintptr_t) ioapic, (uintptr_t) ioapic + PAGESIZE);
+	memcpy(pmap_kern, pmap_boot, PAGESIZE);
 
-		pmap_insert(pmap, mem_phys2pi((uintptr_t) ioapic),
-			    (uintptr_t) ioapic, PTE_W | PTE_G);
+	for (addr = VM_USERLO; addr < mem_max_phys(); addr += PAGESIZE) {
+		pi = mem_phys2pi(addr);
 
-		dprintf("done.\n");
+		if (pi->type != PG_RESERVED)
+			goto next;
+
+		pmap_insert(pmap_kern, pi, addr, PTE_W);
+
+	next:
+		if (addr == 0xfffff000)
+			break;
 	}
 
-	KERN_DEBUG("bootstrap page structures initialized.\n");
-
-	return pmap;
+	return pmap_kern;
 }
 
 /*
@@ -233,10 +170,13 @@ pmap_init(void)
 {
 	if (pcpu_onboot() == TRUE) {
 		/* pmap_new() cannot be useable right now. */
-		memset(pmap_bootpdir, 0, PAGESIZE);
-		if (pmap_init_bootpdir(pmap_bootpdir) == NULL)
-			KERN_PANIC("Failed to initialize bootstrap page structures.\n");
+		if (pmap_init_boot() == NULL)
+			KERN_PANIC("Cannot initialize the bootstrap "
+				   "page map.\n");
+		if (pmap_init_kern() == NULL)
+			KERN_PANIC("Cannot initialize the kernel page map.");
 	}
+
 
 	/* enable global pages (Sec 4.10.2.4, Intel ASDM Vol3) */
 	uint32_t cr4 = rcr4();
@@ -244,7 +184,7 @@ pmap_init(void)
 	lcr4(cr4);
 
 	/* load page table */
-	pmap_install(pmap_bootpdir);
+	pmap_install(pmap_kern);
 
 	/* turn on paging */
 	uint32_t cr0 = CR0_PE|CR0_PG|CR0_AM|CR0_WP|CR0_NE|CR0_TS|CR0_MP;
@@ -253,138 +193,111 @@ pmap_init(void)
 }
 
 /*
- * Create a pmap which is a clone of the kernel pmap.
- *
- * @return the address of pmap object, or NULL when failing
+ * Create a page map for a process. It's a copy of the bootstrap page map.
  */
 pmap_t *
 pmap_new(void)
 {
-	pmap_t *pmap = pmap_new_empty();
+	pageinfo_t *pi;
+	pmap_t *pmap;
 
-	if (pmap == NULL)
+	if ((pi = mem_page_alloc()) == NULL)
 		return NULL;
-
-	/* initialize it from the bootstrap page structure */
-	memcpy(pmap, pmap_bootpdir, PAGESIZE);
-
-	return pmap;
-}
-
-/*
- * Create an empty pmap.
- */
-pmap_t *
-pmap_new_empty(void)
-{
-	pageinfo_t *pi = (pageinfo_t *) mem_page_alloc();
-
-	if (pi == NULL)
-		return NULL;
-
 	mem_incref(pi);
-	pmap_t *pmap = (pmap_t *) mem_pi2ptr(pi);
-	KERN_ASSERT(pmap != NULL);
-	memset(pmap, 0, PAGESIZE);
+
+	pmap = mem_pi2ptr(pi);
+	memcpy(pmap, pmap_boot, PAGESIZE);
 
 	return pmap;
 }
 
 /*
- * Free a pmap and all page tables it contains.
- *
- * @param pmap
+ * Free the memory allocated for a page map of a process. All maps for the
+ * linear address below VM_USERLO and the linear address above VM_USERHI
+ * are shared for all page maps, it must not be freed.
  */
 void
 pmap_free(pmap_t *pmap)
 {
-	KERN_ASSERT(pmap != NULL);
-
-	pmap_remove(pmap, 0, ~0);
+	KERN_ASSERT(pmap != NULL && pmap != pmap_boot && pmap != pmap_kern);
+	pmap_remove(pmap, VM_USERLO, VM_USERHI-1);
+	mem_decref(mem_ptr2pi(pmap));
 	mem_page_free(mem_ptr2pi(pmap));
 }
 
-/*
- * Map virtual address va to physical memory page pi with permission perm
- * in the pmap structure pmap.
- *
- * @param pmap
- * @param pi
- * @param va
- * @param perm
- *
- * @return the pmap structure
- */
 pmap_t *
-pmap_insert(pmap_t *pmap, pageinfo_t *pi, uintptr_t va, int perm)
+pmap_insert(pmap_t *pmap, pageinfo_t *pi, uintptr_t la, int perm)
 {
 	KERN_ASSERT(pmap != NULL);
 
-	pte_t *pte = pmap_walk(pmap, va, TRUE);
+	/* KERN_DEBUG("Map linear address 0x%08x to 0x%08x.\n", */
+	/* 	   la, mem_pi2phys(pi)); */
 
-	if (pte == NULL)
+	pte_t *pte = pmap_walk(pmap, la, TRUE);
+
+	if (pte == NULL) {
+		KERN_DEBUG("Cannot create page structures to "
+			   "map linear address 0x%08x.\n", la);
 		return NULL;
+	}
 
 	if (*pte & PTE_P) {
-		/* KERN_DEBUG("Virtual address %x is already mapped.\n", va); */
+		KERN_DEBUG("Linear address %x is already mapped to 0x%08x.\n",
+			   la, pmap_la2pa(pmap, la));
 		return NULL;
 	}
 
 	*pte = mem_pi2phys(pi) | perm | PTE_P;
+	if (mem_pi2phys(pi) < mem_max_phys() && pi->type == PG_NORMAL)
+		mem_incref(pi);
 
 	return pmap;
 }
 
-/*
- * Reserve a page of physical memory for a virtual page.
- *
- * @return pmap if succeed; otherwise, NULL.
- */
 pmap_t *
-pmap_reserve(pmap_t *pmap, uintptr_t va, int perm)
+pmap_reserve(pmap_t *pmap, uintptr_t la, int perm)
 {
 	KERN_ASSERT(pmap != NULL);
 
 	pageinfo_t *pi = (pageinfo_t *) mem_page_alloc();
 	if (pi == NULL)
 		return NULL;
-
-	mem_incref(pi);
 	memset(mem_pi2ptr(pi), 0, PAGESIZE);
 
-	return pmap_insert(pmap, pi, va, perm);
+	return pmap_insert(pmap, pi, la, perm);
 }
 
-/*
- * Unmap virtual address from va to va + size.
- */
 void
-pmap_remove(pmap_t *pmap, uintptr_t va, size_t size)
+pmap_remove(pmap_t *pmap, uintptr_t la, size_t size)
 {
 	KERN_ASSERT(pmap != NULL && PGOFF(size) == 0);
 
 	pde_t *pdir = (pde_t *) pmap;
 
-	uintptr_t vahi = va + size;
-	while (va < vahi) {
-		pde_t *pde = &pdir[PDX(va)];
+	uintptr_t lahi = la + size;
+	while (la < lahi) {
+		pde_t *pde = &pdir[PDX(la)];
 		if (*pde == PTE_NULL) {
 			/* skip unmapped virtual address */
-			va = PTADDR(va + PTSIZE);
+			la = PTADDR(la + PTSIZE);
 			continue;
 		}
 
 		/* Are we removing the entire page table? */
-		bool wholeptab = (PTX(va) == 0 && vahi-va >= PTSIZE);
+		bool wholeptab = (PTX(la) == 0 && lahi-la >= PTSIZE);
 
-		pte_t *pte = pmap_walk(pdir, va, TRUE);
+		pte_t *pte = pmap_walk(pdir, la, TRUE);
 		KERN_ASSERT(pte != NULL);
 
 		/* Remove page mappings up to end of region or page table */
 		do {
+			uintptr_t pgaddr = PGADDR(*pte);
+			if (pgaddr != 0 && pgaddr < mem_max_phys() &&
+			    mem_phys2pi(pgaddr)->type == PG_NORMAL)
+				mem_decref(mem_phys2pi(pgaddr));
 			*pte++ = PTE_NULL;
-			va += PAGESIZE;
-		} while (va < vahi && PTX(va) != 0);
+			la += PAGESIZE;
+		} while (la < lahi && PTX(la) != 0);
 
 		/* Free the page table too if appropriate */
 		if (wholeptab) {
@@ -394,11 +307,14 @@ pmap_remove(pmap_t *pmap, uintptr_t va, size_t size)
 	}
 }
 
+/*
+ * Set the permission of a linear address region.
+ */
 int
-pmap_setperm(pmap_t *pmap, uintptr_t va, uint32_t size, int perm)
+pmap_setperm(pmap_t *pmap, uintptr_t la, uint32_t size, int perm)
 {
 	KERN_ASSERT(pmap != NULL &&
-		    va % PAGESIZE == 0 && size % PAGESIZE == 0);
+		    la % PAGESIZE == 0 && size % PAGESIZE == 0);
 
 	pde_t *pdir = (pde_t *) pmap;
 
@@ -406,16 +322,16 @@ pmap_setperm(pmap_t *pmap, uintptr_t va, uint32_t size, int perm)
 	uint32_t pteand, pteor;
 	pteand = ~0, pteor = perm | PTE_P;
 
-	uintptr_t vahi = va + size;
-	while (va < vahi) {
-		pde_t *pde = &pdir[PDX(va)];
+	uintptr_t lahi = la + size;
+	while (la < lahi) {
+		pde_t *pde = &pdir[PDX(la)];
 		if (*pde == PTE_NULL && pteor == 0) {
 			/* skip unmapped virtual address */
-			va = PTADDR(va + PTSIZE);
+			la = PTADDR(la + PTSIZE);
 			continue;
 		}
 
-		pte_t *pte = pmap_walk(pdir, va, TRUE);
+		pte_t *pte = pmap_walk(pdir, la, TRUE);
 		if (pte == NULL)
 			return 0;	/* page table alloc failed */
 
@@ -423,13 +339,16 @@ pmap_setperm(pmap_t *pmap, uintptr_t va, uint32_t size, int perm)
 		do {
 			*pte = (*pte & pteand) | pteor;
 			pte++;
-			va += PAGESIZE;
-		} while (va < vahi && PTX(va) != 0);
+			la += PAGESIZE;
+		} while (la < lahi && PTX(la) != 0);
 	}
 
 	return 1;
 }
 
+/*
+ * Activate a page map.
+ */
 void
 pmap_install(pmap_t *pmap)
 {
@@ -438,21 +357,27 @@ pmap_install(pmap_t *pmap)
 	lcr3((uintptr_t) pmap);
 }
 
+void
+pmap_install_kern(void)
+{
+	pmap_install(pmap_kern);
+}
+
 /*
- * Chech whether virtual address from va to (va+size) are present in the
+ * Chech whether virtual address from la to (la+size) are present in the
  * virtual address space pmap.
  *
  * @param pmap
- * @param va
+ * @param la
  * @param size
  *
  * @return TRUE, if all address are in the pmap; otherwise, FALSE.
  */
 bool
-pmap_checkrange(pmap_t *pmap, uintptr_t va, size_t size)
+pmap_checkrange(pmap_t *pmap, uintptr_t la, size_t size)
 {
 	pte_t pte;
-	uintptr_t addr = ROUNDDOWN(va, PAGESIZE);
+	uintptr_t addr = ROUNDDOWN(la, PAGESIZE);
 	ssize_t remain_size = size;
 
 	pte = pmap_lookup(pmap, addr);
@@ -462,7 +387,7 @@ pmap_checkrange(pmap_t *pmap, uintptr_t va, size_t size)
 	}
 
 	addr += PAGESIZE;
-	remain_size -= PAGESIZE - (va - addr);
+	remain_size -= PAGESIZE - (la - addr);
 
 	while (remain_size > 0) {
 		pte = pmap_lookup(pmap, addr);
@@ -478,34 +403,23 @@ pmap_checkrange(pmap_t *pmap, uintptr_t va, size_t size)
 	return TRUE;
 }
 
-/*
- * Copy data between two virtual address spaces.
- *
- * @param d_pmap the destination pmap
- * @param d_va the destination virtual address
- * @param s_pmap the source pmap
- * @param s_va the source vritual address
- * @size numbers of bytes to copy
- *
- * @return the actual number of bytes copied
- */
 size_t
-pmap_copy(pmap_t *d_pmap, uintptr_t d_va,
-	  pmap_t *s_pmap, uintptr_t s_va, size_t size)
+pmap_copy(pmap_t *d_pmap, uintptr_t d_la,
+	  pmap_t *s_pmap, uintptr_t s_la, size_t size)
 {
 	/* KERN_DEBUG("Copy %d bytes from 0x%08x:0x%08x to 0x%08x:0x%08x\n", */
-	/* 	   size, s_pmap, s_va, d_pmap, d_va); */
+	/* 	   size, s_pmap, s_la, d_pmap, d_la); */
 
 	size_t copied_bytes = 0;
-	uintptr_t d_cur_va = d_va, s_cur_va = s_va;
+	uintptr_t d_cur_la = d_la, s_cur_la = s_la;
 	uintptr_t d_cur_pa, s_cur_pa;
 
 	if (size == 0 ||
-	    d_cur_va + size <= d_cur_va || s_cur_va + size <= s_cur_va)
+	    d_cur_la + size <= d_cur_la || s_cur_la + size <= s_cur_la)
 		return 0;
 
-	d_cur_pa = pmap_la2pa(d_pmap, d_cur_va);
-	s_cur_pa = pmap_la2pa(s_pmap, s_cur_va);
+	d_cur_pa = pmap_la2pa(d_pmap, d_cur_la);
+	s_cur_pa = pmap_la2pa(s_pmap, s_cur_la);
 
 	do {
 		/* KERN_DEBUG("  copy from 0x%08x to 0x%08x\n", */
@@ -515,52 +429,47 @@ pmap_copy(pmap_t *d_pmap, uintptr_t d_va,
 
 		d_cur_pa++;
 		s_cur_pa++;
-		d_cur_va++;
-		s_cur_va++;
+		d_cur_la++;
+		s_cur_la++;
 		copied_bytes++;
 
 		if (copied_bytes == size)
 			break;
 
-		if (d_cur_va == ROUNDDOWN(d_cur_va, PAGESIZE))
-			d_cur_pa = pmap_la2pa(d_pmap, d_cur_va);
-		if (s_cur_va == ROUNDDOWN(s_cur_va, PAGESIZE))
-			s_cur_pa = pmap_la2pa(s_pmap, s_cur_va);
+		if (d_cur_la == ROUNDDOWN(d_cur_la, PAGESIZE))
+			d_cur_pa = pmap_la2pa(d_pmap, d_cur_la);
+		if (s_cur_la == ROUNDDOWN(s_cur_la, PAGESIZE))
+			s_cur_pa = pmap_la2pa(s_pmap, s_cur_la);
 	} while (copied_bytes < size);
 
 	return copied_bytes;
 }
 
-/*
- * Set the value of address in the virtual address space.
- *
- * @param pmap
- * @param va the virtual address
- * @param c all bytes from va to (va+size) will be set to this character
- * @param size the number of bytes to be set
- *
- * @return the actual number of bytes set
- */
 size_t
-pmap_memset(pmap_t *pmap, uintptr_t va, char c, size_t size)
+pmap_memset(pmap_t *pmap, uintptr_t la, char c, size_t size)
 {
-	if (pmap_checkrange(pmap, va, size) == FALSE)
-		return 0;
+	KERN_ASSERT(pmap != NULL);
 
-	size_t bytes = 0;
-	uintptr_t cur_va = va;
+	size_t set_bytes = 0;
+	uintptr_t d_la = la, d_pa;
 
-	while (bytes < size) {
-		uintptr_t cur_pa =
-			PGADDR(pmap_lookup(pmap, va)) + PGOFF(cur_va);
+	d_pa = pmap_la2pa(pmap, d_la);
 
-		*(char *) cur_pa = c;
+	do {
+		*(char *) d_pa = c;
 
-		cur_va++;
-		bytes++;
-	}
+		d_la++;
+		d_pa++;
+		set_bytes++;
 
-	return bytes;
+		if (set_bytes == size)
+			break;
+
+		if (d_la == ROUNDDOWN(d_la, PAGESIZE))
+			d_pa = pmap_la2pa(pmap, d_la);
+	} while (set_bytes < size);
+
+	return set_bytes;
 }
 
 uintptr_t

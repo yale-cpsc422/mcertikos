@@ -1,29 +1,16 @@
 /*
+ * A virtual device is hosted in a process and running in the userspace.
  *
- *                      vdev_notify_irq           +-----------+
- *              +-------------------------------  |  Virtual  |
- *              |   +-------------------------->  |    PIC    |
- *              |   |        vdev_get_irq         +-----------+
- *              V   |        vdev_read_irq              ^
- *    +-------------------+                             | vdev_raise_irq
- *    |                   |                             | vdev_lower_irq
- *    |                   |                             |
- *    |  Virtual Machine  |   vdev_ioport_write   +-----------+
- *    |                   |   vdev_ioport_read    o           |
- *    |                   |  ------------------>  o           |
- *    +-------------------+                       |  Virtual  |
- *              |                                 |    DEV    |
- *              |      vdev_notify_sync           |           |
- *              +------------------------------>  |           |
- *                                                +-----------+
- *                                                      |
- *                                                      | vdev_sync_ioport_read
- *                                                      |
- *                                                      V
- *                                                +-----------+
- *                                                |  Physical |
- *                                                |    DEV    |
- *                                                +-----------+
+ * CertiKOS controls and communicates with a virtual device through two
+ * channels:
+ * - A sync channel is a bidirection channel between CertiKOS to the virtual
+ *   device. CertiKOS sends a sync request to a virtual device when it thinks
+ *   the virtual device should synchronize its status with the physical device.
+ *   A virtual device sends a ready message to CertiKOS when it's ready to work.
+ * - A request channel is a bidirection channel between CertiKOS and the virtual
+ *   device. CertiKOS sends the requests which reques to read/write the
+ *   registers/memory/... of a virtual device. A virtual device can respond to a
+ *   read request by sending back the data.
  */
 
 #ifndef _SYS_VIRT_VMM_DEV_H_
@@ -33,10 +20,11 @@
 
 #include <sys/proc.h>
 #include <sys/types.h>
-
 #include <sys/virt/vmm.h>
 
 #include <machine/pmap.h>
+
+struct vm;
 
 /*
  * Initialize the virtual device structures of a virtual machine.
@@ -217,12 +205,28 @@ int vdev_sync_complete(struct vm *vm, vid_t vid);
  *
  * @return 0 if successful; otherwise, return a non-zero value.
  */
-int vdev_device_ready(struct vm *vm, vid_t vid);
+int vdev_send_device_ready(struct vm *vm, vid_t vid);
 
 /*
  * Get the process of a virtual device.
+ *
+ * @param vm  the virtual machine to which the virtual device connects
+ * @param vid the ID of the virtual device
+ *
+ * @return the process which is responsible for the virtual device; or NULL, if
+ *         there's no such virtual device connecting to the virtual machine
  */
 struct proc *vdev_get_dev(struct vm *vm, vid_t vid);
+
+/*
+ * Wait until the virtual machine has received DEVICE_RDY from all its virtual
+ * devices.
+ *
+ * @param vm the virtual machine to which the virtual device is connected
+ *
+ * @return 0 if no errors; otherwise, return a non-zero value.
+ */
+int vdev_wait_all_devices_ready(struct vm *vm);
 
 #else /* !_KERN_ */
 
@@ -233,30 +237,12 @@ typedef int vid_t;
 #endif /* _KERN_ */
 
 enum vdev_msg_magic {
-	RAISE_IRQ_REQ = 0xabcd0001,
-	LOWER_IRQ_REQ,
-	TRIGGER_IRQ_REQ,
-	READ_IOPORT_REQ,
+	READ_IOPORT_REQ = 0xabcd0001,
 	WRITE_IOPORT_REQ,
 	RETURN_IOPORT,
 	DEVIDE_READY,
 	DEV_SYNC_REQ,
-	DEV_SYNC_COMPLETE
-};
-
-struct raise_irq_req {
-	uint32_t	magic;
-	uint8_t		irq;
-};
-
-struct lower_irq_req {
-	uint32_t	magic;
-	uint8_t		irq;
-};
-
-struct trigger_irq_req {
-	uint32_t	magic;
-	uint8_t		irq;
+	MAX_VDEV_MSG_MAGIC
 };
 
 struct read_ioport_req {
@@ -289,24 +275,15 @@ struct dev_sync_req {
 	vid_t		vid;
 };
 
-struct dev_sync_complete {
-	uint32_t	magic;
-	vid_t		vid;
-};
-
 typedef union {
-	struct raise_irq_req	__req0;
-	struct lower_irq_req	__req1;
-	struct trigger_irq_req	__req2;
-	struct read_ioport_req	__req3;
-	struct write_ioport_req	__req4;
-	struct dev_sync_req	__req5;
+	struct read_ioport_req	__req0;
+	struct write_ioport_req	__req1;
+	struct dev_sync_req	__req2;
 } dev_req_t;
 
 typedef union {
 	struct return_ioport	__ack0;
 	struct device_rdy	__ack1;
-	struct dev_sync_complete __ack2;
 } dev_ack_t;
 
 #endif /* !_SYS_VIRT_VMM_IODEV_H_ */

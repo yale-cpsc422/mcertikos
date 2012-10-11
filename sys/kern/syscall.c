@@ -19,7 +19,7 @@
 
 #ifdef DEBUG_SYSCALL
 
-static char *syscall_name[256] =
+static char *syscall_name[MAX_SYSCALL_NR] =
 	{
 		[SYS_puts]		= "sys_puts",
 		[SYS_getc]		= "sys_getc",
@@ -43,13 +43,36 @@ static char *syscall_name[256] =
 		[SYS_set_irq]		= "sys_set_irq",
 		[SYS_guest_read]	= "sys_guest_read",
 		[SYS_guest_write]	= "sys_guest_write",
-		[SYS_sync_done]		= "sys_sync_done",
-		[SYS_dev_ready]		= "sys_device_ready",
+		[SYS_send_ready]	= "sys_send_ready",
 		[SYS_guest_rdtsc]	= "sys_guest_rdtsc",
 		[SYS_guest_tsc_freq]	= "sys_guest_tsc_freq",
 		[SYS_guest_mem_size]	= "sys_guest_mem_size",
 		[SYS_recv_req]		= "sys_recv_req",
-		[SYS_disk_op]		= "sys_disk_op",
+		[SYS_guest_disk_op]	= "sys_guest_disk_op",
+		[SYS_guest_disk_cap]	= "sys_guest_disk_cap",
+	};
+
+static char *errno_name[MAX_ERROR_NR] =
+	{
+		[E_SUCC]		= "E_SUCC",
+		[E_MEM]			= "E_MEM",
+		[E_INVAL_CALLNR]	= "E_INVAL_CALLNR",
+		[E_INVAL_CPU]		= "E_INVAL_CPU",
+		[E_INVAL_SID]		= "E_INVAL_SID",
+		[E_INVAL_ADDR]		= "E_INVAL_ADDR",
+		[E_INVAL_PID]		= "E_INVAL_PID",
+		[E_INVAL_VMID]		= "E_INVAL_VMID",
+		[E_INVAL_VID]		= "E_INVAL_VID",
+		[E_INVAL_IRQ]		= "E_INVAL_IRQ",
+		[E_INVAL_MODE]		= "E_INVAL_MODE",
+		[E_ATTACH]		= "E_ATTACH",
+		[E_DETACH]		= "E_DETACH",
+		[E_IOPORT]		= "E_IOPORT",
+		[E_PIC]			= "E_PIC",
+		[E_DEV_SYNC]		= "E_DEV_SYNC",
+		[E_DEV_RDY]		= "E_DEV_RDY",
+		[E_RECV]		= "E_RECV",
+		[E_DISK_OP]		= "E_DISK_OP",
 	};
 
 #define SYSCALL_DEBUG(fmt, ...)				\
@@ -64,12 +87,15 @@ static char *syscall_name[256] =
 	do {								\
 		KERN_DEBUG("%s(nr %d, CPU%d, PID%d) "fmt,		\
 			   (0 <= nr && nr < MAX_SYSCALL_NR) ?		\
-			   syscall_name[nr] : "null",			\
+			   syscall_name[nr] : "unknown",		\
 			   nr,						\
 			   pcpu_cpu_idx(pcpu_cur()),			\
 			   proc_cur()->pid,				\
 			   ##__VA_ARGS__);				\
 	} while (0)
+
+#define ERRNO_STR(errno)						\
+	((errno) >= MAX_ERROR_NR ? "unknown" : errno_name[(errno)])
 
 #else
 
@@ -83,65 +109,55 @@ static char *syscall_name[256] =
 
 #endif
 
+extern uint8_t _binary___obj_user_vdev_i8042_i8042_start[],
+	_binary___obj_user_vdev_i8254_i8254_start[],
+	_binary___obj_user_vdev_nvram_nvram_start[],
+	_binary___obj_user_vdev_virtio_virtio_start[];
+
+#define ELF_8042	((uintptr_t) _binary___obj_user_vdev_i8042_i8042_start)
+#define ELF_8254	((uintptr_t) _binary___obj_user_vdev_i8254_i8254_start)
+#define ELF_NVRAM	((uintptr_t) _binary___obj_user_vdev_nvram_nvram_start)
+#define ELF_VIRTIO	((uintptr_t) _binary___obj_user_vdev_virtio_virtio_start)
+
+static uintptr_t vdev_elf_addr[MAX_VDEV] =
+	{
+		[VDEV_8042]	= ELF_8042,
+		[VDEV_8254]	= ELF_8254,
+		[VDEV_NVRAM]	= ELF_NVRAM,
+		[VDEV_VIRTIO]	= ELF_VIRTIO,
+	};
+
 /*
- * Transfer data between the user linear address space to the kernel physical
+ * Transfer data between the kernel linear address space and the user linear
  * address space.
  *
- * @param pa   the physical address where the data is transfered to/from
- * @param pmap
- * @param la   the linear address where the data is transfered from/to
+ * @param ka   the start linear address of the kernel linear address space
+ * @param (pmap, la)
+ *             the start linear address of the user linear address space
  * @param size how many bytes is transfered
  *
  * @return the number of bytes that are actually transfered
  */
 static size_t
-rw_user(uintptr_t pa, pmap_t *pmap, uintptr_t la, size_t size, int write)
+rw_user(uintptr_t ka, pmap_t *pmap, uintptr_t la, size_t size, int write)
 {
-	KERN_ASSERT(pa + size <= VM_USERLO);
+	KERN_ASSERT(ka + size <= VM_USERLO);
 	KERN_ASSERT(pmap != NULL);
-
-	uintptr_t from, to, from_pa, to_pa;
-	size_t remaining, copied;
 
 	if (la < VM_USERLO || VM_USERLO - size > la)
 		return 0;
 
-	remaining = size;
-	from = write ? pa : la;
-	from_pa = write ? from : pmap_la2pa(pmap, from);
-	to = write ? la : pa;
-	to_pa = write ? pmap_la2pa(pmap, to) : to;
-
-	while (remaining) {
-		copied = MIN(remaining,
-			     write ?
-			     PAGESIZE - (to - ROUNDDOWN(to, PAGESIZE)) :
-			     PAGESIZE - (from - ROUNDDOWN(from, PAGESIZE)));
-		memcpy((void *) to_pa, (void *) from_pa, copied);
-
-		from += copied;
-		from_pa += copied;
-		to += copied;
-		to_pa += copied;
-		remaining -= copied;
-
-		if (remaining == 0)
-			break;
-
-		if (write && ROUNDDOWN(to, PAGESIZE) == to)
-			to_pa = pmap_la2pa(pmap, la);
-		else if (write == 0 && ROUNDDOWN(from, PAGESIZE) == from)
-			from_pa = pmap_la2pa(pmap, from);
-	}
-
-	return size;
+	if (write)
+		return pmap_copy(pmap, la, pmap_kern, ka, size);
+	else
+		return pmap_copy(pmap_kern, ka, pmap, la, size);
 }
 
-#define copy_from_user(pa, pmap, la, size)	\
-	rw_user((pa), (pmap), (la), (size), 0)
+#define copy_from_user(ka, pmap, la, size)	\
+	rw_user((ka), (pmap), (la), (size), 0)
 
-#define copy_to_user(pmap, la, pa, size)	\
-	rw_user((pa), (pmap), (la), (size), 1)
+#define copy_to_user(pmap, la, ka, size)	\
+	rw_user((ka), (pmap), (la), (size), 1)
 
 static int
 sys_puts(uintptr_t str_la)
@@ -172,37 +188,25 @@ sys_getc(uintptr_t buf_la)
 }
 
 static int
-sys_spawn(uintptr_t user_proc_la, uintptr_t pid_la)
+sys_spawn(uint32_t cpu_idx, uintptr_t binary_la, uintptr_t pid_la)
 {
-	struct proc *p, *new_proc;
-	struct user_proc info;
+	struct proc *p, *new_p;
 
-	if (user_proc_la < VM_USERLO || user_proc_la >= VM_USERHI ||
+	if (binary_la < VM_USERLO || binary_la >= VM_USERHI ||
 	    pid_la < VM_USERLO || pid_la >= VM_USERHI)
 		return E_INVAL_ADDR;
 
-	p = proc_cur();
-
-	if (copy_from_user((uintptr_t) &info, p->pmap,
-			   user_proc_la, sizeof(struct user_proc)) == NULL)
-		return E_MEM;
-
-	if (info.cpu_idx >= pcpu_ncpu())
+	if (cpu_idx >= pcpu_ncpu())
 		return E_INVAL_CPU;
 
-	if (info.sid != p->session->sid)
-		return E_INVAL_SID;
+	p = proc_cur();
+	new_p = proc_spawn(&pcpu[cpu_idx], binary_la, p->session);
 
-	if (info.exe_bin < VM_USERLO || info.exe_bin >= VM_USERHI)
-		return E_INVAL_ADDR;
-
-	new_proc = proc_spawn(&pcpu[info.cpu_idx], info.exe_bin, p->session);
-
-	if (new_proc == NULL)
+	if (new_p == NULL)
 		return E_INVAL_PID;
 
 	if (copy_to_user(p->pmap, pid_la,
-			 (uintptr_t) &new_proc->pid, sizeof(pid_t)) == NULL)
+			 (uintptr_t) &new_p->pid, sizeof(pid_t)) == NULL)
 		return E_MEM;
 
 	return E_SUCC;
@@ -222,6 +226,7 @@ sys_getpid(uintptr_t pid_la)
 		return E_INVAL_ADDR;
 
 	struct proc *p = proc_cur();
+	KERN_ASSERT(p != NULL);
 
 	if (copy_to_user(p->pmap, pid_la,
 			 (uintptr_t) &p->pid, sizeof(pid_t)) == NULL)
@@ -259,16 +264,22 @@ sys_session(int type, uintptr_t sid_la)
 
 	old_s = p->session;
 
+	sched_lock(p->cpu);
+
 	if (session_remove_proc(old_s, p)) {
 		session_free(s);
+		sched_unlock(p->cpu);
 		return E_INVAL_SID;
 	}
 
 	if (session_add_proc(s, p)) {
 		session_free(s);
 		session_add_proc(old_s, p);
+		sched_unlock(p->cpu);
 		return E_INVAL_SID;
 	}
+
+	sched_unlock(p->cpu);
 
 	if (copy_to_user(p->pmap, sid_la,
 			 (uintptr_t) &s->sid, sizeof(int)) == NULL)
@@ -315,6 +326,9 @@ sys_new_vm(uintptr_t vmid_la)
 			 (uintptr_t) &p->vm->vmid, sizeof(vmid_t)) == NULL)
 		return E_MEM;
 
+	p->vm->proc = p;
+	s->vm = p->vm;
+
 	return E_SUCC;
 }
 
@@ -333,27 +347,38 @@ sys_run_vm(void)
 }
 
 static int
-sys_attach_vdev(pid_t pid, uintptr_t vid_la)
+sys_attach_vdev(uint32_t cpu_idx, int vdev_id, uintptr_t vid_la)
 {
-	struct proc *dev_p = proc_pid2proc(pid);
-	struct proc *vm_p = proc_cur();
+	struct proc *vm_p, *dev_p;
 	vid_t vid;
+	uintptr_t binary_la;
 
-	if (dev_p == NULL)
-		return E_INVAL_PID;
+	if (cpu_idx >= pcpu_ncpu())
+		return E_INVAL_CPU;
+
+	if (vdev_id >= MAX_VDEV)
+		return E_ATTACH;
+	binary_la = vdev_elf_addr[vdev_id];
+
+	vm_p = proc_cur();
 
 	if (vm_p->vm == NULL)
 		return E_INVAL_VMID;
 
-	if (dev_p->session != vm_p->vm->proc->session)
+	if (vm_p->session->type != SESSION_VM)
 		return E_INVAL_SID;
 
-	if ((vid = vdev_register_device(vm_p->vm, dev_p)) == -1)
-		return E_INVAL_VID;
+	if ((dev_p = proc_new(binary_la, vm_p->session)) == NULL)
+		return E_ATTACH;
 
-	if (copy_to_user(proc_cur()->pmap, vid_la,
+	if ((vid = vdev_register_device(vm_p->vm, dev_p)) == -1)
+		return E_ATTACH;
+
+	if (copy_to_user(vm_p->pmap, vid_la,
 			 (uintptr_t) &vid, sizeof(vid_t)) == NULL)
 		return E_MEM;
+
+	proc_run(&pcpu[cpu_idx], dev_p);
 
 	return E_SUCC;
 }
@@ -583,7 +608,7 @@ sys_guest_rw(uintptr_t gpa, uintptr_t la, size_t size, int write)
 #define sys_guest_write(gpa, la, size)	sys_guest_rw((gpa), (la), (size), 1)
 
 static int
-sys_sync_done(void)
+sys_send_ready(void)
 {
 	struct proc *dev_p = proc_cur();
 	struct vm *vm = dev_p->session->vm;
@@ -597,28 +622,7 @@ sys_sync_done(void)
 	if (dev_p->vid == -1)
 		return E_INVAL_VID;
 
-	if (vdev_sync_dev(vm, dev_p->vid))
-		return E_DEV_SYNC;
-
-	return E_SUCC;
-}
-
-static int
-sys_dev_ready(void)
-{
-	struct proc *dev_p = proc_cur();
-	struct vm *vm = dev_p->session->vm;
-
-	if (vm == NULL)
-		return E_INVAL_VMID;
-
-	if (dev_p->session != vm->proc->session)
-		return E_INVAL_SID;
-
-	if (dev_p->vid == -1)
-		return E_INVAL_VID;
-
-	if (vdev_device_ready(vm, dev_p->vid))
+	if (vdev_send_device_ready(vm, dev_p->vid))
 		return E_DEV_RDY;
 
 	return E_SUCC;
@@ -631,7 +635,8 @@ sys_recv_req(uintptr_t dev_req_la, bool blocking)
 	struct vm *vm = dev_p->session->vm;
 	vid_t vid;
 	struct channel *ch;
-	uint8_t recv_buf[CHANNEL_BUFFER_SIZE];
+
+	uint8_t *recv_buf;
 	size_t recv_size;
 
 	if (dev_req_la < VM_USERLO || dev_req_la >= VM_USERHI)
@@ -643,8 +648,10 @@ sys_recv_req(uintptr_t dev_req_la, bool blocking)
 	if ((vid = dev_p->vid) == -1)
 		return E_INVAL_VID;
 
-	if ((ch = vm->vdev.ch[vid]) == NULL)
+	if ((ch = vm->vdev.data_ch[vid]) == NULL)
 		return E_INVAL_VID;
+
+	recv_buf = dev_p->sys_buf;
 
 	if (proc_recv_msg(ch, dev_p, recv_buf, &recv_size, blocking) ||
 	    recv_size > sizeof(dev_req_t))
@@ -683,7 +690,7 @@ sys_guest_rdtsc(uintptr_t tsc_la)
 	guest_tsc = vmm_rdtsc(vm);
 
 	if (copy_to_user(dev_p->pmap, tsc_la,
-			 (uintptr_t) &guest_tsc, sizeof(uint64_t)))
+			 (uintptr_t) &guest_tsc, sizeof(uint64_t)) == NULL)
 		return E_MEM;
 
 	return E_SUCC;
@@ -712,7 +719,7 @@ sys_guest_tsc_freq(uintptr_t freq_la)
 	freq = VM_TSC_FREQ;
 
 	if (copy_to_user(dev_p->pmap, freq_la,
-			 (uintptr_t) &freq, sizeof(uint64_t)))
+			 (uintptr_t) &freq, sizeof(uint64_t)) == NULL)
 		return E_MEM;
 
 	return E_SUCC;
@@ -741,25 +748,21 @@ sys_guest_mem_size(uintptr_t size_la)
 	size = VM_PHY_MEMORY_SIZE;
 
 	if (copy_to_user(dev_p->pmap, size_la,
-			 (uintptr_t) &size, sizeof(uint64_t)))
+			 (uintptr_t) &size, sizeof(uint64_t)) == NULL)
 		return E_MEM;
 
 	return E_SUCC;
 }
 
 static int
-sys_disk_op(uintptr_t dop_la)
+sys_guest_disk_op(uintptr_t dop_la)
 {
 	struct proc *dev_p = proc_cur();
 	struct vm *vm = dev_p->session->vm;
 	pmap_t *pmap;
 
 	struct user_disk_op dop;
-	uint64_t sector;
-	uintptr_t la;
-	uint8_t buf[ATA_SECTOR_SIZE];
-	uint64_t nsectors;
-
+	uintptr_t hpa;
 	int rc = 0;
 
 	if (dop_la < VM_USERLO || dop_la + sizeof(dop) > VM_USERHI)
@@ -779,37 +782,16 @@ sys_disk_op(uintptr_t dop_la)
 	if (copy_from_user((uintptr_t) &dop, pmap, dop_la, sizeof(dop)) == NULL)
 		return E_MEM;
 
-	if (dop.la < VM_USERLO ||
-	    VM_USERHI - dop.la < dop.n * ATA_SECTOR_SIZE)
+	if (VM_PHY_MEMORY_SIZE - dop.gpa < dop.n * ATA_SECTOR_SIZE)
 		return E_INVAL_ADDR;
 
 	switch (dop.type) {
 	case DISK_READ:
 	case DISK_WRITE:
-		for (sector = dop.lba, la = dop.la;
-		     sector < dop.lba+dop.n; sector++, la += ATA_SECTOR_SIZE) {
-			if (dop.type == DISK_WRITE &&
-			    !copy_from_user((uintptr_t) buf,
-					    pmap, la, ATA_SECTOR_SIZE))
-				return E_MEM;
-
-			if ((rc = (dop.type == DISK_READ) ?
-			     ahci_disk_read(0, sector, 1, buf) :
-			     ahci_disk_write(0, sector, 1, buf)))
-				break;
-
-			if (dop.type == DISK_READ &&
-			    !copy_to_user(pmap, la,
-					  (uintptr_t) buf, ATA_SECTOR_SIZE))
-				return E_MEM;
-		}
-		break;
-
-	case DISK_CAP:
-		nsectors = ahci_disk_capacity(0);
-		if (!copy_to_user(pmap, dop.la,
-				  (uintptr_t) &nsectors, sizeof(nsectors)))
-			return E_MEM;
+		hpa = vmm_translate_gp2hp(vm, dop.gpa);
+		rc = (dop.type == DISK_READ) ?
+			ahci_disk_read(0, dop.lba, dop.n, (uint8_t *) hpa) :
+			ahci_disk_write(0, dop.lba, dop.n, (uint8_t *) hpa);
 		break;
 
 	default:
@@ -818,6 +800,45 @@ sys_disk_op(uintptr_t dop_la)
 
 	if (rc)
 		return E_DISK_OP;
+
+	return E_SUCC;
+}
+
+static int
+sys_guest_disk_cap(uintptr_t lo_la, uintptr_t hi_la)
+{
+	struct proc *dev_p = proc_cur();
+	struct vm *vm = dev_p->session->vm;
+	pmap_t *pmap;
+
+	uint64_t cap;
+	uint32_t cap_lo, cap_hi;
+
+	if (lo_la < VM_USERLO || lo_la + sizeof(uint32_t) > VM_USERHI ||
+	    hi_la < VM_USERLO || hi_la + sizeof(uint32_t) > VM_USERHI)
+		return E_INVAL_ADDR;
+
+	if (vm == NULL)
+		return E_INVAL_VMID;
+
+	if (dev_p->session != vm->proc->session)
+		return E_INVAL_SID;
+
+	if (dev_p->vid == -1)
+		return E_INVAL_VID;
+
+	cap = ahci_disk_capacity(0);
+	cap_lo = cap & 0xffffffff;
+	cap_hi = (cap >> 32) & 0xffffffff;
+
+	pmap = dev_p->pmap;
+
+	if ((copy_to_user(pmap, lo_la,
+			  (uintptr_t) &cap_lo, sizeof(uint32_t))) == NULL)
+		return E_MEM;
+	if ((copy_to_user(pmap, hi_la,
+			  (uintptr_t) &cap_hi, sizeof(uint32_t))) == NULL)
+		return E_MEM;
 
 	return E_SUCC;
 }
@@ -850,6 +871,8 @@ syscall_handler(struct context *ctx)
 	NR_DEBUG(nr, "from 0x%08x.\n", ctx->tf.eip);
 	/* ctx_dump(ctx); */
 
+	memzero(proc_cur()->sys_buf, PAGESIZE);
+
 	switch (nr) {
 	case SYS_puts:
 		/*
@@ -867,14 +890,15 @@ syscall_handler(struct context *ctx)
 		break;
 	case SYS_spawn:
 		/*
-		 * Create a new process. An object of type struct user_proc must
-		 * be provided by the caller to indicate the basic configuration
-		 * of the process.
-		 * a[0]: the linear address where the user_proc object is
-		 * a[1]: the linear address where the process id will be
+		 * Create and run a new process.
+		 * a[0]: the CPU index on which the new process is going to run
+		 * a[1]: the linear address where the binary code is
+		 * a[2]: the linear address where the process id will be
 		 *       returned to
 		 */
-		errno = sys_spawn((uintptr_t) a[0], (uintptr_t) a[1]);
+		errno = sys_spawn((uint32_t) a[0],
+				  (uintptr_t) a[1],
+				  (uintptr_t) a[2]);
 		break;
 	case SYS_yield:
 		/*
@@ -937,11 +961,15 @@ syscall_handler(struct context *ctx)
 		 * Attach a process as a virtual device to the virtual machine
 		 * in the session of the caller. A virtual device id will be
 		 * be allocated for the virtual device.
-		 * a[0]: the process id
-		 * a[1]: the linear address where the virtual device id is
+		 * a[0]: the CPU index on which the new virtual device is going
+		 *       to run
+		 * a[1]: the linear address of the binary code
+		 * a[2]: the linear address where the virtual device id will be
 		 *       returned to
 		 */
-		errno = sys_attach_vdev((pid_t) a[0], (uintptr_t) a[1]);
+		errno = sys_attach_vdev((uint32_t) a[0],
+					(int) a[1],
+					(uintptr_t) a[2]);
 		break;
 	case SYS_detach_vdev:
 		/*
@@ -983,29 +1011,6 @@ syscall_handler(struct context *ctx)
 		 */
 		errno = sys_detach_irq((uint8_t) a[0]);
 		break;
-#if 0
-	case SYS_guest_in:
-		/*
-		 * Read a guest I/O port. The information of the I/O port
-		 * must be provided in an object of type struct user_ioport
-		 * by the caller.
-		 * a[0]: the linear address where the user_ioport object is
-		 * a[1]: the linear address where the read value will be
-		 *       returned to
-		 */
-		errno = sys_guest_in((uintptr_t) a[0], (uintptr_t) a[1]);
-		break;
-	case SYS_guest_out:
-		/*
-		 * Write a guest I/O port. The information of the I/O port
-		 * must be provided in an object of type struct user_ioport by
-		 * the caller.
-		 * a[0]: the linear address where the user_ioport object is
-		 * a[1]: the value which will be written to the I/O port
-		 */
-		errno = sys_guest_out((uintptr_t) a[0], (uint32_t) a[1]);
-		break;
-#endif
 	case SYS_host_in:
 		/*
 		 * Read a host I/O port. The information of the I/O port
@@ -1069,19 +1074,12 @@ syscall_handler(struct context *ctx)
 		errno = sys_guest_write
 			((uintptr_t) a[0], (uintptr_t) a[1], (size_t) a[2]);
 		break;
-	case SYS_sync_done:
-		/*
-		 * Notify the virtual machine the caller has synchronized the
-		 * virtual device with the physical device.
-		 */
-		errno = sys_sync_done();
-		break;
-	case SYS_dev_ready:
+	case SYS_send_ready:
 		/*
 		 * Notify the virtual machine the caller has initialized a
 		 * virtual device.
 		 */
-		errno = sys_dev_ready();
+		errno = sys_send_ready();
 		break;
 	case SYS_recv_req:
 		/*
@@ -1117,13 +1115,23 @@ syscall_handler(struct context *ctx)
 		 */
 		errno = sys_guest_mem_size((uintptr_t) a[0]);
 		break;
-	case SYS_disk_op:
+	case SYS_guest_disk_op:
 		/*
 		 * Disk operation. The operation information must be provided in
 		 * an object of type struct user_disk_op by the caller.
 		 * a[0]: the linear address where the user_disk_op is
 		 */
-		errno = sys_disk_op((uintptr_t) a[0]);
+		errno = sys_guest_disk_op((uintptr_t) a[0]);
+		break;
+	case SYS_guest_disk_cap:
+		/*
+		 * Get the capability of the disk for the virtual machine.
+		 * a[0]: the linear address where the lowest 32 bits of the
+		 *       capability are returned to
+		 * a[1]: the linear address where the highest 32 bits of the
+		 *       capability are returned to
+		 */
+		errno = sys_guest_disk_cap((uintptr_t) a[0], (uintptr_t) a[1]);
 		break;
 
 	default:
@@ -1134,7 +1142,7 @@ syscall_handler(struct context *ctx)
 	ctx_set_retval(ctx, errno);
 
 	if (errno)
-		NR_DEBUG(nr, "failed (errno=%d).\n", errno);
+		NR_DEBUG(nr, "failed (error %s).\n", ERRNO_STR(errno));
 	else
 		NR_DEBUG(nr, "done.\n");
 	return errno;

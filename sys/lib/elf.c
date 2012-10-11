@@ -19,7 +19,7 @@ elf_load(uintptr_t exe, pmap_t *pmap)
 	elfhdr *eh;
 	proghdr *ph, *eph;
 
-	cur_pmap = (pmap_t *) rcr3();
+	cur_pmap = pmap_kern;
 
 	if (cur_pmap == pmap)
 		return;
@@ -50,7 +50,8 @@ elf_load(uintptr_t exe, pmap_t *pmap)
 		for(; va < eva; va += PAGESIZE, fa += PAGESIZE) {
 			if (pmap_reserve(pmap, va, perm) == NULL)
 				KERN_PANIC("Cannot allocate memory for "
-					   "ELF file.\n");
+					   "ELF file (va 0x%08x, perm %x).\n",
+					   va, perm);
 
 			if (va < ROUNDDOWN(zva, PAGESIZE)) {
 				/* copy a complete page */

@@ -32,19 +32,18 @@ sys_getc(void)
 }
 
 static gcc_inline pid_t
-sys_spawn(uint32_t cpu_idx, sid_t sid, uintptr_t exe)
+sys_spawn(uint32_t cpu_idx, uintptr_t exe)
 {
 	int errno;
 	pid_t pid;
-	struct user_proc proc =
-		{ .cpu_idx = cpu_idx, .sid = sid, .exe_bin = exe };
 
 	asm volatile("int %1"
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
 		       "a" (SYS_spawn),
-		       "b" (&proc),
-		       "c" (&pid)
+		       "b" (cpu_idx),
+		       "c" (exe),
+		       "d" (&pid)
 		     : "cc", "memory");
 
 	return errno ? -1 : pid;
@@ -155,7 +154,7 @@ sys_runvm(void)
 }
 
 static gcc_inline vid_t
-sys_attach_vdev(pid_t pid)
+sys_attach_vdev(uint32_t cpu_idx, int exe)
 {
 	int errno;
 	vid_t vid;
@@ -164,7 +163,9 @@ sys_attach_vdev(pid_t pid)
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
 		       "a" (SYS_attach_vdev),
-		       "b" (&vid)
+		       "b" (cpu_idx),
+		       "c" (exe),
+		       "d" (&vid)
 		     : "cc", "memory");
 
 	return errno ? -1 : vid;
@@ -349,28 +350,14 @@ sys_copy_to_guest(uintptr_t dest_gpa, void *src, size_t sz)
 }
 
 static gcc_inline int
-sys_sync_done(void)
+sys_send_ready(void)
 {
 	int errno;
 
 	asm volatile("int %1"
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
-		       "a" (SYS_sync_done)
-		     : "cc", "memory");
-
-	return errno;
-}
-
-static gcc_inline int
-sys_dev_ready(void)
-{
-	int errno;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_dev_ready)
+		       "a" (SYS_send_ready)
 		     : "cc", "memory");
 
 	return errno;
@@ -441,18 +428,16 @@ sys_recv_req(dev_req_t *req, bool blocking)
 }
 
 static gcc_inline int
-sys_disk_read(uint64_t lba, size_t nsectors, void *buf)
+sys_guest_disk_read(uintptr_t gpa, uint64_t lba, size_t nsectors)
 {
 	int errno;
-	struct user_disk_op dop = { .type = DISK_READ,
-				    .lba  = lba,
-				    .n    = nsectors,
-				    .la   = (uintptr_t) buf };
+	struct user_disk_op dop =
+		{ .type = DISK_READ, .lba = lba, .n = nsectors, .gpa = gpa };
 
 	asm volatile("int %1"
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
-		       "a" (SYS_disk_op),
+		       "a" (SYS_guest_disk_op),
 		       "b" (&dop)
 		     : "cc", "memory");
 
@@ -460,18 +445,16 @@ sys_disk_read(uint64_t lba, size_t nsectors, void *buf)
 }
 
 static gcc_inline int
-sys_disk_write(uint64_t lba, size_t nsectors, void *buf)
+sys_guest_disk_write(uint64_t lba, uintptr_t gpa, size_t nsectors)
 {
 	int errno;
-	struct user_disk_op dop = { .type = DISK_WRITE,
-				    .lba  = lba,
-				    .n    = nsectors,
-				    .la   = (uintptr_t) buf };
+	struct user_disk_op dop =
+		{ .type = DISK_WRITE, .lba = lba, .n = nsectors, .gpa = gpa};
 
 	asm volatile("int %1"
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
-		       "a" (SYS_disk_op),
+		       "a" (SYS_guest_disk_op),
 		       "b" (&dop)
 		     : "cc", "memory");
 
@@ -479,21 +462,20 @@ sys_disk_write(uint64_t lba, size_t nsectors, void *buf)
 }
 
 static gcc_inline uint64_t
-sys_disk_capacity(void)
+sys_guest_disk_capacity(void)
 {
 	int errno;
-	uint64_t size;
-	struct user_disk_op dop = { .type = DISK_CAP,
-				    .la   = (uintptr_t) &size };
+	uint32_t size_lo, size_hi;
 
 	asm volatile("int %1"
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
-		       "a" (SYS_disk_op),
-		       "b" (&dop)
+		       "a" (SYS_guest_disk_cap),
+		       "b" (&size_lo),
+		       "c" (&size_hi)
 		     : "cc", "memory");
 
-	return errno ? 0 : size;
+	return errno ? 0 : ((uint64_t) size_hi << 32 | size_lo);
 }
 
 #endif /* !_USER_SYSCALL_H_ */

@@ -18,10 +18,11 @@
 #define VM_TSC_ADJUST		0
 
 #define VM_PIT_FREQ		(1193182)
-#define VM_TSC_FREQ		(1800 * 1000 * 1000 / VM_TIME_SCALE)
+#define VM_TSC_FREQ		(800 * 1000 * 1000 / VM_TIME_SCALE)
 
 #define MAX_IOPORT		0x10000
 #define MAX_IRQ			0x100
+#define MAX_VID			32
 
 typedef enum {
 	HYPERCALL_BITAND,
@@ -39,6 +40,11 @@ typedef enum {
 	EXIT_FOR_OTHERS		/* exit for other reasons */
 } exit_reason_t;;
 
+typedef enum {
+	VM_STOP,
+	VM_RUNNING
+} vm_stat_t;
+
 struct vm;
 
 typedef void (*iodev_read_func_t)(struct vm *,
@@ -47,28 +53,21 @@ typedef void (*iodev_write_func_t)(struct vm *,
 				   void *iodev, uint32_t port, void *data);
 typedef void (*intr_handle_t)(struct vm *);
 
-#define MAX_VID		32
-
 struct vdev {
-	/* all virtual devices */
-	struct proc	*dev[MAX_VID];
-	struct channel	*ch[MAX_VID];
+	struct vpic	vpic;
+	spinlock_t	vpic_lk;
+
 	spinlock_t	dev_lk;
 
-	/* virtual devices for I/O ports */
+	struct proc	*dev[MAX_VID];
+	struct channel	*data_ch[MAX_VID], *sync_ch[MAX_VID];
 	struct {
-		vid_t		vid;
 		spinlock_t	ioport_lk;
-	} ioport[MAX_IOPORT];
-
-	/* virtual PIC (in kernel) */
-	struct vpic	vpic;
-	spinlock_t	pic_lk;
-
-	/* virtual devices for IRQs */
-	struct {
 		vid_t		vid;
+	} ioport[MAX_IOPORT];
+	struct {
 		spinlock_t	irq_lk;
+		vid_t		vid;
 	} irq[MAX_IRQ];
 };
 
@@ -82,15 +81,16 @@ struct vm {
 	exit_reason_t	exit_reason;
 	volatile bool	handled;	/* Is the exit event handled? */
 
-	struct vdev	vdev;		/* interface of the virtual devices */
+	struct vdev	vdev;		/* virtual devices attached to the VM */
 
 	uint64_t	tsc;		/* guest TSC */
 
 #ifdef TRACE_TOTAL_TIME
-	uint64_t 		start_tsc, total_tsc;
+	uint64_t	start_tsc, total_tsc;
 #endif
 
-	bool			used;
+	vm_stat_t	state;
+	bool		used;
 };
 
 typedef enum vmm_sig {

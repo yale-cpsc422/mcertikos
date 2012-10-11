@@ -29,10 +29,6 @@ enum __syscall_nr {
 			   calling process */
 	SYS_session,	/* create a new session */
 	SYS_getsid,	/* get the session id of the calling process */
-	SYS_disk_op,	/* operate on the disk drive */
-	SYS_disk_read,	/* read the disk drive */
-	SYS_disk_write,	/* write the disk drive */
-	SYS_disk_capacity, /* get the size of the disk drive */
 	/*
 	 * system calls to setup the virtual machines
 	 */
@@ -56,13 +52,13 @@ enum __syscall_nr {
 	SYS_set_irq,	/* set an IRQ line of the guest interrupt controller */
 	SYS_guest_read,	/* transfer data from the guest physical address space */
 	SYS_guest_write,/* transfer data to the guest physical address space */
-	SYS_sync_done,	/* notify the virtual machine of the completion of the
-			   virtual device synchronization */
-	SYS_dev_ready,	/* notify the virtual machine a virtual device is ready */
+	SYS_send_ready,	/* notify the virtual machine a virtual device is ready */
 	SYS_guest_rdtsc,/* read the guest TSC */
 	SYS_guest_tsc_freq, /* get the guest TSC frequency */
 	SYS_guest_mem_size, /* get the size in bytes of the guest physical
 			       memory */
+	SYS_guest_disk_op,  /* operate on the disk drive */
+	SYS_guest_disk_cap, /* get the size of the disk drive */
 	MAX_SYSCALL_NR	/* XXX: always put it at the end of __syscall_nr */
 };
 
@@ -89,13 +85,16 @@ enum __error_nr {
 	E_DEV_SYNC,	/* fail to send DEV_SYNC_COMPLETE */
 	E_DEV_RDY,	/* fail to send DEVIDE_READY */
 	E_RECV,		/* fail to receive */
-	E_DISK_OP	/* disk operation failure */
+	E_DISK_OP,	/* disk operation failure */
+	MAX_ERROR_NR	/* XXX: always pu it at the end of __error_nr */
 };
 
-struct user_proc {
-	uint32_t	cpu_idx;
-	sid_t		sid;
-	uintptr_t	exe_bin;
+enum __dev {
+	VDEV_8042,
+	VDEV_8254,
+	VDEV_NVRAM,
+	VDEV_VIRTIO,
+	MAX_VDEV
 };
 
 struct user_ioport {
@@ -104,20 +103,10 @@ struct user_ioport {
 };
 
 struct user_disk_op {
-	/*
-	 * Operation types:
-	 * - DISK_READ:  read n sectors from the disk logical block address lba
-	 *               to the memory address indicated by the liear address la
-	 * - DISK_WRITE: write n sectors from the memory address indicated by
-	 *               the linear address la to the disk logical block address
-	 *               lba.
-	 * - DISK_CAP:   get the capability (in sectors) of the host disk drive,
-	 *               and save it to the linear address la.
-	 */
-	enum { DISK_READ, DISK_WRITE, DISK_CAP } type;
+	enum { DISK_READ, DISK_WRITE } type;
 	uint64_t	lba;
 	uint64_t	n;
-	uintptr_t	la;
+	uintptr_t	gpa;
 };
 
 #endif /* !_SYS_SYSCALL_H_ */

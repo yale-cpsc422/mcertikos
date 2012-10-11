@@ -14,7 +14,7 @@
 
 static bool vmm_inited = FALSE;
 
-static struct vm vm_pool[4];
+static struct vm vm_pool[MAX_VMID];
 static spinlock_t vm_pool_lock;
 
 static enum {SVM, VMX} virt_type;
@@ -76,7 +76,7 @@ vmm_init(void)
 	}
 
 	for (i = 0; i < MAX_VMID; i++) {
-		memset(&vm_pool[i], 0x0, sizeof(struct vm));
+		memzero(&vm_pool[i], sizeof(struct vm));
 		vm_pool[i].used = FALSE;
 		vm_pool[i].vmid = i;
 	}
@@ -107,7 +107,7 @@ vmm_init_vm(void)
 	struct vm *vm = NULL;
 
 	spinlock_acquire(&vm_pool_lock);
-	for (i = 0; i < 4; i++)
+	for (i = 0; i < MAX_VMID; i++)
 		if (vm_pool[i].used == FALSE) {
 			vm = &vm_pool[i];
 			vm->used = TRUE;
@@ -115,7 +115,7 @@ vmm_init_vm(void)
 		}
 	spinlock_release(&vm_pool_lock);
 
-	if (i == 4)
+	if (i == MAX_VMID)
 		return NULL;
 
 	memset(vm, 0x0, sizeof(struct vm));
@@ -125,10 +125,8 @@ vmm_init_vm(void)
 
 	vm->tsc = 0;
 
-	/* initialize the virtual PIC */
-	vpic_init(&vm->vdev.vpic, vm);
-
 	/* initialize the virtual device interface  */
+	KERN_DEBUG("Initialize virtual device interface.\n");
 	vdev_init(vm);
 
 #ifdef TRACE_TOTAL_TIME
@@ -136,12 +134,13 @@ vmm_init_vm(void)
 #endif
 
 	/* machine-dependent VM initialization */
+	KERN_DEBUG("Architecture-dependent initialization.\n");
 	if (vmm_ops->vm_init(vm) != 0) {
 		KERN_DEBUG("Machine-dependent VM initialization failed.\n");
 		return NULL;
 	}
 
-	pcpu[0].vm = vm;
+	vm->state = VM_STOP;
 
 	return vm;
 }
@@ -155,6 +154,16 @@ vmm_run_vm(struct vm *vm)
 #if defined (TRACE_IOIO) || defined (TRACE_TOTAL_TIME)
 	static uint64_t last_dump = 0;
 #endif
+
+	pcpu_cur()->vm = vm;
+
+	if (vdev_wait_all_devices_ready(vm)) {
+		KERN_DEBUG("Cannot start all virtual devices.\n");
+		return 1;
+	}
+	vm->state = VM_RUNNING;
+
+	KERN_DEBUG("Start running VM ... \n");
 
 	while (1) {
 		KERN_ASSERT(vm->handled == TRUE);
@@ -192,7 +201,6 @@ vmm_run_vm(struct vm *vm)
 #endif
 		}
 #endif
-
 	}
 
 	return 0;
@@ -201,25 +209,7 @@ vmm_run_vm(struct vm *vm)
 struct vm *
 vmm_cur_vm(void)
 {
-	struct vm *vm;
-
-	if (vmm_inited == FALSE)
-		return NULL;
-
-#if 0
-	struct proc *p;
-
-	if ((p = proc_cur()) == NULL)
-		return NULL;
-
-	proc_lock(p);
-	vm = p->vm;
-	proc_unlock(p);
-#else
-	vm = pcpu[0].vm;
-#endif
-
-	return vm;
+	return pcpu_cur()->vm;
 }
 
 void
@@ -262,7 +252,7 @@ vmm_set_irq(struct vm *vm, uint8_t irq, int mode)
 
 	struct vdev *vdev = &vm->vdev;
 
-	spinlock_acquire(&vdev->pic_lk);
+	spinlock_acquire(&vdev->vpic_lk);
 	if (mode == 0) {
 		vpic_set_irq(&vdev->vpic, irq, 1);
 	} else if (mode == 1) {
@@ -271,5 +261,5 @@ vmm_set_irq(struct vm *vm, uint8_t irq, int mode)
 		vpic_set_irq(&vdev->vpic, irq, 0);
 		vpic_set_irq(&vdev->vpic, irq, 1);
 	}
-	spinlock_release(&vdev->pic_lk);
+	spinlock_release(&vdev->vpic_lk);
 }

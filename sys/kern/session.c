@@ -86,6 +86,7 @@ session_new(int type)
 	memzero(new_s, sizeof(struct session));
 
 	new_s->sid = sid;
+	new_s->type = type;
 	new_s->vm = NULL;
 	LIST_INIT(&new_s->proc_list);
 	spinlock_init(&new_s->lk);
@@ -118,7 +119,8 @@ int
 session_add_proc(struct session *s, struct proc *p)
 {
 	KERN_ASSERT(s != NULL && p != NULL);
-	KERN_ASSERT(spinlock_holding(&p->cpu->sched.lk) == TRUE);
+	KERN_ASSERT(p->cpu == NULL ||
+		    spinlock_holding(&p->cpu->sched.lk) == TRUE);
 
 	struct proc *q;
 
