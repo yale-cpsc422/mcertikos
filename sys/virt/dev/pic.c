@@ -39,14 +39,12 @@
 
 #ifdef DEBUG_VPIC
 
-#define i8259_debug(chip, fmt...)				\
-	do {							\
-		struct i8259 *_chip = (struct i8259 *) (chip);	\
-		if (_chip->master == TRUE)			\
-			KERN_DEBUG("Master 8259: ");		\
-		else						\
-			KERN_DEBUG("Slave 8259: ");		\
-		dprintf(fmt);					\
+#define i8259_debug(chip, fmt, ...)					\
+	do {								\
+		struct i8259 *_chip = (struct i8259 *) (chip);		\
+		KERN_DEBUG("%s 8259: "fmt,				\
+			   (_chip->master == TRUE) ? "Master" : "Slave", \
+			   ##__VA_ARGS__);				\
 	} while (0)
 
 #else
