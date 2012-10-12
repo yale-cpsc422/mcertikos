@@ -298,8 +298,6 @@ timer_intr_handler(struct context *ctx)
 int
 kbd_intr_handler(struct context *ctx)
 {
-	intr_eoi();
-
 	struct vm *vm = vmm_cur_vm();
 	int for_guest = (vm != NULL && vm->state == VM_RUNNING);
 
@@ -312,6 +310,8 @@ kbd_intr_handler(struct context *ctx)
 			   proc_cur()->pid, pcpu_cpu_idx(pcpu_cur()));
 		kbd_intr();
 	}
+
+	intr_eoi();
 
 	return 0;
 }
