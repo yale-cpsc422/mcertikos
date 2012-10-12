@@ -170,11 +170,15 @@ vkbd_update_irq(struct vkbd *vkbd)
 
 	/* the interrupts from i8042 are edge-triggered */
 
-	if (irq_kbd_level)
+	if (irq_kbd_level) {
+		vkbd_debug("Trigger IRQ_KBD.\n");
 		sys_set_irq(IRQ_KBD, 2);
+	}
 
-	if (irq_mouse_level)
+	if (irq_mouse_level) {
+		vkbd_debug("Trigger IRQ_MOUSE.\n");
 		sys_set_irq(IRQ_MOUSE, 2);
+	}
 }
 
 static void
@@ -491,7 +495,7 @@ main(int argc, char **argv)
 	sys_send_ready();
 
 	while (1) {
-		if (sys_recv_req(&req, TRUE))
+		if (sys_recv_req(&req, FALSE))
 			continue;
 
 		switch (((uint32_t *) &req)[0]) {
@@ -514,7 +518,9 @@ main(int argc, char **argv)
 			continue;
 
 		case DEV_SYNC_REQ:
+			vkbd_debug("Start to synchronize virtual KBD.\n");
 			vkbd_sync_kbd(&vkbd);
+			vkbd_debug("Complete the synchronization of virtual KBD.\n");
 			continue;
 
 		default:
