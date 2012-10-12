@@ -207,10 +207,10 @@ endif
 
 # If set, enable debugging virtualized PIC
 ifneq "$(strip $(DEBUG_VPIC) $(DEBUG_ALL) $(DEBUG_VIRT))" ""
-USER_CFLAGS	+= -DDEBUG_VPIC
+KERN_CFLAGS	+= -DDEBUG_VPIC
 endif
 
 # If set, enable debugging virtualized PIC
 ifneq "$(strip $(DEBUG_VPIC_VERBOSE) $(DEBUG_ALL) $(DEBUG_VIRT))" ""
-USER_CFLAGS	+= -DDEBUG_VPIC_VERBOSE
+KERN_CFLAGS	+= -DDEBUG_VPIC_VERBOSE
 endif

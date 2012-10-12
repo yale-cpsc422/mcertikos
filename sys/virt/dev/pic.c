@@ -598,10 +598,12 @@ vpic_init(struct vpic *vpic, struct vm *vm)
 {
 	KERN_ASSERT(vpic != NULL);
 
+#ifdef DEBUG_VPIC
 	KERN_DEBUG("Master: %x, ISR@%x, IRR@%x, IMR@%x\n", &vpic->master,
 		   &vpic->master.isr, &vpic->master.irr, &vpic->master.imr);
 	KERN_DEBUG("Slave: %x, ISR@%x, IRR@%x, IMR@%x\n", &vpic->slave,
 		   &vpic->slave.isr, &vpic->slave.irr, &vpic->slave.imr);
+#endif
 
 	i8259_reset(&vpic->master);
 	vpic->master.master = TRUE;
@@ -614,6 +616,10 @@ int
 vpic_read_ioport(struct vpic *vpic, uint16_t port, uint8_t *data)
 {
 	KERN_ASSERT(vpic != NULL && data != NULL);
+
+#ifdef DEBUG_VPIC
+	KERN_DEBUG("Read i8259 port 0x%x.\n", port);
+#endif
 
 	if (port == IO_PIC1 || port == IO_PIC1+1 ||
 	    port == IO_PIC2 || port == IO_PIC2+1)
@@ -630,6 +636,10 @@ int
 vpic_write_ioport(struct vpic *vpic, uint16_t port, uint8_t data)
 {
 	KERN_ASSERT(vpic != NULL && data != NULL);
+
+#ifdef DEBUG_VPIC
+	KERN_DEBUG("Write i8259 port 0x%x, val 0x%x.\n", port, data);
+#endif
 
 	if (port == IO_PIC1 || port == IO_PIC2 ||
 	    port == IO_PIC1+1 || port == IO_PIC2+1)

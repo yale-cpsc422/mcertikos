@@ -186,7 +186,6 @@ svm_guest_intr_handler(struct vm *vm, uint8_t irq)
 #endif
 
 	vid_t vid = vm->vdev.irq[irq].vid;
-
 	/*
 	 * Try to notify the virtual device which occupies the interrupt. If no
 	 * virtual device is registered as the source of the interrupt, raise

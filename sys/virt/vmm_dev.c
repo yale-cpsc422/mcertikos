@@ -604,12 +604,8 @@ vdev_sync_dev(struct vm *vm, vid_t vid)
 	KERN_ASSERT(vm != NULL);
 	KERN_ASSERT(0 <= vid && vid < MAX_VID);
 
-	int rc = 0;
 	struct vdev *vdev = &vm->vdev;
 	struct channel *ch;
-
-	if (vm->proc->state != PROC_RUNNING)
-		return 0;
 
 	spinlock_acquire(&vdev->dev_lk);
 
@@ -622,7 +618,7 @@ vdev_sync_dev(struct vm *vm, vid_t vid)
 	if ((ch = vdev->sync_ch[vid]) == NULL) {
 		VDEV_DEBUG("No available channel.\n");
 		spinlock_release(&vdev->dev_lk);
-		return 1;
+		return 2;
 	}
 
 	VDEV_DEBUG("Synchronize virtual device %d.\n", vid);
@@ -635,12 +631,12 @@ vdev_sync_dev(struct vm *vm, vid_t vid)
 
 	struct dev_sync_req req = { .magic = DEV_SYNC_REQ, .vid = vid };
 	spinlock_acquire(&ch->lk);
-	rc = channel_send(ch, vm->proc, &req, sizeof(req));
+	channel_send(ch, vm->proc, &req, sizeof(req));
 	spinlock_release(&ch->lk);
 
 	spinlock_release(&vdev->dev_lk);
 
-	return rc;
+	return 0;
 }
 
 int
