@@ -10,6 +10,7 @@
 #include <sys/virt/vmm_dev.h>
 #include <sys/virt/dev/pic.h>
 
+#include <dev/pic.h>
 #include <dev/tsc.h>
 
 static bool vmm_inited = FALSE;
@@ -154,6 +155,13 @@ vmm_run_vm(struct vm *vm)
 #if defined (TRACE_IOIO) || defined (TRACE_TOTAL_TIME)
 	static uint64_t last_dump = 0;
 #endif
+
+	vmm_ops->vm_intercept_ioio(vm, IO_PIC1, SZ8, TRUE);
+	vmm_ops->vm_intercept_ioio(vm, IO_PIC2, SZ8, TRUE);
+	vmm_ops->vm_intercept_ioio(vm, IO_PIC1+1, SZ8, TRUE);
+	vmm_ops->vm_intercept_ioio(vm, IO_PIC2+1, SZ8, TRUE);
+	vmm_ops->vm_intercept_ioio(vm, IO_ELCR1, SZ8, TRUE);
+	vmm_ops->vm_intercept_ioio(vm, IO_ELCR2, SZ8, TRUE);
 
 	pcpu_cur()->vm = vm;
 

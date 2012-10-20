@@ -8,7 +8,7 @@
 
 #include <machine/trap.h>
 
-int syscall_handler(struct context *);
+int syscall_handler(struct context *, int guest);
 
 #endif /* _KERN_ */
 

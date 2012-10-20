@@ -606,7 +606,6 @@ vpic_init(struct vpic *vpic, struct vm *vm)
 	i8259_reset(&vpic->master);
 	vpic->master.master = TRUE;
 	i8259_reset(&vpic->slave);
-	vpic->slave.master = FALSE;
 	vpic->master.vpic = vpic->slave.vpic = vpic;
 }
 

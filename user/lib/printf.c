@@ -29,7 +29,7 @@ gets(char* buf, int size) {
 	char c=0;
 	char echo[2];
 	echo[1]=0;
-    while(num < (size-1)) {
+	while(num < (size-1)) {
 		c=0;
 		while ((c = getc()) == 0);
 		echo[0] = c;

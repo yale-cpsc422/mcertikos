@@ -208,9 +208,9 @@ set_intercept_ioio(struct vmcb *vmcb, uint32_t port, data_sz_t size, bool enable
 	KERN_ASSERT(vmcb != NULL);
 
 #ifdef DEBUG_GUEST_IOIO
-	if (enable == TRUE)
-		KERN_DEBUG("Enable intercepting I/O port %d, width %d bits.\n",
-			   port, 8 * (1 << size));
+	KERN_DEBUG("%s intercepting I/O port 0x%x, width %d bits.\n",
+		   (enable == TRUE) ? "Enable" : "Disable",
+		   port, 8 * (1 << size));
 #endif
 
 	uint32_t *iopm = (uint32_t *)(uintptr_t) vmcb->control.iopm_base_pa;

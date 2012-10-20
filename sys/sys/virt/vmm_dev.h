@@ -144,8 +144,8 @@ int vdev_set_irq(struct vm *vm, vid_t vid, uint8_t irq, int mode);
  * @return 0 if successful; otherwise, return a non-zero value.
  */
 int vdev_get_intout(struct vm *vm, int peep);
-#define vdev_peep_intout(vm)	vdev_get_intout((vm), 0)
-#define vdev_read_intout(vm)	vdev_get_intout((vm), 1)
+#define vdev_peep_intout(vm)	vdev_get_intout((vm), 1)
+#define vdev_read_intout(vm)	vdev_get_intout((vm), 0)
 
 /*
  * Notify the guest an interrupt comes.
@@ -228,6 +228,18 @@ struct proc *vdev_get_dev(struct vm *vm, vid_t vid);
  */
 int vdev_wait_all_devices_ready(struct vm *vm);
 
+/*
+ * Get a request to the virtual device.
+ *
+ * @param dev_p    the process running the virtual device
+ * @param req      where the content of the request will be stored
+ * @param size     where the size of the request will be stored
+ * @param blocking whether this's a blocking operation
+ *
+ * @return 0 if successful; otherwise, return a non-zero value
+ */
+int vdev_get_request(struct proc *dev_p, void *req, size_t *size, int blocking);
+
 #else /* !_KERN_ */
 
 #include <types.h>
@@ -240,7 +252,7 @@ enum vdev_msg_magic {
 	READ_IOPORT_REQ = 0xabcd0001,
 	WRITE_IOPORT_REQ,
 	RETURN_IOPORT,
-	DEVIDE_READY,
+	DEVICE_READY,
 	DEV_SYNC_REQ,
 	MAX_VDEV_MSG_MAGIC
 };

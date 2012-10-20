@@ -60,7 +60,7 @@ struct vdev {
 	spinlock_t	dev_lk;
 
 	struct proc	*dev[MAX_VID];
-	struct channel	*data_ch[MAX_VID], *sync_ch[MAX_VID];
+	struct channel	*ch[MAX_VID];
 	struct {
 		spinlock_t	ioport_lk;
 		vid_t		vid;

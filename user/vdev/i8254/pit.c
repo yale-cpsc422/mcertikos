@@ -886,7 +886,7 @@ main(int argc, char **argv)
 	sys_send_ready();
 
 	while (1) {
-		if (sys_recv_req(&req, FALSE))
+		if (sys_recv_req(&req, TRUE))
 			continue;
 
 		switch (((uint32_t *) &req)[0]) {

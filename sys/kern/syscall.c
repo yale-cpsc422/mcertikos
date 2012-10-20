@@ -632,37 +632,18 @@ static int
 sys_recv_req(uintptr_t dev_req_la, bool blocking)
 {
 	struct proc *dev_p = proc_cur();
-	struct vm *vm = dev_p->session->vm;
-	vid_t vid;
-	struct channel *data_ch, *sync_ch;
-
 	uint8_t *recv_buf;
 	size_t recv_size;
 
 	if (dev_req_la < VM_USERLO || dev_req_la >= VM_USERHI)
 		return E_MEM;
 
-	if (vm == NULL)
-		return E_INVAL_VMID;
-
-	if ((vid = dev_p->vid) == -1)
-		return E_INVAL_VID;
-
-	if ((data_ch = vm->vdev.data_ch[vid]) == NULL ||
-	    (sync_ch = vm->vdev.sync_ch[vid]) == NULL)
-		return E_INVAL_VID;
-
 	recv_buf = dev_p->sys_buf;
 
-	if (proc_recv_msg(sync_ch, dev_p, recv_buf, &recv_size, FALSE) == 0 &&
-	    recv_size == sizeof(struct dev_sync_req))
-		goto received_req;
-
-	if (proc_recv_msg(data_ch, dev_p, recv_buf, &recv_size, blocking) ||
+	if (vdev_get_request(dev_p, recv_buf, &recv_size, blocking) ||
 	    recv_size > sizeof(dev_req_t))
 		return E_RECV;
 
- received_req:
 	if (dev_req_la + recv_size > VM_USERHI)
 		return E_MEM;
 
@@ -865,9 +846,10 @@ sys_guest_disk_cap(uintptr_t lo_la, uintptr_t hi_la)
  * - Changes to other arguments maybe not returned to the caller.
  */
 int
-syscall_handler(struct context *ctx)
+syscall_handler(struct context *ctx, int guest)
 {
 	KERN_ASSERT(ctx != NULL);
+	KERN_ASSERT(!guest);
 
 	uint32_t nr = ctx_arg1(ctx);
 	uint32_t a[3] =

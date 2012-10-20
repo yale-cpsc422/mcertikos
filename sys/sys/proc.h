@@ -23,7 +23,7 @@
 #define PID_INV		((pid_t) -1)
 
 struct proc;
-typedef int (*trap_cb_t) (struct context *);
+typedef int (*trap_cb_t) (struct context *, int guest);
 
 /*
  *                              (3)
@@ -218,8 +218,8 @@ void proc_save(struct proc *p, tf_t *tf);
  * @return the pointer to the channel structure if successful; otherwise, return
  *         NULL.
  */
-struct channel *proc_create_channel(struct proc *p1, struct proc *p2,
-				    channel_type type);
+/* struct channel *proc_create_channel(struct proc *p1, struct proc *p2, */
+/* 				    channel_type type); */
 
 /*
  * Send a messags through a channel. If the channel is busy when proc_send_msg()
@@ -238,8 +238,8 @@ struct channel *proc_create_channel(struct proc *p1, struct proc *p2,
  *  return E_CHANNEL_ILL_SENDER, if the sending process is not allowed to send
  *         through the channel.
  */
-int proc_send_msg(struct channel *ch,
-		  struct proc *sender, void *msg, size_t size);
+/* int proc_send_msg(struct channel *ch, */
+/* 		  struct proc *sender, void *msg, size_t size); */
 
 /*
  * Receive a message through a channel. When parameter block is TRUE, the
@@ -260,8 +260,8 @@ int proc_send_msg(struct channel *ch,
  *  return E_CHANNEL_ILL_RECEIVER, if the receiving process is not allowed to
  *         receive from the channel.
  */
-int proc_recv_msg(struct channel *ch,
-		  struct proc *receiver, void *msg, size_t *size, bool block);
+/* int proc_recv_msg(struct channel *ch, */
+/* 		  struct proc *receiver, void *msg, size_t *size, bool block); */
 
 #endif /* _KERN_ */
 
