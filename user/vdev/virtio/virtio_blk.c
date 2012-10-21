@@ -543,6 +543,8 @@ virtio_blk_init(struct virtio_blk *blk, struct vpci_host *vpci_host)
 
 	blk->vring.queue_size = VIRTIO_BLK_QUEUE_SIZE;
 
+	sys_attach_irq(dev->pci_conf.intr_line);
+
 	smp_wmb();
 
 	return 0;
