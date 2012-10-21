@@ -191,11 +191,9 @@ svm_guest_intr_handler(struct vm *vm, uint8_t irq)
 	 * virtual device is registered as the source of the interrupt, raise
 	 * corresponding interrupt line of the virtual PIC.
 	 */
-	if (vdev_sync_dev(vm, vid)) {
-		if (vpic_is_ready(&vm->vdev.vpic) == TRUE) {
-			vdev_raise_irq(vm, vid, irq);
-			vdev_lower_irq(vm, vid, irq);
-		}
+	if (vdev_sync_dev(vm, vid) && vpic_is_ready(&vm->vdev.vpic) == TRUE) {
+		vdev_raise_irq(vm, vid, irq);
+		vdev_lower_irq(vm, vid, irq);
 	}
 
 	vm->handled = TRUE;

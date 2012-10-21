@@ -1236,22 +1236,26 @@ vmx_handle_ept_violation(struct vm *vm)
 		   (uintptr_t) vmcs_read32(VMCS_GUEST_LINEAR_ADDRESS));
 #endif
 
-	/* TODO: which exception/fault would happen? */
-	if (0xf0000000 <= fault_pa && fault_pa <= 0xffffffff) {
-		if ((pi = mem_pages_alloc_align(512, 9)) == NULL)
-			return 0;
-		memset(mem_pi2ptr(pi), 0, PAGESIZE * 512);
-
-		if (ept_add_mapping(vmx->pml4ept,
-				    ROUNDDOWN(fault_pa, PAGESIZE * 512),
-				    PAT_WRITE_BACK, mem_pi2phys(pi), TRUE))
-			KERN_PANIC("Cannot allocate memory for guest physical "
-				   "address 0x%08x.\n", fault_pa);
-
-		ept_invalidate_mappings((uintptr_t) vmx->pml4ept);
-	} else {
-		KERN_PANIC("Out of physical memory range: 0x%08x.\n", fault_pa);
+	if (!(0xf0000000 <= fault_pa && fault_pa <= 0xffffffff)) {
+		KERN_WARN("Out of physical memory range: 0x%08x.\n", fault_pa);
+		return FALSE;
 	}
+
+	if ((pi = mem_page_alloc()) == NULL) {
+		KERN_WARN("Cannot allocate physical memory for gpa 0x%08x.\n",
+			  fault_pa);
+		return FALSE;
+	}
+
+	memset(mem_pi2ptr(pi), 0, PAGESIZE);
+
+	if (ept_add_mapping(vmx->pml4ept,
+			    ROUNDDOWN(fault_pa, PAGESIZE),
+			    mem_pi2phys(pi), PAT_WRITE_BACK, FALSE))
+		KERN_PANIC("Cannot allocate memory for guest physical "
+			   "address 0x%08x.\n", fault_pa);
+
+	ept_invalidate_mappings((uintptr_t) vmx->pml4ept);
 
 	return TRUE;
 }
@@ -1481,7 +1485,7 @@ vmx_handle_extint(struct vm *vm, uint8_t irq)
 	 * virtual device is registered as the source of the interrupt, raise
 	 * corresponding interrupt line of the virtual PIC.
 	 */
-	if (vdev_sync_dev(vm, vid)) {
+	if (vdev_sync_dev(vm, vid) && vpic_is_ready(&vm->vdev.vpic) == TRUE) {
 		vdev_raise_irq(vm, vid, irq);
 		vdev_lower_irq(vm, vid, irq);
 	}
