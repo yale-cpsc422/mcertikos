@@ -732,6 +732,7 @@ vmx_init_vm(struct vm *vm)
 		return 1;
 	}
 	vmx->pml4ept = (uint64_t *) mem_pi2phys(ept_pi);
+	memzero(mem_pi2ptr(ept_pi), PAGESIZE);
 	KERN_DEBUG("EPT @ 0x%08x.\n", vmx->pml4ept);
 
 	if (ept_create_mappings(vmx->pml4ept, VM_PHY_MEMORY_SIZE)) {
