@@ -3,6 +3,7 @@
 #include <string.h>
 #include <syscall.h>
 #include <types.h>
+#include <vdev.h>
 #include <x86.h>
 
 #include "pci.h"
@@ -258,8 +259,8 @@ virtio_blk_conf_readl(void *dev, uint32_t port, void *data)
 static gcc_inline void
 unregister_register_read(uint16_t port, data_sz_t size)
 {
-	sys_detach_port(port, size);
-	sys_attach_port(port, size);
+	vdev_detach_ioport(port, size);
+	vdev_attach_ioport(port, size);
 }
 
 /*
@@ -331,13 +332,13 @@ virtio_blk_get_id(uintptr_t gpa, uint32_t len)
 	strncpy(id, VIRTIO_BLK_DEVICE_NAME, size);
 	id[size] = '\0';
 
-	return sys_copy_to_guest(gpa, id, size);
+	return vdev_copy_to_guest(gpa, id, size);
 }
 
 static gcc_inline int
 virtio_blk_set_status(uintptr_t gpa, uint8_t status)
 {
-	return sys_copy_to_guest(gpa, &status, sizeof(status));
+	return vdev_copy_to_guest(gpa, &status, sizeof(status));
 }
 
 static int
@@ -380,7 +381,7 @@ virtio_blk_handle_req(struct virtio_device *dev,
 	       req_desc.flags, req_desc.next);
 #endif
 
-	if (sys_copy_from_guest(&req, req_desc.addr, sizeof(req))) {
+	if (vdev_copy_from_guest(&req, req_desc.addr, sizeof(req))) {
 		virtio_blk_debug("Cannot get the request.\n");
 		return 1;
 	}
@@ -543,7 +544,7 @@ virtio_blk_init(struct virtio_blk *blk, struct vpci_host *vpci_host)
 
 	blk->vring.queue_size = VIRTIO_BLK_QUEUE_SIZE;
 
-	sys_attach_irq(dev->pci_conf.intr_line);
+	vdev_attach_irq(dev->pci_conf.intr_line);
 
 	smp_wmb();
 
@@ -642,27 +643,28 @@ main(int argc, char **argv)
 	struct virtio_blk blk;
 	struct virtio_device *device;
 
-	dev_req_t req;
-	struct read_ioport_req *read_req;
-	struct write_ioport_req *write_req;
+	vdev_req_t req;
+	struct vdev_ioport_info *read_req, *write_req;
 	uint16_t port;
 	data_sz_t width;
 	uint32_t data;
+
+	int chid = sys_getchid();
 
 	vpci_init(&vpci_host);
 	virtio_blk_init(&blk, &vpci_host);
 
 	device = &blk.common_header;
 
-	sys_send_ready();
+	vdev_ready(chid);
 
 	while (1) {
-		if (sys_recv_req(&req, TRUE))
+		if (!vdev_get_request(chid, &req, TRUE))
 			continue;
 
 		switch (((uint32_t *) &req)[0]) {
-		case READ_IOPORT_REQ:
-			read_req = (struct read_ioport_req *) &req;
+		case VDEV_READ_GUEST_IOPORT:
+			read_req = (struct vdev_ioport_info *) &req;
 			port = read_req->port;
 			width = read_req->width;
 			if (PCI_CONFIG_ADDR <= port && port < PCI_CONFIG_DATA+4)
@@ -674,11 +676,12 @@ main(int argc, char **argv)
 					(&blk, port, width, &data);
 			else
 				data = 0xffffffff;
-			sys_ret_in(port, read_req->width, data);
+			vdev_return_guest_ioport(chid,
+						 port, read_req->width, data);
 			continue;
 
-		case WRITE_IOPORT_REQ:
-			write_req = (struct write_ioport_req *) &req;
+		case VDEV_WRITE_GUEST_IOPORT:
+			write_req = (struct vdev_ioport_info *) &req;
 			port = write_req->port;
 			width = write_req->width;
 			data = write_req->val;

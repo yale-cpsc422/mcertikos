@@ -32,7 +32,7 @@ sys_getc(void)
 }
 
 static gcc_inline pid_t
-sys_spawn(uint32_t cpu_idx, uintptr_t exe)
+sys_create_proc(uintptr_t exe)
 {
 	int errno;
 	pid_t pid;
@@ -40,13 +40,28 @@ sys_spawn(uint32_t cpu_idx, uintptr_t exe)
 	asm volatile("int %1"
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
-		       "a" (SYS_spawn),
-		       "b" (cpu_idx),
-		       "c" (exe),
-		       "d" (&pid)
+		       "a" (SYS_create_proc),
+		       "b" (exe),
+		       "c" (&pid)
 		     : "cc", "memory");
 
 	return errno ? -1 : pid;
+}
+
+static gcc_inline int
+sys_run_proc(pid_t pid, uint32_t cpu_idx)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_run_proc),
+		       "b" (pid),
+		       "c" (cpu_idx)
+		     : "cc", "memory");
+
+	return errno;
 }
 
 static gcc_inline void
@@ -88,6 +103,55 @@ sys_getppid(void)
 		     : "cc", "memory");
 
 	return errno ? -1 : pid;
+}
+
+static gcc_inline int
+sys_getchid(void)
+{
+	int errno, chid;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_getchid),
+		       "b" (&chid)
+		     : "cc", "memory");
+
+	return errno ? -1 : chid;
+}
+
+static gcc_inline int
+sys_send(int chid, void *buf, size_t size)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_send),
+		       "b" (chid),
+		       "c" (buf),
+		       "d" (size)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_recv(int chid, void *buf, size_t *size)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_recv),
+		       "b" (chid),
+		       "c" (buf),
+		       "d" (size)
+		     : "cc", "memory");
+
+	return errno;
 }
 
 static gcc_inline sid_t
@@ -154,7 +218,7 @@ sys_runvm(void)
 }
 
 static gcc_inline vid_t
-sys_attach_vdev(uint32_t cpu_idx, int exe)
+sys_attach_vdev(pid_t pid)
 {
 	int errno;
 	vid_t vid;
@@ -163,9 +227,8 @@ sys_attach_vdev(uint32_t cpu_idx, int exe)
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
 		       "a" (SYS_attach_vdev),
-		       "b" (cpu_idx),
-		       "c" (exe),
-		       "d" (&vid)
+		       "b" (pid),
+		       "c" (&vid)
 		     : "cc", "memory");
 
 	return errno ? -1 : vid;
@@ -179,7 +242,8 @@ sys_detach_vdev(vid_t vid)
 	asm volatile("int %1"
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
-		       "a" (SYS_detach_vdev)
+		       "a" (SYS_detach_vdev),
+		       "b" (vid)
 		     : "cc", "memory");
 
 	return errno;
@@ -252,7 +316,7 @@ sys_host_in(uint16_t port, data_sz_t width)
 {
 	int errno;
 	uint32_t val;
-	struct user_ioport portinfo = { .port = port, .width = width };
+	struct ioport_info portinfo = { .port = port, .width = width };
 
 	asm volatile("int %1"
 		     : "=a" (errno)
@@ -269,29 +333,12 @@ static gcc_inline int
 sys_host_out(uint16_t port, data_sz_t width, uint32_t val)
 {
 	int errno;
-	struct user_ioport portinfo = { .port = port, .width = width };
+	struct ioport_info portinfo = { .port = port, .width = width };
 
 	asm volatile("int %1"
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
 		       "a" (SYS_host_out),
-		       "b" (&portinfo),
-		       "c" (val)
-		     : "cc", "memory");
-
-	return errno;
-}
-
-static gcc_inline int
-sys_ret_in(uint16_t port, data_sz_t width, uint32_t val)
-{
-	int errno;
-	struct user_ioport portinfo = { .port = port, .width = width };
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_ret_in),
 		       "b" (&portinfo),
 		       "c" (val)
 		     : "cc", "memory");
@@ -349,22 +396,8 @@ sys_copy_to_guest(uintptr_t dest_gpa, void *src, size_t sz)
 	return errno;
 }
 
-static gcc_inline int
-sys_send_ready(void)
-{
-	int errno;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_send_ready)
-		     : "cc", "memory");
-
-	return errno;
-}
-
 static gcc_inline uint64_t
-sys_guest_rdtsc(void)
+sys_guest_tsc(void)
 {
 	int errno;
 	uint64_t tsc;
@@ -372,7 +405,7 @@ sys_guest_rdtsc(void)
 	asm volatile("int %1"
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
-		       "a" (SYS_guest_rdtsc),
+		       "a" (SYS_guest_tsc),
 		       "b" (&tsc)
 		     : "cc", "memory");
 
@@ -380,7 +413,7 @@ sys_guest_rdtsc(void)
 }
 
 static gcc_inline uint64_t
-sys_guest_tsc_freq(void)
+sys_guest_cpufreq(void)
 {
 	int errno;
 	uint64_t freq;
@@ -388,7 +421,7 @@ sys_guest_tsc_freq(void)
 	asm volatile("int %1"
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
-		       "a" (SYS_guest_tsc_freq),
+		       "a" (SYS_guest_cpufreq),
 		       "b" (&freq)
 		     : "cc", "memory");
 
@@ -396,7 +429,7 @@ sys_guest_tsc_freq(void)
 }
 
 static gcc_inline size_t
-sys_guest_mem_size(void)
+sys_guest_memsize(void)
 {
 	int errno;
 	size_t size;
@@ -404,27 +437,11 @@ sys_guest_mem_size(void)
 	asm volatile("int %1"
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
-		       "a" (SYS_guest_mem_size),
+		       "a" (SYS_guest_memsize),
 		       "b" (&size)
 		     : "cc", "memory");
 
 	return errno ? 0 : size;
-}
-
-static gcc_inline int
-sys_recv_req(dev_req_t *req, bool blocking)
-{
-	int errno;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_recv_req),
-		       "b" (req),
-		       "c" (blocking)
-		     : "cc", "memory");
-
-	return errno;
 }
 
 static gcc_inline int

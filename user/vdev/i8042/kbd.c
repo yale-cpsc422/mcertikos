@@ -31,6 +31,7 @@
 #include <string.h>
 #include <syscall.h>
 #include <types.h>
+#include <vdev.h>
 
 #include "kbd.h"
 #include "ps2.h"
@@ -172,12 +173,12 @@ vkbd_update_irq(struct vkbd *vkbd)
 
 	if (irq_kbd_level) {
 		vkbd_debug("Trigger IRQ_KBD.\n");
-		sys_set_irq(IRQ_KBD, 2);
+		vdev_set_irq(IRQ_KBD, 2);
 	}
 
 	if (irq_mouse_level) {
 		vkbd_debug("Trigger IRQ_MOUSE.\n");
-		sys_set_irq(IRQ_MOUSE, 2);
+		vdev_set_irq(IRQ_MOUSE, 2);
 	}
 }
 
@@ -462,10 +463,10 @@ vkbd_sync_kbd(struct vkbd *vkbd)
 
 	/* synchronize the state of physical i8042 to virtualized i8042 */
 	while (1) {
-		status = sys_host_in(KBSTATP, SZ8);
+		status = vdev_read_host_ioport(KBSTATP, SZ8);
 		if (!(status & KBD_STAT_OBF))
 			break;
-		c = sys_host_in(KBDATAP, SZ8);
+		c = vdev_read_host_ioport(KBDATAP, SZ8);
 		vkbd_queue(vkbd, c, 0);
 	}
 }
@@ -475,10 +476,13 @@ main(int argc, char **argv)
 {
 	struct vkbd vkbd;
 
-	dev_req_t req;
-	struct read_ioport_req *read_req;
-	struct write_ioport_req *write_req;
+	int chid;
+
+	vdev_req_t req;
+	struct vdev_ioport_info *read_req, *write_req;
 	uint32_t data;
+
+	chid = sys_getchid();
 
 	memset(&vkbd, 0, sizeof(vkbd));
 	vkbd.status = KBD_STAT_CMD | KBD_STAT_UNLOCKED;
@@ -487,37 +491,38 @@ main(int argc, char **argv)
 	ps2_kbd_init(&vkbd.kbd, vkbd_update_kbd_irq, &vkbd);
 	ps2_mouse_init(&vkbd.mouse, vkbd_update_aux_irq, &vkbd);
 
-	sys_attach_port(KBSTATP, SZ8);
-	sys_attach_port(KBDATAP, SZ8);
-	sys_attach_irq(IRQ_KBD);
-	sys_attach_irq(IRQ_MOUSE);
+	vdev_attach_ioport(KBSTATP, SZ8);
+	vdev_attach_ioport(KBDATAP, SZ8);
+	vdev_attach_irq(IRQ_KBD);
+	vdev_attach_irq(IRQ_MOUSE);
 
-	sys_send_ready();
+	vdev_ready(chid);
 
 	while (1) {
-		if (sys_recv_req(&req, TRUE))
+		if (!vdev_get_request(chid, &req, TRUE))
 			continue;
 
 		switch (((uint32_t *) &req)[0]) {
-		case READ_IOPORT_REQ:
-			read_req = (struct read_ioport_req *) &req;
+		case VDEV_READ_GUEST_IOPORT:
+			read_req = (struct vdev_ioport_info *) &req;
 			if (unlikely(read_req->port != KBSTATP &&
 				     read_req->port != KBDATAP))
 				data = 0xffffffff;
 			else
 				_vkbd_ioport_read(&vkbd, read_req->port, &data);
-			sys_ret_in(read_req->port, read_req->width, data);
+			vdev_return_guest_ioport(chid, read_req->port,
+						 read_req->width, data);
 			continue;
 
-		case WRITE_IOPORT_REQ:
-			write_req = (struct write_ioport_req *) &req;
+		case VDEV_WRITE_GUEST_IOPORT:
+			write_req = (struct vdev_ioport_info *) &req;
 			if (write_req->port == KBCMDP ||
 			    write_req->port == KBDATAP)
 				_vkbd_ioport_write(&vkbd, write_req->port,
 						   write_req->val);
 			continue;
 
-		case DEV_SYNC_REQ:
+		case VDEV_DEVICE_SYNC:
 			vkbd_debug("Start to synchronize virtual KBD.\n");
 			vkbd_sync_kbd(&vkbd);
 			vkbd_debug("Complete the synchronization of virtual KBD.\n");

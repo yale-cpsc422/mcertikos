@@ -105,6 +105,7 @@ struct proc {
 	struct proc	*parent;    /* (s) the parent process of this process */
 	TAILQ_HEAD(children, proc) child_list;
 	TAILQ_ENTRY(proc)          child_entry;
+	struct channel	*parent_ch; /* (s) the channel to the parent process */
 
 	/*
 	 * A process can be in either of the free processes list, the ready
@@ -218,8 +219,8 @@ void proc_save(struct proc *p, tf_t *tf);
  * @return the pointer to the channel structure if successful; otherwise, return
  *         NULL.
  */
-/* struct channel *proc_create_channel(struct proc *p1, struct proc *p2, */
-/* 				    channel_type type); */
+struct channel *proc_create_channel(struct proc *p1, struct proc *p2,
+				    channel_type type);
 
 /*
  * Send a messags through a channel. If the channel is busy when proc_send_msg()
@@ -238,8 +239,8 @@ void proc_save(struct proc *p, tf_t *tf);
  *  return E_CHANNEL_ILL_SENDER, if the sending process is not allowed to send
  *         through the channel.
  */
-/* int proc_send_msg(struct channel *ch, */
-/* 		  struct proc *sender, void *msg, size_t size); */
+int proc_send_msg(struct channel *ch,
+		  struct proc *sender, void *msg, size_t size);
 
 /*
  * Receive a message through a channel. When parameter block is TRUE, the
@@ -260,8 +261,8 @@ void proc_save(struct proc *p, tf_t *tf);
  *  return E_CHANNEL_ILL_RECEIVER, if the receiving process is not allowed to
  *         receive from the channel.
  */
-/* int proc_recv_msg(struct channel *ch, */
-/* 		  struct proc *receiver, void *msg, size_t *size, bool block); */
+int proc_recv_msg(struct channel *ch,
+		  struct proc *receiver, void *msg, size_t *size, bool block);
 
 #endif /* _KERN_ */
 

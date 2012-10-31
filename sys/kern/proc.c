@@ -325,6 +325,21 @@ proc_new(uintptr_t binary, struct session *s)
 	/* set session */
 	session_add_proc(s, p);
 
+	/* create the channel between the new process and its parent */
+	p->parent_ch = proc_create_channel(p->parent, p, CHANNEL_TYPE_BIDIRECT);
+	if (p->parent_ch == NULL) {
+		PROC_DEBUG("Cannot create a channel between process %d and "
+			   "its parent process %d.\n", p->pid, p->parent->pid);
+		session_remove_proc(s, p);
+		if (p->parent != p)
+			TAILQ_REMOVE(&p->parent->child_list, p, child_entry);
+		mem_page_free(buf_pi);
+		pmap_free(p->pmap);
+		kstack_free(p->kstack);
+		proc_free(p);
+		return NULL;
+	}
+
 	PROC_DEBUG("Process %d is created in session %d.\n",
 		   p->pid, p->session->sid);
 

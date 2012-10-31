@@ -22,13 +22,18 @@ enum __syscall_nr {
 	 */
 	SYS_puts = 0,	/* output a string to the screen */
 	SYS_getc,	/* input a character */
-	SYS_spawn,	/* create a new process */
+	SYS_create_proc,/* create a new process */
+	SYS_run_proc,	/* run a process */
 	SYS_yield,	/* yield to another process */
 	SYS_getpid,	/* get the process id of the calling process */
 	SYS_getppid,	/* get the process id of the parent process of the
 			   calling process */
+	SYS_getchid,	/* get the identity of the channel to communicate with
+			   the parent process */
 	SYS_session,	/* create a new session */
 	SYS_getsid,	/* get the session id of the calling process */
+	SYS_send,	/* send a message */
+	SYS_recv,	/* recv a message */
 	/*
 	 * system calls to setup the virtual machines
 	 */
@@ -43,20 +48,16 @@ enum __syscall_nr {
 	/*
 	 * system calls for virtual devices to commnicate with virtual machines
 	 */
-	SYS_recv_req,	/* receive requests from the virtual machine */
-	SYS_guest_in,	/* read from a guest I/O port */
-	SYS_guest_out,	/* write to a guest I/O port */
 	SYS_ret_in,	/* return the value on an guest I/O port */
 	SYS_host_in,	/* read from a host I/O port */
 	SYS_host_out,	/* write to a host I/O port */
 	SYS_set_irq,	/* set an IRQ line of the guest interrupt controller */
 	SYS_guest_read,	/* transfer data from the guest physical address space */
 	SYS_guest_write,/* transfer data to the guest physical address space */
-	SYS_send_ready,	/* notify the virtual machine a virtual device is ready */
-	SYS_guest_rdtsc,/* read the guest TSC */
-	SYS_guest_tsc_freq, /* get the guest TSC frequency */
-	SYS_guest_mem_size, /* get the size in bytes of the guest physical
-			       memory */
+	SYS_guest_tsc,	/* read the guest TSC */
+	SYS_guest_cpufreq, /* get the guest TSC frequency */
+	SYS_guest_memsize, /* get the size in bytes of the guest physical
+			      memory */
 	SYS_guest_disk_op,  /* operate on the disk drive */
 	SYS_guest_disk_cap, /* get the size of the disk drive */
 	MAX_SYSCALL_NR	/* XXX: always put it at the end of __syscall_nr */
@@ -74,6 +75,7 @@ enum __error_nr {
 	E_INVAL_SID,	/* invalid session ID */
 	E_INVAL_ADDR,	/* invalid address */
 	E_INVAL_PID,	/* invalid process ID */
+	E_INVAL_CHID,	/* invalid channel ID */
 	E_INVAL_VMID,	/* invalid virtual machine */
 	E_INVAL_VID,	/* invalid virtual device ID */
 	E_INVAL_IRQ,	/* invalid IRQ */
@@ -84,6 +86,7 @@ enum __error_nr {
 	E_PIC,		/* errors related to the virtual PIC */
 	E_DEV_SYNC,	/* fail to send DEV_SYNC_COMPLETE */
 	E_DEV_RDY,	/* fail to send DEVIDE_READY */
+	E_SEND,		/* fail to send */
 	E_RECV,		/* fail to receive */
 	E_DISK_OP,	/* disk operation failure */
 	MAX_ERROR_NR	/* XXX: always pu it at the end of __error_nr */
@@ -97,7 +100,7 @@ enum __dev {
 	MAX_VDEV
 };
 
-struct user_ioport {
+struct ioport_info {
 	uint16_t	port;
 	data_sz_t	width;
 };

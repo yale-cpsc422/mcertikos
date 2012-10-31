@@ -2,6 +2,7 @@
 #include <string.h>
 #include <syscall.h>
 #include <types.h>
+#include <vdev.h>
 
 #include "bios.h"
 #include "nvram.h"
@@ -44,12 +45,12 @@ vnvram_ioport_read(struct vnvram *nvram, uint16_t port)
 	ASSERT(port == CMOS_INDEX_PORT || port == CMOS_DATA_PORT);
 
 	if (port == CMOS_INDEX_PORT)
-		return sys_host_in(port, SZ8);
+		return vdev_read_host_ioport(port, SZ8);
 
 	if (nvram->data_valid == TRUE)
 		return nvram->data;
 	else
-		return sys_host_in(port, SZ8);
+		return vdev_read_host_ioport(port, SZ8);
 }
 
 static void
@@ -60,7 +61,7 @@ vnvram_ioport_write(struct vnvram *nvram, uint16_t port, uint8_t data)
 
 	if (port == CMOS_DATA_PORT) {
 		VNVRAM_DEBUG("Write host I/O port 0x%x.\n", port);
-		sys_host_out(port, SZ8, data);
+		vdev_write_host_ioport(port, SZ8, data);
 		return;
 	}
 
@@ -105,7 +106,7 @@ vnvram_ioport_write(struct vnvram *nvram, uint16_t port, uint8_t data)
 	default:
 		VNVRAM_DEBUG("Passthrough index 0x%x.\n", idx);
 		nvram->data_valid = FALSE;
-		sys_host_out(port, SZ8, data);
+		vdev_write_host_ioport(port, SZ8, data);
 		return;
 	}
 
@@ -139,23 +140,24 @@ main(int argc, char **argv)
 {
 	struct vnvram vnvram;
 
-	dev_req_t req;
-	struct read_ioport_req *read_req;
-	struct write_ioport_req *write_req;
+	vdev_req_t req;
+	struct vdev_ioport_info *read_req, *write_req;
 	uint32_t data;
 
 	uint64_t phy_mem_size;
+
+	int chid = sys_getchid();
 
 	memset(&vnvram, 0, sizeof(struct vnvram));
 
 	vnvram.data_valid = FALSE;
 
-	sys_attach_port(CMOS_DATA_PORT, SZ8);
-	sys_attach_port(CMOS_INDEX_PORT, SZ8);
+	vdev_attach_ioport(CMOS_DATA_PORT, SZ8);
+	vdev_attach_ioport(CMOS_INDEX_PORT, SZ8);
 
-	sys_send_ready();
+	vdev_ready(chid);
 
-	phy_mem_size = sys_guest_mem_size();
+	phy_mem_size = sys_guest_memsize();
 	if (phy_mem_size > 0x100000000ULL) { /* above 4 GB */
 		vnvram.highmem_size = phy_mem_size - 0x100000000ULL;
 		phy_mem_size -= vnvram.highmem_size;
@@ -175,12 +177,12 @@ main(int argc, char **argv)
 		     vnvram.highmem_size);
 
 	while (1) {
-		if (sys_recv_req(&req, TRUE))
+		if (!vdev_get_request(chid, &req, TRUE))
 			continue;
 
 		switch (((uint32_t *) &req)[0]) {
-		case READ_IOPORT_REQ:
-			read_req = (struct read_ioport_req *) &req;
+		case VDEV_READ_GUEST_IOPORT:
+			read_req = (struct vdev_ioport_info *) &req;
 			VNVRAM_DEBUG("Receive READ_IOPORT_REQ (port 0x%x, "
 				     "width %d bytes).\n",
 				     read_req->port, 1 << read_req->width);
@@ -191,11 +193,12 @@ main(int argc, char **argv)
 				_vnvram_ioport_read(&vnvram,
 						    read_req->port, &data);
 			VNVRAM_DEBUG("Send result 0x%x.\n", data);
-			sys_ret_in(read_req->port, read_req->width, data);
+			vdev_return_guest_ioport(chid, read_req->port,
+						 read_req->width, data);
 			continue;
 
-		case WRITE_IOPORT_REQ:
-			write_req = (struct write_ioport_req *) &req;
+		case VDEV_WRITE_GUEST_IOPORT:
+			write_req = (struct vdev_ioport_info *) &req;
 			VNVRAM_DEBUG("Receive WRITE_IOPORT_REQ (port 0x%x, "
 				     "width %d bytes, val 0x%x).\n",
 				     write_req->port, 1 << write_req->width,
@@ -208,7 +211,8 @@ main(int argc, char **argv)
 			continue;
 
 		default:
-			VNVRAM_DEBUG("Ignore unknown request.\n");
+			VNVRAM_DEBUG("Ignore unknown request (magic 0x%x).\n",
+				     ((uint32_t *) &req)[0]);
 			continue;
 		}
 	}

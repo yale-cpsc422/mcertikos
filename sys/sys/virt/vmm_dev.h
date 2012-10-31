@@ -249,53 +249,37 @@ typedef int vid_t;
 #endif /* _KERN_ */
 
 enum vdev_msg_magic {
-	READ_IOPORT_REQ = 0xabcd0001,
-	WRITE_IOPORT_REQ,
-	RETURN_IOPORT,
-	DEVICE_READY,
-	DEV_SYNC_REQ,
+	VDEV_DEVICE_READY = 0xabcd0001,
+	VDEV_DEVICE_SYNC,
+	VDEV_READ_GUEST_IOPORT,
+	VDEV_WRITE_GUEST_IOPORT,
+	VDEV_GUEST_IOPORT_DATA,
 	MAX_VDEV_MSG_MAGIC
 };
 
-struct read_ioport_req {
+struct vdev_device_ready {
 	uint32_t	magic;
-	uint16_t	port;
-	uint8_t		width;
 };
 
-struct write_ioport_req {
+struct vdev_device_sync {
 	uint32_t	magic;
-	uint16_t	port;
-	uint8_t		width;
-	uint32_t	val;
 };
 
-struct return_ioport {
+struct vdev_ioport_info {
 	uint32_t	magic;
 	uint16_t	port;
 	uint8_t		width;
 	uint32_t	val;
 };
 
-struct device_rdy {
-	uint32_t	magic;
-	vid_t		vid;
-};
-
-struct dev_sync_req {
-	uint32_t	magic;
-	vid_t		vid;
-};
+typedef union {
+	struct vdev_device_sync	__req0;
+	struct vdev_ioport_info	__req1;
+} vdev_req_t;
 
 typedef union {
-	struct read_ioport_req	__req0;
-	struct write_ioport_req	__req1;
-	struct dev_sync_req	__req2;
-} dev_req_t;
-
-typedef union {
-	struct return_ioport	__ack0;
-	struct device_rdy	__ack1;
-} dev_ack_t;
+	struct vdev_device_ready __ack0;
+	struct vdev_ioport_info  __ack1;
+} vdev_ack_t;
 
 #endif /* !_SYS_VIRT_VMM_IODEV_H_ */

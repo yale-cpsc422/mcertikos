@@ -114,7 +114,7 @@ channel_send(struct channel *ch, struct proc *p, void *msg, size_t size)
 	KERN_ASSERT(size > 0);
 	KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
 
-	if (size > 1024) {
+	if (size > CHANNEL_BUFFER_SIZE) {
 		CHANNEL_DEBUG("(%d) Size of the message (%d) is too large.\n",
 			      p->pid, size);
 		return E_CHANNEL_MSG_TOO_LARGE;

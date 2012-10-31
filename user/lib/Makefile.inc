@@ -11,6 +11,7 @@ USER_LIB_SRC	+= $(USER_DIR)/lib/proc.c
 USER_LIB_SRC	+= $(USER_DIR)/lib/session.c
 USER_LIB_SRC	+= $(USER_DIR)/lib/spinlock.c
 USER_LIB_SRC	+= $(USER_DIR)/lib/string.c
+USER_LIB_SRC	+= $(USER_DIR)/lib/vdev.c
 
 USER_LIB_SRC	:= $(wildcard $(USER_LIB_SRC))
 USER_LIB_OBJ	:= $(patsubst %.c, $(OBJDIR)/%.o, $(USER_LIB_SRC))

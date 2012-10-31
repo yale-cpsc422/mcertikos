@@ -3,20 +3,33 @@
 #include <stdio.h>
 #include <syscall.h>
 #include <types.h>
+#include <vdev.h>
 
-static vid_t
-attach_vdev(int vdev, char *desc)
+static int
+create_vdev(int vdev, char *desc)
 {
-	vid_t vid;
+	pid_t pid;
 
 	printf("Create virtual %s ... ", desc);
-	if ((vid = sys_attach_vdev(1, vdev)) == -1) {
-		printf("failed.\n");
+
+	pid = sys_create_proc(vdev);
+	if (pid == -1) {
+		printf("failed to create a process.\n");
 		return -1;
 	}
-	printf("done. (vid %d)\n", vid);
 
-	return vid;
+	if (vdev_attach_proc(pid) == -1) {
+		printf("failed to attach the process as a virtual device.\n");
+		return -2;
+	}
+
+	if (sys_run_proc(pid, 1)) {
+		printf("failed to start the process %d.\n", pid);
+		return -3;
+	}
+
+	printf("done. (pid = %d)\n", pid);
+	return 0;
 }
 
 int
@@ -25,7 +38,6 @@ main(int argc, char **argv)
 	sid_t vm_sid;
 	pid_t my_pid;
 	vmid_t vmid;
-	vid_t vid;
 
 	my_pid = getpid();
 
@@ -43,13 +55,13 @@ main(int argc, char **argv)
 	}
 	printf("done (vmid %d).\n", vmid);
 
-	if ((vid = attach_vdev(VDEV_8042, "i8042")) == -1)
+	if (create_vdev(VDEV_8042, "i8042"))
 		return 1;
-	if ((vid = attach_vdev(VDEV_8254, "i8254")) == -1)
+	if (create_vdev(VDEV_8254, "i8254"))
 		return 1;
-	if ((vid = attach_vdev(VDEV_NVRAM, "NVRAM")) == -1)
+	if (create_vdev(VDEV_NVRAM, "NVRAM"))
 		return 1;
-	if ((vid = attach_vdev(VDEV_VIRTIO, "VirtIO")) == -1)
+	if (create_vdev(VDEV_VIRTIO, "VirtIO"))
 		return 1;
 
 	printf("Start VM ... ");
