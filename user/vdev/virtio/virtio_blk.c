@@ -367,7 +367,7 @@ virtio_blk_disk_write(uint64_t lba, uint64_t nsectors, uintptr_t gpa)
 	while (remaining > 0) {
 		uint64_t n = MIN(remaining, VIRTIO_BLK_MAX_SECTORS);
 
-		rc = vdev_copy_from_guest(virtio_blk_data_buf, cur_lba,
+		rc = vdev_copy_from_guest(virtio_blk_data_buf, cur_gpa,
 					  n * ATA_SECTOR_SIZE);
 		if (rc) {
 			virtio_blk_debug("Failed to copy from guest. "
