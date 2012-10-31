@@ -34,6 +34,8 @@ enum __syscall_nr {
 	SYS_getsid,	/* get the session id of the calling process */
 	SYS_send,	/* send a message */
 	SYS_recv,	/* recv a message */
+	SYS_disk_op,	/* perform a disk operation */
+	SYS_disk_cap,	/* get the capacity of a disk in bytes */
 	/*
 	 * system calls to setup the virtual machines
 	 */
@@ -58,8 +60,6 @@ enum __syscall_nr {
 	SYS_guest_cpufreq, /* get the guest TSC frequency */
 	SYS_guest_memsize, /* get the size in bytes of the guest physical
 			      memory */
-	SYS_guest_disk_op,  /* operate on the disk drive */
-	SYS_guest_disk_cap, /* get the size of the disk drive */
 	MAX_SYSCALL_NR	/* XXX: always put it at the end of __syscall_nr */
 };
 
@@ -100,7 +100,7 @@ enum __dev {
 	MAX_VDEV
 };
 
-struct ioport_info {
+struct user_ioport {
 	uint16_t	port;
 	data_sz_t	width;
 };
@@ -109,7 +109,7 @@ struct user_disk_op {
 	enum { DISK_READ, DISK_WRITE } type;
 	uint64_t	lba;
 	uint64_t	n;
-	uintptr_t	gpa;
+	uintptr_t	buf;
 };
 
 #endif /* !_SYS_SYSCALL_H_ */

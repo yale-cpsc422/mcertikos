@@ -33,6 +33,8 @@ static char *syscall_name[MAX_SYSCALL_NR] =
 		[SYS_getchid]		= "sys_getchid",
 		[SYS_send]		= "sys_send",
 		[SYS_recv]		= "sys_recv",
+		[SYS_disk_op]		= "sys_disk_op",
+		[SYS_disk_cap]		= "sys_disk_cap",
 		[SYS_new_vm]		= "sys_new_vm",
 		[SYS_run_vm]		= "sys_run_vm",
 		[SYS_attach_vdev]	= "sys_attach_vdev",
@@ -47,8 +49,6 @@ static char *syscall_name[MAX_SYSCALL_NR] =
 		[SYS_guest_tsc]		= "sys_guest_tsc",
 		[SYS_guest_cpufreq]	= "sys_guest_cpufreq",
 		[SYS_guest_memsize]	= "sys_guest_memsize",
-		[SYS_guest_disk_op]	= "sys_guest_disk_op",
-		[SYS_guest_disk_cap]	= "sys_guest_disk_cap",
 	};
 
 static char *errno_name[MAX_ERROR_NR] =
@@ -580,7 +580,7 @@ sys_ioport_inout(uintptr_t user_ioport_la, uintptr_t val_la, int in)
 	struct vm *vm;
 	int rc;
 
-	struct ioport_info portinfo;
+	struct user_ioport portinfo;
 	uint32_t val;
 
 	if ((vm = dev_p->session->vm) == NULL)
@@ -593,7 +593,7 @@ sys_ioport_inout(uintptr_t user_ioport_la, uintptr_t val_la, int in)
 		return E_INVAL_VID;
 
 	if ((copy_from_user((uintptr_t) &portinfo, dev_p->pmap, user_ioport_la,
-			    sizeof(struct ioport_info))) == NULL)
+			    sizeof(struct user_ioport))) == NULL)
 		return E_MEM;
 
 	if (in) {
@@ -765,45 +765,88 @@ sys_guest_memsize(uintptr_t size_la)
 }
 
 static int
-sys_guest_disk_op(uintptr_t dop_la)
+__sys_disk_read(uint64_t lba, uint64_t nsectors, uintptr_t buf)
 {
-	struct proc *dev_p = proc_cur();
-	struct vm *vm = dev_p->session->vm;
+	uint64_t cur_lba, remaining;
+	uintptr_t cur_la;
+
+	struct proc *p = proc_cur();
+
+	cur_lba = lba;
+	remaining = nsectors;
+	cur_la = buf;
+
+	while (remaining > 0) {
+		uint64_t n = MIN(remaining, PAGESIZE / ATA_SECTOR_SIZE);
+		if (ahci_disk_read(0, cur_lba, n, p->sys_buf))
+			return E_DISK_OP;
+		if (copy_to_user(p->pmap, cur_la, (uintptr_t) p->sys_buf,
+				 n * ATA_SECTOR_SIZE) == NULL)
+			return E_MEM;
+		cur_lba += n;
+		remaining -= n;
+		cur_la += n * ATA_SECTOR_SIZE;
+	}
+
+	return E_SUCC;
+}
+
+static int
+__sys_disk_write(uint64_t lba, uint64_t nsectors, uintptr_t buf)
+{
+	uint64_t cur_lba, remaining;
+	uintptr_t cur_la;
+
+	struct proc *p = proc_cur();
+
+	cur_lba = lba;
+	remaining = nsectors;
+	cur_la = buf;
+
+	while (remaining > 0) {
+		uint64_t n = MIN(remaining, PAGESIZE / ATA_SECTOR_SIZE);
+		if (copy_from_user((uintptr_t) p->sys_buf, p->pmap, cur_la,
+				   n * ATA_SECTOR_SIZE) == NULL)
+			return E_MEM;
+		if (ahci_disk_write(0, cur_lba, n, p->sys_buf))
+			return E_DISK_OP;
+		cur_lba += n;
+		remaining -= n;
+		cur_la += n * ATA_SECTOR_SIZE;
+	}
+
+	return E_SUCC;
+}
+
+static int
+sys_disk_op(uintptr_t dop_la)
+{
+	struct proc *p;
 	pmap_t *pmap;
 
 	struct user_disk_op dop;
-	uintptr_t hpa;
 	int rc = 0;
 
 	if (dop_la < VM_USERLO || dop_la + sizeof(dop) > VM_USERHI)
 		return E_INVAL_ADDR;
 
-	if (vm == NULL)
-		return E_INVAL_VMID;
-
-	if (dev_p->session != vm->proc->session)
-		return E_INVAL_SID;
-
-	if (dev_p->vid == -1)
-		return E_INVAL_VID;
-
-	pmap = dev_p->pmap;
+	p = proc_cur();
+	pmap = p->pmap;
 
 	if (copy_from_user((uintptr_t) &dop, pmap, dop_la, sizeof(dop)) == NULL)
 		return E_MEM;
 
-	if (VM_PHY_MEMORY_SIZE - dop.gpa < dop.n * ATA_SECTOR_SIZE)
+	if (!(VM_USERLO <= dop.buf &&
+	      dop.buf + dop.n * ATA_SECTOR_SIZE <= VM_USERHI))
 		return E_INVAL_ADDR;
 
 	switch (dop.type) {
 	case DISK_READ:
-	case DISK_WRITE:
-		hpa = vmm_translate_gp2hp(vm, dop.gpa);
-		rc = (dop.type == DISK_READ) ?
-			ahci_disk_read(0, dop.lba, dop.n, (uint8_t *) hpa) :
-			ahci_disk_write(0, dop.lba, dop.n, (uint8_t *) hpa);
+		rc = __sys_disk_read(dop.lba, dop.n, dop.buf);
 		break;
-
+	case DISK_WRITE:
+		rc = __sys_disk_write(dop.lba, dop.n, dop.buf);
+		break;
 	default:
 		rc = 1;
 	}
@@ -815,38 +858,24 @@ sys_guest_disk_op(uintptr_t dop_la)
 }
 
 static int
-sys_guest_disk_cap(uintptr_t lo_la, uintptr_t hi_la)
+sys_disk_cap(uintptr_t lo_la, uintptr_t hi_la)
 {
-	struct proc *dev_p = proc_cur();
-	struct vm *vm = dev_p->session->vm;
-	pmap_t *pmap;
-
 	uint64_t cap;
 	uint32_t cap_lo, cap_hi;
 
-	if (lo_la < VM_USERLO || lo_la + sizeof(uint32_t) > VM_USERHI ||
-	    hi_la < VM_USERLO || hi_la + sizeof(uint32_t) > VM_USERHI)
+	if (!(VM_USERLO <= lo_la && lo_la + sizeof(uint32_t) <= VM_USERHI))
 		return E_INVAL_ADDR;
-
-	if (vm == NULL)
-		return E_INVAL_VMID;
-
-	if (dev_p->session != vm->proc->session)
-		return E_INVAL_SID;
-
-	if (dev_p->vid == -1)
-		return E_INVAL_VID;
+	if (!(VM_USERLO <= hi_la && hi_la + sizeof(uint32_t) <= VM_USERHI))
+		return E_INVAL_ADDR;
 
 	cap = ahci_disk_capacity(0);
 	cap_lo = cap & 0xffffffff;
 	cap_hi = (cap >> 32) & 0xffffffff;
 
-	pmap = dev_p->pmap;
-
-	if ((copy_to_user(pmap, lo_la,
+	if ((copy_to_user(proc_cur()->pmap, lo_la,
 			  (uintptr_t) &cap_lo, sizeof(uint32_t))) == NULL)
 		return E_MEM;
-	if ((copy_to_user(pmap, hi_la,
+	if ((copy_to_user(proc_cur()->pmap, hi_la,
 			  (uintptr_t) &cap_hi, sizeof(uint32_t))) == NULL)
 		return E_MEM;
 
@@ -1125,15 +1154,15 @@ syscall_handler(struct context *ctx, int guest)
 		 */
 		errno = sys_guest_memsize((uintptr_t) a[0]);
 		break;
-	case SYS_guest_disk_op:
+	case SYS_disk_op:
 		/*
 		 * Disk operation. The operation information must be provided in
 		 * an object of type struct user_disk_op by the caller.
 		 * a[0]: the linear address where the user_disk_op is
 		 */
-		errno = sys_guest_disk_op((uintptr_t) a[0]);
+		errno = sys_disk_op((uintptr_t) a[0]);
 		break;
-	case SYS_guest_disk_cap:
+	case SYS_disk_cap:
 		/*
 		 * Get the capability of the disk for the virtual machine.
 		 * a[0]: the linear address where the lowest 32 bits of the
@@ -1141,7 +1170,7 @@ syscall_handler(struct context *ctx, int guest)
 		 * a[1]: the linear address where the highest 32 bits of the
 		 *       capability are returned to
 		 */
-		errno = sys_guest_disk_cap((uintptr_t) a[0], (uintptr_t) a[1]);
+		errno = sys_disk_cap((uintptr_t) a[0], (uintptr_t) a[1]);
 		break;
 
 	default:

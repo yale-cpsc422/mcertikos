@@ -31,6 +31,9 @@ static uint16_t unsupported_command =
 	PCI_COMMAND_PALETTE_ENABLE | PCI_COMMAND_PARITY_ENABLE |
 	PCI_COMMAND_SERR_ENABLE | PCI_COMMAND_BACKTOBACK_ENABLE;
 
+#define VIRTIO_BLK_MAX_SECTORS	16
+static uint8_t virtio_blk_data_buf[ATA_SECTOR_SIZE * VIRTIO_BLK_MAX_SECTORS];
+
 /*
  * Perform the VirtIO block device-specific PCI command, which is recorded in
  * blk->common.header.pci_conf.header.command.
@@ -304,19 +307,91 @@ virtio_blk_get_vring(struct virtio_device *dev, uint8_t idx)
 }
 
 /*
- * virtio_blk_disk_rw()
+ * virtio_blk_disk_read() / virtio_blk_disk_write()
  *   forward the read/write operations on the VirtIO block device to the host
  *   disk drive.
  */
 
 static int
-virtio_blk_disk_rw(uint64_t lba, uint64_t nsectors, uintptr_t gpa, int write)
+virtio_blk_disk_read(uint64_t lba, uint64_t nsectors, uintptr_t gpa)
 {
-	int rc = write ? sys_guest_disk_write(lba, gpa, nsectors) :
-		sys_guest_disk_read(gpa, lba, nsectors);
-	virtio_blk_debug("%s %s.\n",
-			 write ? "Write" : "Read", rc ? "failed" : "OK");
-	return rc;
+	int rc;
+	uint64_t cur_lba, remaining;
+	uintptr_t cur_gpa;
+
+	cur_lba = lba;
+	remaining = nsectors;
+	cur_gpa = gpa;
+
+	while (remaining > 0) {
+		uint64_t n = MIN(remaining, VIRTIO_BLK_MAX_SECTORS);
+
+		rc = sys_disk_read(cur_lba, n, virtio_blk_data_buf);
+		if (rc) {
+			virtio_blk_debug("Failed to read host disk. "
+					 "(lba %lld, %lld sectors)\n",
+					 cur_lba, n);
+			return 1;
+		}
+
+		rc = vdev_copy_to_guest(cur_gpa, virtio_blk_data_buf,
+					n * ATA_SECTOR_SIZE);
+		if (rc) {
+			virtio_blk_debug("Failed to copy to guest. "
+					 "(lba %lld, %lld sectors)\n",
+					 cur_lba, n);
+			return 2;
+		}
+
+		cur_lba += n;
+		remaining -= n;
+		cur_gpa += n * ATA_SECTOR_SIZE;
+	}
+
+	virtio_blk_debug("Succeed reading guest disk. "
+			 "(lba %lld, %lld sectors)\n", lba, nsectors);
+	return 0;
+}
+
+static int
+virtio_blk_disk_write(uint64_t lba, uint64_t nsectors, uintptr_t gpa)
+{
+	int rc;
+	uint64_t cur_lba, remaining;
+	uintptr_t cur_gpa;
+
+	cur_lba = lba;
+	remaining = nsectors;
+	cur_gpa = gpa;
+
+	while (remaining > 0) {
+		uint64_t n = MIN(remaining, VIRTIO_BLK_MAX_SECTORS);
+
+		rc = vdev_copy_from_guest(virtio_blk_data_buf, cur_lba,
+					  n * ATA_SECTOR_SIZE);
+		if (rc) {
+			virtio_blk_debug("Failed to copy from guest. "
+					 "(lba %lld, %lld sectors)\n",
+					 cur_lba, n);
+			return 2;
+		}
+
+		rc = sys_disk_write(cur_lba, n, virtio_blk_data_buf);
+		if (rc) {
+			virtio_blk_debug("Failed to write host disk. "
+					 "(lba %lld, %lld sectors)\n",
+					 cur_lba, n);
+			return 1;
+		}
+
+		cur_lba += n;
+		remaining -= n;
+		cur_gpa += n * ATA_SECTOR_SIZE;
+	}
+
+	virtio_blk_debug("Succeed writing guest disk. "
+			 "(lba %lld, %lld sectors)\n", lba, nsectors);
+	return 0;
 }
 
 static gcc_inline int
@@ -443,13 +518,13 @@ virtio_blk_handle_req(struct virtio_device *dev,
 	/* handle the request */
 	switch (req.type) {
 	case VIRTIO_BLK_T_IN:
-		if (virtio_blk_disk_rw(req.sector, nsectors, buf, 0))
+		if (virtio_blk_disk_read(req.sector, nsectors, buf))
 			virtio_blk_set_status(status, VIRTIO_BLK_S_IOERR);
 		else
 			virtio_blk_set_status(status, VIRTIO_BLK_S_OK);
 		break;
 	case VIRTIO_BLK_T_OUT:
-		if (virtio_blk_disk_rw(req.sector, nsectors, buf, 1))
+		if (virtio_blk_disk_write(req.sector, nsectors, buf))
 			virtio_blk_set_status(status, VIRTIO_BLK_S_IOERR);
 		else
 			virtio_blk_set_status(status, VIRTIO_BLK_S_OK);
@@ -537,7 +612,7 @@ virtio_blk_init(struct virtio_blk *blk, struct vpci_host *vpci_host)
 		VIRTIO_BLK_F_SIZE_MAX |
 		VIRTIO_BLK_F_SEG_MAX |
 		VIRTIO_BLK_F_BLK_SIZE;
-	blk->blk_header.capacity = sys_guest_disk_capacity();
+	blk->blk_header.capacity = sys_disk_capacity();
 	blk->blk_header.size_max = 4096;
 	blk->blk_header.seg_max = 1;
 	blk->blk_header.blk_size = 512;

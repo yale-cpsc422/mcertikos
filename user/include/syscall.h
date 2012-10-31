@@ -316,7 +316,7 @@ sys_host_in(uint16_t port, data_sz_t width)
 {
 	int errno;
 	uint32_t val;
-	struct ioport_info portinfo = { .port = port, .width = width };
+	struct user_ioport portinfo = { .port = port, .width = width };
 
 	asm volatile("int %1"
 		     : "=a" (errno)
@@ -333,7 +333,7 @@ static gcc_inline int
 sys_host_out(uint16_t port, data_sz_t width, uint32_t val)
 {
 	int errno;
-	struct ioport_info portinfo = { .port = port, .width = width };
+	struct user_ioport portinfo = { .port = port, .width = width };
 
 	asm volatile("int %1"
 		     : "=a" (errno)
@@ -445,16 +445,16 @@ sys_guest_memsize(void)
 }
 
 static gcc_inline int
-sys_guest_disk_read(uintptr_t gpa, uint64_t lba, size_t nsectors)
+sys_disk_read(uint64_t lba, uint64_t nsectors, void *buf)
 {
 	int errno;
-	struct user_disk_op dop =
-		{ .type = DISK_READ, .lba = lba, .n = nsectors, .gpa = gpa };
+	struct user_disk_op dop = { .type = DISK_READ, .lba = lba,
+				    .n = nsectors, .buf = (uintptr_t) buf };
 
 	asm volatile("int %1"
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
-		       "a" (SYS_guest_disk_op),
+		       "a" (SYS_disk_op),
 		       "b" (&dop)
 		     : "cc", "memory");
 
@@ -462,16 +462,16 @@ sys_guest_disk_read(uintptr_t gpa, uint64_t lba, size_t nsectors)
 }
 
 static gcc_inline int
-sys_guest_disk_write(uint64_t lba, uintptr_t gpa, size_t nsectors)
+sys_disk_write(uint64_t lba, uint64_t nsectors, void *buf)
 {
 	int errno;
-	struct user_disk_op dop =
-		{ .type = DISK_WRITE, .lba = lba, .n = nsectors, .gpa = gpa};
+	struct user_disk_op dop = { .type = DISK_WRITE, .lba = lba,
+				    .n = nsectors, .buf = (uintptr_t) buf };
 
 	asm volatile("int %1"
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
-		       "a" (SYS_guest_disk_op),
+		       "a" (SYS_disk_op),
 		       "b" (&dop)
 		     : "cc", "memory");
 
@@ -479,7 +479,7 @@ sys_guest_disk_write(uint64_t lba, uintptr_t gpa, size_t nsectors)
 }
 
 static gcc_inline uint64_t
-sys_guest_disk_capacity(void)
+sys_disk_capacity(void)
 {
 	int errno;
 	uint32_t size_lo, size_hi;
@@ -487,7 +487,7 @@ sys_guest_disk_capacity(void)
 	asm volatile("int %1"
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
-		       "a" (SYS_guest_disk_cap),
+		       "a" (SYS_disk_cap),
 		       "b" (&size_lo),
 		       "c" (&size_hi)
 		     : "cc", "memory");
