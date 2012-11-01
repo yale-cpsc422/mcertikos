@@ -605,7 +605,7 @@ virtio_blk_init(struct virtio_blk *blk, struct vpci_host *vpci_host)
 	dev->pci_conf.header.subclass = PCI_SUBCLASS_MASS_STORAGE_IDE;
 	dev->pci_conf.header.header_type = PCI_HDRTYPE_DEVICE;
 	dev->pci_conf.sub_id = VIRTIO_PCI_SUBDEV_BLK;
-	dev->pci_conf.intr_line = 5 /* IRQ_IDE */;
+	dev->pci_conf.intr_line = 14;
 	dev->pci_conf.intr_pin = PCI_INTERRUPT_PIN_A;
 
 	blk->common_header.virtio_header.device_features =
