@@ -719,21 +719,6 @@ vpic_get_irq(struct vpic *vpic)
 }
 
 /*
- * Check wheter there is IRQ from virtualized PIC.
- */
-bool
-vpic_has_irq(struct vpic *vpic)
-{
-	KERN_ASSERT(vpic != NULL);
-
-	if (vpic->master.int_out == 1)
-		KERN_DEBUG("master.INT_OUT is set.\n");
-
-	return (vpic->master.int_out != 0) ? TRUE : FALSE;
-}
-
-
-/*
  * Set/Unset an IR line of the virtualized i8259. If the slave i8259 is
  * set/unset, this function will conseqently set/unset the master i8259.
  */

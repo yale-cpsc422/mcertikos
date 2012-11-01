@@ -77,7 +77,6 @@ struct vpic {
 void vpic_init(struct vpic *, struct vm *);
 int  vpic_read_ioport(struct vpic *, uint16_t port, uint8_t *data);
 int  vpic_write_ioport(struct vpic *, uint16_t port, uint8_t data);
-bool vpic_has_irq(struct vpic *);
 int  vpic_read_irq(struct vpic *);
 int  vpic_get_irq(struct vpic *);
 void vpic_set_irq(struct vpic *, int irq, int level);
