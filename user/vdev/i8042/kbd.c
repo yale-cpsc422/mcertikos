@@ -177,8 +177,8 @@ vkbd_update_irq(struct vkbd *vkbd)
 	}
 
 	if (irq_mouse_level) {
-		vkbd_debug("Trigger IRQ_MOUSE.\n");
-		vdev_set_irq(IRQ_MOUSE, 2);
+		/* vkbd_debug("Trigger IRQ_MOUSE.\n"); */
+		/* vdev_set_irq(IRQ_MOUSE, 2); */
 	}
 }
 
