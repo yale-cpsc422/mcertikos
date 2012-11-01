@@ -41,8 +41,7 @@ static gcc_inline  void
 pre_handle_user(tf_t *tf)
 {
 	if (!(tf->eip >= VM_USERLO && tf->eip < VM_USERHI))
-		KERN_PANIC("trapno %d, eip 0x%08x, 0x%08x.\n",
-			   tf->trapno, tf->eip, rcr2());
+		KERN_PANIC("trapno %d, eip 0x%08x.\n", tf->trapno, tf->eip);
 	KERN_ASSERT(tf->eip >= VM_USERLO && tf->eip < VM_USERHI);
 	struct proc *cur_p = proc_cur();
 	KERN_ASSERT(cur_p);
@@ -59,7 +58,8 @@ default_handler_guest(tf_t *tf)
 static gcc_inline void
 default_handler_user(tf_t *tf)
 {
-	KERN_WARN("No handler for user trap 0x%x.\n", tf->trapno);
+	KERN_WARN("No handler for user trap 0x%x, process %d, eip 0x%08x.\n",
+		  tf->trapno, proc_cur()->pid, tf->eip);
 }
 
 static gcc_inline gcc_noreturn void
