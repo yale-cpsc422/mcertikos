@@ -143,6 +143,8 @@ pmap_init_kern(void)
 {
 	uintptr_t addr;
 	pageinfo_t *pi;
+	int i;
+	ioapic_t *ioapic_addr;
 
 	memcpy(pmap_kern, pmap_boot, PAGESIZE);
 
@@ -157,6 +159,14 @@ pmap_init_kern(void)
 	next:
 		if (addr == 0xfffff000)
 			break;
+	}
+
+	for (i = 0; i < ioapic_number(); i++) {
+		if ((ioapic_addr = ioapic_get(i)) == NULL ||
+		    (uintptr_t) ioapic_addr >= VM_USERHI)
+			continue;
+		pi = mem_phys2pi((uintptr_t) ioapic_addr);
+		pmap_insert(pmap_kern, pi, (uintptr_t) ioapic_addr, PTE_W);
 	}
 
 	return pmap_kern;
