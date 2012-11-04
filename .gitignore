@@ -1,4 +1,6 @@
-bochs.log
+*.img
+log
+*.log
 cscope.*
 *~
 obj
@@ -6,3 +8,5 @@ obj/*
 *.DS_Store
 misc/qemu
 misc/qemu/*
+misc/iso
+misc/iso/*
