@@ -1,7 +1,90 @@
 #include <debug.h>
+#include <string.h>
 #include <syscall.h>
 #include <types.h>
 #include <vdev.h>
+
+int
+vdev_init(struct vdev *vdev, void *opaque_dev, char *desc,
+	  int (*init)(void *),
+	  int (*read_ioport)(void *, uint16_t, data_sz_t, void *),
+	  int (*write_ioport)(void *, uint16_t, data_sz_t, uint32_t),
+	  int (*sync)(void *))
+{
+	if (vdev == NULL || opaque_dev == NULL)
+		return 1;
+
+	strncpy(vdev->desc, desc, 47);
+	vdev->desc[47] = '\0';
+
+	vdev->opaque_dev = opaque_dev;
+	vdev->init = init;
+	vdev->read_ioport = read_ioport;
+	vdev->write_ioport = write_ioport;
+	vdev->sync = sync;
+
+	return 0;
+}
+
+int
+vdev_start(struct vdev *vdev)
+{
+	void *opaque_dev;
+	int chid;
+	vdev_req_t req;
+	struct vdev_ioport_info *read_req, *write_req;
+	uint32_t data;
+
+	if (vdev == NULL)
+		return 1;
+
+	if ((opaque_dev = vdev->opaque_dev) == NULL)
+		return 2;
+
+	if ((chid = sys_getchid()) == -1)
+		return 3;
+
+	if (vdev->init && vdev->init(opaque_dev))
+		return 4;
+
+	vdev_ready(chid);
+
+	while (1) {
+		if (!vdev_get_request(chid, &req, TRUE))
+			continue;
+
+		switch (((uint32_t *) &req)[0]) {
+		case VDEV_READ_GUEST_IOPORT:
+			read_req = (struct vdev_ioport_info *) &req;
+			if (vdev->read_ioport == NULL ||
+			    vdev->read_ioport(opaque_dev, read_req->port,
+					      read_req->width, &data))
+				data = 0xffffffff;
+			vdev_return_guest_ioport(chid, read_req->port,
+						 read_req->width, data);
+			continue;
+
+
+		case VDEV_WRITE_GUEST_IOPORT:
+			write_req = (struct vdev_ioport_info *) &req;
+			if (vdev->write_ioport)
+				vdev->write_ioport(opaque_dev, write_req->port,
+						   write_req->width,
+						   write_req->val);
+			continue;
+
+		case VDEV_DEVICE_SYNC:
+			if (vdev->sync)
+				vdev->sync(opaque_dev);
+			continue;
+
+		default:
+			continue;
+		}
+	}
+
+	return 0;
+}
 
 vid_t
 vdev_attach_proc(pid_t pid)

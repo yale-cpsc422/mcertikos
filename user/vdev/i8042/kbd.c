@@ -418,11 +418,16 @@ vkbd_write_data(struct vkbd *vkbd, uint32_t data)
 	vkbd->write_cmd = 0;
 }
 
-static void
-_vkbd_ioport_read(struct vkbd *vkbd, uint16_t port, void *data)
+static int
+_vkbd_ioport_read(void *opaque, uint16_t port, data_sz_t width, void *data)
 {
-	ASSERT(vkbd != NULL && data != NULL);
-	ASSERT(port == KBSTATP || port == KBDATAP);
+	struct vkbd *vkbd = (struct vkbd *) opaque;
+
+	if (vkbd == NULL || data == NULL)
+		return 1;
+
+	if (port != KBSTATP && port != KBDATAP)
+		return 2;
 
 	if (port == KBSTATP)
 		*(uint8_t *) data = vkbd_read_status(vkbd);
@@ -430,20 +435,28 @@ _vkbd_ioport_read(struct vkbd *vkbd, uint16_t port, void *data)
 		*(uint8_t *) data = vkbd_read_data(vkbd);
 
 	vkbd_debug("Read port=%x, data=%x.\n", port, *(uint8_t *) data);
+	return 0;
 }
 
-static void
-_vkbd_ioport_write(struct vkbd *vkbd, uint16_t port, uint8_t data)
+static int
+_vkbd_ioport_write(void *opaque, uint16_t port, data_sz_t width, uint32_t data)
 {
-	ASSERT(vkbd != NULL);
-	ASSERT(port == KBCMDP || port == KBDATAP);
+	struct vkbd *vkbd = (struct vkbd *) opaque;
 
-	vkbd_debug("Write port=%x, data=%x.\n", port, data);
+	if (vkbd == NULL)
+		return 1;
+
+	if (port != KBCMDP && port != KBDATAP)
+		return 2;
+
+	vkbd_debug("Write port=%x, data=%x.\n", port, (uint8_t) data);
 
 	if (port == KBDATAP)
-		vkbd_write_data(vkbd, data);
+		vkbd_write_data(vkbd, (uint8_t) data);
 	else
-		vkbd_write_command(vkbd, data);
+		vkbd_write_command(vkbd, (uint8_t) data);
+
+	return 0;
 }
 
 static void
@@ -456,9 +469,11 @@ vkbd_reset(struct vkbd *vkbd)
 	vkbd->outport = KBD_OUT_RESET | KBD_OUT_A20;
 }
 
-static void
-vkbd_sync_kbd(struct vkbd *vkbd)
+static int
+vkbd_sync_kbd(void *opaque)
 {
+	struct vkbd *vkbd = (struct vkbd *) opaque;
+
 	uint8_t status, c;
 
 	/* synchronize the state of physical i8042 to virtualized i8042 */
@@ -469,69 +484,39 @@ vkbd_sync_kbd(struct vkbd *vkbd)
 		c = vdev_read_host_ioport(KBDATAP, SZ8);
 		vkbd_queue(vkbd, c, 0);
 	}
+
+	return 0;
 }
 
-int
-main(int argc, char **argv)
+static int
+vkbd_init(void *opaque)
 {
-	struct vkbd vkbd;
+	struct vkbd *vkbd = (struct vkbd *) opaque;
 
-	int chid;
+	memset(vkbd, 0, sizeof(struct vkbd));
+	vkbd->status = KBD_STAT_CMD | KBD_STAT_UNLOCKED;
+	vkbd->outport = KBD_OUT_RESET | KBD_OUT_A20;
 
-	vdev_req_t req;
-	struct vdev_ioport_info *read_req, *write_req;
-	uint32_t data;
-
-	chid = sys_getchid();
-
-	memset(&vkbd, 0, sizeof(vkbd));
-	vkbd.status = KBD_STAT_CMD | KBD_STAT_UNLOCKED;
-	vkbd.outport = KBD_OUT_RESET | KBD_OUT_A20;
-
-	ps2_kbd_init(&vkbd.kbd, vkbd_update_kbd_irq, &vkbd);
-	ps2_mouse_init(&vkbd.mouse, vkbd_update_aux_irq, &vkbd);
+	ps2_kbd_init(&vkbd->kbd, vkbd_update_kbd_irq,vkbd);
+	ps2_mouse_init(&vkbd->mouse, vkbd_update_aux_irq, vkbd);
 
 	vdev_attach_ioport(KBSTATP, SZ8);
 	vdev_attach_ioport(KBDATAP, SZ8);
 	vdev_attach_irq(IRQ_KBD);
 	vdev_attach_irq(IRQ_MOUSE);
 
-	vdev_ready(chid);
-
-	while (1) {
-		if (!vdev_get_request(chid, &req, TRUE))
-			continue;
-
-		switch (((uint32_t *) &req)[0]) {
-		case VDEV_READ_GUEST_IOPORT:
-			read_req = (struct vdev_ioport_info *) &req;
-			if (unlikely(read_req->port != KBSTATP &&
-				     read_req->port != KBDATAP))
-				data = 0xffffffff;
-			else
-				_vkbd_ioport_read(&vkbd, read_req->port, &data);
-			vdev_return_guest_ioport(chid, read_req->port,
-						 read_req->width, data);
-			continue;
-
-		case VDEV_WRITE_GUEST_IOPORT:
-			write_req = (struct vdev_ioport_info *) &req;
-			if (write_req->port == KBCMDP ||
-			    write_req->port == KBDATAP)
-				_vkbd_ioport_write(&vkbd, write_req->port,
-						   write_req->val);
-			continue;
-
-		case VDEV_DEVICE_SYNC:
-			vkbd_debug("Start to synchronize virtual KBD.\n");
-			vkbd_sync_kbd(&vkbd);
-			vkbd_debug("Complete the synchronization of virtual KBD.\n");
-			continue;
-
-		default:
-			continue;
-		}
-	}
-
 	return 0;
+}
+
+int
+main(int argc, char **argv)
+{
+	struct vkbd vkbd;
+	struct vdev vdev;
+
+	if (vdev_init(&vdev, &vkbd, "Virtual PS/2 Controller", vkbd_init,
+		      _vkbd_ioport_read, _vkbd_ioport_write, vkbd_sync_kbd))
+		return 1;
+
+	return vdev_start(&vdev);
 }

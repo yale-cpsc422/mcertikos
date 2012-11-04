@@ -175,4 +175,48 @@ uint64_t vdev_guest_cpufreq(void);
  */
 uint64_t vdev_guest_memsize(void);
 
+
+
+struct vdev {
+	char	desc[48];
+	void	*opaque_dev;
+
+	int	(*init)(void *opaque_dev);
+	int	(*read_ioport)(void *opaque_dev,
+			       uint16_t port, data_sz_t width, void *val);
+	int	(*write_ioport)(void *opaque_dev,
+				uint16_t port, data_sz_t width, uint32_t val);
+	int	(*sync)(void *opaque_dev);
+};
+
+/*
+ * Initialize a virtual device.
+ *
+ * @param vdev         the virtual device to be initialized
+ * @param opaque_dev   the pointer to the concrete virtual device
+ * @param desc         a describing string of the virtual device
+ * @param read_ioport  the pointer to the function which handles the read
+ *                     requests to the guest I/O ports
+ * @param write_ioport the pointer to the fucntion which handles the write
+ *                     requests to the guest I/O ports
+ * @param sync         the pointer to the function which handles the sync
+ *                     requests
+ *
+ * @return 0 if successful; otherwise, return a non-zero value.
+ */
+int vdev_init(struct vdev *vdev, void *opaque_dev, char *desc,
+	      int (*init)(void *),
+	      int (*read_ioport)(void *, uint16_t, data_sz_t, void *),
+	      int (*write_ioport)(void *, uint16_t, data_sz_t, uint32_t),
+	      int (*sync)(void *));
+
+/*
+ * Start a virtual device.
+ *
+ * @param vdev the pointer to the virtual device to be started
+ *
+ * @return 0 if successful; otherwise, return a non-zero value.
+ */
+int vdev_start(struct vdev *vdev);
+
 #endif /* !_USER_VDEV_H_ */

@@ -714,13 +714,18 @@ vpit_gate_ioport_write(struct vpit *pit, uint8_t data)
 	spinlock_release(&pit->channels[2].lk);
 }
 
-static void
-_vpit_ioport_read(struct vpit *pit, uint16_t port, void *data)
+static int
+_vpit_ioport_read(void *opaque, uint16_t port, data_sz_t width, void *data)
 {
-	ASSERT(pit != NULL && data != NULL);
-	ASSERT(port == PIT_CONTROL_PORT || port == PIT_CHANNEL0_PORT ||
-	       port == PIT_CHANNEL1_PORT || port == PIT_CHANNEL2_PORT ||
-	       port == PIT_GATE_PORT);
+	struct vpit *pit = (struct vpit *) opaque;
+
+	if (pit == NULL || data == NULL)
+		return 1;
+
+	if (port != PIT_CONTROL_PORT && port != PIT_CHANNEL0_PORT &&
+	    port != PIT_CHANNEL1_PORT && port != PIT_CHANNEL2_PORT &&
+	    port != PIT_GATE_PORT)
+		return 2;
 
 	if (port == PIT_GATE_PORT)
 		*(uint8_t *) data = vpit_gate_ioport_read(pit);
@@ -728,22 +733,30 @@ _vpit_ioport_read(struct vpit *pit, uint16_t port, void *data)
 		*(uint8_t *) data = vpit_ioport_read(pit, port);
 
 	vpit_debug("Read: port=%x, data=%x.\n", port, *(uint8_t *) data);
+	return 0;
 }
 
-static void
-_vpit_ioport_write(struct vpit *pit, uint16_t port, uint8_t data)
+static int
+_vpit_ioport_write(void *opaque, uint16_t port, data_sz_t width, uint32_t data)
 {
-	ASSERT(pit != NULL);
-	ASSERT(port == PIT_CONTROL_PORT || port == PIT_CHANNEL0_PORT ||
-	       port == PIT_CHANNEL1_PORT || port == PIT_CHANNEL2_PORT ||
-	       port == PIT_GATE_PORT);
+	struct vpit *pit = (struct vpit *) opaque;
 
-	vpit_debug("Write: port=%x, data=%x.\n", port, data);
+	if (pit == NULL)
+		return 1;
+
+	if (port != PIT_CONTROL_PORT && port != PIT_CHANNEL0_PORT &&
+	    port != PIT_CHANNEL1_PORT && port != PIT_CHANNEL2_PORT &&
+	    port != PIT_GATE_PORT)
+		return 2;
+
+	vpit_debug("Write: port=%x, data=%x.\n", port, (uint8_t) data);
 
 	if (port == PIT_GATE_PORT)
-		vpit_gate_ioport_write(pit, data);
+		vpit_gate_ioport_write(pit, (uint8_t) data);
 	else
-		vpit_ioport_write(pit, port, data);
+		vpit_ioport_write(pit, port, (uint8_t) data);
+
+	return 0;
 }
 
 static void
@@ -824,14 +837,13 @@ vpit_channel_update(struct vpit_channel *ch, uint64_t current_time)
 	vpit_debug("vpit_channel_update() done.\n");
 }
 
-static void
-vpit_update(struct vpit *vpit)
+static int
+vpit_update(void *opaque)
 {
-	ASSERT(vpit != NULL);
-
+	struct vpit *vpit = (struct vpit *) opaque;
 	uint64_t tsc = vdev_guest_tsc();
-
 	int i;
+
 	for (i = 0; i < 3; i++) {
 		vpit_debug("Update i8254 channel %d.\n", i);
 		struct vpit_channel *ch = &vpit->channels[i];
@@ -842,38 +854,34 @@ vpit_update(struct vpit *vpit)
 		}
 		spinlock_release(&ch->lk);
 	}
+
+	return 0;
 }
 
-int
-main(int argc, char **argv)
+static int
+vpit_init(void *opaque)
 {
-	struct vpit vpit;
+	struct vpit *vpit = (struct vpit *) opaque;
 
-	vdev_req_t req;
-	struct vdev_ioport_info *read_req, *write_req;
-	uint32_t data;
-
-	int chid = sys_getchid();
-
-	memset(&vpit, 0, sizeof(vpit));
+	memset(vpit, 0, sizeof(struct vpit));
 
 	/* initialize channle 0 */
-	spinlock_init(&vpit.channels[0].lk);
-	vpit.channels[0].pit = &vpit;
-	vpit.channels[0].enabled = FALSE;
-	vpit.channels[0].last_intr_time_valid = FALSE;
+	spinlock_init(&vpit->channels[0].lk);
+	vpit->channels[0].pit = vpit;
+	vpit->channels[0].enabled = FALSE;
+	vpit->channels[0].last_intr_time_valid = FALSE;
 
 	/* initialize channel 1 */
-	spinlock_init(&vpit.channels[1].lk);
-	vpit.channels[1].pit = &vpit;
-	vpit.channels[1].enabled = FALSE;
-	vpit.channels[1].last_intr_time_valid = FALSE;
+	spinlock_init(&vpit->channels[1].lk);
+	vpit->channels[1].pit = vpit;
+	vpit->channels[1].enabled = FALSE;
+	vpit->channels[1].last_intr_time_valid = FALSE;
 
 	/* initialize channel 2 */
-	spinlock_init(&vpit.channels[2].lk);
-	vpit.channels[2].pit = &vpit;
-	vpit.channels[2].enabled = FALSE;
-	vpit.channels[2].last_intr_time_valid = FALSE;
+	spinlock_init(&vpit->channels[2].lk);
+	vpit->channels[2].pit = vpit;
+	vpit->channels[2].enabled = FALSE;
+	vpit->channels[2].last_intr_time_valid = FALSE;
 
 	/* register virtualized device (handlers of I/O ports & IRQ) */
 	vdev_attach_ioport(PIT_CONTROL_PORT, SZ8);
@@ -885,47 +893,17 @@ main(int argc, char **argv)
 
 	guest_tsc_freq = vdev_guest_cpufreq();
 
-	vdev_ready(chid);
-
-	while (1) {
-		if (!vdev_get_request(chid, &req, TRUE))
-			continue;
-
-		switch (((uint32_t *) &req)[0]) {
-		case VDEV_READ_GUEST_IOPORT:
-			read_req = (struct vdev_ioport_info *) &req;
-			if (unlikely(read_req->port != PIT_CONTROL_PORT &&
-				     read_req->port != PIT_CHANNEL0_PORT &&
-				     read_req->port != PIT_CHANNEL1_PORT &&
-				     read_req->port != PIT_CHANNEL2_PORT &&
-				     read_req->port != PIT_GATE_PORT))
-				data = 0xffffffff;
-			else
-				_vpit_ioport_read(&vpit, read_req->port, &data);
-			vdev_return_guest_ioport(chid, read_req->port,
-						 read_req->width, data);
-			continue;
-
-		case VDEV_WRITE_GUEST_IOPORT:
-			write_req = (struct vdev_ioport_info *) &req;
-			if (read_req->port == PIT_CONTROL_PORT ||
-			    read_req->port == PIT_CHANNEL0_PORT ||
-			    read_req->port == PIT_CHANNEL1_PORT ||
-			    read_req->port == PIT_CHANNEL2_PORT ||
-			    read_req->port == PIT_GATE_PORT)
-				_vpit_ioport_write(&vpit, write_req->port,
-						   write_req->val);
-			continue;
-
-		case VDEV_DEVICE_SYNC:
-			vpit_update(&vpit);
-			continue;
-
-		default:
-			vpit_debug("Ignore unknown request.\n");
-			continue;
-		}
-	}
-
 	return 0;
+}
+
+int
+main(int argc, char **argv)
+{
+	struct vpit vpit;
+	struct vdev vdev;
+
+	vdev_init(&vdev, &vpit, "Virtual i8253/8254", vpit_init,
+		  _vpit_ioport_read, _vpit_ioport_write, vpit_update);
+
+	return vdev_start(&vdev);
 }
