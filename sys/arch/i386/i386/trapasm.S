@@ -54,7 +54,7 @@ TRAPHANDLER_NOEC(Xfperr,  T_FPERR)
 TRAPHANDLER     (Xalign,  T_ALIGN)
 TRAPHANDLER_NOEC(Xmchk,   T_MCHK)
 /* The rest of the Interrup Handlers */
-TRAPHANDLER_NOEC(Xsyscall, 48)
+TRAPHANDLER_NOEC(Xsyscall, T_SYSCALL)
 
 /* the external device interrupts */
 TRAPHANDLER_NOEC(Xirq0,   T_IRQ0+0)
@@ -74,9 +74,13 @@ TRAPHANDLER_NOEC(Xirq13,  T_IRQ0+13)
 TRAPHANDLER_NOEC(Xirq14,  T_IRQ0+14)
 TRAPHANDLER_NOEC(Xirq15,  T_IRQ0+15)
 
-TRAPHANDLER_NOEC(Xirq19,  T_IRQ0+IRQ_ERROR)
+/* local APIC interrupts */
+TRAPHANDLER_NOEC(Xltimer, T_LTIMER)
+TRAPHANDLER_NOEC(Xlerror, T_LERROR)
+TRAPHANDLER_NOEC(Xperfctr,T_PERFCTR)
+
+/* inter-processor interrupts */
 TRAPHANDLER_NOEC(Xirq20,  T_IRQ0+IRQ_IPI_RESCHED)
-TRAPHANDLER_NOEC(Xirq21,  T_IRQ0+IRQ_IPI_VINTR)
 
 /* default handler -- not for any specific trap */
 TRAPHANDLER     (Xdefault, 500)

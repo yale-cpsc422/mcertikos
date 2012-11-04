@@ -14,7 +14,8 @@ volatile static bool intr_inited = FALSE;
 /* Entries of interrupt handlers, defined in trapasm.S */
 extern char Xdivide,Xdebug,Xnmi,Xbrkpt,Xoflow,Xbound,
 	Xillop,Xdevice,Xdblflt,Xtss,Xsegnp,Xstack,
-	Xgpflt,Xpgflt,Xfperr,Xalign,Xmchk,Xdefault,Xsyscall;
+	Xgpflt,Xpgflt,Xfperr,Xalign,Xmchk,Xdefault,Xsyscall,
+	Xltimer, Xlerror, Xperfctr;
 extern char Xirq0,Xirq1,Xirq2,Xirq3,Xirq4,Xirq5,
 	Xirq6,Xirq7,Xirq8,Xirq9,Xirq10,Xirq11,
 	Xirq12,Xirq13,Xirq14,Xirq15,Xirq19, Xirq20;
@@ -59,7 +60,7 @@ intr_init_idt(void)
 
 	// Use DPL=3 here because system calls are explicitly invoked
 	// by the user process (with "int $T_SYSCALL").
-	SETGATE(idt[48], 0, CPU_GDT_KCODE, &Xsyscall, 3);
+	SETGATE(idt[T_SYSCALL], 0, CPU_GDT_KCODE, &Xsyscall, 3);
 
 	SETGATE(idt[T_IRQ0 + 0], 0, CPU_GDT_KCODE, &Xirq0, 0);
 	SETGATE(idt[T_IRQ0 + 1], 0, CPU_GDT_KCODE, &Xirq1, 0);
@@ -78,10 +79,12 @@ intr_init_idt(void)
 	SETGATE(idt[T_IRQ0 + 14], 0, CPU_GDT_KCODE, &Xirq14, 0);
 	SETGATE(idt[T_IRQ0 + 15], 0, CPU_GDT_KCODE, &Xirq15, 0);
 
-	/* interrupt gate for IRQ_ERROR */
-	SETGATE(idt[T_IRQ0 + 19], 0, CPU_GDT_KCODE, &Xirq19, 0);
+	/* interrupt gates for local APIC interrupts */
+	SETGATE(idt[T_LTIMER], 0, CPU_GDT_KCODE, &Xltimer, 0);
+	SETGATE(idt[T_LERROR], 0, CPU_GDT_KCODE, &Xlerror, 0);
+	SETGATE(idt[T_PERFCTR], 0, CPU_GDT_KCODE, &Xperfctr, 0);
 
-	/* interrupt gate for IRQ_IPI_RESCHED */
+	/* interrupt gates for inter-processor interrupts  */
 	SETGATE(idt[T_IRQ0 + IRQ_IPI_RESCHED], 0, CPU_GDT_KCODE, &Xirq20, 0);
 
 	asm volatile("lidt %0" : : "m" (idt_pd));
