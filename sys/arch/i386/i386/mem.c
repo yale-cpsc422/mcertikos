@@ -257,7 +257,7 @@ pmmap_init(mboot_info_t *mbi)
 static uintptr_t
 pmmap_max()
 {
-	pmmap_t *ent, *last_mem_ent;
+	pmmap_t *ent, *last_mem_ent = NULL;
 
 	for (ent = pmmap; ent != NULL && ent->next != NULL; ent = ent->next)
 		if (ent->type == MEM_RAM)
