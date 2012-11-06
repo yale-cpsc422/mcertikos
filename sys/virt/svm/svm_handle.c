@@ -303,21 +303,19 @@ svm_handle_ioio(struct vm *vm)
 		(exitinfo1 & SVM_EXITINFO1_SZ16) ? SZ16 : SZ32;
 	bool type = exitinfo1 & SVM_EXITINFO1_TYPE_MASK;
 	uint32_t data = (uint32_t) save->rax;
-	vid_t vid = vm->vdev.ioport[port].vid;
 
 	if (type & SVM_EXITINFO1_TYPE_IN) {
 #ifdef DEBUG_GUEST_IOIO
 		dprintf(" read port 0x%x, width %d bits.\n",
 			port, 8 * (1 << width));
 #endif
-		vdev_read_guest_ioport(vm, vid,
-				       port, width, (uint32_t *) &save->rax);
+		vdev_read_guest_ioport(vm, port, width, (uint32_t *) &save->rax);
 	} else {
 #ifdef DEBUG_GUEST_IOIO
 		dprintf(" write port 0x%x, width %d bits, data 0x%x.\n",
 			port, 8 * (1 << width), data);
 #endif
-		vdev_write_guest_ioport(vm, vid, port, width, data);
+		vdev_write_guest_ioport(vm, port, width, data);
 	}
 
 	save->rip = ctrl->exit_info_2;

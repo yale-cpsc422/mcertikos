@@ -339,8 +339,32 @@ vdev_recv_result(struct vm *vm, struct channel *ch, void *result, size_t *size)
 	return 0;
 }
 
+static int
+vdev_read_ioport_passthrough(uint16_t port, data_sz_t width, uint32_t *data)
+{
+	if (width == SZ8)
+		*(uint8_t *) data = inb(port);
+	else if (width == SZ16)
+		*(uint16_t *) data = inw(port);
+	else
+		*(uint32_t *) data = inl(port);
+	return 0;
+}
+
+static int
+vdev_write_ioport_passthrough(uint16_t port, data_sz_t width, uint32_t data)
+{
+	if (width == SZ8)
+		outb(port, (uint8_t) data);
+	else if (width == SZ16)
+		outw(port, (uint16_t) data);
+	else
+		outl(port, (uint32_t) data);
+	return 0;
+}
+
 int
-vdev_read_guest_ioport(struct vm *vm, vid_t vid,
+vdev_read_guest_ioport(struct vm *vm,
 		       uint16_t port, data_sz_t width, uint32_t *data)
 {
 	KERN_ASSERT(vm != NULL);
@@ -350,8 +374,11 @@ vdev_read_guest_ioport(struct vm *vm, vid_t vid,
 	    port == IO_PIC2 || port == IO_PIC2+1 ||
 	    port == IO_ELCR1 || port == IO_ELCR2)
 		return vpic_read_ioport(&vm->vdev.vpic, port, (uint8_t *) data);
-
-	KERN_ASSERT(0 <= vid && vid < MAX_VID);
+	else if ((0x3f8 <= port && port <= 0x3ff) || /* COM1 */
+		 (0x3b0 <= port && port <= 0x3bf) || /* MONO */
+		 (0x3c0 <= port && port <= 0x3cf) || /* VGA */
+		 (0x3d0 <= port && port <= 0x3df)    /* CGA */)
+		return vdev_read_ioport_passthrough(port, width, data);
 
 	int rc = 0;
 
@@ -359,15 +386,19 @@ vdev_read_guest_ioport(struct vm *vm, vid_t vid,
 	size_t recv_size;
 
 	struct vdev *vdev = &vm->vdev;
-	struct channel *ch = vdev->ch[vid];
+	struct channel *ch;
 	struct vdev_ioport_info *result;
 
-	if (vdev->ioport[port].vid != vid) {
-		VDEV_DEBUG("Unmatched vid %d (expect %d).\n",
-			   vdev->ioport[port].vid, vid);
-		rc = 1;
-		goto ret;
+	vid_t vid;
+
+	if ((vid = vdev->ioport[port].vid) == -1) {
+		SET_IOPORT_DATA(data, 0xffffffff, width);
+		return 0;
 	}
+
+	KERN_ASSERT(0 <= vid && vid < MAX_VID);
+
+	ch = vdev->ch[vid];
 
 	struct vdev_ioport_info req = { .magic = VDEV_READ_GUEST_IOPORT,
 				        .port  = port, .width = width };
@@ -407,7 +438,7 @@ vdev_read_guest_ioport(struct vm *vm, vid_t vid,
 }
 
 int
-vdev_write_guest_ioport(struct vm *vm, vid_t vid,
+vdev_write_guest_ioport(struct vm *vm,
 			uint16_t port, data_sz_t width, uint32_t data)
 {
 	KERN_ASSERT(vm != NULL);
@@ -418,16 +449,19 @@ vdev_write_guest_ioport(struct vm *vm, vid_t vid,
 	    port == IO_PIC2 || port == IO_PIC2+1 ||
 	    port == IO_ELCR1 || port == IO_ELCR2)
 		return vpic_write_ioport(&vm->vdev.vpic, port, data);
-
-	KERN_ASSERT(0 <= vid && vid < MAX_VID);
+	else if ((0x3f8 <= port && port <= 0x3ff) || /* COM1 */
+		 (0x3b0 <= port && port <= 0x3bf) || /* MONO */
+		 (0x3c0 <= port && port <= 0x3cf) || /* VGA */
+		 (0x3d0 <= port && port <= 0x3df)    /* CGA */)
+		return vdev_write_ioport_passthrough(port, width, data);
 
 	struct vdev *vdev = &vm->vdev;
+	vid_t vid;
 
-	if (vdev->ioport[port].vid != vid) {
-		VDEV_DEBUG("Unmatched vid %d (expect %d).\n",
-			   vdev->ioport[port].vid, vid);
-		return 1;
-	}
+	if ((vid = vdev->ioport[port].vid) == -1)
+		return 0;
+
+	KERN_ASSERT(0 <= vid && vid < MAX_VID);
 
 	struct vdev_ioport_info req = {	.magic = VDEV_WRITE_GUEST_IOPORT,
 					.port  = port, .width = width };

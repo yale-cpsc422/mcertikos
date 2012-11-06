@@ -76,16 +76,15 @@ int vdev_unregister_irq(struct vm *vm, uint8_t irq, vid_t vid);
  * Read/Write the guest I/O port.
  *
  * @param vm    the virtual machine operating on
- * @param vid   the virtual device responsible for the I/O port
  * @param port  the I/O port accessed
  * @param width the data width
  * @param data  the data read/written
  *
  * @return 0 if successful; otherwise, return a non-zero value
  */
-int vdev_read_guest_ioport(struct vm *vm, vid_t vid,
+int vdev_read_guest_ioport(struct vm *vm,
 			   uint16_t port, data_sz_t width, uint32_t *data);
-int vdev_write_guest_ioport(struct vm *vm, vid_t vid,
+int vdev_write_guest_ioport(struct vm *vm,
 			    uint16_t port, data_sz_t width, uint32_t data);
 
 /*

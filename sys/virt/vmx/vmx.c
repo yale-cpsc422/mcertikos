@@ -779,7 +779,7 @@ vmx_init_vm(struct vm *vm)
 		return 1;
 	}
 	vmx->io_bitmap = (char *) mem_pi2phys(io_pi);
-	memset(vmx->io_bitmap, 0x0, PAGESIZE * 2);
+	memset(vmx->io_bitmap, 0xf, PAGESIZE * 2);
 	KERN_DEBUG("I/O bitmap A @ 0x%08x, I/O bitmap B @ 0x%08x.\n",
 		   vmx->io_bitmap, (uintptr_t) vmx->io_bitmap + PAGESIZE);
 
@@ -1050,12 +1050,10 @@ vmx_handle_inout(struct vm *vm)
 	uint16_t port;
 	uint8_t size, dir;
 	data_sz_t width;
-	vid_t vid;
 
 	port = EXIT_QUAL_IO_PORT(vmx->exit_qualification);
 	size = EXIT_QUAL_IO_SIZE(vmx->exit_qualification);
 	dir = EXIT_QUAL_IO_DIR(vmx->exit_qualification);
-	vid = vm->vdev.ioport[port].vid;
 
 	KERN_ASSERT(size == EXIT_QUAL_IO_ONE_BYTE ||
 		    size == EXIT_QUAL_IO_TWO_BYTE ||
@@ -1077,10 +1075,10 @@ vmx_handle_inout(struct vm *vm)
 #endif
 
 	if (dir == EXIT_QUAL_IO_IN)
-		vdev_read_guest_ioport(vm, vid,
+		vdev_read_guest_ioport(vm,
 				       port, width, (uint32_t *) &vmx->g_rax);
 	else
-		vdev_write_guest_ioport(vm, vid, port, width, (uint32_t) vmx->g_rax);
+		vdev_write_guest_ioport(vm, port, width, (uint32_t) vmx->g_rax);
 
 	vmx->g_rip += vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
 

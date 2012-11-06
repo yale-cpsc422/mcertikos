@@ -189,7 +189,7 @@ alloc_nested_ptable(void)
  *         otherwise, 0x0.
  */
 static uint64_t
-alloc_permission_map(size_t size)
+alloc_permission_map(size_t size, uint8_t init_val)
 {
 	pageinfo_t *pi = mem_pages_alloc(size);
 
@@ -197,7 +197,7 @@ alloc_permission_map(size_t size)
 		return 0;
 
 	uintptr_t addr = mem_pi2phys(pi);
-	memset((uint8_t *) addr, 0, size);
+	memset((uint8_t *) addr, init_val, size);
 
 	return (uint64_t) addr;
 }
@@ -299,7 +299,7 @@ setup_intercept(struct vm *vm)
 	struct vmcb *vmcb = svm->vmcb;
 
 	/* create IOPM */
-	vmcb->control.iopm_base_pa = alloc_permission_map(SVM_IOPM_SIZE);
+	vmcb->control.iopm_base_pa = alloc_permission_map(SVM_IOPM_SIZE, 0xf);
 	if (vmcb->control.iopm_base_pa == 0x0) {
 		KERN_DEBUG("Failed to create IOPM.\n");
 		return 1;
@@ -307,7 +307,7 @@ setup_intercept(struct vm *vm)
 	KERN_DEBUG("IOPM is at %x.\n", vmcb->control.iopm_base_pa);
 
 	/* create MSRPM */
-	vmcb->control.msrpm_base_pa = alloc_permission_map(SVM_MSRPM_SIZE);
+	vmcb->control.msrpm_base_pa = alloc_permission_map(SVM_MSRPM_SIZE, 0x0);
 	if (vmcb->control.msrpm_base_pa == 0x0) {
 		KERN_DEBUG("Failed to create MSRPM.\n");
 		return 1;
