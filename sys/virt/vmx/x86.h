@@ -173,7 +173,8 @@ vmwrite(uint32_t encoding, uint32_t val)
 			 : "r" (val), "r" (encoding)
 			 : "cc");
 	if (unlikely(error))
-		KERN_PANIC("vmwrite error\n");
+		KERN_PANIC("vmwrite 0x%08x 0x%08x error %d\n",
+			   val, encoding, error);
 }
 
 #define	INVVPID_TYPE_ADDRESS		0UL

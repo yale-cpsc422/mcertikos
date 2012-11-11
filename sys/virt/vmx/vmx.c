@@ -34,6 +34,7 @@
 #include <sys/debug.h>
 #include <sys/mem.h>
 #include <sys/pcpu.h>
+#include <sys/spinlock.h>
 #include <sys/string.h>
 #include <sys/types.h>
 #include <sys/x86.h>
@@ -50,9 +51,52 @@
 #include "x86.h"
 
 static struct {
-	struct vmx	vmxs[MAX_CPU];
-	bool		used[MAX_CPU];
+	struct vmx	vmx[MAX_VMID];
+	bool		used[MAX_VMID];
 } vmx_pool;
+
+static spinlock_t vmx_pool_lock;
+
+static struct vmx *
+alloc_vmx(void)
+{
+	int i;
+	struct vmx *vmx = NULL;
+
+	spinlock_acquire(&vmx_pool_lock);
+
+	for (i = 0; i < MAX_VMID; i++)
+		if (vmx_pool.used[i] == FALSE)
+			break;
+
+	if (i < MAX_VMID) {
+		vmx_pool.used[i] = TRUE;
+		vmx = &vmx_pool.vmx[i];
+		memzero(vmx, sizeof(struct vmx));
+	}
+
+	spinlock_release(&vmx_pool_lock);
+
+	return vmx;
+}
+
+static void
+free_vmx(struct vmx *vmx)
+{
+	uintptr_t offset;
+
+	if (vmx < vmx_pool.vmx)
+		return;
+
+	offset = (uintptr_t) vmx - (uintptr_t) &vmx_pool.vmx;
+	if (offset % sizeof(struct vmx) ||
+	    offset / sizeof(struct vmx) >= MAX_VMID)
+		return;
+
+	spinlock_acquire(&vmx_pool_lock);
+	vmx_pool.used[vmx - vmx_pool.vmx] = FALSE;
+	spinlock_release(&vmx_pool_lock);
+}
 
 #define PINBASED_CTLS_ONE_SETTING		\
 	PINBASED_EXTINT_EXITING/*	|	\ */
@@ -130,9 +174,9 @@ struct vmx_info {
 	uint64_t	cr4_ones_mask, cr4_zeros_mask;
 
 	void		*vmx_region;
-} vmx_proc_info[MAX_CPU];
+} vmx_cpu_info[MAX_CPU];
 
-#if defined (DEBUG_VMEXIT) || defined (TRACE_VMEXIT)
+#if defined (DEBUG_VMEXIT)
 
 static char *exit_reason_string[60] = {
 	[EXIT_REASON_EXCEPTION] = "Exception/NMI",
@@ -191,66 +235,6 @@ static char *exit_reason_string[60] = {
 	[EXIT_REASON_INVPCID] = "INVPCID",
 	[EXIT_REASON_VMFUNC] = "VMFUNC",
 };
-
-#endif
-
-#ifdef TRACE_VMEXIT
-
-static struct {
-	uint64_t total;
-	uint64_t delta;
-	uint64_t time;
-} vmexit_trace_info[60];
-
-static void
-dump_vmexit_trace_info(void)
-{
-	int slot;
-
-	KERN_DEBUG("VMEXIT trace:\n");
-
-	for (slot = 0; slot < 60; slot++) {
-		if (vmexit_trace_info[slot].delta > 0) {
-			vmexit_trace_info[slot].total +=
-				vmexit_trace_info[slot].delta;
-			dprintf("%s: +%lld times, "
-				"total %lld ticks, "
-				"%lld ticks/time\n",
-				exit_reason_string[slot],
-				vmexit_trace_info[slot].delta,
-				vmexit_trace_info[slot].time,
-				vmexit_trace_info[slot].time/
-				vmexit_trace_info[slot].total);
-			vmexit_trace_info[slot].delta = 0;
-		}
-	}
-}
-
-#endif
-
-#ifdef TRACE_EVT_INJECT
-static uint64_t exception_delta = 0;
-static uint64_t intr_delta = 0;
-static uint64_t others_delta = 0;
-
-static void
-dump_evt_inj_trace_info(void)
-{
-	dprintf("Inject");
-	if (exception_delta) {
-		dprintf(" +%d exceptions", exception_delta);
-		exception_delta = 0;
-	}
-	if (intr_delta) {
-		dprintf(" +%d interrupts", intr_delta);
-		intr_delta = 0;
-	}
-	if (others_delta) {
-		dprintf(" +%d others", others_delta);
-		others_delta = 0;
-	}
-	dprintf("\n");
-}
 
 #endif
 
@@ -390,132 +374,6 @@ vmx_dump_info(struct vmx *vmx)
 		vmcs_read64(VMCS_HOST_IA32_EFER));
 }
 
-static void
-vmx_set_intercept_io(struct vmx *vmx, uint16_t port, data_sz_t sz, bool enable)
-{
-	KERN_ASSERT(vmx != NULL);
-	KERN_ASSERT(sz == SZ8 || sz == SZ16 || sz == SZ32);
-
-#ifdef DEBUG_GUEST_IOIO
-	if (enable == TRUE)
-		KERN_DEBUG("Enable intercepting I/O port 0x%x, size %d byte%s\n",
-			   port, (1 << sz), (sz != SZ8) ? "s" : "");
-#endif
-
-	uint32_t *bitmap = (uint32_t *) vmx->io_bitmap;
-
-	int i;
-	int port1, entry, bit;
-
-	for (i = 0; i < (1 << sz); i++) {
-		port1 = port + i;
-		entry = port1 / 32;
-		bit = port1 - entry *32;
-
-		if (enable == TRUE)
-			bitmap[entry] |= (1 << bit);
-		else
-			bitmap[entry] &= ~(1 << bit);
-	}
-}
-
-static void
-vmx_inject_event(uint32_t type, uint8_t vector, uint32_t err_code, int err_valid)
-{
-	KERN_ASSERT(type == VMCS_INTERRUPTION_INFO_HW_INTR ||
-		    type == VMCS_INTERRUPTION_INFO_NMI ||
-		    type == VMCS_INTERRUPTION_INFO_HW_EXCPT);
-
-#ifdef DEBUG_EVT_INJECT
-	KERN_DEBUG("Inject %s, vector 0x%x, error code %d.\n",
-		   (type == VMCS_INTERRUPTION_INFO_HW_INTR) ? "ExtINT" :
-		   (type == VMCS_INTERRUPTION_INFO_NMI) ? "NMI" : "HW Excpt",
-		   vector, err_code);
-#endif
-
-	uint32_t intr_info;
-
-	intr_info = vmcs_read32(VMCS_ENTRY_INTR_INFO);
-	if (intr_info & VMCS_INTERRUPTION_INFO_VALID)
-		KERN_PANIC("Non-delivered event: type %d, vector %d.\n",
-			   (intr_info >> 8) & 7, intr_info & 0xff);
-
-	intr_info = VMCS_INTERRUPTION_INFO_VALID |
-		type | vector | ((err_valid ? 1 : 0) << 11);
-
-#ifdef DEBUG_EVT_INJECT
-	KERN_DEBUG("VMCS_ENTRY_INTR_INFO 0x%08x\n", intr_info);
-	KERN_DEBUG("VMCS_GUEST_INTERRUPTIBILITY 0x%08x\n",
-		   (uintptr_t) vmcs_read32(VMCS_GUEST_INTERRUPTIBILITY));
-	KERN_DEBUG("guest eflags 0x%08x\n",
-		   (uintptr_t) vmcs_read32(VMCS_GUEST_RFLAGS));
-#endif
-
-#ifdef TRACE_EVT_INJECT
-	if (type == VMCS_INTERRUPTION_INFO_HW_INTR)
-		intr_delta++;
-	else if (type == VMCS_INTERRUPTION_INFO_HW_EXCPT)
-		exception_delta++;
-	else
-		others_delta++;
-#endif
-
-	vmcs_write32(VMCS_ENTRY_INTR_INFO, intr_info);
-
-	if (err_valid) {
-#ifdef DEBUG_EVT_INJECT
-		KERN_DEBUG("VMCS_ENTRY_EXCEPTION_ERROR 0x%08x\n", err_code);
-#endif
-		vmcs_write32(VMCS_ENTRY_EXCEPTION_ERROR, err_code);
-	}
-}
-
-static void
-load_bios(uint64_t *pml4ept)
-{
-	/* load BIOS ROM */
-	extern uint8_t _binary___misc_bios_bin_start[],
-		_binary___misc_bios_bin_size[];
-
-	KERN_ASSERT((size_t) _binary___misc_bios_bin_size % 0x10000 == 0);
-
-	uintptr_t bios_addr = 0x100000 - (size_t) _binary___misc_bios_bin_size;
-
-	ept_copy_to_guest(pml4ept,
-			  bios_addr,
-			  (uintptr_t) _binary___misc_bios_bin_start,
-			  (size_t) _binary___misc_bios_bin_size);
-
-	/* load VGA BIOS ROM */
-	extern uint8_t _binary___misc_vgabios_bin_start[],
-		_binary___misc_vgabios_bin_size[];
-
-	/* KERN_ASSERT((size_t) _binary___misc_vgabios_bin_size <= 0x8000); */
-
-	ept_copy_to_guest(pml4ept,
-			  0xc0000,
-			  (uintptr_t) _binary___misc_vgabios_bin_start,
-			  (size_t) _binary___misc_vgabios_bin_size);
-}
-
-static struct vmx *
-vmx_alloc(void)
-{
-	int i;
-
-	for (i = 0; i < MAX_CPU; i++)
-		if (vmx_pool.used[i] == FALSE)
-			break;
-
-	if (i == MAX_CPU)
-		return NULL;
-
-	vmx_pool.used[i] = TRUE;
-	memset(&vmx_pool.vmxs[i], 0, sizeof(struct vmx));
-
-	return &vmx_pool.vmxs[i];
-}
-
 static int
 vmx_enable(void)
 {
@@ -523,7 +381,7 @@ vmx_enable(void)
 	struct vmx_info *vmx_info;
 	int error;
 
-	vmx_info = &vmx_proc_info[pcpu_cpu_idx(pcpu_cur())];
+	vmx_info = &vmx_cpu_info[pcpu_cpu_idx(pcpu_cur())];
 
 	lcr4(rcr4() | CR4_VMXE);
 
@@ -532,6 +390,7 @@ vmx_enable(void)
 		return 1;
 	}
 	vmx_info->vmx_region = (void *) mem_pi2phys(pi);
+	memzero(vmx_info->vmx_region, PAGESIZE);
 
 	*(uint32_t *) vmx_info->vmx_region = rdmsr(MSR_VMX_BASIC) & 0xffffffff;
 
@@ -544,6 +403,168 @@ vmx_enable(void)
 	return error;
 }
 
+static struct vmcs *
+alloc_vmcs(void)
+{
+	pageinfo_t *pi;
+	struct vmcs *vmcs;
+
+	if ((pi = mem_page_alloc()) ==NULL)
+		return NULL;
+
+	vmcs = mem_pi2ptr(pi);
+	memzero(vmcs, sizeof(struct vmcs));
+
+	return vmcs;
+}
+
+static void
+free_vmcs(struct vmcs *vmcs)
+{
+	if (vmcs == NULL)
+		return;
+	mem_page_free(mem_ptr2pi(vmcs));
+}
+
+static uint64_t *
+alloc_pml4(void)
+{
+	pageinfo_t *pi;
+	uint64_t *pml4;
+
+	if ((pi = mem_page_alloc()) == NULL)
+		return NULL;
+
+	pml4 = mem_pi2ptr(pi);
+	memzero(pml4, PAGESIZE);
+
+	return pml4;
+}
+
+static void
+free_pml4(uint64_t *pml4)
+{
+	if (pml4 == NULL)
+		return;
+	mem_page_free(mem_ptr2pi(pml4));
+}
+
+static char *
+alloc_bitmap(size_t size)
+{
+	pageinfo_t *pi;
+	char *bitmap;
+
+	if (size == 0 || size % PAGESIZE)
+		return NULL;
+
+	if ((pi = mem_pages_alloc(size)) == NULL)
+		return NULL;
+
+	bitmap = mem_pi2ptr(pi);
+	memzero(bitmap, size);
+
+	return bitmap;
+}
+
+static void
+free_bitmap(void *bitmap)
+{
+	if (bitmap == NULL)
+		return;
+	mem_page_free(bitmap);
+}
+
+static int
+vmx_handle_exit(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct vmx *vmx = (struct vmx *) vm->cookie;
+
+	vm->exit_handled = FALSE;
+
+	switch (vmx->exit_reason & EXIT_REASON_MASK) {
+	case EXIT_REASON_EXT_INTR:
+		vm->exit_reason = EXIT_FOR_EXTINT;
+		break;
+
+	case EXIT_REASON_INTR_WINDOW:
+		vm->exit_reason = EXIT_FOR_INTWIN;
+		break;
+
+	case EXIT_REASON_INOUT:
+		vm->exit_reason = EXIT_FOR_IOPORT;
+		vm->exit_info.ioport.port =
+			EXIT_QUAL_IO_PORT(vmx->exit_qualification);
+		if (EXIT_QUAL_IO_SIZE(vmx->exit_qualification) ==
+		    EXIT_QUAL_IO_ONE_BYTE)
+			vm->exit_info.ioport.width = SZ8;
+		else if (EXIT_QUAL_IO_SIZE(vmx->exit_qualification) ==
+			 EXIT_QUAL_IO_TWO_BYTE)
+			vm->exit_info.ioport.width = SZ16;
+		else
+			vm->exit_info.ioport.width = SZ32;
+		if (EXIT_QUAL_IO_DIR(vmx->exit_qualification) ==
+		    EXIT_QUAL_IO_IN)
+			vm->exit_info.ioport.write = FALSE;
+		else
+			vm->exit_info.ioport.write = TRUE;
+		vm->exit_info.ioport.rep =
+			EXIT_QUAL_IO_REP(vmx->exit_qualification) ? TRUE : FALSE;
+		vm->exit_info.ioport.str =
+			EXIT_QUAL_IO_STR(vmx->exit_qualification) ? TRUE : FALSE;
+		break;
+
+	case EXIT_REASON_EPT_FAULT:
+		vm->exit_reason = EXIT_FOR_PGFLT;
+		vm->exit_info.pgflt.addr =
+			(uintptr_t) vmcs_read64(VMCS_GUEST_PHYSICAL_ADDRESS);
+		break;
+
+	case EXIT_REASON_CPUID:
+		vm->exit_reason = EXIT_FOR_CPUID;
+		break;
+
+	case EXIT_REASON_RDTSC:
+		vm->exit_reason = EXIT_FOR_RDTSC;
+		break;
+
+	case EXIT_REASON_RDMSR:
+		vm->exit_reason = EXIT_FOR_RDMSR;
+		break;
+
+	case EXIT_REASON_WRMSR:
+		vm->exit_reason = EXIT_FOR_WRMSR;
+		break;
+
+	case EXIT_REASON_VMCALL:
+		vm->exit_reason = EXIT_FOR_HYPERCALL;
+		break;
+
+	case EXIT_REASON_RDTSCP:
+	case EXIT_REASON_HLT:
+	case EXIT_REASON_VMCLEAR:
+	case EXIT_REASON_VMLAUNCH:
+	case EXIT_REASON_VMPTRLD:
+	case EXIT_REASON_VMPTRST:
+	case EXIT_REASON_VMREAD:
+	case EXIT_REASON_VMRESUME:
+	case EXIT_REASON_VMWRITE:
+	case EXIT_REASON_VMXOFF:
+	case EXIT_REASON_VMXON:
+	case EXIT_REASON_MWAIT:
+	case EXIT_REASON_MONITOR:
+		vm->exit_reason = EXIT_FOR_INVAL_INSTR;
+		break;
+
+	default:
+		vm->exit_reason = EXIT_INVAL;
+	}
+
+	return 0;
+}
+
 static int
 vmx_init(void)
 {
@@ -553,7 +574,7 @@ vmx_init(void)
 	struct vmx_info *vmx_info;
 
 	KERN_ASSERT(pcpu_cur() != NULL);
-	vmx_info = &vmx_proc_info[pcpu_cpu_idx(pcpu_cur())];
+	vmx_info = &vmx_cpu_info[pcpu_cpu_idx(pcpu_cur())];
 
 	memset(&vmx_pool, 0, sizeof(vmx_pool));
 
@@ -699,51 +720,44 @@ vmx_init_vm(struct vm *vm)
 
 	struct vmx_info *vmx_info;
 	struct vmx *vmx;
-	pageinfo_t *vmcs_pi, *ept_pi, *msr_pi, *io_pi;
 
-	vmx_info = &vmx_proc_info[pcpu_cpu_idx(pcpu_cur())];
+	int rc = 0;
+
+	vmx_info = &vmx_cpu_info[pcpu_cpu_idx(pcpu_cur())];
 	KERN_ASSERT(vmx_info->vmx_enabled == TRUE);
 
-	vmx = vmx_alloc();
-
-	if (vmx == NULL) {
+	if ((vmx = alloc_vmx()) == NULL) {
 		KERN_DEBUG("Cannot allocate memory for struct vmx.\n");
-		return 1;
+		rc = 1;
+		goto vmx_err;
 	}
-
 	vm->cookie = vmx;
 
 	/*
 	 * Setup VMCS.
 	 */
-	if ((vmcs_pi = mem_page_alloc()) == NULL) {
+	if ((vmx->vmcs = alloc_vmcs()) == NULL) {
 		KERN_DEBUG("Cannot allocate memory for VMCS.\n");
-		return 1;
+		rc = 2;
+		goto vmcs_err;
 	}
-	vmx->vmcs = (struct vmcs *) mem_pi2phys(vmcs_pi);
 	KERN_DEBUG("VMCS @ 0x%08x\n", vmx->vmcs);
 
 	/*
 	 * Setup EPT.
 	 */
-	if ((ept_pi = mem_page_alloc()) == NULL) {
+	if ((vmx->pml4ept = alloc_pml4()) == NULL) {
 		KERN_DEBUG("Cannot allocate memory for EPT.\n");
-		mem_page_free(vmcs_pi);
-		return 1;
+		rc = 3;
+		goto pml4_err;
 	}
-	vmx->pml4ept = (uint64_t *) mem_pi2phys(ept_pi);
-	memzero(mem_pi2ptr(ept_pi), PAGESIZE);
 	KERN_DEBUG("EPT @ 0x%08x.\n", vmx->pml4ept);
 
-	if (ept_create_mappings(vmx->pml4ept, VM_PHY_MEMORY_SIZE)) {
+	if (ept_create_mappings(vmx->pml4ept, vm->memsize)) {
 		KERN_DEBUG("Cannot create EPT mappings.\n");
-		mem_page_free(ept_pi);
-		mem_page_free(vmcs_pi);
-		return 1;
+		rc = 4;
+		goto ept_err;
 	}
-
-	/* load SeaBIOS */
-	load_bios(vmx->pml4ept);
 
 	/*
 	 * Clean up EPTP-tagged guest physical and combined mappings
@@ -759,27 +773,22 @@ vmx_init_vm(struct vm *vm)
 	/*
 	 * Setup MSR bitmap.
 	 */
-	if ((msr_pi = mem_page_alloc()) == NULL) {
+	if ((vmx->msr_bitmap = alloc_bitmap(PAGESIZE)) == NULL) {
 		KERN_DEBUG("Cannot allocate memory for MSR bitmap.\n");
-		mem_page_free(vmcs_pi);
-		mem_page_free(ept_pi);
-		return 1;
+		rc = 5;
+		goto msr_err;
 	}
-	vmx->msr_bitmap = (char *) mem_pi2phys(msr_pi);
 	KERN_DEBUG("MSR bitmap @ 0x%08x\n", vmx->msr_bitmap);
 	msr_bitmap_initialize(vmx->msr_bitmap);
 
 	/*
 	 * Setup I/O bitmaps.
 	 */
-	if ((io_pi = mem_pages_alloc(PAGESIZE * 2)) == NULL) {
+	if ((vmx->io_bitmap = alloc_bitmap(PAGESIZE * 2)) == NULL) {
 		KERN_DEBUG("Cannot allocate memory for I/O bitmap.\n");
-		mem_page_free(vmcs_pi);
-		mem_page_free(ept_pi);
-		return 1;
+		rc = 6;
+		goto io_err;
 	}
-	vmx->io_bitmap = (char *) mem_pi2phys(io_pi);
-	memset(vmx->io_bitmap, 0xf, PAGESIZE * 2);
 	KERN_DEBUG("I/O bitmap A @ 0x%08x, I/O bitmap B @ 0x%08x.\n",
 		   vmx->io_bitmap, (uintptr_t) vmx->io_bitmap + PAGESIZE);
 
@@ -799,13 +808,6 @@ vmx_init_vm(struct vm *vm)
 		 (uintptr_t) vmx_return_from_guest);
 
 	vmx->vpid = pcpu_cpu_idx(pcpu_cur()) + 1;
-
-	vmx->g_rax = vmx->g_rbx = vmx->g_rcx =
-		vmx->g_rsi = vmx->g_rdi = vmx->g_rbp = 0;
-	vmx->g_rdx =
-		(pcpu_cur()->arch_info.family << 8) |
-		(pcpu_cur()->arch_info.model << 4) |
-		(pcpu_cur()->arch_info.step);
 	vmx->g_cr2 = 0;
 	vmx->g_dr0 = vmx->g_dr1 = vmx->g_dr2 = vmx->g_dr3 = 0;
 	vmx->g_dr6 = 0xffff0ff0;
@@ -813,6 +815,19 @@ vmx_init_vm(struct vm *vm)
 	KERN_DEBUG("vmx_init_vm() done.\n");
 
 	return 0;
+
+ io_err:
+	free_bitmap(vmx->msr_bitmap);
+ msr_err:
+	/* TODO: free EPT */
+ ept_err:
+	free_pml4(vmx->pml4ept);
+ pml4_err:
+	free_vmcs(vmx->vmcs);
+ vmcs_err:
+	free_vmx(vmx);
+ vmx_err:
+	return rc;
 }
 
 static int
@@ -825,23 +840,6 @@ vmx_run_vm(struct vm *vm)
 	vmptrld(vmx->vmcs);
 
 	vmcs_write32(VMCS_GUEST_RIP, vmx->g_rip);
-
-#ifdef DEBUG_VMENTRY
-	if (vmx->launched)
-		KERN_DEBUG("Resume VM from eip 0x%08x:0x%08x ... \n",
-			   (uintptr_t) vmcs_read32(VMCS_GUEST_CS_BASE),
-			   (uintptr_t) vmcs_read32(VMCS_GUEST_RIP));
-	else
-		KERN_DEBUG("Launch VM from eip 0x%08x:0x%08x ... \n",
-			   (uintptr_t) vmcs_read32(VMCS_GUEST_CS_BASE),
-			   (uintptr_t) vmcs_read32(VMCS_GUEST_RIP));
-	/* vmx_dump_info(vmx); */
-#endif
-
-#ifdef TRACE_TOTAL_TIME
-	if (vm->start_tsc != 0)
-		vm->total_tsc += (rdtscp() - vm->start_tsc);
-#endif
 
 	/* the address of vmx is stored in %ecx */
 	__asm __volatile(
@@ -951,593 +949,482 @@ vmx_run_vm(struct vm *vm)
 			 [exit_tsc_hi] "i" (offsetof(struct vmx, exit_tsc[1]))
 			 : "cc", "memory", "eax", "ebx", "edx", "esi", "edi");
 
-#ifdef TRACE_TOTAL_TIME
-	vm->start_tsc = rdtscp();
-#endif
-
-	if (unlikely(vmx->failed == 1))
-		KERN_PANIC("vmlaunch/vmresume failed: error %d.\n",
+	if (unlikely(vmx->failed == 1)) {
+		KERN_DEBUG("vmlaunch/vmresume failed: error %d.\n",
 			   vmx->failed);
-	else if (unlikely(vmx->failed == 2))
-		KERN_PANIC("vmlaunch/vmresume failed: error %d, code 0x%08x.\n",
+		return 1;
+	} else if (unlikely(vmx->failed == 2)) {
+		KERN_DEBUG("vmlaunch/vmresume failed: error %d, code 0x%08x.\n",
 			   vmx->failed, vmcs_read32(VMCS_INSTRUCTION_ERROR));
+		return 2;
+	}
 
 	vmx->g_rip = vmcs_read32(VMCS_GUEST_RIP);
 	vmx->exit_reason = vmcs_read32(VMCS_EXIT_REASON);
 	vmx->exit_qualification = vmcs_read32(VMCS_EXIT_QUALIFICATION);
 
 	if (unlikely(vmx->exit_reason & EXIT_REASON_ENTRY_FAIL)) {
-		KERN_PANIC("VM-entry failure: reason %d.\n",
+		KERN_DEBUG("VM-entry failure: reason %d.\n",
 			   vmx->exit_reason & 0x0000ffff);
 		return 1;
 	}
 
-	if ((vmx->exit_reason & EXIT_REASON_MASK) == EXIT_REASON_EXT_INTR) {
-		vm->exit_reason = EXIT_FOR_EXTINT;
-		vm->handled = FALSE;
-	}
+	vm->pending = (vmcs_read32(VMCS_ENTRY_INTR_INFO) &
+		       VMCS_INTERRUPTION_INFO_VALID) ? TRUE : FALSE;
+	vm->intr_shadow = (vmcs_read32(VMCS_GUEST_INTERRUPTIBILITY) &
+		(VMCS_INTERRUPTIBILITY_STI_BLOCKING |
+		 VMCS_INTERRUPTIBILITY_MOVSS_BLOCKING)) ? TRUE : FALSE;
 
 	vmx->launched = 1;
 
+	return vmx_handle_exit(vm);
+}
+
+static int
+vmx_intercept_ioport(struct vm *vm, uint16_t port, bool enable)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct vmx *vmx = (struct vmx *) vm->cookie;
+	uint32_t *bitmap = (uint32_t *) vmx->io_bitmap;
+
+	int entry = port / 32;
+	int bit = port - entry * 32;
+
+	if (enable == TRUE)
+		bitmap[entry] |= (1 << bit);
+	else
+		bitmap[entry] &= ~(1 << bit);
+
 	return 0;
 }
 
-static gcc_inline uint32_t
-vmx_interruption_info(void)
-{
-	return vmcs_read32(VMCS_EXIT_INTERRUPTION_INFO);
-}
-
-static gcc_inline uint32_t
-vmx_vector_info(void)
-{
-	return vmcs_read32(VMCS_IDT_VECTORING_INFO);
-}
-
-static void
-physical_ioport_read(uint32_t port, void *data, data_sz_t size)
-{
-	KERN_ASSERT(data != NULL);
-
-	switch (size) {
-	case SZ8:
-		*(uint8_t *) data = inb(port);
-		break;
-
-	case SZ16:
-		*(uint16_t *) data = inw(port);
-		break;
-
-	case SZ32:
-		*(uint32_t *) data = inl(port);
-		break;
-
-	default:
-		KERN_PANIC("Invalid data size.\n");
-	}
-}
-
-static void
-physical_ioport_write(uint32_t port, void *data, data_sz_t size)
-{
-	KERN_ASSERT(data != NULL);
-
-	switch (size) {
-	case SZ8:
-		outb(port, *(uint8_t *) data);
-		break;
-
-	case SZ16:
-		outw(port, *(uint16_t *) data);
-		break;
-
-	case SZ32:
-		outl(port, *(uint32_t *) data);
-		break;
-
-	default:
-		KERN_PANIC("Invalid data size.\n");
-	}
-}
-
-static gcc_inline bool
-vmx_handle_inout(struct vm *vm)
+static int
+vmx_intercept_all_ioports(struct vm *vm, bool enable)
 {
 	KERN_ASSERT(vm != NULL);
 
 	struct vmx *vmx = (struct vmx *) vm->cookie;
-
-	uint16_t port;
-	uint8_t size, dir;
-	data_sz_t width;
-
-	port = EXIT_QUAL_IO_PORT(vmx->exit_qualification);
-	size = EXIT_QUAL_IO_SIZE(vmx->exit_qualification);
-	dir = EXIT_QUAL_IO_DIR(vmx->exit_qualification);
-
-	KERN_ASSERT(size == EXIT_QUAL_IO_ONE_BYTE ||
-		    size == EXIT_QUAL_IO_TWO_BYTE ||
-		    size == EXIT_QUAL_IO_FOUR_BYTE);
-
-	if (size == EXIT_QUAL_IO_ONE_BYTE)
-		width = SZ8;
-	else if (size == EXIT_QUAL_IO_TWO_BYTE)
-		width = SZ16;
-	else
-		width = SZ32;
-
-#ifdef DEBUG_GUEST_IOIO
-	KERN_DEBUG("Intercept IO: %s, port 0x%x, %d bytes%s%s.\n",
-		   (dir == EXIT_QUAL_IO_OUT) ? "OUT" : "IN",
-		   port, (1 << width),
-		   EXIT_QUAL_IO_REP(vmx->exit_qualification) ? ", REP" : "",
-		   EXIT_QUAL_IO_STR(vmx->exit_qualification) ? ", STR" : "");
-#endif
-
-	if (dir == EXIT_QUAL_IO_IN)
-		vdev_read_guest_ioport(vm,
-				       port, width, (uint32_t *) &vmx->g_rax);
-	else
-		vdev_write_guest_ioport(vm, port, width, (uint32_t) vmx->g_rax);
-
-	vmx->g_rip += vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
-
-	return TRUE;
-}
-
-static gcc_inline bool
-vmx_handle_cpuid(struct vm *vm)
-{
-	KERN_ASSERT(vm != NULL);
-
-	struct vmx *vmx = (struct vmx *) vm->cookie;
-	uint32_t id;
-	uint32_t eax, ebx, ecx, edx;
-
-	id = vmx->g_rax;
-
-#ifdef DEBUG_GUEST_CPUID
-	KERN_DEBUG("Intercept cpuid 0x%08x.\n", (uintptr_t) id);
-#endif
-
-	if (id == 0x00000001) {
-		cpuid(id, &eax, &ebx, &ecx, &edx);
-		vmx->g_rax = eax;
-		vmx->g_rbx = /* 1 core per processor */
-			(ebx & ~(uint32_t) (0xf << 16)) | (1 << 16);
-		vmx->g_rcx = ecx & ~(uint32_t) (CPUID_FEATURE_RDRAND |
-						CPUID_FEATURE_AVX |
-						CPUID_FEATURE_AES |
-						CPUID_FEATURE_TSC_DEADLINE |
-						CPUID_FEATURE_X2APIC |
-						CPUID_FEATURE_PCID |
-						CPUID_FEATURE_XTPR |
-						CPUID_FEATURE_EIST |
-						CPUID_FEATURE_SMX |
-						CPUID_FEATURE_VMX |
-						CPUID_FEATURE_MONITOR);
-		vmx->g_rdx = edx & ~(uint32_t) (CPUID_FEATURE_HTT |
-						CPUID_FEATURE_ACPI |
-						CPUID_FEATURE_MCA |
-						CPUID_FEATURE_MTRR |
-						CPUID_FEATURE_APIC |
-						CPUID_FEATURE_MCE |
-						CPUID_FEATURE_MSR |
-						CPUID_FEATURE_DE);
-	} else if (id >= 0x80000000) {
-		vmx->g_rax = vmx->g_rbx = vmx->g_rcx = vmx->g_rdx = 0;
-	} else {
-		cpuid(id, &eax, &ebx, &ecx, &edx);
-		vmx->g_rax = eax;
-		vmx->g_rbx = ebx;
-		vmx->g_rcx = ecx;
-		vmx->g_rdx = edx;
-	}
-
-	vmx->g_rip += vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
-
-	return TRUE;
-}
-
-static gcc_inline bool
-vmx_handle_rdmsr(struct vm *vm)
-{
-	KERN_ASSERT(vm != NULL);
-
-	struct vmx *vmx;
-	uint32_t msr;
-	uint64_t val;
-	uint16_t cs_sel;
-	uint8_t cpl;
-	uint32_t err_code;
-
-	vmx = (struct vmx *) vm->cookie;
-	msr = vmx->g_rcx;
-	cpl = (vmcs_read32(VMCS_GUEST_CS_ACCESS_RIGHTS) >> 5) & 3;
-
-#ifdef DEBUG_GUEST_MSR
-	KERN_DEBUG("Intercept rdmsr: MSR 0x%08x, CPL %d.\n", msr, cpl);
-#endif
-
-	if (cpl != 0 &&
-	    !((0x00000000 <= msr && msr <= 0x00001fff) ||
-	      (0xc0000000 <= msr && msr <= 0xc0001fff))) {
-		cs_sel = vmcs_read16(VMCS_GUEST_CS_SELECTOR);
-		err_code = (cs_sel & 0x1fff) << 3;
-		vmx_inject_event(VMCS_INTERRUPTION_INFO_HW_EXCPT, T_GPFLT,
-				 err_code, 1);
-		return TRUE;
-	}
-
-	val = rdmsr(msr);
-	vmx->g_rax = val & 0xffffffff;
-	vmx->g_rdx = (val >> 32) & 0xffffffff;
-	vmx->g_rip += vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
-
-	return TRUE;
-}
-
-static gcc_inline bool
-vmx_handle_wrmsr(struct vm *vm)
-{
-	KERN_ASSERT(vm != NULL);
-
-	struct vmx *vmx;
-	uint32_t msr;
-	uint64_t val;
-	uint16_t cs_sel;
-	uint8_t cpl;
-	uint32_t err_code;
-
-	vmx = (struct vmx *) vm->cookie;
-	msr = vmx->g_rcx;
-	val = ((vmx->g_rdx & 0xffffffff) << 32) | (vmx->g_rax & 0xffffffff);
-	cpl = (vmcs_read32(VMCS_GUEST_CS_ACCESS_RIGHTS) >> 5) & 3;
-
-#ifdef DEBUG_GUEST_MSR
-	KERN_DEBUG("Intecept wrmsr: MSR 0x%08x, val 0x%llx, CPL %d.\n",
-		   msr, val, cpl);
-#endif
-
-	if (cpl != 0 &&
-	    !((0x00000000 <= msr && msr <= 0x00001fff) ||
-	      (0xc0000000 <= msr && msr <= 0xc0001fff))) {
-		cs_sel = vmcs_read16(VMCS_GUEST_CS_SELECTOR);
-		err_code = (cs_sel & 0x1fff) << 3;
-		vmx_inject_event(VMCS_INTERRUPTION_INFO_HW_EXCPT, T_GPFLT,
-				 err_code, 1);
-		return TRUE;
-	}
-
-	wrmsr(msr, val);
-	vmx->g_rip += vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
-
-	return TRUE;
-}
-
-static gcc_inline bool
-vmx_handle_ept_violation(struct vm *vm)
-{
-	KERN_ASSERT(vm != NULL);
-
-	struct vmx *vmx;
-	uintptr_t fault_pa;
-	pageinfo_t *pi;
-
-	vmx = (struct vmx *) vm->cookie;
-	fault_pa = vmcs_read64(VMCS_GUEST_PHYSICAL_ADDRESS);
-
-#ifdef DEBUG_EPT
-	KERN_DEBUG("Intercept EPT violation: "
-		   "guest physical address 0x%08x, "
-		   "guest linear address 0x%08x\n",
-		   fault_pa,
-		   (uintptr_t) vmcs_read32(VMCS_GUEST_LINEAR_ADDRESS));
-#endif
-
-	if (!(0xf0000000 <= fault_pa && fault_pa <= 0xffffffff)) {
-		KERN_WARN("Out of physical memory range: 0x%08x.\n", fault_pa);
-		return FALSE;
-	}
-
-	if ((pi = mem_page_alloc()) == NULL) {
-		KERN_WARN("Cannot allocate physical memory for gpa 0x%08x.\n",
-			  fault_pa);
-		return FALSE;
-	}
-
-	memset(mem_pi2ptr(pi), 0, PAGESIZE);
-
-	if (ept_add_mapping(vmx->pml4ept,
-			    ROUNDDOWN(fault_pa, PAGESIZE),
-			    mem_pi2phys(pi), PAT_WRITE_BACK, FALSE))
-		KERN_PANIC("Cannot allocate memory for guest physical "
-			   "address 0x%08x.\n", fault_pa);
-
-	ept_invalidate_mappings((uintptr_t) vmx->pml4ept);
-
-	return TRUE;
-}
-
-static void
-vmx_intr_assist(struct vm *vm)
-{
-	KERN_ASSERT(vm != NULL);
-
-	struct vmx *vmx = (struct vmx *) vm->cookie;
-	int vector, intr_disable, blocked, pending;
 	uint32_t procbased_ctls;
-
-	if ((vector = vdev_peep_intout(vm)) == -1)
-		return;
-
-	pending = vmcs_read32(VMCS_EXIT_INTERRUPTION_INFO) &
-		VMCS_INTERRUPTION_INFO_VALID;
-
-#ifdef DEBUG_GUEST_INTR
-	if (pending)
-		KERN_DEBUG("Find pending event: intr_info 0x%08x.\n",
-			   vmcs_read32(VMCS_EXIT_INTERRUPTION_INFO));
-#endif
-
-	if (((uint32_t) vmcs_read32(VMCS_GUEST_RFLAGS) & FL_IF) == 0)
-		intr_disable = 1;
-	else
-	        intr_disable = 0;
-
-#ifdef DEBUG_GUEST_INTR
-	if (intr_disable)
-		KERN_DEBUG("Guest EFLAGS.IF is cleared: 0x%08x\n",
-			   (uintptr_t) vmcs_read32(VMCS_GUEST_RFLAGS));
-#endif
-
-	blocked = vmcs_read32(VMCS_GUEST_INTERRUPTIBILITY) &
-		(VMCS_INTERRUPTIBILITY_STI_BLOCKING |
-		 VMCS_INTERRUPTIBILITY_MOVSS_BLOCKING);
-
-#ifdef DEBUG_GUEST_INTR
-	if (blocked & VMCS_INTERRUPTIBILITY_STI_BLOCKING)
-		KERN_DEBUG("Blocked by STI.\n");
-	if (blocked & VMCS_INTERRUPTIBILITY_MOVSS_BLOCKING)
-		KERN_DEBUG("Blocked by MOVSS.\n");
-#endif
-
-	blocked = blocked || intr_disable;
-
-	if (pending || blocked) {
-		procbased_ctls = vmcs_read32(VMCS_PRI_PROC_BASED_CTLS);
-		vmcs_write32(VMCS_PRI_PROC_BASED_CTLS,
-			     procbased_ctls | PROCBASED_INT_WINDOW_EXITING);
-		vmx->pending_intr = vector;
-		return;
-	}
-
-	if ((vector = vdev_read_intout(vm)) == -1)
-		return;
-
-	vmx_inject_event(VMCS_INTERRUPTION_INFO_HW_INTR, vector, 0, 0);
-	vmx->pending_intr = -1;
+	uint32_t *bitmap;
 
 	procbased_ctls = vmcs_read32(VMCS_PRI_PROC_BASED_CTLS);
-	vmcs_write32(VMCS_PRI_PROC_BASED_CTLS,
-		     procbased_ctls & ~PROCBASED_INT_WINDOW_EXITING);
-}
-
-static int
-vmx_handle_exit(struct vm *vm)
-{
-	KERN_ASSERT(vm != NULL);
-
-	struct vmx *vmx;
-	uint32_t procbased_ctls;
-
-#if defined (TRACE_VMEXIT) || defined (TRACE_EVT_INJECT)
-	uint64_t start_tsc, end_tsc;
-	static uint64_t last_dump_tsc = 0;
-	extern uint64_t tsc_per_ms;
-#endif
-
-	vmx = (struct vmx *) vm->cookie;
-	KERN_ASSERT(vmx != NULL);
-
-	if ((vmx->exit_reason & EXIT_REASON_ENTRY_FAIL)) {
-		KERN_DEBUG("VMEXIT for VM-entry failure.\n");
-		vm->exit_reason = EXIT_FOR_OTHERS;
-		vm->handled = 0;
-		goto ret;
+	if (enable == TRUE) {
+		procbased_ctls |= PROCBASED_IO_EXITING;
+	} else {
+		procbased_ctls &= ~(PROCBASED_IO_EXITING | PROCBASED_IO_BITMAPS);
+		bitmap = (uint32_t *) vmx->io_bitmap;
+		memzero(bitmap, PAGESIZE * 2);
 	}
-
-#ifdef DEBUG_VMEXIT
-	KERN_DEBUG("Exit reason %s, qualification 0x%llx, eip 0x%08x\n",
-		   exit_reason_string[vmx->exit_reason & EXIT_REASON_MASK],
-		   vmx->exit_qualification,
-		   (uintptr_t) vmcs_read32(VMCS_GUEST_RIP));
-#endif
-
-#ifdef TRACE_VMEXIT
-	vmexit_trace_info[vmx->exit_reason & EXIT_REASON_MASK].delta++;
-	start_tsc = rdtscp();
-#endif
-
-	switch (vmx->exit_reason & EXIT_REASON_MASK) {
-	case EXIT_REASON_EXT_INTR:
-		/* external interrupts should be handled before here */
-		KERN_ASSERT(vm->exit_reason == EXIT_FOR_EXTINT &&
-			    vm->handled == TRUE);
-		break;
-
-	case EXIT_REASON_INOUT:
-		vm->exit_reason = EXIT_FOR_OTHERS;
-		vm->handled = vmx_handle_inout(vm);
-		break;
-
-	case EXIT_REASON_CPUID:
-		vm->exit_reason = EXIT_FOR_OTHERS;
-		vm->handled = vmx_handle_cpuid(vm);
-		break;
-
-	case EXIT_REASON_RDMSR:
-		vm->exit_reason = EXIT_FOR_OTHERS;
-		vm->handled = vmx_handle_rdmsr(vm);
-		break;
-
-	case EXIT_REASON_WRMSR:
-		vm->exit_reason = EXIT_FOR_OTHERS;
-		vm->handled = vmx_handle_wrmsr(vm);
-		break;
-
-	case EXIT_REASON_RDTSC:
-		vm->exit_reason = EXIT_FOR_OTHERS;
-		vmx->g_rdx = (vm->tsc >> 32);
-		vmx->g_rax = (vm->tsc &0xffffffff);
-		vmx->g_rip += vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
-		vm->handled = TRUE;
-		break;
-
-	case EXIT_REASON_RDTSCP:
-	case EXIT_REASON_HLT:
-	case EXIT_REASON_VMCALL:
-	case EXIT_REASON_VMCLEAR:
-	case EXIT_REASON_VMLAUNCH:
-	case EXIT_REASON_VMPTRLD:
-	case EXIT_REASON_VMPTRST:
-	case EXIT_REASON_VMREAD:
-	case EXIT_REASON_VMRESUME:
-	case EXIT_REASON_VMWRITE:
-	case EXIT_REASON_VMXOFF:
-	case EXIT_REASON_VMXON:
-	case EXIT_REASON_MWAIT:
-	case EXIT_REASON_MONITOR:
-		vm->exit_reason = EXIT_FOR_OTHERS;
-		KERN_DEBUG("Invalid OP: exit_reason 0x%08x.\n",
-			   ((struct vmx *) vm->cookie)->exit_reason);
-		vmx_inject_event(VMCS_INTERRUPTION_INFO_HW_EXCPT, T_ILLOP, 0, 0);
-		vm->handled = TRUE;
-		break;
-
-	case EXIT_REASON_EPT_FAULT:
-		vm->exit_reason = EXIT_FOR_OTHERS;
-		vm->handled = vmx_handle_ept_violation(vm);
-		break;
-
-	case EXIT_REASON_INTR_WINDOW:
-		/* disable exiting for the interrupt window */
-		vm->exit_reason = EXIT_FOR_OTHERS;
-		procbased_ctls = vmcs_read32(VMCS_PRI_PROC_BASED_CTLS);
-		procbased_ctls &= ~PROCBASED_INT_WINDOW_EXITING;
-		vmcs_write32(VMCS_PRI_PROC_BASED_CTLS, procbased_ctls);
-		vm->handled = TRUE;
-		break;
-
-	case EXIT_REASON_EXCEPTION:
-	case EXIT_REASON_TRIPLE_FAULT:
-	case EXIT_REASON_NMI_WINDOW:
-	case EXIT_REASON_INVAL_VMCS:
-	case EXIT_REASON_INVAL_MSR:
-	case EXIT_REASON_MCE:
-	case EXIT_REASON_EPT_MISCONFIG:
-	default:
-		KERN_DEBUG("Unhandled VMEXIT: exit_reason 0x%08x.\n",
-			   vmx->exit_reason);
-		vm->exit_reason = EXIT_FOR_OTHERS;
-		vm->handled = FALSE;
-	}
-
-#if defined (TRACE_VMEXIT) || defined (TRACE_EVT_INJECT)
-	end_tsc = rdtscp();
-
-#ifdef TRACE_VMEXIT
-	vmexit_trace_info[vmx->exit_reason & EXIT_REASON_MASK].time +=
-		(end_tsc - start_tsc);
-#endif
-
-	if ((end_tsc - last_dump_tsc) / tsc_per_ms > 10 * 1000) {
-		last_dump_tsc = rdtscp();
-#ifdef TRACE_VMEXIT
-		dump_vmexit_trace_info();
-#endif
-#ifdef TRACE_EVT_INJECT
-		dump_evt_inj_trace_info();
-#endif
-	}
-#endif
-
-	KERN_ASSERT(vm->handled == TRUE);
-
-	vmx_intr_assist(vm);
-
- ret:
-	return vm->handled;
-}
-
-static int
-vmx_handle_extint(struct vm *vm, uint8_t irq)
-{
-	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(vm->exit_reason == EXIT_FOR_EXTINT &&
-		    vm->handled == FALSE);
-
-	vid_t vid = vm->vdev.irq[irq].vid;
-
-	/*
-	 * Try to notify the virtual device which occupies the interrupt. If no
-	 * virtual device is registered as the source of the interrupt, raise
-	 * corresponding interrupt line of the virtual PIC.
-	 */
-	if (vdev_sync_dev(vm, vid) && vpic_is_ready(&vm->vdev.vpic) == TRUE) {
-		vdev_raise_irq(vm, vid, irq);
-		vdev_lower_irq(vm, vid, irq);
-	}
-
-	vm->handled = TRUE;
 
 	return 0;
 }
 
 static void
-vmx_intercept_io(struct vm *vm, uint32_t port, data_sz_t size, bool enable)
+vmx_intercept_msr_helper(struct vmx *vmx, uint32_t msr, bool write, bool enable)
 {
-	KERN_ASSERT(vm != NULL);
+	uint32_t *msr_bitmap;
+	uint32_t offset;
+	int entry, bit;
 
-	struct vmx *vmx = (struct vmx *) vm->cookie;
-	vmx_set_intercept_io(vmx, port, size, enable);
+	msr_bitmap = (uint32_t *)
+		((uintptr_t) vmx->msr_bitmap + (write == TRUE) ? 0 : 2048);
+
+	if (0x00000000 <= msr && msr <= 0x00001fff) {
+		offset = msr - 0x00000000;
+	} else {
+		msr_bitmap = (uint32_t *) ((uintptr_t) msr_bitmap + 1024);
+		offset = msr - 0xc0000000;
+	}
+
+	entry = offset / 32;
+	bit = offset - entry * 32;
+
+	if (enable == TRUE)
+		msr_bitmap[entry] |= (1 << bit);
+	else
+		msr_bitmap[entry] &= ~(1 << bit);
 }
 
-static uint64_t
-vmx_get_enter_tsc(struct vm *vm)
+static void
+vmx_intercept_wrmsr(struct vmx *vmx, uint32_t msr, bool enable)
 {
-	KERN_ASSERT(vm != NULL);
-	struct vmx *vmx = (struct vmx *) vm->cookie;
-	return ((uint64_t) vmx->enter_tsc[1] << 32) | vmx->enter_tsc[0];
+
 }
 
-static uint64_t
-vmx_get_exit_tsc(struct vm *vm)
+static int
+vmx_intercept_msr(struct vm *vm, uint32_t msr, int rw)
 {
 	KERN_ASSERT(vm != NULL);
+
 	struct vmx *vmx = (struct vmx *) vm->cookie;
-	return ((uint64_t) vmx->exit_tsc[1] << 32) | vmx->exit_tsc[0];
+
+	if (!((0x00000000 <= msr && msr <= 0x00001fff) ||
+	      (0xc0000000 <= msr && msr <= 0xc0001fff)))
+		return 1;
+
+	vmx_intercept_msr_helper(vmx, msr, FALSE, (rw & 0x1) ? TRUE : FALSE);
+	vmx_intercept_msr_helper(vmx, msr, TRUE, (rw & 0x2) ? TRUE : FALSE);
+
+	return 0;
 }
 
-static uintptr_t
-vmx_gpa_2_hpa(struct vm *vm, uintptr_t gpa)
+static int
+vmx_intercept_all_msrs(struct vm *vm, int rw)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct vmx *vmx = (struct vmx *) vm->cookie;
+	char *msr_bitmap = vmx->msr_bitmap;
+	char *rdmsr_bitmap = msr_bitmap;
+	char *wrmsr_bitmap = (char *) ((uintptr_t) msr_bitmap + 0x800);
+
+	memset(rdmsr_bitmap, (rw & 0x1) ? 0xf : 0x0, 2048);
+	memset(wrmsr_bitmap, (rw & 0x2) ? 0xf : 0x0, 2048);
+
+	return 0;
+}
+
+static int
+vmx_intercept_intr_window(struct vm *vm, bool enable)
+{
+	KERN_ASSERT(vm != NULL);
+
+	uint32_t procbased_ctls = vmcs_read32(VMCS_PRI_PROC_BASED_CTLS);
+	if (enable == TRUE)
+		procbased_ctls |= PROCBASED_INT_WINDOW_EXITING;
+	else
+		procbased_ctls &= ~PROCBASED_INT_WINDOW_EXITING;
+	vmcs_write32(VMCS_PRI_PROC_BASED_CTLS, procbased_ctls);
+
+	return 0;
+}
+
+static int
+vmx_get_reg(struct vm *vm, guest_reg_t reg, uint32_t *val)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(val != NULL);
+
+	struct vmx *vmx = (struct vmx *) vm->cookie;
+
+	switch (reg) {
+	case GUEST_EAX:
+		*val = (uint32_t) vmx->g_rax;
+		break;
+	case GUEST_EBX:
+		*val = (uint32_t) vmx->g_rbx;
+		break;
+	case GUEST_ECX:
+		*val = (uint32_t) vmx->g_rcx;
+		break;
+	case GUEST_EDX:
+		*val = (uint32_t) vmx->g_rdx;
+		break;
+	case GUEST_ESI:
+		*val = (uint32_t) vmx->g_rsi;
+		break;
+	case GUEST_EDI:
+		*val = (uint32_t) vmx->g_rdi;
+		break;
+	case GUEST_EBP:
+		*val = (uint32_t) vmx->g_rbp;
+		break;
+	case GUEST_ESP:
+		*val = vmcs_read32(VMCS_GUEST_RSP);
+		break;
+	case GUEST_EIP:
+		*val = (uint32_t) vmx->g_rip;
+		break;
+	case GUEST_EFLAGS:
+		*val = vmcs_read32(VMCS_GUEST_RFLAGS);
+		break;
+	case GUEST_CR0:
+		*val = vmcs_read32(VMCS_GUEST_CR0);
+		break;
+	case GUEST_CR2:
+		*val = (uint32_t) vmx->g_cr2;
+		break;
+	case GUEST_CR3:
+		*val = vmcs_read32(VMCS_GUEST_CR3);
+		break;
+	case GUEST_CR4:
+		*val = vmcs_read32(VMCS_GUEST_CR4);
+		break;
+	default:
+		return 1;
+	}
+
+	return 0;
+}
+
+static int
+vmx_set_reg(struct vm *vm, guest_reg_t reg, uint32_t val)
 {
 	KERN_ASSERT(vm != NULL);
 
 	struct vmx *vmx = (struct vmx *) vm->cookie;
 
-	return ept_gpa_to_hpa(vmx->pml4ept, gpa);
+	switch (reg) {
+	case GUEST_EAX:
+		vmx->g_rax = val;
+		break;
+	case GUEST_EBX:
+		vmx->g_rbx = val;
+		break;
+	case GUEST_ECX:
+		vmx->g_rcx = val;
+		break;
+	case GUEST_EDX:
+		vmx->g_rdx = val;
+		break;
+	case GUEST_ESI:
+		vmx->g_rsi = val;
+		break;
+	case GUEST_EDI:
+		vmx->g_rdi = val;
+		break;
+	case GUEST_EBP:
+		vmx->g_rbp = val;
+		break;
+	case GUEST_ESP:
+		vmcs_write32(VMCS_GUEST_RSP, val);
+		break;
+	case GUEST_EIP:
+		vmx->g_rip = val;
+		break;
+	case GUEST_EFLAGS:
+		vmcs_write32(VMCS_GUEST_RFLAGS, val);
+		break;
+	case GUEST_CR0:
+		vmcs_write32(VMCS_GUEST_CR0, val);
+		break;
+	case GUEST_CR2:
+		vmx->g_cr2 = val;
+		break;
+	case GUEST_CR3:
+		vmcs_write32(VMCS_GUEST_CR3, val);
+		break;
+	case GUEST_CR4:
+		vmcs_write32(VMCS_GUEST_CR4, val);
+		break;
+	default:
+		return 1;
+	}
+
+	return 0;
+}
+
+static int
+vmx_get_msr(struct vm *vm, uint32_t msr, uint64_t *val)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(val != NULL);
+
+	if (!((0x00000000 <= msr && msr <= 0x00001fff) ||
+	      (0xc0000000 <= msr && msr <= 0xc0001fff)))
+		return 1;
+
+	*val = rdmsr(msr);
+
+	return 0;
+}
+
+static int
+vmx_set_msr(struct vm *vm, uint32_t msr, uint64_t val)
+{
+	KERN_ASSERT(vm != NULL);
+
+	if (!((0x00000000 <= msr && msr <= 0x00001fff) ||
+	      (0xc0000000 <= msr && msr <= 0xc0001fff)))
+		return 1;
+
+	wrmsr(msr, val);
+
+	return 0;
+}
+
+static struct {
+	uint32_t selector;
+	uint32_t base;
+	uint32_t limit;
+	uint32_t access;
+} seg_encode[10] = {
+	[GUEST_CS] = { VMCS_GUEST_CS_SELECTOR, VMCS_GUEST_CS_BASE,
+		       VMCS_GUEST_CS_LIMIT, VMCS_GUEST_CS_ACCESS_RIGHTS },
+	[GUEST_SS] = { VMCS_GUEST_SS_SELECTOR, VMCS_GUEST_SS_BASE,
+		       VMCS_GUEST_SS_LIMIT, VMCS_GUEST_SS_ACCESS_RIGHTS },
+	[GUEST_DS] = { VMCS_GUEST_DS_SELECTOR, VMCS_GUEST_DS_BASE,
+		       VMCS_GUEST_DS_LIMIT, VMCS_GUEST_DS_ACCESS_RIGHTS },
+	[GUEST_ES] = { VMCS_GUEST_ES_SELECTOR, VMCS_GUEST_ES_BASE,
+		       VMCS_GUEST_ES_LIMIT, VMCS_GUEST_ES_ACCESS_RIGHTS },
+	[GUEST_FS] = { VMCS_GUEST_FS_SELECTOR, VMCS_GUEST_FS_BASE,
+		       VMCS_GUEST_FS_LIMIT, VMCS_GUEST_FS_ACCESS_RIGHTS },
+	[GUEST_GS] = { VMCS_GUEST_GS_SELECTOR, VMCS_GUEST_GS_BASE,
+		       VMCS_GUEST_GS_LIMIT, VMCS_GUEST_GS_ACCESS_RIGHTS },
+	[GUEST_LDTR] = { VMCS_GUEST_LDTR_SELECTOR, VMCS_GUEST_LDTR_BASE,
+			 VMCS_GUEST_LDTR_LIMIT, VMCS_GUEST_LDTR_ACCESS_RIGHTS },
+	[GUEST_TR] = { VMCS_GUEST_TR_SELECTOR, VMCS_GUEST_TR_BASE,
+		       VMCS_GUEST_TR_LIMIT, VMCS_GUEST_TR_ACCESS_RIGHTS },
+	[GUEST_GDTR] = { 0, VMCS_GUEST_GDTR_BASE, VMCS_GUEST_GDTR_LIMIT, 0 },
+	[GUEST_IDTR] = { 0, VMCS_GUEST_IDTR_BASE, VMCS_GUEST_IDTR_LIMIT, 0 },
+};
+
+static int
+vmx_get_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(desc != NULL);
+
+	desc->base = vmcs_read32(seg_encode[seg].base);
+	desc->lim = vmcs_read32(seg_encode[seg].limit);
+
+	if (seg != GUEST_GDTR && seg != GUEST_IDTR) {
+		desc->ar = vmcs_read32(seg_encode[seg].access);
+		desc->sel = vmcs_read32(seg_encode[seg].selector);
+	}
+
+	return 0;
+}
+
+static int
+vmx_set_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(desc != NULL);
+
+	vmcs_write32(seg_encode[seg].base, desc->base);
+	vmcs_write32(seg_encode[seg].limit, desc->lim);
+
+	if (seg != GUEST_GDTR && seg != GUEST_IDTR) {
+		vmcs_write32(seg_encode[seg].access, desc->ar);
+		vmcs_write32(seg_encode[seg].selector, desc->sel);
+	}
+
+	return 0;
+}
+
+static int
+vmx_get_mmap(struct vm *vm, uintptr_t gpa, uintptr_t *hpa)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(hpa != NULL);
+
+	struct vmx *vmx = (struct vmx *) vm->cookie;
+
+	if (gpa % PAGESIZE)
+	    return 1;
+
+	*hpa = (uintptr_t) ept_gpa_to_hpa(vmx->pml4ept, gpa);
+	return 0;
+}
+
+static int
+vmx_set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa)
+{
+	KERN_ASSERT(vm != NULL);
+
+	int rc = 0;
+	struct vmx *vmx = (struct vmx *) vm->cookie;
+
+	rc = ept_add_mapping(vmx->pml4ept, gpa, hpa, PAT_WRITE_BACK, FALSE);
+
+	if (rc)
+		return 1;
+	else
+		ept_invalidate_mappings((uint64_t)(uintptr_t) vmx->pml4ept);
+
+	return 0;
+}
+
+static int
+vmx_unset_mmap(struct vm *vm, uintptr_t gpa)
+{
+	KERN_PANIC("vmx_unset_mmap() not implemented yet.\n");
+	return 1;
+}
+
+static int
+vmx_inject_event(struct vm *vm, guest_event_t type,
+		 uint8_t vector, uint32_t errcode, bool ev)
+{
+	KERN_ASSERT(vm != NULL);
+
+	uint32_t intr_info = vmcs_read32(VMCS_ENTRY_INTR_INFO);
+	if (intr_info & VMCS_INTERRUPTION_INFO_VALID)
+		return 1;
+
+	intr_info = VMCS_INTERRUPTION_INFO_VALID |
+		type | vector | ((ev == TRUE ? 1 : 0) << 11);
+	vmcs_write32(VMCS_ENTRY_INTR_INFO, intr_info);
+	if (ev == TRUE)
+		vmcs_write32(VMCS_ENTRY_EXCEPTION_ERROR, errcode);
+
+	return 0;
+}
+
+static int
+vmx_get_next_eip(struct vm *vm, instr_t instr, uint32_t *val)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(val != NULL);
+	struct vmx *vmx = (struct vmx *) vm->cookie;
+	*val = vmx->g_rip + vmcs_read32(VMCS_EXIT_INSTRUCTION_LENGTH);
+	return 0;
+}
+
+static int
+vmx_get_cpuid(struct vm *vm, uint32_t in_eax, uint32_t in_ecx,
+	      uint32_t *eax, uint32_t *ebx, uint32_t *ecx, uint32_t *edx)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(eax != NULL && ebx != NULL && ecx != NULL && edx != NULL);
+
+	if (in_eax == 0x00000001) {
+		cpuid(in_eax, eax, ebx, ecx, edx);
+		*ebx = /* 1 core per processor */
+			(*ebx & ~(uint32_t) (0xf << 16)) | (1 << 16);
+		*ecx = *ecx & ~(uint32_t)
+			(CPUID_FEATURE_RDRAND | CPUID_FEATURE_AVX |
+			 CPUID_FEATURE_AES | CPUID_FEATURE_TSC_DEADLINE |
+			 CPUID_FEATURE_X2APIC | CPUID_FEATURE_PCID |
+			 CPUID_FEATURE_XTPR | CPUID_FEATURE_EIST |
+			 CPUID_FEATURE_SMX | CPUID_FEATURE_VMX |
+			 CPUID_FEATURE_MONITOR);
+		*edx = *edx & ~(uint32_t)
+			(CPUID_FEATURE_HTT | CPUID_FEATURE_ACPI |
+			 CPUID_FEATURE_MCA | CPUID_FEATURE_MTRR |
+			 CPUID_FEATURE_APIC | CPUID_FEATURE_MCE |
+			 CPUID_FEATURE_MSR | CPUID_FEATURE_DE);
+	} else if (in_eax >= 0x80000000) {
+		*eax = *ebx = *ecx = *edx = 0;
+	} else {
+		cpuid(in_eax, eax, ebx, ecx, edx);
+	}
+
+	return 0;
 }
 
 struct vmm_ops vmm_ops_intel = {
 	.signature		= INTEL_VMX,
-	.vmm_init		= vmx_init,
+	.hw_init		= vmx_init,
+	.intercept_ioport	= vmx_intercept_ioport,
+	.intercept_all_ioports	= vmx_intercept_all_ioports,
+	.intercept_msr		= vmx_intercept_msr,
+	.intercept_all_msrs	= vmx_intercept_all_msrs,
+	.intercept_intr_window	= vmx_intercept_intr_window,
 	.vm_init		= vmx_init_vm,
 	.vm_run			= vmx_run_vm,
-	.vm_exit_handle		= vmx_handle_exit,
-	.vm_intr_handle		= vmx_handle_extint,
-	.vm_enter_tsc		= vmx_get_enter_tsc,
-	.vm_exit_tsc		= vmx_get_exit_tsc,
-	.vm_intercept_ioio	= vmx_intercept_io,
-	.vm_translate_gp2hp	= vmx_gpa_2_hpa,
+	.get_reg		= vmx_get_reg,
+	.set_reg		= vmx_set_reg,
+	.get_msr		= vmx_get_msr,
+	.set_msr		= vmx_set_msr,
+	.get_desc		= vmx_get_desc,
+	.set_desc		= vmx_set_desc,
+	.get_mmap		= vmx_get_mmap,
+	.set_mmap		= vmx_set_mmap,
+	.unset_mmap		= vmx_unset_mmap,
+	.inject_event		= vmx_inject_event,
+	.get_next_eip		= vmx_get_next_eip,
+	.get_cpuid		= vmx_get_cpuid,
 };
