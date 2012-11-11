@@ -969,12 +969,6 @@ vmx_run_vm(struct vm *vm)
 		return 1;
 	}
 
-	vm->pending = (vmcs_read32(VMCS_ENTRY_INTR_INFO) &
-		       VMCS_INTERRUPTION_INFO_VALID) ? TRUE : FALSE;
-	vm->intr_shadow = (vmcs_read32(VMCS_GUEST_INTERRUPTIBILITY) &
-		(VMCS_INTERRUPTIBILITY_STI_BLOCKING |
-		 VMCS_INTERRUPTIBILITY_MOVSS_BLOCKING)) ? TRUE : FALSE;
-
 	vmx->launched = 1;
 
 	return vmx_handle_exit(vm);
@@ -1405,6 +1399,23 @@ vmx_get_cpuid(struct vm *vm, uint32_t in_eax, uint32_t in_ecx,
 	return 0;
 }
 
+static bool
+vmx_pending_event(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+	return (vmcs_read32(VMCS_ENTRY_INTR_INFO) &
+		VMCS_INTERRUPTION_INFO_VALID) ? TRUE : FALSE;
+}
+
+static bool
+vmx_intr_shadow(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+	return (vmcs_read32(VMCS_GUEST_INTERRUPTIBILITY) &
+		(VMCS_INTERRUPTIBILITY_STI_BLOCKING |
+		 VMCS_INTERRUPTIBILITY_MOVSS_BLOCKING)) ? TRUE : FALSE;
+}
+
 struct vmm_ops vmm_ops_intel = {
 	.signature		= INTEL_VMX,
 	.hw_init		= vmx_init,
@@ -1427,4 +1438,6 @@ struct vmm_ops vmm_ops_intel = {
 	.inject_event		= vmx_inject_event,
 	.get_next_eip		= vmx_get_next_eip,
 	.get_cpuid		= vmx_get_cpuid,
+	.pending_event		= vmx_pending_event,
+	.intr_shadow		= vmx_intr_shadow,
 };

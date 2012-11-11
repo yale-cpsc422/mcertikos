@@ -628,9 +628,6 @@ svm_run_vm(struct vm *vm)
 		}
 	}
 
-	vm->pending = (ctrl->event_inj & SVM_EVTINJ_VALID) ? TRUE : FALSE;
-	vm->intr_shadow = (ctrl->int_state & 0x1) ? TRUE : FALSE;
-
 	if (ctrl->exit_code == SVM_EXIT_ERR) {
 		vm->exit_reason = EXIT_INVAL;
 		svm_handle_err(vm);
@@ -1069,6 +1066,28 @@ svm_get_cpuid(struct vm *vm, uint32_t in_eax, uint32_t in_ecx,
 	return 0;
 }
 
+static bool
+svm_pending_event(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct svm *svm = (struct svm *) vm->cookie;
+	struct vmcb_control_area *ctrl = &svm->vmcb->control;
+
+	return (ctrl->event_inj & SVM_EVTINJ_VALID) ? TRUE : FALSE;
+}
+
+static bool
+svm_intr_shadow(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	struct svm *svm = (struct svm *) vm->cookie;
+	struct vmcb_control_area *ctrl = &svm->vmcb->control;
+
+	return (ctrl->int_state & 0x1) ? TRUE : FALSE;
+}
+
 struct vmm_ops vmm_ops_amd = {
 	.signature		= AMD_SVM,
 	.hw_init		= svm_init,
@@ -1090,5 +1109,7 @@ struct vmm_ops vmm_ops_amd = {
 	.unset_mmap		= svm_unset_mmap,
 	.inject_event		= svm_inject_event,
 	.get_next_eip		= svm_get_next_eip,
-	.get_cpuid		= svm_get_cpuid
+	.get_cpuid		= svm_get_cpuid,
+	.pending_event		= svm_pending_event,
+	.intr_shadow		= svm_intr_shadow,
 };

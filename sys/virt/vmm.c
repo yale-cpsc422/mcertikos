@@ -365,21 +365,25 @@ vmm_intr_assist(struct vm *vm)
 	if ((vector = vdev_peep_intout(vm)) == -1)
 		return;
 
+	if (vmm_ops->pending_event(vm) == TRUE) {
+		/* KERN_DEBUG("Pending injected event.\n"); */
+		blocked = 1;
+		goto after_check;
+	}
+
 	/* check if the virtual CPU is able to accept the interrupt */
 	vmm_ops->get_reg(vm, GUEST_EFLAGS, &eflags);
 	if (!(eflags & FL_IF)) {
 		/* KERN_DEBUG("EFLAGS.IF = 0 (EFLAGS = 0x%08x).\n", eflags); */
 		blocked = 1;
+		goto after_check;
 	}
-	if (vm->intr_shadow == TRUE) {
+	if (vmm_ops->intr_shadow(vm) == TRUE) {
 		/* KERN_DEBUG("Interrupt shadow.\n"); */
 		blocked = 1;
 	}
-	if (vm->pending == TRUE) {
-		/* KERN_DEBUG("Pending injected event.\n"); */
-		blocked = 1;
-	}
 
+ after_check:
 	/*
 	 * If not, enable intercepting the interrupt window so that CertiKOS
 	 * will be acknowledged once the virtual CPU is able to accept the
@@ -499,9 +503,6 @@ vmm_create_vm(uint64_t cpufreq, size_t memsize)
 
 	vm->exit_reason = EXIT_NONE;
 	vm->exit_handled = TRUE;
-
-	vm->pending = FALSE;
-	vm->intr_shadow = FALSE;
 
 	if (vmm_ops->vm_init == NULL || vmm_ops->vm_init(vm)) {
 		KERN_DEBUG("Machine-dependent VM initialization failed.\n");

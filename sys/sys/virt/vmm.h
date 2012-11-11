@@ -82,10 +82,6 @@ struct vm {
 	exit_info_t	exit_info;	/* the information of the latest VMEXIT */
 	volatile bool	exit_handled;	/* is the latest VMEXIT handled? */
 
-	bool		pending;	/* is any event pending? */
-	bool		intr_shadow;	/* is the virtual machine in the
-					   interrupt shadow? */
-
 	struct vdev	vdev;	/* the virtual devices of the virtual machine */
 
 	void		*cookie;
@@ -330,6 +326,17 @@ typedef enum {
  *   @return 0 if successful and the guest %eax, %ebx, %ecx and %edx are put at
  *           eax, ebx, ecx and edx respectively; otherwise, return a non-zero
  *           value and the values at eax, ebx, ecx and edx are all undefined
+ *
+ * - bool pending_event(struct vm *vm)
+ *   Is there any pending events which were injected before the latest exit?
+ *   @param vm the virtual machine
+ *   @return TRUE if there is at least one pending event; otherwise, return
+ *           FALSE
+ *
+ * - bool intr_shadow(struct vm *vm)
+ *   Is the virtual machine in the interrupt shadow at the latest exit?
+ *   @param vm the virtual machine
+ *   @return TRUE is it's in the interrupt shadow; otherwise, return FALSE
  */
 struct vmm_ops {
 	vmm_sig_t	signature;
@@ -370,6 +377,9 @@ struct vmm_ops {
 	int (*get_cpuid)(struct vm *vm, uint32_t in_eax, uint32_t in_ecx,
 			 uint32_t *eax, uint32_t *ebx,
 			 uint32_t *ecx, uint32_t *edx);
+
+	bool (*pending_event)(struct vm *vm);
+	bool (*intr_shadow)(struct vm *vm);
 };
 
 /*
