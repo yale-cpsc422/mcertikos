@@ -405,15 +405,6 @@ struct svm {
 	uint16_t	h_fs, h_gs, h_ldt;
 };
 
-/* defined in svm_asm.S */
-extern void svm_run(struct svm *);
-
-void set_intercept_ioio(struct vmcb *, uint32_t port, data_sz_t, bool enable);
-void set_intercept_rdmsr(struct vmcb *, uint64_t msr, bool enable);
-void set_intercept_wrmsr(struct vmcb *, uint64_t msr, bool enable);
-void set_intercept(struct vmcb *, int bit, bool enable);
-void set_intercept_exception(struct vmcb *, int bit, bool enable);
-
 #endif /* !__ASSEMBLER__ */
 
 #endif /* _KERN_ */
