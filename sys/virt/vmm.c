@@ -1,4 +1,5 @@
 #include <sys/debug.h>
+#include <sys/gcc.h>
 #include <sys/intr.h>
 #include <sys/pcpu.h>
 #include <sys/proc.h>
@@ -18,35 +19,409 @@ static bool vmm_inited = FALSE;
 static struct vm vm_pool[MAX_VMID];
 static spinlock_t vm_pool_lock;
 
-static enum {SVM, VMX} virt_type;
+static struct vmm_ops *vmm_ops = NULL;
 
-static bool gcc_inline
-is_intel(void)
-{
-	return (strncmp(pcpu_cur()->arch_info.vendor, "GenuineIntel", 20) == 0);
-}
+#define CODE_SEG_AR (GUEST_SEG_ATTR_P | GUEST_SEG_ATTR_S |	\
+		     GUEST_SEG_TYPE_CODE | GUEST_SEG_ATTR_A)
+#define DATA_SEG_AR (GUEST_SEG_ATTR_P | GUEST_SEG_ATTR_S |	\
+		     GUEST_SEG_TYPE_DATA | GUEST_SEG_ATTR_A)
+#define LDT_AR      (GUEST_SEG_ATTR_P | GUEST_SEG_TYPE_LDT)
+#define TSS_AR      (GUEST_SEG_ATTR_P | GUEST_SEG_TYPE_TSS)
 
-static bool gcc_inline
-is_amd(void)
+static struct guest_seg_desc guest_seg_desc[GUEST_MAX_SEG_DESC] = {
+	/* 0: code segment */
+	{ .sel = 0xf000, .base = 0x000f0000, .lim = 0xffff, .ar = CODE_SEG_AR },
+	/* 1: data segment */
+	{ .sel = 0x0000, .base = 0x00000000, .lim = 0xffff, .ar = DATA_SEG_AR },
+	/* 2: LDT */
+	{ .sel = 0, .base = 0, .lim = 0xffff, .ar = LDT_AR },
+	/* 3: TSS */
+	{ .sel = 0, .base = 0, .lim = 0xffff, .ar = TSS_AR },
+	/* 4: GDT/IDT */
+	{ .sel = 0, .base = 0, .lim = 0xffff, .ar = 0 }
+};
+
+#undef CODE_SEG_AR
+#undef DATA_SEG_AR
+#undef LDT_AR
+#undef TSS_AR
+
+#define is_intel()							\
+	(strncmp(pcpu_cur()->arch_info.vendor, "GenuineIntel", 20) == 0)
+#define is_amd()							\
+	(strncmp(pcpu_cur()->arch_info.vendor, "AuthenticAMD", 20) == 0)
+
+static struct vm *
+vmm_alloc_vm(void)
 {
-	return (strncmp(pcpu_cur()->arch_info.vendor, "AuthenticAMD", 20) == 0);
+	struct vm *new_vm = NULL;
+	int i;
+
+	spinlock_acquire(&vm_pool_lock);
+
+	for (i = 0; i < MAX_VMID; i++)
+		if (vm_pool[i].used == FALSE)
+			break;
+	if (likely(i < MAX_VMID)) {
+		new_vm = &vm_pool[i];
+		new_vm->used = TRUE;
+	}
+
+	spinlock_release(&vm_pool_lock);
+	return new_vm;
 }
 
 static void
-vmm_update_guest_tsc(struct vm *vm)
+vmm_update_guest_tsc(struct vm *vm, uint64_t last_h_tsc, uint64_t cur_h_tsc)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(cur_h_tsc >= last_h_tsc);
+	uint64_t delta = cur_h_tsc - last_h_tsc;
+	vm->tsc += (delta * vm->cpufreq) / (tsc_per_ms * 1000);
+}
+
+static int
+vmm_handle_ioport(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(vm->exit_reason == EXIT_FOR_IOPORT);
+
+	exit_info_t *exit_info = &vm->exit_info;
+	uint16_t port;
+	data_sz_t width;
+	uint32_t eax, next_eip;
+
+	if (exit_info->ioport.rep == TRUE) {
+		KERN_PANIC("REP I/O instructions is not implemented yet.\n");
+		return 1;
+	}
+
+	if (exit_info->ioport.str == TRUE) {
+		KERN_PANIC("String operation is not implemented yet.\n");
+		return 2;
+	}
+
+	port = exit_info->ioport.port;
+	width = exit_info->ioport.width;
+
+	/*
+	 * TODO: check CPL and IOPL
+	 */
+
+	if (exit_info->ioport.write == TRUE) {
+		vmm_ops->get_reg(vm, GUEST_EAX, &eax);
+#ifdef DEBUG_GUEST_IOIO
+		KERN_DEBUG("Write guest I/O port 0x%x, width %d bytes, "
+			   "val 0x%08x.\n", port, 1 << width, eax);
+#endif
+		vdev_write_guest_ioport(vm, port, width, eax);
+		vmm_ops->get_next_eip(vm, INSTR_OUT, &next_eip);
+	} else {
+		vdev_read_guest_ioport(vm, port, width, &eax);
+		vmm_ops->set_reg(vm, GUEST_EAX, eax);
+		vmm_ops->get_next_eip(vm, INSTR_IN, &next_eip);
+#ifdef DEBUG_GUEST_IOIO
+		KERN_DEBUG("Read guest I/O port 0x%x, width %d bytes, "
+			   "val 0x%08x.\n", port, 1 << width, eax);
+#endif
+	}
+
+	vmm_ops->set_reg(vm, GUEST_EIP, next_eip);
+
+	return 0;
+}
+
+static int
+vmm_handle_rdmsr(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(vm->exit_reason == EXIT_FOR_RDMSR);
+
+	uint32_t msr, next_eip;
+	uint64_t val;
+	struct guest_seg_desc cs_desc;
+	uint8_t cpl;
+
+	vmm_ops->get_desc(vm, GUEST_CS, &cs_desc);
+	cpl = (cs_desc.ar >> 5) & 3;
+
+	vmm_ops->get_reg(vm, GUEST_ECX, &msr);
+
+	if (cpl != 0 || vmm_ops->get_msr(vm, msr, &val)) {
+		vmm_ops->inject_event(vm, EVENT_EXCEPTION, T_GPFLT,
+				      (cs_desc.sel & 0x1fff) << 3, TRUE);
+		return 0;
+	}
+
+	vmm_ops->set_reg(vm, GUEST_EAX, val & 0xffffffff);
+	vmm_ops->set_reg(vm, GUEST_EDX, (val >> 32) & 0xffffffff);
+
+	vmm_ops->get_next_eip(vm, INSTR_RDMSR, &next_eip);
+	vmm_ops->set_reg(vm, GUEST_EIP, next_eip);
+
+	return 0;
+}
+
+static int
+vmm_handle_wrmsr(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(vm->exit_reason == EXIT_FOR_WRMSR);
+
+	uint32_t msr, next_eip, eax, edx;
+	uint64_t val;
+	struct guest_seg_desc cs_desc;
+	uint8_t cpl;
+
+	vmm_ops->get_desc(vm, GUEST_CS, &cs_desc);
+	cpl = (cs_desc.ar >> 5) & 3;
+
+	vmm_ops->get_reg(vm, GUEST_ECX, &msr);
+
+	vmm_ops->get_reg(vm, GUEST_EAX, &eax);
+	vmm_ops->get_reg(vm, GUEST_EDX, &edx);
+	val = ((uint64_t) edx << 32) | (uint64_t) eax;
+
+	if (cpl != 0 || vmm_ops->set_msr(vm, msr, val)) {
+		vmm_ops->inject_event(vm, EVENT_EXCEPTION, T_GPFLT,
+				      (cs_desc.sel & 0x1fff) << 3, TRUE);
+		return 0;
+	}
+
+	vmm_ops->get_next_eip(vm, INSTR_WRMSR, &next_eip);
+	vmm_ops->set_reg(vm, GUEST_EIP, next_eip);
+
+	return 0;
+}
+
+static int
+vmm_handle_pgflt(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(vm->exit_reason == EXIT_FOR_PGFLT);
+
+	exit_info_t *exit_info = &vm->exit_info;
+	uint32_t fault_pa = exit_info->pgflt.addr;
+	pageinfo_t *pi;
+	uintptr_t host_pa;
+
+	if (vm->memsize <= fault_pa && fault_pa < 0xf0000000) {
+		KERN_PANIC("EPT/NPT fault @ 0x%08x: out of range.\n", fault_pa);
+		return 1;
+	}
+
+	if ((pi = mem_page_alloc()) == NULL) {
+		KERN_PANIC("EPT/NPT fault @ 0x%08x: no host memory.\n",
+			   fault_pa);
+		return 2;
+	}
+
+	host_pa = mem_pi2phys(pi);
+	memzero((void *) host_pa, PAGESIZE);
+
+	if ((vmm_ops->set_mmap(vm, fault_pa, host_pa))) {
+		KERN_PANIC("EPT/NPT fault @ 0x%08x: cannot be mapped to "
+			   "HPA 0x%08x.\n", fault_pa, host_pa);
+		return 3;
+	}
+
+#ifdef DEBUG_ADDR_TRANS
+	KERN_DEBUG("EPT/NPT fault @ 0x%08x: mapped to HPA 0x%08x.\n",
+		   fault_pa, host_pa);
+#endif
+	return 0;
+}
+
+static int
+vmm_handle_cpuid(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(vm->exit_reason == EXIT_FOR_CPUID);
+
+	uint32_t eax, ebx, ecx, edx, next_eip;
+
+	vmm_ops->get_reg(vm, GUEST_EAX, &eax);
+	vmm_ops->get_reg(vm, GUEST_ECX, &ecx);
+	vmm_ops->get_cpuid(vm, eax, ecx, &eax, &ebx, &ecx, &edx);
+	vmm_ops->set_reg(vm, GUEST_EAX, eax);
+	vmm_ops->set_reg(vm, GUEST_EBX, ebx);
+	vmm_ops->set_reg(vm, GUEST_ECX, ecx);
+	vmm_ops->set_reg(vm, GUEST_EDX, edx);
+
+	vmm_ops->get_next_eip(vm, INSTR_CPUID, &next_eip);
+	vmm_ops->set_reg(vm, GUEST_EIP, next_eip);
+
+	return 0;
+}
+
+static int
+vmm_handle_rdtsc(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(vm->exit_reason == EXIT_FOR_RDTSC);
+
+	uint32_t next_eip;
+
+	vmm_ops->set_reg(vm, GUEST_EDX, (vm->tsc >> 32) & 0xffffffff);
+	vmm_ops->set_reg(vm, GUEST_EAX, vm->tsc & 0xffffffff);
+
+	vmm_ops->get_next_eip(vm, INSTR_RDTSC, &next_eip);
+	vmm_ops->set_reg(vm, GUEST_EIP, next_eip);
+
+	return 0;
+}
+
+static int
+vmm_handle_hypercall(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(vm->exit_reason == EXIT_FOR_HYPERCALL);
+	KERN_WARN("vmm_handle_hypercall() not implemented yet.\n");
+
+	uint32_t next_eip;
+
+	vmm_ops->get_next_eip(vm, INSTR_HYPERCALL, &next_eip);
+	vmm_ops->set_reg(vm, GUEST_EIP, next_eip);
+
+	return 0;
+}
+
+static int
+vmm_handle_invalid_instr(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(vm->exit_reason == EXIT_FOR_INVAL_INSTR);
+
+	vmm_ops->inject_event(vm, EVENT_EXCEPTION, T_ILLOP, 0, FALSE);
+	return 0;
+}
+
+static int
+vmm_handle_exit(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(vm->exit_reason != EXIT_NONE);
+
+	int rc = 0;
+
+	switch (vm->exit_reason) {
+	case EXIT_FOR_EXTINT:
+		KERN_ASSERT(vm->exit_handled = TRUE);
+		break;
+
+	case EXIT_FOR_INTWIN:
+		rc = vmm_ops->intercept_intr_window(vm, FALSE);
+		break;
+
+	case EXIT_FOR_IOPORT:
+		rc = vmm_handle_ioport(vm);
+		break;
+
+	case EXIT_FOR_RDMSR:
+		rc = vmm_handle_rdmsr(vm);
+		break;
+
+	case EXIT_FOR_WRMSR:
+		rc = vmm_handle_wrmsr(vm);
+		break;
+
+	case EXIT_FOR_PGFLT:
+		rc = vmm_handle_pgflt(vm);
+		break;
+
+	case EXIT_FOR_CPUID:
+		rc = vmm_handle_cpuid(vm);
+		break;
+
+	case EXIT_FOR_RDTSC:
+		rc = vmm_handle_rdtsc(vm);
+		break;
+
+	case EXIT_FOR_HYPERCALL:
+		rc = vmm_handle_hypercall(vm);
+		break;
+
+	case EXIT_FOR_INVAL_INSTR:
+		rc = vmm_handle_invalid_instr(vm);
+		break;
+
+	default:
+		rc = 1;
+	}
+
+	return rc;
+}
+
+static void
+vmm_intr_assist(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
 
-	uint64_t entry_host_tsc, exit_host_tsc, delta, incr;
+	int vector;
+	uint32_t eflags;
+	int blocked = 0;
 
-	entry_host_tsc = vmm_ops->vm_enter_tsc(vm);
-	exit_host_tsc = vmm_ops->vm_exit_tsc(vm);
+	/* no interrupt needs to be injected */
+	if ((vector = vdev_peep_intout(vm)) == -1)
+		return;
 
-	KERN_ASSERT(exit_host_tsc > entry_host_tsc);
+	/* check if the virtual CPU is able to accept the interrupt */
+	vmm_ops->get_reg(vm, GUEST_EFLAGS, &eflags);
+	if (!(eflags & FL_IF)) {
+		/* KERN_DEBUG("EFLAGS.IF = 0 (EFLAGS = 0x%08x).\n", eflags); */
+		blocked = 1;
+	}
+	if (vm->intr_shadow == TRUE) {
+		/* KERN_DEBUG("Interrupt shadow.\n"); */
+		blocked = 1;
+	}
+	if (vm->pending == TRUE) {
+		/* KERN_DEBUG("Pending injected event.\n"); */
+		blocked = 1;
+	}
 
-	delta = exit_host_tsc - entry_host_tsc;
-	incr = (delta * VM_TSC_FREQ) / (tsc_per_ms * 1000);
-	vm->tsc += (incr - VM_TSC_ADJUST);
+	/*
+	 * If not, enable intercepting the interrupt window so that CertiKOS
+	 * will be acknowledged once the virtual CPU is able to accept the
+	 * interrupt.
+	 */
+	if (blocked) {
+		vmm_ops->intercept_intr_window(vm, TRUE);
+		return;
+	}
+
+	if ((vector = vdev_read_intout(vm)) == -1)
+		return;
+
+	/* inject the interrupt and disable intercepting the interrupt window */
+	/* KERN_DEBUG("Inject ExtINTR %d.\n", vector); */
+	vmm_ops->inject_event(vm, EVENT_EXTINT, vector, 0, FALSE);
+	vmm_ops->intercept_intr_window(vm, FALSE);
+}
+
+static int
+vmm_load_bios(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	extern uint8_t _binary___misc_bios_bin_start[],
+		_binary___misc_bios_bin_size[],
+		_binary___misc_vgabios_bin_start[],
+		_binary___misc_vgabios_bin_size[];
+
+	/* load BIOS ROM */
+	KERN_ASSERT((size_t) _binary___misc_bios_bin_size % 0x10000 == 0);
+	vmm_memcpy_to_guest(vm,
+			    0x100000 - (size_t) _binary___misc_bios_bin_size,
+			    (uintptr_t) _binary___misc_bios_bin_start,
+			    (size_t) _binary___misc_bios_bin_size);
+
+	/* load VGA BIOS ROM */
+	vmm_memcpy_to_guest(vm, 0xc0000,
+			    (uintptr_t) _binary___misc_vgabios_bin_start,
+			    (size_t) _binary___misc_vgabios_bin_size);
+
+	return 0;
 }
 
 int
@@ -56,92 +431,121 @@ vmm_init(void)
 	extern struct vmm_ops vmm_ops_amd;
 
 	int i;
+	struct pcpu *c;
 
-	if (vmm_inited == TRUE)
+	c = pcpu_cur();
+	KERN_ASSERT(c);
+
+	if (c->vm_inited == TRUE)
 		return 0;
 
-	if (is_intel() == TRUE) {
-		vmm_ops = &vmm_ops_intel;
-		virt_type = VMX;
-	} else if (is_amd() == TRUE) {
-		vmm_ops = &vmm_ops_amd;
-		virt_type = SVM;
-	} else {
-		KERN_DEBUG("Neither Intel nor AMD processor.\n");
-		return 1;
+	if (vmm_inited == FALSE && pcpu_onboot() == TRUE) {
+		for (i = 0; i < MAX_VMID; i++) {
+			memzero(&vm_pool[i], sizeof(struct vm));
+			vm_pool[i].used = FALSE;
+			vm_pool[i].vmid = i;
+		}
+		spinlock_init(&vm_pool_lock);
+
+		if (is_intel() == TRUE) {
+			vmm_ops = &vmm_ops_intel;
+		} else if (is_amd() == TRUE) {
+			vmm_ops = &vmm_ops_amd;
+		} else {
+			KERN_DEBUG("Neither Intel nor AMD processor.\n");
+			return 1;
+		}
+
+		vmm_inited = TRUE;
 	}
 
-	if (vmm_ops->vmm_init == NULL || vmm_ops->vmm_init() != 0) {
-		KERN_DEBUG("Machine-dependent vmm_init() failed.\n");
-		return 1;
+	if (vmm_inited == FALSE)
+		return 2;
+
+	if (vmm_ops->hw_init == NULL || vmm_ops->hw_init() != 0) {
+		KERN_DEBUG("Cannot initialize the virtualization hardware.\n");
+		return 3;
 	}
 
-	for (i = 0; i < MAX_VMID; i++) {
-		memzero(&vm_pool[i], sizeof(struct vm));
-		vm_pool[i].used = FALSE;
-		vm_pool[i].vmid = i;
-	}
-
-	spinlock_init(&vm_pool_lock);
-
-	vmm_inited = TRUE;
+	c->vm_inited = TRUE;
 
 	return 0;
 }
 
-int
-vmm_init_on_ap(void)
-{
-        if (vmm_ops->vmm_init == NULL || vmm_ops->vmm_init() != 0) {
-                KERN_DEBUG("Machine-dependent vmm_init() failed.\n");
-                return 1;
-        } else
-		return 0;
-}
-
 struct vm *
-vmm_init_vm(void)
+vmm_create_vm(uint64_t cpufreq, size_t memsize)
 {
 	KERN_ASSERT(vmm_inited == TRUE);
 
-	int i;
-	struct vm *vm = NULL;
+	struct vm *vm ;
 
-	spinlock_acquire(&vm_pool_lock);
-	for (i = 0; i < MAX_VMID; i++)
-		if (vm_pool[i].used == FALSE) {
-			vm = &vm_pool[i];
-			vm->used = TRUE;
-			break;
-		}
-	spinlock_release(&vm_pool_lock);
-
-	if (i == MAX_VMID)
+	if (cpufreq >= tsc_per_ms * 1000) {
+		KERN_DEBUG("Guest CPU frequency cannot be higher than the host "
+			   "CPU frequency.\n");
 		return NULL;
+	}
 
-	memset(vm, 0x0, sizeof(struct vm));
+	if ((vm = vmm_alloc_vm()) == NULL) {
+		KERN_DEBUG("Cannot allocate a vm structure.\n");
+		return NULL;
+	}
 
-	vm->exit_reason = EXIT_NONE;
-	vm->handled = TRUE;
+	vm->proc = NULL;
+	vm->state = VM_STATE_STOP;
 
+	vm->cpufreq = cpufreq;
+	vm->memsize = memsize;
 	vm->tsc = 0;
 
-	/* initialize the virtual device interface  */
-	KERN_DEBUG("Initialize virtual device interface.\n");
-	vdev_init(vm);
+	vm->exit_reason = EXIT_NONE;
+	vm->exit_handled = TRUE;
 
-#ifdef TRACE_TOTAL_TIME
-	vm->start_tsc = vm->total_tsc = 0;
-#endif
+	vm->pending = FALSE;
+	vm->intr_shadow = FALSE;
 
-	/* machine-dependent VM initialization */
-	KERN_DEBUG("Architecture-dependent initialization.\n");
-	if (vmm_ops->vm_init(vm) != 0) {
+	if (vmm_ops->vm_init == NULL || vmm_ops->vm_init(vm)) {
 		KERN_DEBUG("Machine-dependent VM initialization failed.\n");
 		return NULL;
 	}
 
-	vm->state = VM_STOP;
+	vmm_ops->intercept_all_ioports(vm, TRUE);
+	vmm_ops->intercept_all_msrs(vm, 0);
+
+	/* setup the segment registers */
+	vmm_ops->set_desc(vm, GUEST_CS, &guest_seg_desc[0]);
+	vmm_ops->set_desc(vm, GUEST_DS, &guest_seg_desc[1]);
+	vmm_ops->set_desc(vm, GUEST_ES, &guest_seg_desc[1]);
+	vmm_ops->set_desc(vm, GUEST_FS, &guest_seg_desc[1]);
+	vmm_ops->set_desc(vm, GUEST_GS, &guest_seg_desc[1]);
+	vmm_ops->set_desc(vm, GUEST_SS, &guest_seg_desc[1]);
+	vmm_ops->set_desc(vm, GUEST_LDTR, &guest_seg_desc[2]);
+	vmm_ops->set_desc(vm, GUEST_TR, &guest_seg_desc[3]);
+	vmm_ops->set_desc(vm, GUEST_GDTR, &guest_seg_desc[4]);
+	vmm_ops->set_desc(vm, GUEST_IDTR, &guest_seg_desc[4]);
+
+	/* setup the general registers */
+	vmm_ops->set_reg(vm, GUEST_EAX, 0x00000000);
+	vmm_ops->set_reg(vm, GUEST_EBX, 0x00000000);
+	vmm_ops->set_reg(vm, GUEST_ECX, 0x00000000);
+	vmm_ops->set_reg(vm, GUEST_EDX,
+			 (pcpu_cur()->arch_info.family << 8) |
+			 (pcpu_cur()->arch_info.model << 4) |
+			 (pcpu_cur()->arch_info.step));
+	vmm_ops->set_reg(vm, GUEST_ESI, 0x00000000);
+	vmm_ops->set_reg(vm, GUEST_EDI, 0x00000000);
+	vmm_ops->set_reg(vm, GUEST_EBP, 0x00000000);
+	vmm_ops->set_reg(vm, GUEST_ESP, 0x00000000);
+	vmm_ops->set_reg(vm, GUEST_EIP, 0x0000fff0);
+	vmm_ops->set_reg(vm, GUEST_EFLAGS, 0x00000002);
+
+	/* load BIOS */
+	vmm_load_bios(vm);
+
+	/* setup the virtual device interface */
+	vdev_init(vm);
+
+	KERN_DEBUG("VM (CPU %lld Hz, MEM %d bytes) is created.\n",
+		   cpufreq, memsize);
 
 	return vm;
 }
@@ -152,16 +556,8 @@ vmm_run_vm(struct vm *vm)
 	KERN_ASSERT(vmm_inited == TRUE);
 	KERN_ASSERT(vm != NULL);
 
-#if defined (TRACE_IOIO) || defined (TRACE_TOTAL_TIME)
-	static uint64_t last_dump = 0;
-#endif
-
-	vmm_ops->vm_intercept_ioio(vm, IO_PIC1, SZ8, TRUE);
-	vmm_ops->vm_intercept_ioio(vm, IO_PIC2, SZ8, TRUE);
-	vmm_ops->vm_intercept_ioio(vm, IO_PIC1+1, SZ8, TRUE);
-	vmm_ops->vm_intercept_ioio(vm, IO_PIC2+1, SZ8, TRUE);
-	vmm_ops->vm_intercept_ioio(vm, IO_ELCR1, SZ8, TRUE);
-	vmm_ops->vm_intercept_ioio(vm, IO_ELCR2, SZ8, TRUE);
+	uint64_t start_tsc;
+	int rc;
 
 	pcpu_cur()->vm = vm;
 
@@ -169,49 +565,51 @@ vmm_run_vm(struct vm *vm)
 		KERN_DEBUG("Cannot start all virtual devices.\n");
 		return 1;
 	}
-	vm->state = VM_RUNNING;
+	vm->state = VM_STATE_RUNNING;
 
 	KERN_DEBUG("Start running VM ... \n");
 
+	rc = 0;
 	while (1) {
-		KERN_ASSERT(vm->handled == TRUE);
+		KERN_ASSERT(vm->exit_handled == TRUE);
 
-		vmm_ops->vm_run(vm);
+		start_tsc = rdtscp();
 
-		vmm_update_guest_tsc(vm);
+		if ((rc = vmm_ops->vm_run(vm)))
+			break;
+
+		vmm_update_guest_tsc(vm, start_tsc, rdtscp());
 
 		/*
-		 * If VM exits for interrupts, then enable interrupts in the
-		 * host in order to let host interrupt handlers come in.
+		 * If the exit is caused by the interrupt, set the IF bit on the
+		 * current processor so that the interrupt handler in CertiKOS
+		 * kernel will be invoked. Therefore, we can know which
+		 * interrupt is happening in the virtual machine.
 		 */
-		if (vm->exit_reason == EXIT_FOR_EXTINT && vm->handled == FALSE)
+		if (vm->exit_reason == EXIT_FOR_EXTINT)
 			intr_local_enable();
 
-		/* wait until the external interrupt is handled */
-		while (vm->exit_reason == EXIT_FOR_EXTINT &&
-		       vm->handled == FALSE)
-			pause();
-		/* assertion makes sure that interrupts are disabled */
-		KERN_ASSERT((read_eflags() & FL_IF) == 0x0);
-		vmm_ops->vm_exit_handle(vm);
+		KERN_ASSERT(vm->exit_reason != EXIT_FOR_EXTINT ||
+			    (vm->exit_handled == TRUE &&
+			     (read_eflags() & FL_IF) == 0x0));
 
-#if defined (TRACE_IOIO) || defined (TRACE_TOTAL_TIME)
-		if ((rdtscp() - last_dump) / tsc_per_ms >= 10 * 1000) {
-			last_dump = rdtscp();
-#ifdef TRACE_IOIO
-			dump_ioio_trace_info();
-#endif
-
-#ifdef TRACE_TOTAL_TIME
-			dprintf("%lld ms of 10,000 ms are out of the guest.\n",
-				vm->total_tsc / tsc_per_ms);
-			vm->total_tsc = 0;
-#endif
+		/* handle other types of the VM exits */
+		if (vmm_handle_exit(vm)) {
+			KERN_DEBUG("Cannot handle a VM exit (exit_reason %d).\n",
+				   vm->exit_reason);
+			rc = 1;
+			break;
 		}
-#endif
+
+		vm->exit_handled = TRUE;
+
+		/* post-handling of the interrupts from the virtual machine */
+		vmm_intr_assist(vm);
 	}
 
-	return 0;
+	if (rc)
+		KERN_DEBUG("A virtual machine terminates abnormally.\n");
+	return rc;
 }
 
 struct vm *
@@ -220,54 +618,164 @@ vmm_cur_vm(void)
 	return pcpu_cur()->vm;
 }
 
-void
-vmm_handle_intr(struct vm *vm, uint8_t irqno)
-{
-	KERN_ASSERT(vm != NULL);
-	vmm_ops->vm_intr_handle(vm, irqno);
-}
-
 uint64_t
 vmm_rdtsc(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
-
 	return vm->tsc;
 }
 
-uintptr_t
-vmm_translate_gp2hp(struct vm *vm, uintptr_t gp)
+int
+vmm_get_mmap(struct vm *vm, uintptr_t gpa, uintptr_t *hpa)
 {
 	KERN_ASSERT(vm != NULL);
 
-	return vmm_ops->vm_translate_gp2hp(vm, gp);
+	if (ROUNDDOWN(gpa, PAGESIZE) != gpa ||
+	    (gpa >= vm->memsize && gpa < 0xf0000000))
+		return 1;
+
+	if (hpa == NULL)
+		return 2;
+
+	return vmm_ops->get_mmap(vm, gpa, hpa);
 }
 
-struct vm *
-vmm_get_vm(vmid_t vmid)
-{
-	if (!(0 <= vmid && vmid < MAX_VMID))
-		return NULL;
-	return &vm_pool[vmid];
-}
-
-void
-vmm_set_irq(struct vm *vm, uint8_t irq, int mode)
+int
+vmm_set_mmap(struct vm *vm, uintptr_t gpa, pageinfo_t *pi)
 {
 	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(0 <= irq && irq < MAX_IRQ);
-	KERN_ASSERT(0 <= mode && mode < 3);
 
-	struct vdev *vdev = &vm->vdev;
+	if (ROUNDDOWN(gpa, PAGESIZE) != gpa ||
+	    (gpa >= vm->memsize && gpa < 0xf0000000))
+		return 1;
 
-	spinlock_acquire(&vdev->vpic_lk);
-	if (mode == 0) {
-		vpic_set_irq(&vdev->vpic, irq, 1);
-	} else if (mode == 1) {
-		vpic_set_irq(&vdev->vpic, irq, 0);
-	} else {
-		vpic_set_irq(&vdev->vpic, irq, 0);
-		vpic_set_irq(&vdev->vpic, irq, 1);
+	if (pi == NULL)
+		return 2;
+
+	return vmm_ops->set_mmap(vm, gpa, mem_pi2phys(pi));
+}
+
+int
+vmm_unset_mmap(struct vm *vm, uintptr_t gpa)
+{
+	KERN_ASSERT(vm != NULL);
+
+	if (ROUNDDOWN(gpa, PAGESIZE) != gpa ||
+	    (gpa >= vm->memsize && gpa < 0xf0000000))
+		return 1;
+
+	return vmm_ops->unset_mmap(vm, gpa);
+}
+
+int
+vmm_intercept_ioport(struct vm *vm, uint16_t port, bool enable)
+{
+	KERN_ASSERT(vm != NULL);
+	return vmm_ops->intercept_ioport(vm, port, enable);
+}
+
+int
+vmm_handle_extint(struct vm *vm, uint8_t irq)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(vm->exit_reason == EXIT_FOR_EXTINT &&
+		    vm->exit_handled == FALSE);
+
+	vid_t vid = vm->vdev.irq[irq].vid;
+
+	/*
+	 * Try to notify the virtual device which occupies the interrupt. If no
+	 * virtual device is registered as the source of the interrupt, raise
+	 * corresponding interrupt line of the virtual PIC.
+	 */
+	if (vdev_sync_dev(vm, vid) && vpic_is_ready(&vm->vdev.vpic) == TRUE) {
+		vdev_raise_irq(vm, vid, irq);
+		vdev_lower_irq(vm, vid, irq);
 	}
-	spinlock_release(&vdev->vpic_lk);
+
+	vm->exit_handled = TRUE;
+
+	return 0;
+}
+
+int
+vmm_memcpy_to_guest(struct vm *vm,
+		    uintptr_t dest_gpa, uintptr_t src_hpa, size_t size)
+{
+	KERN_ASSERT(vm != NULL);
+
+	uintptr_t dest_hpa, dest, src;
+	size_t remaining, copied;
+
+	if (dest_gpa > vm->memsize || size > vm->memsize ||
+	    vm->memsize - size < dest_gpa)
+		return 1;
+
+	vmm_ops->get_mmap(vm, dest_gpa, &dest_hpa);
+	dest_hpa += dest_gpa - ROUNDDOWN(dest_gpa, PAGESIZE);
+	dest = dest_gpa;
+	src = src_hpa;
+	remaining = size;
+
+	copied = PAGESIZE - (dest_gpa - ROUNDDOWN(dest_gpa, PAGESIZE));
+	copied = MIN(copied, remaining);
+
+	do {
+		memcpy((void *) dest_hpa, (void *) src, copied);
+		remaining -= copied;
+		if (remaining == 0)
+			break;
+		dest += copied;
+		vmm_ops->get_mmap(vm, dest, &dest_hpa);
+		src += copied;
+		copied = MIN(PAGESIZE, remaining);
+	} while (remaining);
+
+	return 0;
+}
+
+int
+vmm_memcpy_to_host(struct vm *vm,
+		   uintptr_t dest_hpa, uintptr_t src_gpa, size_t size)
+{
+	KERN_ASSERT(vm != NULL);
+
+	uintptr_t src_hpa, dest, src;
+	size_t remaining, copied;
+
+	if (src_gpa > vm->memsize || size > vm->memsize ||
+	    vm->memsize - size < src_gpa)
+		return 1;
+
+	vmm_ops->get_mmap(vm, src_gpa, &src_hpa);
+	src_hpa += src_gpa - ROUNDDOWN(src_gpa, PAGESIZE);
+	src = src_gpa;
+	dest = dest_hpa;
+	remaining = size;
+
+	copied = PAGESIZE - (src_gpa - ROUNDDOWN(src_gpa, PAGE_SIZE));
+	copied = MIN(copied, remaining);
+
+	do {
+		memcpy((void *) dest, (void *) src_hpa, copied);
+		remaining -= copied;
+		if (remaining == 0)
+			break;
+		dest += copied;
+		src += copied;
+		vmm_ops->get_mmap(vm, src, &src_hpa);
+		copied = MIN(PAGESIZE, remaining);
+	} while (remaining);
+
+
+	return 0;
+}
+
+uintptr_t
+vmm_translate_gp2hp(struct vm *vm, uintptr_t gpa)
+{
+	KERN_ASSERT(vm != NULL);
+	uintptr_t hpa;
+	vmm_ops->get_mmap(vm, ROUNDDOWN(gpa, PAGESIZE), &hpa);
+	return hpa + (gpa - ROUNDDOWN(gpa, PAGESIZE));
 }

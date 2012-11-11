@@ -33,6 +33,7 @@ pcpu_init(void)
 		proc_sched_init(&pcpu[i].sched);
 		pcpu[i].vm = NULL;
 		pcpu[i].inited = TRUE;
+		pcpu[i].vm_inited = FALSE;
 	}
 
 	pcpu_inited = TRUE;

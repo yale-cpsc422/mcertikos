@@ -432,7 +432,8 @@ sys_new_vm(uintptr_t vmid_la)
 	if (s->type != SESSION_VM)
 		return E_INVAL_SID;
 
-	if ((p->vm = vmm_init_vm()) == NULL) {
+	if ((p->vm = vmm_create_vm(800 * 1000 * 1000,
+				   256 * 1024 *1024)) == NULL) {
 		proc_unlock(p);
 		return E_INVAL_VMID;
 	}
@@ -655,8 +656,7 @@ sys_guest_rw(uintptr_t gpa, uintptr_t la, size_t size, int write)
 	struct proc *dev_p = proc_cur();
 	struct vm *vm = dev_p->session->vm;
 
-	if (la < VM_USERLO || la > VM_USERHI - size ||
-	    VM_PHY_MEMORY_SIZE - la < size)
+	if (la < VM_USERLO || la > VM_USERHI - size || vm->memsize - la < size)
 		return E_INVAL_ADDR;
 
 	if (vm == NULL)
@@ -726,7 +726,7 @@ sys_guest_cpufreq(uintptr_t freq_la)
 	if (dev_p->vid == -1)
 		return E_INVAL_VID;
 
-	freq = VM_TSC_FREQ;
+	freq = vm->cpufreq;
 
 	if (copy_to_user(dev_p->pmap, freq_la,
 			 (uintptr_t) &freq, sizeof(uint64_t)) == NULL)
@@ -755,7 +755,7 @@ sys_guest_memsize(uintptr_t size_la)
 	if (dev_p->vid == -1)
 		return E_INVAL_VID;
 
-	size = VM_PHY_MEMORY_SIZE;
+	size = vm->memsize;
 
 	if (copy_to_user(dev_p->pmap, size_la,
 			 (uintptr_t) &size, sizeof(uint64_t)) == NULL)

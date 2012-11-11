@@ -607,6 +607,13 @@ vpic_init(struct vpic *vpic, struct vm *vm)
 	vpic->master.master = TRUE;
 	i8259_reset(&vpic->slave);
 	vpic->master.vpic = vpic->slave.vpic = vpic;
+
+	vmm_intercept_ioport(vm, IO_PIC1, TRUE);
+	vmm_intercept_ioport(vm, IO_PIC2, TRUE);
+	vmm_intercept_ioport(vm, IO_PIC1+1, TRUE);
+	vmm_intercept_ioport(vm, IO_PIC2+1, TRUE);
+	vmm_intercept_ioport(vm, IO_ELCR1, TRUE);
+	vmm_intercept_ioport(vm, IO_ELCR2, TRUE);
 }
 
 int

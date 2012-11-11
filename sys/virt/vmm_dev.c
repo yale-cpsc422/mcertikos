@@ -37,7 +37,7 @@ vdev_init(struct vm *vm)
 	spinlock_init(&vm->vdev.vpic_lk);
 	vpic_init(&vm->vdev.vpic, vm);
 
-	KERN_DEBUG("Initialize virtual device management.\n");
+	KERN_DEBUG("Initialize virtual device interface.\n");
 	spinlock_init(&vm->vdev.dev_lk);
 	memzero(vm->vdev.dev, sizeof(struct proc *) * MAX_VID);
 	memzero(vm->vdev.ch, sizeof(struct channel *) * MAX_VID);
@@ -144,7 +144,7 @@ vdev_register_ioport(struct vm *vm, uint16_t port, data_sz_t width, vid_t vid)
 		}
 
 		vdev->ioport[port1].vid = vid;
-		vmm_ops->vm_intercept_ioio(vm, port1, SZ8, TRUE);
+		vmm_intercept_ioport(vm, port1, TRUE);
 
 		VDEV_DEBUG("Attach virtual device %d to I/O port 0x%x.\n",
 			   vid, port1);
@@ -178,7 +178,7 @@ vdev_unregister_ioport(struct vm *vm, uint16_t port, data_sz_t width, vid_t vid)
 		}
 
 		vdev->ioport[port1].vid = -1;
-		vmm_ops->vm_intercept_ioio(vm, port1, SZ8, FALSE);
+		vmm_intercept_ioport(vm, port1, FALSE);
 
 		VDEV_DEBUG("Detach virtual device %d from I/O port 0x%x.n",
 			   vid, port1);
@@ -558,7 +558,17 @@ vdev_set_irq(struct vm *vm, vid_t vid, uint8_t irq, int mode)
 		rc = 1;
 		goto ret1;
 	}
-	vmm_set_irq(vm, irq, mode);
+
+	spinlock_acquire(&vdev->vpic_lk);
+	if (mode == 0) {
+		vpic_set_irq(&vdev->vpic, irq, 1);
+	} else if (mode == 1) {
+		vpic_set_irq(&vdev->vpic, irq, 0);
+	} else {
+		vpic_set_irq(&vdev->vpic, irq, 0);
+		vpic_set_irq(&vdev->vpic, irq, 1);
+	}
+	spinlock_release(&vdev->vpic_lk);
 
 	VDEV_DEBUG("%s virtual IRQ line %d.\n",
 		   mode == 0 ? "Raise" : mode == 1 ? "Lower" : "Trigger", irq);
@@ -600,15 +610,15 @@ vdev_rw_guest_mem(struct vm *vm, uintptr_t gpa,
 	uintptr_t from, to, from_pa, to_pa;
 	size_t remaining, copied;
 
-	if (gpa >= VM_PHY_MEMORY_SIZE) {
+	if (gpa >= vm->memsize) {
 		VDEV_DEBUG("Guest physical address 0x%08x is out of range "
-			   "(0x00000000 ~ 0x%08x).\n", gpa, VM_PHY_MEMORY_SIZE);
+			   "(0x00000000 ~ 0x%08x).\n", gpa, vm->memsize);
 		return 1;
 	}
 
-	if (VM_PHY_MEMORY_SIZE - gpa < size) {
+	if (vm->memsize - gpa < size) {
 		VDEV_DEBUG("Size (%d bytes) is out of range (%d bytes).\n",
-			   size, VM_PHY_MEMORY_SIZE - gpa);
+			   size, vm->memsize - gpa);
 		return 1;
 	}
 

@@ -58,6 +58,7 @@ struct pcpu {
 	struct sched	sched;		/* process scheduler */
 	trap_cb_t	**trap_handler;	/* arrays of trap handlers */
 	struct vm	*vm;
+	bool		vm_inited;	/* is the virtualization initialzied? */
 };
 
 struct pcpu pcpu[MAX_CPU];

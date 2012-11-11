@@ -23,8 +23,8 @@ trap_from_guest(tf_t *tf)
 {
 	struct vm *vm = vmm_cur_vm();
 	return tf && tf->eip < VM_USERLO &&
-		vm && vm->state == VM_RUNNING &&
-		vm->exit_reason == EXIT_FOR_EXTINT && vm->handled == FALSE;
+		vm && vm->state == VM_STATE_RUNNING &&
+		vm->exit_reason == EXIT_FOR_EXTINT && vm->exit_handled == FALSE;
 }
 
 static gcc_inline void
@@ -52,7 +52,7 @@ pre_handle_user(tf_t *tf)
 static gcc_inline void
 default_handler_guest(tf_t *tf)
 {
-	vmm_handle_intr(vmm_cur_vm(), tf->trapno - T_IRQ0);
+	vmm_handle_extint(vmm_cur_vm(), tf->trapno - T_IRQ0);
 }
 
 static gcc_inline void
@@ -243,7 +243,7 @@ timer_intr_handler(struct context *ctx, int guest)
 	intr_eoi();
 
 	if (guest) {
-		vmm_handle_intr(vmm_cur_vm(), IRQ_TIMER);
+		vmm_handle_extint(vmm_cur_vm(), IRQ_TIMER);
 	} else {
 		proc_sched_update();
 
@@ -275,7 +275,7 @@ kbd_intr_handler(struct context *ctx, int guest)
 	intr_eoi();
 
 	if (guest)
-		vmm_handle_intr(vmm_cur_vm(), IRQ_KBD);
+		vmm_handle_extint(vmm_cur_vm(), IRQ_KBD);
 	else
 		kbd_intr();
 
@@ -292,7 +292,7 @@ ipi_resched_handler(struct context *ctx, int guest)
 	intr_eoi();
 
 	if (guest) {
-		vmm_handle_intr(vmm_cur_vm(), IRQ_IPI_RESCHED);
+		vmm_handle_extint(vmm_cur_vm(), IRQ_IPI_RESCHED);
 	} else {
 		sched_lock(pcpu_cur());
 		proc_sched(TRUE);
