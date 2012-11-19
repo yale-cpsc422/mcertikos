@@ -593,6 +593,8 @@ virtio_blk_init(struct virtio_blk *blk, struct vpci_host *vpci_host)
 	ASSERT(blk != NULL);
 	ASSERT(vpci_host != NULL);
 
+	memset(blk, 0, sizeof(struct virtio_blk));
+
 	struct virtio_device *dev = &blk->common_header;
 
 	if (virtio_device_init(dev, &virtio_blk_ops, vpci_host)) {
