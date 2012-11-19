@@ -14,7 +14,7 @@ struct pcpuinfo {
 	bool		bsp;
 
 	/* cpuid 0x0 */
-	uint32_t	max_input;	/* Maximum input value for basic CPUID
+	uint32_t	cpuid_high;	/* Maximum input value for basic CPUID
 					   information (%eax)*/
 	char		vendor[20];	/* CPU vendor (%ebx, %ecx, %edx) */
 
@@ -31,6 +31,10 @@ struct pcpuinfo {
 	uint8_t		apic_id;	/* initial APIC id (%ebx[31:24]) */
 	uint32_t	feature1;	/* CPU features (%ecx) */
 	uint32_t	feature2;	/* CPU features (%edx) */
+
+	/* cpuid 0x80000000 */
+	uint32_t	cpuid_exthigh;	/* Maximum Input Value for Extended
+					   Function CPUID Information */
 };
 
 bool pcpu_mp_init(struct pcpu *c);

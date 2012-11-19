@@ -242,6 +242,7 @@ vmm_handle_cpuid(struct vm *vm)
 
 	vmm_ops->get_reg(vm, GUEST_EAX, &eax);
 	vmm_ops->get_reg(vm, GUEST_ECX, &ecx);
+
 	vmm_ops->get_cpuid(vm, eax, ecx, &eax, &ebx, &ecx, &edx);
 	vmm_ops->set_reg(vm, GUEST_EAX, eax);
 	vmm_ops->set_reg(vm, GUEST_EBX, ebx);

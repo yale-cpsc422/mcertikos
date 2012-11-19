@@ -24,7 +24,7 @@ static gcc_inline void
 pcpu_print_cpuinfo(uint32_t cpu_idx, struct pcpuinfo *cpuinfo)
 {
 	KERN_INFO("CPU%d: %s, FAMILY %d(%d), MODEL %d(%d), STEP %d, "
-		  "FEATURE %x %x\n",
+		  "FEATURE 0x%x 0x%x\n",
 		  cpu_idx, cpuinfo->vendor,
 		  cpuinfo->family, cpuinfo->ext_family,
 		  cpuinfo->model, cpuinfo->ext_model,
@@ -38,7 +38,7 @@ pcpu_identify(void)
 	uint32_t eax, ebx, ecx, edx;
 
 	cpuid(0x0, &eax, &ebx, &ecx, &edx);
-	cpuinfo->max_input = eax;
+	cpuinfo->cpuid_high = eax;
 	((uint32_t *) cpuinfo->vendor)[0] = ebx;
 	((uint32_t *) cpuinfo->vendor)[1] = edx;
 	((uint32_t *) cpuinfo->vendor)[2] = ecx;
@@ -56,6 +56,9 @@ pcpu_identify(void)
 	cpuinfo->apic_id = (ebx >> 24) & 0xff;
 	cpuinfo->feature1 = ecx;
 	cpuinfo->feature2 = edx;
+
+	cpuid(0x80000000, &eax, &ebx, &ecx, &edx);
+	cpuinfo->cpuid_exthigh = eax;
 
 	pcpu_print_cpuinfo(pcpu_cpu_idx(pcpu_cur()), cpuinfo);
 }
