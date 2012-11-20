@@ -405,6 +405,21 @@ struct svm {
 	uint16_t	h_fs, h_gs, h_ldt;
 };
 
+#ifdef DEBUG_SVM
+
+#define SVM_DEBUG(fmt, ...)				\
+	do {						\
+		KERN_DEBUG("SVM: "fmt, ##__VA_ARGS__);	\
+	} while (0)
+
+#else
+
+#define SVM_DEBUG(fmt, ...)			\
+	do {					\
+	} while (0)
+
+#endif
+
 #endif /* !__ASSEMBLER__ */
 
 #endif /* _KERN_ */

@@ -37,7 +37,7 @@ svm_check(void)
 	uint32_t feature, dummy;
 	cpuid(CPUID_FEATURE_FUNC, &dummy, &dummy, &feature, &dummy);
 	if ((feature & CPUID_X_FEATURE_SVM) == 0) {
-		KERN_DEBUG("The processor does not support SVM.\n");
+		SVM_DEBUG("The processor does not support SVM.\n");
 		return FALSE;
 	}
 
@@ -49,14 +49,14 @@ svm_check(void)
 	/* check CPUID 0x8000000a */
 	cpuid(CPUID_SVM_FEATURE_FUNC, &dummy, &dummy, &dummy, &feature);
 	if ((feature & CPUID_SVM_LOCKED) == 0) {
-		KERN_DEBUG("SVM maybe disabled by BIOS.\n");
+		SVM_DEBUG("SVM maybe disabled by BIOS.\n");
 		return FALSE;
 	} else {
-		KERN_DEBUG("SVM maybe disabled with key.\n");
+		SVM_DEBUG("SVM maybe disabled with key.\n");
 		return FALSE;
 	}
 
-	KERN_DEBUG("SVM is available.\n");
+	SVM_DEBUG("SVM is available.\n");
 
 	return TRUE;
 }
@@ -74,7 +74,7 @@ svm_enable(void)
 	efer |= MSR_EFER_SVME;
 	wrmsr(MSR_EFER, efer);
 
-	KERN_DEBUG("SVM is enabled.\n");
+	SVM_DEBUG("SVM is enabled.\n");
 }
 
 /*
@@ -86,8 +86,8 @@ alloc_hsave_area(void)
 	pageinfo_t *pi = mem_page_alloc();
 
 	if (pi == NULL) {
-		KERN_DEBUG("Failed to allocate memory for "
-			   "the host state-save area failed.\n");
+		SVM_DEBUG("Failed to allocate memory for "
+			  "the host state-save area failed.\n");
 		return 0x0;
 	}
 
@@ -128,7 +128,7 @@ free_svm(struct svm *svm)
 	offset = (uintptr_t) svm - (uintptr_t) svm_pool.svm;
 	if (offset % sizeof(struct svm) ||
 	    offset / sizeof(struct svm) >= MAX_VMID)
-	    return;
+		return;
 
 	spinlock_acquire(&svm_pool_lk);
 	svm_pool.used[svm - svm_pool.svm] = FALSE;
@@ -146,7 +146,7 @@ alloc_vmcb(void)
 	pageinfo_t *pi = mem_page_alloc();
 
 	if (pi == NULL) {
-		KERN_DEBUG("Failed to allocate memory for VMCB.\n");
+		SVM_DEBUG("Failed to allocate memory for VMCB.\n");
 		return NULL;
 	}
 
@@ -176,7 +176,7 @@ alloc_nested_ptable(size_t memsize)
 	pmap_t *pmap;
 
 	if ((pmap_pi = mem_page_alloc()) == NULL) {
-		KERN_DEBUG("Cannot allocate memory for nested page table.\n");
+		SVM_DEBUG("Cannot allocate memory for nested page table.\n");
 		return NULL;
 	}
 	pmap = mem_pi2ptr(pmap_pi);
@@ -190,8 +190,8 @@ alloc_nested_ptable(size_t memsize)
 					   "0x%08x.\n", addr);
 		} else if (pmap_reserve(pmap, addr,
 					PTE_G | PTE_W | PTE_U) == NULL) {
-			KERN_DEBUG("Failed to map guest memory page at %x.\n",
-				   addr);
+			SVM_DEBUG("Failed to map guest memory page at %x.\n",
+				  addr);
 			pmap_free(pmap);
 			return NULL;
 		}
@@ -357,6 +357,11 @@ svm_handle_exit(struct vm *vm)
 
 	vm->exit_handled = FALSE;
 
+#ifdef DEBUG_VMEXIT
+	SVM_DEBUG("VMEXIT exit_code 0x%x, guest EIP 0x%08x.\n",
+		  ctrl->exit_code, (uintptr_t) vmcb->save.rip);
+#endif
+
 	switch (ctrl->exit_code) {
 	case SVM_EXIT_INTR:
 		vm->exit_reason = EXIT_FOR_EXTINT;
@@ -448,7 +453,7 @@ svm_init(void)
 	else
 		wrmsr(MSR_VM_HSAVE_PA, hsave_addr);
 
-	KERN_DEBUG("Host state-save area is at %x.\n", hsave_addr);
+	SVM_DEBUG("Host state-save area is at %x.\n", hsave_addr);
 
 	return 0;
 }
@@ -477,7 +482,7 @@ svm_init_vm(struct vm *vm)
 		rc = 2;
 		goto vmcb_err;
 	}
-	KERN_DEBUG("VMCB is at 0x%08x.\n", svm->vmcb);
+	SVM_DEBUG("VMCB is at 0x%08x.\n", svm->vmcb);
 
 	vmcb = svm->vmcb;
 	save = &vmcb->save;
@@ -497,7 +502,7 @@ svm_init_vm(struct vm *vm)
 		goto npt_err;
 	}
 	control->nested_cr3 = (uintptr_t) ncr3;
-	KERN_DEBUG("Nested page table is at 0x%08x.\n", ncr3);
+	SVM_DEBUG("Nested page table is at 0x%08x.\n", ncr3);
 
 	/* create IOPM */
 	if (!(control->iopm_base_pa = alloc_perm_map(SVM_IOPM_SIZE))) {
@@ -535,8 +540,8 @@ svm_init_vm(struct vm *vm)
 
 	return 0;
 
- /* err: */
- /* 	free_perm_map(control->msrpm_base_pa); */
+	/* err: */
+	/* 	free_perm_map(control->msrpm_base_pa); */
  msrpm_err:
 	free_perm_map(control->iopm_base_pa);
  iopm_err:
@@ -594,8 +599,8 @@ svm_run_vm(struct vm *vm)
 		switch (int_type) {
 		case SVM_EXITINTINFO_TYPE_INTR:
 #ifdef DEBUG_GUEST_INTR
-			KERN_DEBUG("Pending INTR: vec=%x.\n",
-				   exit_int_info & SVM_EXITINTINFO_VEC_MASK);
+			SVM_DEBUG("Pending INTR: vec=%x.\n",
+				  exit_int_info & SVM_EXITINTINFO_VEC_MASK);
 #endif
 			ctrl->event_inj = exit_int_info;
 			ctrl->event_inj_err = errcode;
@@ -603,7 +608,7 @@ svm_run_vm(struct vm *vm)
 
 		case SVM_EXITINTINFO_TYPE_NMI:
 #ifdef DEBUG_GUEST_INTR
-			KERN_DEBUG("Pending NMI.\n");
+			SVM_DEBUG("Pending NMI.\n");
 #endif
 			ctrl->event_inj = exit_int_info;
 			ctrl->event_inj_err = errcode;
@@ -611,15 +616,15 @@ svm_run_vm(struct vm *vm)
 
 		case SVM_EXITINTINFO_TYPE_EXEPT:
 #ifdef DEBUG_GUEST_INTR
-			KERN_DEBUG("Pending exception: vec=%x, errcode=%x.\n",
-				   exit_int_info & SVM_EXITINTINFO_VEC_MASK,
-				   errcode);
+			SVM_DEBUG("Pending exception: vec=%x, errcode=%x.\n",
+				  exit_int_info & SVM_EXITINTINFO_VEC_MASK,
+				  errcode);
 #endif
 			break;
 
 		case SVM_EXITINTINFO_TYPE_SOFT:
 #ifdef DEBUG_GUEST_INTR
-			KERN_DEBUG("Pending soft INTR.\n");
+			SVM_DEBUG("Pending soft INTR.\n");
 #endif
 			break;
 
@@ -647,6 +652,11 @@ svm_intercept_ioport(struct vm *vm, uint16_t port, bool enable)
 {
 	KERN_ASSERT(vm != NULL);
 
+#ifdef DEBUG_GUEST_IOPORT
+	SVM_DEBUG("%s intercepting guest I/O port 0x%x.\n",
+		  (enable == TRUE) ? "Enable" : "Disable", port);
+#endif
+
 	struct svm *svm = (struct svm *) vm->cookie;
 	uint32_t *iopm = (uint32_t *)(uintptr_t) svm->vmcb->control.iopm_base_pa;
 
@@ -665,6 +675,11 @@ static int
 svm_intercept_all_ioports(struct vm *vm, bool enable)
 {
 	KERN_ASSERT(vm != NULL);
+
+#ifdef DEBUG_GUEST_IOPORT
+	SVM_DEBUG("%s intercepting all guest I/O ports.\n",
+		  (enable == TRUE) ? "Enable" : "Disable");
+#endif
 
 	struct svm *svm = (struct svm *) vm->cookie;
 	uint32_t *iopm = (uint32_t *)(uintptr_t) svm->vmcb->control.iopm_base_pa;
@@ -689,6 +704,13 @@ svm_intercept_all_msrs(struct vm *vm, int rw)
 {
 	KERN_ASSERT(vm != NULL);
 	KERN_ASSERT(rw == 0 || rw == 1 || rw == 2 || rw == 3);
+
+#ifdef DEBUG_GUEST_MSR
+	SVM_DEBUG("%s intercepting reading all guest MSRs, "
+		  "%s intercepting writing all guest MSRs.\n",
+		  (rw & 0x1) ? "Enable" : "Disable",
+		  (rw & 0x2) ? "Enable" : "Disable");
+#endif
 
 	struct svm *svm = (struct svm *) vm->cookie;
 	uint8_t *msrpm = (uint8_t *)(uintptr_t) svm->vmcb->control.msrpm_base_pa;

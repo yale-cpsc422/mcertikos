@@ -8,6 +8,7 @@
 
 #include "ept.h"
 #include "vmcs.h"
+#include "vmx.h"
 #include "x86.h"
 
 gcc_inline uint16_t
@@ -74,17 +75,17 @@ vmcs_set_defaults(struct vmcs *vmcs, uint64_t *pml4ept, uint32_t pinbased_ctls,
 	/*
 	 * Load the VMX controls
 	 */
-	KERN_DEBUG("Set pin-based controls to 0x%08x\n", pinbased_ctls);
+	VMX_DEBUG("Set pin-based controls to 0x%08x\n", pinbased_ctls);
 	vmcs_write32(VMCS_PIN_BASED_CTLS, pinbased_ctls);
-	KERN_DEBUG("Set primary processor-based controls to 0x%08x\n",
-		   procbased_ctls);
+	VMX_DEBUG("Set primary processor-based controls to 0x%08x\n",
+		  procbased_ctls);
 	vmcs_write32(VMCS_PRI_PROC_BASED_CTLS, procbased_ctls);
-	KERN_DEBUG("Set secondary processor-based controls to 0x%08x\n",
-		   procbased_ctls2);
+	VMX_DEBUG("Set secondary processor-based controls to 0x%08x\n",
+		  procbased_ctls2);
 	vmcs_write32(VMCS_SEC_PROC_BASED_CTLS, procbased_ctls2);
-	KERN_DEBUG("Set exit controls to 0x%08x\n", exit_ctls);
+	VMX_DEBUG("Set exit controls to 0x%08x\n", exit_ctls);
 	vmcs_write32(VMCS_EXIT_CTLS, exit_ctls);
-	KERN_DEBUG("Set entry controls to 0x%08x\n", entry_ctls);
+	VMX_DEBUG("Set entry controls to 0x%08x\n", entry_ctls);
 	vmcs_write32(VMCS_ENTRY_CTLS, entry_ctls);
 
 	/*

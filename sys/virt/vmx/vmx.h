@@ -32,6 +32,21 @@ struct vmx {
 	int		failed;
 };
 
+#ifdef DEBUG_VMX
+
+#define VMX_DEBUG(fmt, ...)				\
+	do {						\
+		KERN_DEBUG("VMX: "fmt, ##__VA_ARGS__);	\
+	} while (0)
+
+#else
+
+#define VMX_DEBUG(fmt, ...)			\
+	do {					\
+	} while (0)
+
+#endif
+
 #endif /* _KERN_ */
 
 #endif /* !_VIRT_VMX_H_ */

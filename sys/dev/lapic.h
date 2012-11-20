@@ -113,12 +113,7 @@
 
 #define	APIC_ICRLO_RESV_MASK	(APIC_RESV1_MASK | APIC_RESV2_MASK)
 
-#if	defined (DEBUG_ALL) || defined (DEBUG_VIRT) ||	\
-	defined (LOW_FREQ) || defined (DEBUG_VMEXIT)
-#define LAPIC_TIMER_INTR_FREQ	1
-#else
 #define LAPIC_TIMER_INTR_FREQ	100
-#endif
 
 typedef uintptr_t		lapic_t;
 

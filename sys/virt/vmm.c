@@ -14,6 +14,21 @@
 #include <dev/pic.h>
 #include <dev/tsc.h>
 
+#ifdef DEBUG_VIRT
+
+#define VIRT_DEBUG(fmt, ...)				\
+	do {						\
+		KERN_DEBUG("VMM: "fmt, ##__VA_ARGS__);	\
+	} while (0)
+
+#else
+
+#define VIRT_DEBUG(fmt...)			\
+	do {					\
+	} while (0)
+
+#endif
+
 static bool vmm_inited = FALSE;
 
 static struct vm vm_pool[MAX_VMID];
@@ -110,7 +125,7 @@ vmm_handle_ioport(struct vm *vm)
 
 	if (exit_info->ioport.write == TRUE) {
 		vmm_ops->get_reg(vm, GUEST_EAX, &eax);
-#ifdef DEBUG_GUEST_IOIO
+#ifdef DEBUG_GUEST_IOPORT
 		KERN_DEBUG("Write guest I/O port 0x%x, width %d bytes, "
 			   "val 0x%08x.\n", port, 1 << width, eax);
 #endif
@@ -120,7 +135,7 @@ vmm_handle_ioport(struct vm *vm)
 		vdev_read_guest_ioport(vm, port, width, &eax);
 		vmm_ops->set_reg(vm, GUEST_EAX, eax);
 		vmm_ops->get_next_eip(vm, INSTR_IN, &next_eip);
-#ifdef DEBUG_GUEST_IOIO
+#ifdef DEBUG_GUEST_IOPORT
 		KERN_DEBUG("Read guest I/O port 0x%x, width %d bytes, "
 			   "val 0x%08x.\n", port, 1 << width, eax);
 #endif
@@ -148,10 +163,18 @@ vmm_handle_rdmsr(struct vm *vm)
 	vmm_ops->get_reg(vm, GUEST_ECX, &msr);
 
 	if (cpl != 0 || vmm_ops->get_msr(vm, msr, &val)) {
+#ifdef DEBUG_GUEST_MSR
+		KERN_DEBUG("Guest rdmsr 0x%08x: permission denied, "
+			   "CPL (%d) != 0.\n", msr, cpl);
+#endif
 		vmm_ops->inject_event(vm, EVENT_EXCEPTION, T_GPFLT,
 				      (cs_desc.sel & 0x1fff) << 3, TRUE);
 		return 0;
 	}
+
+#ifdef DEBUG_GUEST_MSR
+	KERN_DEBUG("Guest rdmsr 0x%08x = 0x%llx.\n", msr, val);
+#endif
 
 	vmm_ops->set_reg(vm, GUEST_EAX, val & 0xffffffff);
 	vmm_ops->set_reg(vm, GUEST_EDX, (val >> 32) & 0xffffffff);
@@ -183,10 +206,18 @@ vmm_handle_wrmsr(struct vm *vm)
 	val = ((uint64_t) edx << 32) | (uint64_t) eax;
 
 	if (cpl != 0 || vmm_ops->set_msr(vm, msr, val)) {
+#ifdef DEBUG_GUEST_MSR
+		KERN_DEBUG("Guest wrmsr 0x%08x: permission denied, "
+			   "CPL (%d) != 0.\n", msr, cpl);
+#endif
 		vmm_ops->inject_event(vm, EVENT_EXCEPTION, T_GPFLT,
 				      (cs_desc.sel & 0x1fff) << 3, TRUE);
 		return 0;
 	}
+
+#ifdef DEBUG_GUEST_MSR
+	KERN_DEBUG("Guest wrmsr 0x%08x, 0x%llx.\n", msr, val);
+#endif
 
 	vmm_ops->get_next_eip(vm, INSTR_WRMSR, &next_eip);
 	vmm_ops->set_reg(vm, GUEST_EIP, next_eip);
@@ -225,7 +256,7 @@ vmm_handle_pgflt(struct vm *vm)
 		return 3;
 	}
 
-#ifdef DEBUG_ADDR_TRANS
+#ifdef DEBUG_GUEST_PGFLT
 	KERN_DEBUG("EPT/NPT fault @ 0x%08x: mapped to HPA 0x%08x.\n",
 		   fault_pa, host_pa);
 #endif
@@ -238,16 +269,22 @@ vmm_handle_cpuid(struct vm *vm)
 	KERN_ASSERT(vm != NULL);
 	KERN_ASSERT(vm->exit_reason == EXIT_FOR_CPUID);
 
-	uint32_t eax, ebx, ecx, edx, next_eip;
+	uint32_t func1, func2, eax, ebx, ecx, edx, next_eip;
 
-	vmm_ops->get_reg(vm, GUEST_EAX, &eax);
-	vmm_ops->get_reg(vm, GUEST_ECX, &ecx);
+	vmm_ops->get_reg(vm, GUEST_EAX, &func1);
+	vmm_ops->get_reg(vm, GUEST_ECX, &func2);
 
-	vmm_ops->get_cpuid(vm, eax, ecx, &eax, &ebx, &ecx, &edx);
+	vmm_ops->get_cpuid(vm, func1, func2, &eax, &ebx, &ecx, &edx);
 	vmm_ops->set_reg(vm, GUEST_EAX, eax);
 	vmm_ops->set_reg(vm, GUEST_EBX, ebx);
 	vmm_ops->set_reg(vm, GUEST_ECX, ecx);
 	vmm_ops->set_reg(vm, GUEST_EDX, edx);
+
+#ifdef DEBUG_GUEST_CPUID
+	KERN_DEBUG("Guest cpuid eax=0x%08x ecx=0x%08x: "
+		   "eax=0x%08x, ebx=0x%08x, ecx=0x%08x, edx=0x%08x.\n",
+		   func1, func2, eax, ebx, ecx, edx);
+#endif
 
 	vmm_ops->get_next_eip(vm, INSTR_CPUID, &next_eip);
 	vmm_ops->set_reg(vm, GUEST_EIP, next_eip);
@@ -265,6 +302,10 @@ vmm_handle_rdtsc(struct vm *vm)
 
 	vmm_ops->set_reg(vm, GUEST_EDX, (vm->tsc >> 32) & 0xffffffff);
 	vmm_ops->set_reg(vm, GUEST_EAX, vm->tsc & 0xffffffff);
+
+#ifdef DEBUG_GUEST_TSC
+	KERN_DEBUG("Guest rdtsc = 0x%llx.\n", vm->tsc);
+#endif
 
 	vmm_ops->get_next_eip(vm, INSTR_RDTSC, &next_eip);
 	vmm_ops->set_reg(vm, GUEST_EIP, next_eip);
@@ -293,6 +334,8 @@ vmm_handle_invalid_instr(struct vm *vm)
 	KERN_ASSERT(vm != NULL);
 	KERN_ASSERT(vm->exit_reason == EXIT_FOR_INVAL_INSTR);
 
+	VIRT_DEBUG("Invalid instruction.\n");
+
 	vmm_ops->inject_event(vm, EVENT_EXCEPTION, T_ILLOP, 0, FALSE);
 	return 0;
 }
@@ -307,46 +350,79 @@ vmm_handle_exit(struct vm *vm)
 
 	switch (vm->exit_reason) {
 	case EXIT_FOR_EXTINT:
+#if defined (DEBUG_VMEXIT) || defined (DEBUG_GUEST_INTR)
+		KERN_DEBUG("VMEXIT for external interrupt.\n");
+#endif
 		KERN_ASSERT(vm->exit_handled = TRUE);
 		break;
 
 	case EXIT_FOR_INTWIN:
+#if defined (DEBUG_VMEXIT) || defined (DEBUG_GUEST_INTR)
+		KERN_DEBUG("VMEXIT for interrupt window.\n");
+#endif
 		rc = vmm_ops->intercept_intr_window(vm, FALSE);
 		break;
 
 	case EXIT_FOR_IOPORT:
+#if defined (DEBUG_VMEXIT) || defined (DEBUG_GUEST_IOPORT)
+		KERN_DEBUG("VMEXIT for I/O port.\n");
+#endif
 		rc = vmm_handle_ioport(vm);
 		break;
 
 	case EXIT_FOR_RDMSR:
+#if defined (DEBUG_VMEXIT) || defined (DEBUG_GUEST_MSR)
+		KERN_DEBUG("VMEXIT for rdmsr.\n");
+#endif
 		rc = vmm_handle_rdmsr(vm);
 		break;
 
 	case EXIT_FOR_WRMSR:
+#if defined (DEBUG_VMEXIT) || defined (DEBUG_GUEST_MSR)
+		KERN_DEBUG("VMEXIT for wrmsr.\n");
+#endif
 		rc = vmm_handle_wrmsr(vm);
 		break;
 
 	case EXIT_FOR_PGFLT:
+#if defined (DEBUG_VMEXIT) || defined (DEBUG_GUEST_PGFLT)
+		KERN_DEBUG("VMEXIT for page fault.\n");
+#endif
 		rc = vmm_handle_pgflt(vm);
 		break;
 
 	case EXIT_FOR_CPUID:
+#if defined (DEBUG_VMEXIT) || defined (DEBUG_GUEST_CPUID)
+		KERN_DEBUG("VMEXIT for cpuid.\n");
+#endif
 		rc = vmm_handle_cpuid(vm);
 		break;
 
 	case EXIT_FOR_RDTSC:
+#if defined (DEBUG_VMEXIT) || defined (DEBUG_GUEST_TSC)
+		KERN_DEBUG("VMEXIT for rdtsc.\n");
+#endif
 		rc = vmm_handle_rdtsc(vm);
 		break;
 
 	case EXIT_FOR_HYPERCALL:
+#if defined (DEBUG_VMEXIT) || defined (DEBUG_HYPERCALL)
+		KERN_DEBUG("VMEXIT for hypercall.\n");
+#endif
 		rc = vmm_handle_hypercall(vm);
 		break;
 
 	case EXIT_FOR_INVAL_INSTR:
+#ifdef DEBUG_VMEXIT
+		KERN_DEBUG("VMEXIT for invalid instruction.\n");
+#endif
 		rc = vmm_handle_invalid_instr(vm);
 		break;
 
 	default:
+#ifdef DEBUG_VMEXIT
+		KERN_DEBUG("VMEXIT for unknown reason %d.\n", vm->exit_reason);
+#endif
 		rc = 1;
 	}
 
@@ -363,11 +439,17 @@ vmm_intr_assist(struct vm *vm)
 	int blocked = 0;
 
 	/* no interrupt needs to be injected */
-	if ((vector = vdev_peep_intout(vm)) == -1)
+	if ((vector = vdev_peep_intout(vm)) == -1) {
+#if defined (DEBUG_GUEST_INTR) || defined (DEBUG_GUEST_INJECT)
+		KERN_DEBUG("Found no interrupt.\n");
+#endif
 		return;
+	}
 
 	if (vmm_ops->pending_event(vm) == TRUE) {
-		/* KERN_DEBUG("Pending injected event.\n"); */
+#if defined (DEBUG_GUEST_INTR) || defined (DEBUG_GUEST_INJECT)
+		KERN_DEBUG("Found pending event.\n");
+#endif
 		blocked = 1;
 		goto after_check;
 	}
@@ -375,12 +457,16 @@ vmm_intr_assist(struct vm *vm)
 	/* check if the virtual CPU is able to accept the interrupt */
 	vmm_ops->get_reg(vm, GUEST_EFLAGS, &eflags);
 	if (!(eflags & FL_IF)) {
-		/* KERN_DEBUG("EFLAGS.IF = 0 (EFLAGS = 0x%08x).\n", eflags); */
+#if defined (DEBUG_GUEST_INTR) || defined (DEBUG_GUEST_INJECT)
+		KERN_DEBUG("Guest EFLAGS.IF = 0.\n");
+#endif
 		blocked = 1;
 		goto after_check;
 	}
 	if (vmm_ops->intr_shadow(vm) == TRUE) {
-		/* KERN_DEBUG("Interrupt shadow.\n"); */
+#if defined (DEBUG_GUEST_INTR) || defined (DEBUG_GUEST_INJECT)
+		KERN_DEBUG("Guest in interrupt shadow.\n");
+#endif
 		blocked = 1;
 	}
 
@@ -399,7 +485,9 @@ vmm_intr_assist(struct vm *vm)
 		return;
 
 	/* inject the interrupt and disable intercepting the interrupt window */
-	/* KERN_DEBUG("Inject ExtINTR %d.\n", vector); */
+#if defined (DEBUG_GUEST_INTR) || defined (DEBUG_GUEST_INJECT)
+	KERN_DEBUG("Inject ExtINTR vec=0x%x.\n", vector);
+#endif
 	vmm_ops->inject_event(vm, EVENT_EXTINT, vector, 0, FALSE);
 	vmm_ops->intercept_intr_window(vm, FALSE);
 }
@@ -457,7 +545,7 @@ vmm_init(void)
 		} else if (is_amd() == TRUE) {
 			vmm_ops = &vmm_ops_amd;
 		} else {
-			KERN_DEBUG("Neither Intel nor AMD processor.\n");
+			VIRT_DEBUG("Neither Intel nor AMD processor.\n");
 			return 1;
 		}
 
@@ -468,7 +556,7 @@ vmm_init(void)
 		return 2;
 
 	if (vmm_ops->hw_init == NULL || vmm_ops->hw_init() != 0) {
-		KERN_DEBUG("Cannot initialize the virtualization hardware.\n");
+		VIRT_DEBUG("Cannot initialize the virtualization hardware.\n");
 		return 3;
 	}
 
@@ -485,13 +573,13 @@ vmm_create_vm(uint64_t cpufreq, size_t memsize)
 	struct vm *vm ;
 
 	if (cpufreq >= tsc_per_ms * 1000) {
-		KERN_DEBUG("Guest CPU frequency cannot be higher than the host "
+		VIRT_DEBUG("Guest CPU frequency cannot be higher than the host "
 			   "CPU frequency.\n");
 		return NULL;
 	}
 
 	if ((vm = vmm_alloc_vm()) == NULL) {
-		KERN_DEBUG("Cannot allocate a vm structure.\n");
+		VIRT_DEBUG("Cannot allocate a vm structure.\n");
 		return NULL;
 	}
 
@@ -506,7 +594,7 @@ vmm_create_vm(uint64_t cpufreq, size_t memsize)
 	vm->exit_handled = TRUE;
 
 	if (vmm_ops->vm_init == NULL || vmm_ops->vm_init(vm)) {
-		KERN_DEBUG("Machine-dependent VM initialization failed.\n");
+		VIRT_DEBUG("Machine-dependent VM initialization failed.\n");
 		return NULL;
 	}
 
@@ -546,7 +634,7 @@ vmm_create_vm(uint64_t cpufreq, size_t memsize)
 	/* setup the virtual device interface */
 	vdev_init(vm);
 
-	KERN_DEBUG("VM (CPU %lld Hz, MEM %d bytes) is created.\n",
+	VIRT_DEBUG("VM (CPU %lld Hz, MEM %d bytes) is created.\n",
 		   cpufreq, memsize);
 
 	return vm;
@@ -564,12 +652,12 @@ vmm_run_vm(struct vm *vm)
 	pcpu_cur()->vm = vm;
 
 	if (vdev_wait_all_devices_ready(vm)) {
-		KERN_DEBUG("Cannot start all virtual devices.\n");
+		VIRT_DEBUG("Cannot start all virtual devices.\n");
 		return 1;
 	}
 	vm->state = VM_STATE_RUNNING;
 
-	KERN_DEBUG("Start running VM ... \n");
+	VIRT_DEBUG("Start running VM ... \n");
 
 	rc = 0;
 	while (1) {
@@ -597,7 +685,7 @@ vmm_run_vm(struct vm *vm)
 
 		/* handle other types of the VM exits */
 		if (vmm_handle_exit(vm)) {
-			KERN_DEBUG("Cannot handle a VM exit (exit_reason %d).\n",
+			VIRT_DEBUG("Cannot handle a VM exit (exit_reason %d).\n",
 				   vm->exit_reason);
 			rc = 1;
 			break;
@@ -610,7 +698,7 @@ vmm_run_vm(struct vm *vm)
 	}
 
 	if (rc)
-		KERN_DEBUG("A virtual machine terminates abnormally.\n");
+		VIRT_DEBUG("A virtual machine terminates abnormally.\n");
 	return rc;
 }
 

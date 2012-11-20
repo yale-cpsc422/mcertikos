@@ -36,6 +36,7 @@
 #include <sys/types.h>
 #include <sys/x86.h>
 
+#include "vmx.h"
 #include "vmx_msr.h"
 
 static bool
@@ -85,8 +86,10 @@ vmx_set_ctlreg(int ctl_reg, int true_ctl_reg, uint32_t ones_mask,
 
 	/* We cannot ask the same bit to be set to both '1' and '0' */
 	if ((ones_mask ^ zeros_mask) != (ones_mask | zeros_mask)) {
-		KERN_DEBUG("0's mask 0x%08x and 1's mask 0x%08x are overlapped.\n",
-			   zeros_mask, ones_mask);
+#ifdef DEBUG_GUEST_MSR
+		VMX_DEBUG("0's mask 0x%08x and 1's mask 0x%08x are "
+			  "overlapped.\n", zeros_mask, ones_mask);
+#endif
 		return 1;
 	}
 
@@ -109,13 +112,17 @@ vmx_set_ctlreg(int ctl_reg, int true_ctl_reg, uint32_t ones_mask,
 
 		if (zero_allowed && !one_allowed) {		/* b(i),c(i) */
 			if (ones_mask & (1 << i)) {
-				KERN_DEBUG("Cannot set bit %d to zero.\n", i);
+#ifdef DEBUG_GUEST_MSR
+				VMX_DEBUG("Cannot set bit %d to zero.\n", i);
+#endif
 				return 1;
 			}
 			*retval &= ~(1 << i);
 		} else if (one_allowed && !zero_allowed) {	/* b(i),c(i) */
 			if (zeros_mask & (1 << i)) {
-				KERN_DEBUG("Cannot set bit %d to one.\n", i);
+#ifdef DEBUG_GUEST_MSR
+				VMX_DEBUG("Cannot set bit %d to one.\n", i);
+#endif
 				return 2;
 			}
 			*retval |= 1 << i;

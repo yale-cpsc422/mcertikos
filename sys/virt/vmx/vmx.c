@@ -98,15 +98,15 @@ free_vmx(struct vmx *vmx)
 	spinlock_release(&vmx_pool_lock);
 }
 
-#define PINBASED_CTLS_ONE_SETTING		\
+#define PINBASED_CTLS_ONE_SETTING			\
 	PINBASED_EXTINT_EXITING/*	|	\ */
-	/* PINBASED_NMI_EXITING		|	\ */
-	/* PINBASED_VIRTUAL_NMI */
+/* PINBASED_NMI_EXITING		|	\ */
+/* PINBASED_VIRTUAL_NMI */
 #define PINBASED_CTLS_ZERO_SETTING	0
 
-#define PROCBASED_CTLS_WINDOW_SETTING		\
+#define PROCBASED_CTLS_WINDOW_SETTING			\
 	PROCBASED_INT_WINDOW_EXITING/* 	|	\ */
-	/* PROCBASED_NMI_WINDOW_EXITING */
+/* PROCBASED_NMI_WINDOW_EXITING */
 
 #define PROCBASED_CTLS_ONE_SETTING		\
 	(PROCBASED_IO_BITMAPS		|	\
@@ -176,7 +176,7 @@ struct vmx_info {
 	void		*vmx_region;
 } vmx_cpu_info[MAX_CPU];
 
-#if defined (DEBUG_VMEXIT)
+#ifdef DEBUG_VMEXIT
 
 static char *exit_reason_string[60] = {
 	[EXIT_REASON_EXCEPTION] = "Exception/NMI",
@@ -241,6 +241,7 @@ static char *exit_reason_string[60] = {
 static void
 vmx_dump_host_info(void)
 {
+#ifdef DEBUG_VMX
 	dprintf("Host:\n"
 		"    eax 0x%08x    ebx 0x%08x    ecx 0x%08x    edx 0x%08x\n"
 		"    esi 0x%08x    edi 0x%08x    ebp 0x%08x    esp 0x%08x\n"
@@ -250,17 +251,19 @@ vmx_dump_host_info(void)
 		/* (uintptr_t) vmcs_read(VMCS_HOST_RSP), */
 		read_esp(),
 		read_eflags());
+#endif
 }
 
 static void
 vmx_dump_info(struct vmx *vmx)
 {
+#ifdef DEBUG_VMX
 	KERN_ASSERT(vmx != NULL);
 
 	uintptr_t vmcs_ptr;
 
 	vmptrst(&vmcs_ptr);
-	KERN_DEBUG("VMCS @ 0x%08x\n", vmcs_ptr);
+	VMX_DEBUG("VMCS @ 0x%08x\n", vmcs_ptr);
 	KERN_ASSERT(vmcs_ptr == (uintptr_t) vmx->vmcs);
 	vmptrld(vmx->vmcs);
 
@@ -372,6 +375,7 @@ vmx_dump_info(struct vmx *vmx)
 		(uintptr_t) vmcs_read32(VMCS_HOST_IDTR_BASE),
 		vmcs_read64(VMCS_HOST_IA32_PAT),
 		vmcs_read64(VMCS_HOST_IA32_EFER));
+#endif
 }
 
 static int
@@ -386,7 +390,7 @@ vmx_enable(void)
 	lcr4(rcr4() | CR4_VMXE);
 
 	if ((pi = mem_page_alloc()) == NULL) {
-		KERN_DEBUG("Cannot allocate memory for VMX regison.\n");
+		VMX_DEBUG("Cannot allocate memory for VMX regison.\n");
 		return 1;
 	}
 	vmx_info->vmx_region = (void *) mem_pi2phys(pi);
@@ -483,6 +487,12 @@ vmx_handle_exit(struct vm *vm)
 	struct vmx *vmx = (struct vmx *) vm->cookie;
 
 	vm->exit_handled = FALSE;
+
+#ifdef DEBUG_VMEXIT
+	VMX_DEBUG("VMEXIT for %s at guest EIP 0x%08x.\n",
+		  exit_reason_string[vmx->exit_reason & EXIT_REASON_MASK],
+		  (uintptr_t) vmcs_read32(VMCS_GUEST_RIP));
+#endif
 
 	switch (vmx->exit_reason & EXIT_REASON_MASK) {
 	case EXIT_REASON_EXT_INTR:
@@ -581,107 +591,107 @@ vmx_init(void)
 	/* CPUID.1:ECX[bit 5] must be 1 for processor to support VMX */
 	cpuid(0x00000001, &dummy, &dummy, &val, &dummy);
 	if (!(val & CPUID_FEATURE_VMX)) {
-		KERN_DEBUG("No VMX (cpuid 0x1 : ecx=0x%08x).\n", val);
+		VMX_DEBUG("No VMX (cpuid 0x1 : ecx=0x%08x).\n", val);
 		return 1;
 	}
 
-	KERN_DEBUG("MSR_VMX_BASIC = 0x%llx\n", rdmsr(MSR_VMX_BASIC));
+	VMX_DEBUG("MSR_VMX_BASIC = 0x%llx\n", rdmsr(MSR_VMX_BASIC));
 
 	/* setup pin-based control registers */
-	KERN_DEBUG("MSR_VMX_PINBASED_CTLS = 0x%llx\n",
-		   rdmsr(MSR_VMX_PINBASED_CTLS));
+	VMX_DEBUG("MSR_VMX_PINBASED_CTLS = 0x%llx\n",
+		  rdmsr(MSR_VMX_PINBASED_CTLS));
 	if ((rdmsr(MSR_VMX_BASIC) & (1ULL << 55)))
-		KERN_DEBUG("MSR_VMX_TRUE_PINBASED_CTLS = 0x%llx\n",
-			   rdmsr(MSR_VMX_TRUE_PINBASED_CTLS));
+		VMX_DEBUG("MSR_VMX_TRUE_PINBASED_CTLS = 0x%llx\n",
+			  rdmsr(MSR_VMX_TRUE_PINBASED_CTLS));
 	else
-		KERN_DEBUG("NO MSR_VMX_TRUE_PINBASED_CTLS\n");
+		VMX_DEBUG("NO MSR_VMX_TRUE_PINBASED_CTLS\n");
 	error = vmx_set_ctlreg
 		(MSR_VMX_PINBASED_CTLS,     MSR_VMX_TRUE_PINBASED_CTLS,
 		 PINBASED_CTLS_ONE_SETTING, PINBASED_CTLS_ZERO_SETTING,
 		 &vmx_info->pinbased_ctls);
 	if (error) {
-		KERN_DEBUG("Not support desired pin-based controls. "
-			   "(error=%d)\n", error);
+		VMX_DEBUG("Not support desired pin-based controls. "
+			  "(error=%d)\n", error);
 		return (error);
 	}
-	KERN_DEBUG("pin-based ctls 0x%08x\n", vmx_info->pinbased_ctls);
+	VMX_DEBUG("pin-based ctls 0x%08x\n", vmx_info->pinbased_ctls);
 
 	/* setup primary processor-based control registrers */
-	KERN_DEBUG("MSR_VMX_PROCBASED_CTLS = 0x%llx\n",
-		   rdmsr(MSR_VMX_PROCBASED_CTLS));
+	VMX_DEBUG("MSR_VMX_PROCBASED_CTLS = 0x%llx\n",
+		  rdmsr(MSR_VMX_PROCBASED_CTLS));
 	if ((rdmsr(MSR_VMX_BASIC) & (1ULL << 55)))
-		KERN_DEBUG("MSR_VMX_TRUE_PROCBASED_CTLS = 0x%llx\n",
-			   rdmsr(MSR_VMX_TRUE_PROCBASED_CTLS));
+		VMX_DEBUG("MSR_VMX_TRUE_PROCBASED_CTLS = 0x%llx\n",
+			  rdmsr(MSR_VMX_TRUE_PROCBASED_CTLS));
 	else
-		KERN_DEBUG("NO MSR_VMX_TRUE_PROCBASED_CTLS\n");
+		VMX_DEBUG("NO MSR_VMX_TRUE_PROCBASED_CTLS\n");
 	error = vmx_set_ctlreg
 		(MSR_VMX_PROCBASED_CTLS,     MSR_VMX_TRUE_PROCBASED_CTLS,
 		 PROCBASED_CTLS_ONE_SETTING, PROCBASED_CTLS_ZERO_SETTING,
 		 &vmx_info->procbased_ctls);
 	if (error) {
-		KERN_DEBUG("Not support desired primary processor-based "
-			   "controls. (error=%d)\n", error);
+		VMX_DEBUG("Not support desired primary processor-based "
+			  "controls. (error=%d)\n", error);
 		return (error);
 	}
 	vmx_info->procbased_ctls &= ~PROCBASED_CTLS_WINDOW_SETTING;
-	KERN_DEBUG("primary processor-based ctls 0x%08x\n",
-		   vmx_info->procbased_ctls);
+	VMX_DEBUG("primary processor-based ctls 0x%08x\n",
+		  vmx_info->procbased_ctls);
 
 	/* setup secondary processor-based control registers */
-	KERN_DEBUG("MSR_VMX_PROCBASED_CTLS2 = 0x%llx\n",
-		   rdmsr(MSR_VMX_PROCBASED_CTLS2));
+	VMX_DEBUG("MSR_VMX_PROCBASED_CTLS2 = 0x%llx\n",
+		  rdmsr(MSR_VMX_PROCBASED_CTLS2));
 	error = vmx_set_ctlreg
 		(MSR_VMX_PROCBASED_CTLS,      MSR_VMX_PROCBASED_CTLS2,
 		 PROCBASED_CTLS2_ONE_SETTING, PROCBASED_CTLS2_ZERO_SETTING,
 		 &vmx_info->procbased_ctls2);
 	if (error) {
-		KERN_DEBUG("Not support desired secondary processor-based "
-			   "controls. (error=%d)\n", error);
+		VMX_DEBUG("Not support desired secondary processor-based "
+			  "controls. (error=%d)\n", error);
 		return (error);
 	}
-	KERN_DEBUG("secondary processor-based ctls 0x%08x\n",
-		   vmx_info->procbased_ctls2);
+	VMX_DEBUG("secondary processor-based ctls 0x%08x\n",
+		  vmx_info->procbased_ctls2);
 
 	/* setup VM exit control registers */
-	KERN_DEBUG("MSR_VMX_EXIT_CTLS = 0x%llx\n", rdmsr(MSR_VMX_EXIT_CTLS));
+	VMX_DEBUG("MSR_VMX_EXIT_CTLS = 0x%llx\n", rdmsr(MSR_VMX_EXIT_CTLS));
 	if (rdmsr(MSR_VMX_BASIC) & (1ULL << 51))
-		KERN_DEBUG("MSR_VMX_TRUE_EXIT_CTLS = 0x%llx\n",
-			   rdmsr(MSR_VMX_TRUE_EXIT_CTLS));
+		VMX_DEBUG("MSR_VMX_TRUE_EXIT_CTLS = 0x%llx\n",
+			  rdmsr(MSR_VMX_TRUE_EXIT_CTLS));
 	else
-		KERN_DEBUG("NO MSR_VMX_TRUE_EXIT_CTLS\n");
+		VMX_DEBUG("NO MSR_VMX_TRUE_EXIT_CTLS\n");
 	error = vmx_set_ctlreg
 		(MSR_VMX_EXIT_CTLS,        MSR_VMX_TRUE_EXIT_CTLS,
 		 VM_EXIT_CTLS_ONE_SETTING, VM_EXIT_CTLS_ZERO_SETTING,
 		 &vmx_info->exit_ctls);
 	if (error) {
-		KERN_DEBUG("Not support desired VM-exit controls. (error=%d)\n",
-			   error);
+		VMX_DEBUG("Not support desired VM-exit controls. (error=%d)\n",
+			  error);
 		return (error);
 	}
-	KERN_DEBUG("exit ctls 0x%08x\n", vmx_info->exit_ctls);
+	VMX_DEBUG("exit ctls 0x%08x\n", vmx_info->exit_ctls);
 
 	/* setup VM entry control registers */
-	KERN_DEBUG("MSR_VMX_ENTRY_CTLS = 0x%llx\n", rdmsr(MSR_VMX_ENTRY_CTLS));
+	VMX_DEBUG("MSR_VMX_ENTRY_CTLS = 0x%llx\n", rdmsr(MSR_VMX_ENTRY_CTLS));
 	if (rdmsr(MSR_VMX_BASIC) & (1ULL << 51))
-		KERN_DEBUG("MSR_VNX_TRUE_ENTRY_CTLS = 0x%llx\n",
-			   rdmsr(MSR_VMX_TRUE_ENTRY_CTLS));
+		VMX_DEBUG("MSR_VNX_TRUE_ENTRY_CTLS = 0x%llx\n",
+			  rdmsr(MSR_VMX_TRUE_ENTRY_CTLS));
 	else
-		KERN_DEBUG("NO MSR_VMX_TRUE_ENTRY_CTLS\n");
+		VMX_DEBUG("NO MSR_VMX_TRUE_ENTRY_CTLS\n");
 	error = vmx_set_ctlreg
 		(MSR_VMX_ENTRY_CTLS,        MSR_VMX_TRUE_ENTRY_CTLS,
 		 VM_ENTRY_CTLS_ONE_SETTING, VM_ENTRY_CTLS_ZERO_SETTING,
 		 &vmx_info->entry_ctls);
 	if (error) {
-		KERN_DEBUG("Not support desired VM-entry controls. "
-			   "(error=%d)\n", error);
+		VMX_DEBUG("Not support desired VM-entry controls. "
+			  "(error=%d)\n", error);
 		return (error);
 	}
-	KERN_DEBUG("entry ctls 0x%08x\n", vmx_info->entry_ctls);
+	VMX_DEBUG("entry ctls 0x%08x\n", vmx_info->entry_ctls);
 
 	/* initialize EPT */
 	error = ept_init();
 	if (error) {
-		KERN_DEBUG("Cannot initalize EPT. (error=%d)\n", error);
+		VMX_DEBUG("Cannot initalize EPT. (error=%d)\n", error);
 		return error;
 	}
 
@@ -690,21 +700,21 @@ vmx_init(void)
 	fixed1 = rdmsr(MSR_VMX_CR0_FIXED1);
 	vmx_info->cr0_ones_mask = (fixed0 & fixed1) & ~(CR0_PG | CR0_PE);
 	vmx_info->cr0_zeros_mask = (CR0_NW | CR0_CD) | (~fixed0 & ~fixed1);
-	KERN_DEBUG("CR0 1s mask 0x%llx, 0s mask 0x%llx.\n",
-		   vmx_info->cr0_ones_mask, vmx_info->cr0_zeros_mask);
+	VMX_DEBUG("CR0 1s mask 0x%llx, 0s mask 0x%llx.\n",
+		  vmx_info->cr0_ones_mask, vmx_info->cr0_zeros_mask);
 
 	/* check fixed bits of CR4 */
 	fixed0 = rdmsr(MSR_VMX_CR4_FIXED0);
 	fixed1 = rdmsr(MSR_VMX_CR4_FIXED1);
 	vmx_info->cr4_ones_mask = fixed0 & fixed1;
 	vmx_info->cr4_zeros_mask = ~fixed0 & ~fixed1;
-	KERN_DEBUG("CR4 1s mask 0x%llx, 0s mask 0x%llx.\n",
-		   vmx_info->cr4_ones_mask, vmx_info->cr4_zeros_mask);
+	VMX_DEBUG("CR4 1s mask 0x%llx, 0s mask 0x%llx.\n",
+		  vmx_info->cr4_ones_mask, vmx_info->cr4_zeros_mask);
 
 	/* enable VMX */
 	error = vmx_enable();
 	if (error) {
-		KERN_DEBUG("Cannot enable VMX.\n");
+		VMX_DEBUG("Cannot enable VMX.\n");
 		return error;
 	}
 
@@ -727,7 +737,7 @@ vmx_init_vm(struct vm *vm)
 	KERN_ASSERT(vmx_info->vmx_enabled == TRUE);
 
 	if ((vmx = alloc_vmx()) == NULL) {
-		KERN_DEBUG("Cannot allocate memory for struct vmx.\n");
+		VMX_DEBUG("Cannot allocate memory for struct vmx.\n");
 		rc = 1;
 		goto vmx_err;
 	}
@@ -737,24 +747,24 @@ vmx_init_vm(struct vm *vm)
 	 * Setup VMCS.
 	 */
 	if ((vmx->vmcs = alloc_vmcs()) == NULL) {
-		KERN_DEBUG("Cannot allocate memory for VMCS.\n");
+		VMX_DEBUG("Cannot allocate memory for VMCS.\n");
 		rc = 2;
 		goto vmcs_err;
 	}
-	KERN_DEBUG("VMCS @ 0x%08x\n", vmx->vmcs);
+	VMX_DEBUG("VMCS @ 0x%08x\n", vmx->vmcs);
 
 	/*
 	 * Setup EPT.
 	 */
 	if ((vmx->pml4ept = alloc_pml4()) == NULL) {
-		KERN_DEBUG("Cannot allocate memory for EPT.\n");
+		VMX_DEBUG("Cannot allocate memory for EPT.\n");
 		rc = 3;
 		goto pml4_err;
 	}
-	KERN_DEBUG("EPT @ 0x%08x.\n", vmx->pml4ept);
+	VMX_DEBUG("EPT @ 0x%08x.\n", vmx->pml4ept);
 
 	if (ept_create_mappings(vmx->pml4ept, vm->memsize)) {
-		KERN_DEBUG("Cannot create EPT mappings.\n");
+		VMX_DEBUG("Cannot create EPT mappings.\n");
 		rc = 4;
 		goto ept_err;
 	}
@@ -774,23 +784,23 @@ vmx_init_vm(struct vm *vm)
 	 * Setup MSR bitmap.
 	 */
 	if ((vmx->msr_bitmap = alloc_bitmap(PAGESIZE)) == NULL) {
-		KERN_DEBUG("Cannot allocate memory for MSR bitmap.\n");
+		VMX_DEBUG("Cannot allocate memory for MSR bitmap.\n");
 		rc = 5;
 		goto msr_err;
 	}
-	KERN_DEBUG("MSR bitmap @ 0x%08x\n", vmx->msr_bitmap);
+	VMX_DEBUG("MSR bitmap @ 0x%08x\n", vmx->msr_bitmap);
 	msr_bitmap_initialize(vmx->msr_bitmap);
 
 	/*
 	 * Setup I/O bitmaps.
 	 */
 	if ((vmx->io_bitmap = alloc_bitmap(PAGESIZE * 2)) == NULL) {
-		KERN_DEBUG("Cannot allocate memory for I/O bitmap.\n");
+		VMX_DEBUG("Cannot allocate memory for I/O bitmap.\n");
 		rc = 6;
 		goto io_err;
 	}
-	KERN_DEBUG("I/O bitmap A @ 0x%08x, I/O bitmap B @ 0x%08x.\n",
-		   vmx->io_bitmap, (uintptr_t) vmx->io_bitmap + PAGESIZE);
+	VMX_DEBUG("I/O bitmap A @ 0x%08x, I/O bitmap B @ 0x%08x.\n",
+		  vmx->io_bitmap, (uintptr_t) vmx->io_bitmap + PAGESIZE);
 
 	/*
 	 * Setup VMCS.
@@ -812,7 +822,7 @@ vmx_init_vm(struct vm *vm)
 	vmx->g_dr0 = vmx->g_dr1 = vmx->g_dr2 = vmx->g_dr3 = 0;
 	vmx->g_dr6 = 0xffff0ff0;
 
-	KERN_DEBUG("vmx_init_vm() done.\n");
+	VMX_DEBUG("vmx_init_vm() done.\n");
 
 	return 0;
 
@@ -950,12 +960,12 @@ vmx_run_vm(struct vm *vm)
 			 : "cc", "memory", "eax", "ebx", "edx", "esi", "edi");
 
 	if (unlikely(vmx->failed == 1)) {
-		KERN_DEBUG("vmlaunch/vmresume failed: error %d.\n",
-			   vmx->failed);
+		VMX_DEBUG("vmlaunch/vmresume failed: error %d.\n",
+			  vmx->failed);
 		return 1;
 	} else if (unlikely(vmx->failed == 2)) {
-		KERN_DEBUG("vmlaunch/vmresume failed: error %d, code 0x%08x.\n",
-			   vmx->failed, vmcs_read32(VMCS_INSTRUCTION_ERROR));
+		VMX_DEBUG("vmlaunch/vmresume failed: error %d, code 0x%08x.\n",
+			  vmx->failed, vmcs_read32(VMCS_INSTRUCTION_ERROR));
 		return 2;
 	}
 
@@ -964,8 +974,8 @@ vmx_run_vm(struct vm *vm)
 	vmx->exit_qualification = vmcs_read32(VMCS_EXIT_QUALIFICATION);
 
 	if (unlikely(vmx->exit_reason & EXIT_REASON_ENTRY_FAIL)) {
-		KERN_DEBUG("VM-entry failure: reason %d.\n",
-			   vmx->exit_reason & 0x0000ffff);
+		VMX_DEBUG("VM-entry failure: reason %d.\n",
+			  vmx->exit_reason & 0x0000ffff);
 		return 1;
 	}
 
@@ -978,6 +988,11 @@ static int
 vmx_intercept_ioport(struct vm *vm, uint16_t port, bool enable)
 {
 	KERN_ASSERT(vm != NULL);
+
+#ifdef DEBUG_GUEST_IOPORT
+	VMX_DEBUG("%s intercepting guest I/O port 0x%x.\n",
+		  (enable == TRUE) ? "Enable" : "Disable", port);
+#endif
 
 	struct vmx *vmx = (struct vmx *) vm->cookie;
 	uint32_t *bitmap = (uint32_t *) vmx->io_bitmap;
@@ -997,6 +1012,11 @@ static int
 vmx_intercept_all_ioports(struct vm *vm, bool enable)
 {
 	KERN_ASSERT(vm != NULL);
+
+#ifdef DEBUG_GUEST_IOPORT
+	VMX_DEBUG("%s intercepting all guest I/O ports.\n",
+		  (enable == TRUE) ? "Enable" : "Disable");
+#endif
 
 	struct vmx *vmx = (struct vmx *) vm->cookie;
 	uint32_t procbased_ctls;
@@ -1040,22 +1060,27 @@ vmx_intercept_msr_helper(struct vmx *vmx, uint32_t msr, bool write, bool enable)
 		msr_bitmap[entry] &= ~(1 << bit);
 }
 
-static void
-vmx_intercept_wrmsr(struct vmx *vmx, uint32_t msr, bool enable)
-{
-
-}
-
 static int
 vmx_intercept_msr(struct vm *vm, uint32_t msr, int rw)
 {
 	KERN_ASSERT(vm != NULL);
 
+#ifdef DEBUG_GUEST_MSR
+	VMX_DEBUG("%s intercepting rdmsr 0x%08x, "
+		  "%s intercepting wrmsr 0x%08x.\n",
+		  (rw & 0x1) ? "Enable" : "Disable", msr,
+		  (rw & 0x2) ? "Enable" : "Disable", msr);
+#endif
+
 	struct vmx *vmx = (struct vmx *) vm->cookie;
 
 	if (!((0x00000000 <= msr && msr <= 0x00001fff) ||
-	      (0xc0000000 <= msr && msr <= 0xc0001fff)))
+	      (0xc0000000 <= msr && msr <= 0xc0001fff))) {
+#ifdef DEBUG_GUEST_MSR
+		VMX_DEBUG("MSR 0x%08x out of range.\n", msr);
+#endif
 		return 1;
+	}
 
 	vmx_intercept_msr_helper(vmx, msr, FALSE, (rw & 0x1) ? TRUE : FALSE);
 	vmx_intercept_msr_helper(vmx, msr, TRUE, (rw & 0x2) ? TRUE : FALSE);
@@ -1067,6 +1092,13 @@ static int
 vmx_intercept_all_msrs(struct vm *vm, int rw)
 {
 	KERN_ASSERT(vm != NULL);
+
+#ifdef DEBUG_GUEST_MSR
+	VMX_DEBUG("%s intercepting reading all guest MSRs, "
+		  "%s intercepting writing all guest MSRs.\n",
+		  (rw & 0x1) ? "Enable" : "Disable",
+		  (rw & 0x2) ? "Enable" : "Disable");
+#endif
 
 	struct vmx *vmx = (struct vmx *) vm->cookie;
 	char *msr_bitmap = vmx->msr_bitmap;
@@ -1221,6 +1253,10 @@ vmx_get_msr(struct vm *vm, uint32_t msr, uint64_t *val)
 
 	*val = rdmsr(msr);
 
+#ifdef DEBUG_GUEST_MSR
+	VMX_DEBUG("Guest rdmsr 0x%08x = 0x%llx.\n", msr, *val);
+#endif
+
 	return 0;
 }
 
@@ -1234,6 +1270,10 @@ vmx_set_msr(struct vm *vm, uint32_t msr, uint64_t val)
 		return 1;
 
 	wrmsr(msr, val);
+
+#ifdef DEBUG_GUEST_MSR
+	VMX_DEBUG("Guest wrmsr 0x%08x, 0x%llx.\n", msr, val);
+#endif
 
 	return 0;
 }
@@ -1307,7 +1347,7 @@ vmx_get_mmap(struct vm *vm, uintptr_t gpa, uintptr_t *hpa)
 	struct vmx *vmx = (struct vmx *) vm->cookie;
 
 	if (gpa % PAGESIZE)
-	    return 1;
+		return 1;
 
 	*hpa = (uintptr_t) ept_gpa_to_hpa(vmx->pml4ept, gpa);
 	return 0;

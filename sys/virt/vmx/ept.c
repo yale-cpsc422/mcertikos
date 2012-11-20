@@ -47,14 +47,14 @@
 
 #ifdef DEBUG_EPT
 
-#define EPT_DEBUG(fmt...)			\
-	{					\
-		KERN_DEBUG(fmt);		\
+#define EPT_DEBUG(fmt, ...)				\
+	{						\
+		KERN_DEBUG("EPT: "fmt, ##__VA_ARGS__);	\
 	}
 
 #else
 
-#define EPT_DEBUG(fmt...)			\
+#define EPT_DEBUG(fmt, ...)			\
 	{					\
 	}
 
@@ -278,11 +278,11 @@ ept_add_mapping(uint64_t *pml4ept, uintptr_t gpa, uintptr_t hpa,
 				EPT_PG_EX | EPT_PG_WR | EPT_PG_RD |
 				EPT_PG_MEMORY_TYPE(mem_type);
 
-			/* EPT_DEBUG("Add 2MB mapping: gpa 0x%08x ==> hpa 0x%08x.\n", */
-			/* 	gpa, hpa); */
+			EPT_DEBUG("Add 2MB mapping: "
+				  "gpa 0x%08x ==> hpa 0x%08x.\n", gpa, hpa);
 		} else {
 			/* use 4KB EPT pages */
-			/* EPT_DEBUG("Create page table for gpa 0x%08x.\n", gpa); */
+			EPT_DEBUG("Create page table for gpa 0x%08x.\n", gpa);
 
 			pi = mem_page_alloc();
 
@@ -297,8 +297,8 @@ ept_add_mapping(uint64_t *pml4ept, uintptr_t gpa, uintptr_t hpa,
 		}
 	} else {
 		if (superpage == TRUE) {
-			/* EPT_DEBUG("gpa 0x%08x is already mapped to hpa 0x%08x.\n", */
-			/* 	  gpa, (uintptr_t) pde & EPT_ADDR_MASK); */
+			EPT_DEBUG("gpa 0x%08x is already mapped to hpa 0x%08x.\n",
+				  gpa, (uintptr_t) pde & EPT_ADDR_MASK);
 			return 1;
 		} else {
 			ptab = (uint64_t *)(uintptr_t) (*pde & EPT_ADDR_MASK);
@@ -314,8 +314,8 @@ ept_add_mapping(uint64_t *pml4ept, uintptr_t gpa, uintptr_t hpa,
 			EPT_PG_IGNORE_PAT | EPT_PG_EX | EPT_PG_WR | EPT_PG_RD |
 			EPT_PG_MEMORY_TYPE(mem_type);
 
-		/* EPT_DEBUG("Add 4KB mapping: gpa 0x%08x ==> hpa 0x%08x.\n", */
-		/* 	  gpa, hpa); */
+		EPT_DEBUG("Add 4KB mapping: gpa 0x%08x ==> hpa 0x%08x.\n",
+			  gpa, hpa);
 	} else {
 		EPT_DEBUG("gpa 0x%08x is already mapped to hpa 0x%08x.\n",
 			  gpa, (uintptr_t) pte & EPT_ADDR_MASK);
