@@ -374,7 +374,10 @@ vdev_read_guest_ioport(struct vm *vm,
 	    port == IO_PIC2 || port == IO_PIC2+1 ||
 	    port == IO_ELCR1 || port == IO_ELCR2)
 		return vpic_read_ioport(&vm->vdev.vpic, port, (uint8_t *) data);
-	else if ((0x3f8 <= port && port <= 0x3ff) || /* COM1 */
+	else if (
+#ifndef TRACE_VIRT
+		 (0x3f8 <= port && port <= 0x3ff) || /* COM1 */
+#endif
 		 (0x3b0 <= port && port <= 0x3bf) || /* MONO */
 		 (0x3c0 <= port && port <= 0x3cf) || /* VGA */
 		 (0x3d0 <= port && port <= 0x3df)    /* CGA */)
@@ -449,7 +452,10 @@ vdev_write_guest_ioport(struct vm *vm,
 	    port == IO_PIC2 || port == IO_PIC2+1 ||
 	    port == IO_ELCR1 || port == IO_ELCR2)
 		return vpic_write_ioport(&vm->vdev.vpic, port, data);
-	else if ((0x3f8 <= port && port <= 0x3ff) || /* COM1 */
+	else if (
+#ifndef TRACE_VIRT
+		 (0x3f8 <= port && port <= 0x3ff) || /* COM1 */
+#endif
 		 (0x3b0 <= port && port <= 0x3bf) || /* MONO */
 		 (0x3c0 <= port && port <= 0x3cf) || /* VGA */
 		 (0x3d0 <= port && port <= 0x3df)    /* CGA */)

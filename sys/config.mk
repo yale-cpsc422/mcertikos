@@ -174,3 +174,52 @@ endif
 ifneq "$(strip $(DEBUG_VPIC) $(DEBUG_VDEV) $(DEBUG_VIRT_ALL) $(DEBUG_ALL))" ""
 KERN_CFLAGS	+= -DDEBUG_VPIC -DDEBUG_VIRT -DDEBUG_MSG
 endif
+
+#
+# Performace trace switches.
+#
+
+# If set, enable the basic trace of the virtualization module.
+ifneq "$(strip $(TRACE_VIRT) $(TRACE_VIRT_ALL))" ""
+KERN_CFLAGS	+= -DTRACE_VIRT -DDEBUG_VIRT -DDEBUG_MSG
+endif
+
+# If set, enable the basic trace of VMEXITs.
+ifneq "$(strip $(TRACE_VMEXIT) $(TRACE_VIRT_ALL))" ""
+KERN_CFLAGS	+= -DTRACE_VMEXIT -DTRACE_VIRT -DDEBUG_VIRT -DDEBUG_MSG
+endif
+
+# If set, enable the trace of handling guest interrupts.
+ifneq "$(strip $(TRACE_GUEST_INTR) $(TRACE_VIRT_ALL))" ""
+KERN_CFLAGS	+= -DTRACE_GUEST_INTR -DTRACE_VIRT -DDEBUG_VIRT -DDEBUG_MSG
+endif
+
+# If set, enable the trace of handling guest I/O ports.
+ifneq "$(strip $(TRACE_GUEST_IOPORT) $(TRACE_VIRT_ALL))" ""
+KERN_CFLAGS	+= -DTRACE_GUEST_IOPORT -DTRACE_VIRT -DDEBUG_VIRT -DDEBUG_MSG
+endif
+
+# If set, enable the trace of handling guest MSRs.
+ifneq "$(strip $(TRACE_GUEST_MSR) $(TRACE_VIRT_ALL))" ""
+KERN_CFLAGS	+= -DTRACE_GUEST_MSR -DTRACE_VIRT -DDEBUG_VIRT -DDEBUG_MSG
+endif
+
+# If set, enable the trace of handling guest cpuid.
+ifneq "$(strip $(TRACE_GUEST_CPUID) $(TRACE_VIRT_ALL))" ""
+KERN_CFLAGS	+= -DTRACE_GUEST_CPUID -DTRACE_VIRT -DDEBUG_VIRT -DDEBUG_MSG
+endif
+
+# If set, enable the trace of handling guest page fault.
+ifneq "$(strip $(TRACE_GUEST_PGFLT) $(TRACE_VIRT_ALL))" ""
+KERN_CFLAGS	+= -DTRACE_GUEST_PGFLT -DTRACE_VIRT -DDEBUG_VIRT -DDEBUG_MSG
+endif
+
+# If set, enable the trace of handling guest TSC.
+ifneq "$(strip $(TRACE_GUEST_TSC) $(TRACE_VIRT_ALL))" ""
+KERN_CFLAGS	+= -DTRACE_GUEST_TSC -DTRACE_VIRT -DDEBUG_VIRT -DDEBUG_MSG
+endif
+
+# If set, enable the trace of handling hypercalls.
+ifneq "$(strip $(TRACE_HYPERCALL) $(TRACE_VIRT_ALL))" ""
+KERN_CFLAGS	+= -DTRACE_HYPERCALL -DTRACE_VIRT -DDEBUG_VIRT -DDEBUG_MSG
+endif

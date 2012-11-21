@@ -51,6 +51,81 @@ typedef enum {
 	VM_STATE_RUNNING	/* the virtual machine is running */
 } vm_stat_t;
 
+#ifdef TRACE_VIRT
+
+#define VM_TRACE_OUTPUT_INTERVAL	5
+
+struct vm_perf_trace {
+	uint64_t	entry_time;	/* time of the latest VM entry */
+	uint64_t	exit_time;	/* time of the latest VM exit */
+	uint64_t	last_output_time;
+
+	uint64_t	in_guest_time;	/* total VM running time */
+	uint64_t	in_host_time;	/* total VMM handling time */
+
+	uint64_t	entry_counter;	/* amount of VM entries */
+	uint64_t	exit_counter;	/* amount of VM exits */
+
+	uint64_t	total_ioport_time;	/* total time handling IO ports */
+	uint64_t	total_ioport_counter;	/* total amount of VM exits
+						   caused by I/O ports */
+	uint64_t	total_irq_time;		/* total time handling interupts */
+	uint64_t	total_irq_counter;	/* total amount of VM exits
+						   caused by interrupts */
+
+	uint64_t	total_intwin_time;	/* total time handling interrupt
+						   windows */
+	uint64_t	total_intwin_counter;	/* total amount of VM exits
+						   caused by interrupt windows */
+
+	uint64_t	total_msr_time;		/* total time handling MSRs */
+	uint64_t	total_msr_counter;	/* total amount of VM exits
+						   caused by MSRs */
+
+	uint64_t	total_cpuid_time;	/* total time handling CPUIDs */
+	uint64_t	total_cpuid_counter;	/* total amount of VM exits
+						   caused by CPUIDs */
+
+	uint64_t	total_pgflt_time;	/* total time handling pgflts */
+	uint64_t	total_pgflt_counter;	/* total amount of VM exits
+						   caused by page faults */
+
+	uint64_t	total_tsc_time;		/* total time handling TSC */
+	uint64_t	total_tsc_counter;	/* total amount of VM exits
+						   caused by TSC */
+
+	uint64_t	total_hcall_time;	/* total time handling hypercalls */
+	uint64_t	total_hcall_counter;	/* total amount of VM exits
+						   caused by hypercalls */
+
+	uint64_t	other_time;		/* total time handling other
+						   VM exits */
+	uint64_t	other_counter;		/* total amount of VM exits
+						   caused by other reasons */
+
+#ifdef TRACE_GUEST_IOPORT
+	/*
+	 * ioport_time[i]   : total time handling a single I/O port i
+	 * ioport_counter[i]: total amount of VM exits caused by a single I/O
+	 *                    port i
+	 */
+	uint64_t	ioport_time[MAX_IOPORT];
+	uint64_t	ioport_counter[MAX_IOPORT];
+#endif
+
+#ifdef TRACE_GUEST_INTR
+	/*
+	 * irq_time[i]   : total time handling a single interrupt i
+	 * irq_counter[i]: total amount of VM exits caused by a single
+	 *                 interrupt i
+	 */
+	uint64_t	irq_time[MAX_IRQ];
+	uint64_t	irq_counter[MAX_IRQ];
+#endif
+};
+
+#endif
+
 struct vdev {
 	struct vpic	vpic;
 	spinlock_t	vpic_lk;
@@ -83,6 +158,10 @@ struct vm {
 	volatile bool	exit_handled;	/* is the latest VMEXIT handled? */
 
 	struct vdev	vdev;	/* the virtual devices of the virtual machine */
+
+#ifdef TRACE_VIRT
+	struct vm_perf_trace trace;	/* performace trace information */
+#endif
 
 	void		*cookie;
 };

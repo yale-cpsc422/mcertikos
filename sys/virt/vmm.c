@@ -517,6 +517,224 @@ vmm_load_bios(struct vm *vm)
 	return 0;
 }
 
+#ifdef TRACE_VIRT
+
+static void
+vmm_trace_output(struct vm_perf_trace *trace)
+{
+	/* dprintf("\nPerformance trace information in the past %d s:\n" */
+	/* 	"  In-guest time       %lld ms\n" */
+	/* 	"  In-host time        %lld ms\n" */
+	/* 	"    I/O port          %lld ms \t(%3d \%)\n" */
+	/* 	"    IRQ               %lld ms \t(%3d \%)\n" */
+	/* 	"    Interrupt window  %lld ms \t(%3d \%)\n" */
+	/* 	"    MSR               %lld ms \t(%3d \%)\n" */
+	/* 	"    CPUID             %lld ms \t(%3d \%)\n" */
+	/* 	"    Page fault        %lld ms \t(%3d \%)\n" */
+	/* 	"    TSC               %lld ms \t(%3d \%)\n" */
+	/* 	"    Hypercall         %lld ms \t(%3d \%)\n" */
+	/* 	"    Others            %lld ms \t(%3d \%)\n" */
+	/* 	"  Total VM entries    %lld\n" */
+	/* 	"  Total VM exits      %lld\n" */
+	/* 	"    I/O port          %lld \t(%3d \%)\n" */
+	/* 	"    IRQ               %lld \t(%3d \%)\n" */
+	/* 	"    Interrupt window  %lld \t(%3d \%)\n" */
+	/* 	"    MSR               %lld \t(%3d \%)\n" */
+	/* 	"    CPUID             %lld \t(%3d \%)\n" */
+	/* 	"    Page fault        %lld \t(%3d \%)\n" */
+	/* 	"    TSC               %lld \t(%3d \%)\n" */
+	/* 	"    Hypercall         %lld \t(%3d \%)\n" */
+	/* 	"    Others            %lld \t(%3d \%)\n", */
+	dprintf("  %lld"
+		"  %lld"
+		"  %lld"
+		"  %lld"
+		"  %lld"
+		"  %lld"
+		"  %lld"
+		"  %lld"
+		"  %lld"
+		"  %lld"
+		"  %lld"
+		"  %lld"
+		"  %lld"
+		"  %lld"
+		"  %lld"
+		"  %lld"
+		"  %lld"
+		"  %lld"
+		"  %lld"
+		"  %lld"
+		"  %lld",
+		trace->in_guest_time / tsc_per_ms,
+		trace->in_host_time / tsc_per_ms,
+		trace->total_ioport_time / tsc_per_ms,
+		trace->total_irq_time / tsc_per_ms,
+		trace->total_intwin_time / tsc_per_ms,
+		trace->total_msr_time / tsc_per_ms,
+		trace->total_cpuid_time / tsc_per_ms,
+		trace->total_pgflt_time / tsc_per_ms,
+		trace->total_tsc_time / tsc_per_ms,
+		trace->total_hcall_time / tsc_per_ms,
+		trace->other_time / tsc_per_ms,
+		trace->exit_counter,
+		trace->total_ioport_counter,
+		trace->total_irq_counter,
+		trace->total_intwin_counter,
+		trace->total_msr_counter,
+		trace->total_cpuid_counter,
+		trace->total_pgflt_counter,
+		trace->total_tsc_counter,
+		trace->total_hcall_counter,
+		trace->other_counter);
+}
+
+#ifdef TRACE_GUEST_IOPORT
+static void
+vmm_trace_ioport_output(struct vm_perf_trace *trace)
+{
+	uint32_t port;
+	for (port = 0; port < MAX_IOPORT; port++)
+		if (trace->ioport_counter[port]) {
+			dprintf("  0x%x  %lld  %lld",
+				(uint16_t) port,
+				trace->ioport_time[port] / tsc_per_ms,
+				trace->ioport_counter[port]);
+			trace->ioport_time[port] =
+				trace->ioport_counter[port] = 0;
+		}
+}
+#endif
+
+static void
+vmm_trace_vmentry(struct vm *vm, uint64_t entry_tsc)
+{
+	struct vm_perf_trace *trace = &vm->trace;
+	uint64_t handling_time;
+
+	trace->entry_counter++;
+
+	if (unlikely(trace->entry_time == 0)) {
+		trace->entry_time = trace->last_output_time = entry_tsc;
+		return;
+	}
+
+	handling_time = entry_tsc - trace->exit_time;
+
+	trace->in_host_time += handling_time;
+	trace->entry_time = entry_tsc;
+
+	switch (vm->exit_reason) {
+	case EXIT_FOR_EXTINT:
+		trace->total_irq_time += handling_time;
+		break;
+	case EXIT_FOR_INTWIN:
+		trace->total_intwin_time += handling_time;
+		break;
+	case EXIT_FOR_IOPORT:
+		trace->total_ioport_time += handling_time;
+#ifdef TRACE_GUEST_IOPORT
+		trace->ioport_time[vm->exit_info.ioport.port] += handling_time;
+#endif
+		break;
+	case EXIT_FOR_RDMSR:
+	case EXIT_FOR_WRMSR:
+		trace->total_msr_time += handling_time;
+		break;
+	case EXIT_FOR_PGFLT:
+		trace->total_pgflt_time += handling_time;
+		break;
+	case EXIT_FOR_CPUID:
+		trace->total_cpuid_time += handling_time;
+		break;
+	case EXIT_FOR_RDTSC:
+		trace->total_tsc_time += handling_time;
+		break;
+	case EXIT_FOR_HYPERCALL:
+		trace->total_hcall_time += handling_time;
+		break;
+	default:
+		trace->other_time += handling_time;
+	}
+
+	if (entry_tsc - trace->last_output_time >=
+	    VM_TRACE_OUTPUT_INTERVAL * tsc_per_ms * 1000) {
+		vmm_trace_output(trace);
+#ifdef TRACE_GUEST_IOPORT
+		vmm_trace_ioport_output(trace);
+#endif
+		dprintf("\n");
+		trace->last_output_time = entry_tsc;
+		trace->in_guest_time = trace->in_host_time = 0;
+		trace->entry_counter = trace->exit_counter = 0;
+		trace->total_ioport_counter =
+			trace->total_irq_counter =
+			trace->total_intwin_counter =
+			trace->total_msr_counter =
+			trace->total_cpuid_counter =
+			trace->total_pgflt_counter =
+			trace->total_tsc_counter =
+			trace->total_hcall_counter =
+			trace->other_counter = 0;
+		trace->total_ioport_time =
+			trace->total_irq_time =
+			trace->total_intwin_time =
+			trace->total_msr_time =
+			trace->total_cpuid_time =
+			trace->total_pgflt_time =
+			trace->total_tsc_time =
+			trace->total_hcall_time =
+			trace->other_time = 0;
+	}
+}
+
+static void
+vmm_trace_vmexit(struct vm *vm, uint64_t exit_tsc)
+{
+	struct vm_perf_trace *trace = &vm->trace;
+
+	uint64_t running_time = exit_tsc - trace->entry_time;
+
+	trace->in_guest_time += running_time;
+	trace->exit_counter++;
+	trace->exit_time = exit_tsc;
+
+	switch (vm->exit_reason) {
+	case EXIT_FOR_EXTINT:
+		trace->total_irq_counter++;
+		break;
+	case EXIT_FOR_INTWIN:
+		trace->total_intwin_counter++;
+		break;
+	case EXIT_FOR_IOPORT:
+		trace->total_ioport_counter++;
+#ifdef TRACE_GUEST_IOPORT
+		trace->ioport_counter[vm->exit_info.ioport.port]++;
+#endif
+		break;
+	case EXIT_FOR_RDMSR:
+	case EXIT_FOR_WRMSR:
+		trace->total_msr_counter++;
+		break;
+	case EXIT_FOR_PGFLT:
+		trace->total_pgflt_counter++;
+		break;
+	case EXIT_FOR_CPUID:
+		trace->total_cpuid_counter++;
+		break;
+	case EXIT_FOR_RDTSC:
+		trace->total_tsc_counter++;
+		break;
+	case EXIT_FOR_HYPERCALL:
+		trace->total_hcall_counter++;
+		break;
+	default:
+		trace->other_counter++;
+	}
+}
+
+#endif
+
 int
 vmm_init(void)
 {
@@ -593,6 +811,10 @@ vmm_create_vm(uint64_t cpufreq, size_t memsize)
 	vm->exit_reason = EXIT_NONE;
 	vm->exit_handled = TRUE;
 
+#ifdef TRACE_VIRT
+	memzero(&vm->trace, sizeof(struct vm_perf_trace));
+#endif
+
 	if (vmm_ops->vm_init == NULL || vmm_ops->vm_init(vm)) {
 		VIRT_DEBUG("Machine-dependent VM initialization failed.\n");
 		return NULL;
@@ -646,7 +868,7 @@ vmm_run_vm(struct vm *vm)
 	KERN_ASSERT(vmm_inited == TRUE);
 	KERN_ASSERT(vm != NULL);
 
-	uint64_t start_tsc;
+	uint64_t start_tsc, exit_tsc;
 	int rc;
 
 	pcpu_cur()->vm = vm;
@@ -665,10 +887,19 @@ vmm_run_vm(struct vm *vm)
 
 		start_tsc = rdtscp();
 
+#ifdef TRACE_VIRT
+		vmm_trace_vmentry(vm, start_tsc);
+#endif
+
 		if ((rc = vmm_ops->vm_run(vm)))
 			break;
 
-		vmm_update_guest_tsc(vm, start_tsc, rdtscp());
+		exit_tsc = rdtscp();
+		vmm_update_guest_tsc(vm, start_tsc, exit_tsc);
+
+#ifdef TRACE_VIRT
+		vmm_trace_vmexit(vm, exit_tsc);
+#endif
 
 		/*
 		 * If the exit is caused by the interrupt, set the IF bit on the
