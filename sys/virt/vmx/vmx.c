@@ -1042,9 +1042,9 @@ vmx_intercept_msr_helper(struct vmx *vmx, uint32_t msr, bool write, bool enable)
 	int entry, bit;
 
 	msr_bitmap = (uint32_t *)
-		((uintptr_t) vmx->msr_bitmap + (write == TRUE) ? 0 : 2048);
+		((uintptr_t) vmx->msr_bitmap + ((write == TRUE) ? 0 : 2048));
 
-	if (0x00000000 <= msr && msr <= 0x00001fff) {
+	if (msr <= 0x00001fff) {
 		offset = msr - 0x00000000;
 	} else {
 		msr_bitmap = (uint32_t *) ((uintptr_t) msr_bitmap + 1024);
@@ -1074,7 +1074,7 @@ vmx_intercept_msr(struct vm *vm, uint32_t msr, int rw)
 
 	struct vmx *vmx = (struct vmx *) vm->cookie;
 
-	if (!((0x00000000 <= msr && msr <= 0x00001fff) ||
+	if (!((msr <= 0x00001fff) ||
 	      (0xc0000000 <= msr && msr <= 0xc0001fff))) {
 #ifdef DEBUG_GUEST_MSR
 		VMX_DEBUG("MSR 0x%08x out of range.\n", msr);
@@ -1247,8 +1247,7 @@ vmx_get_msr(struct vm *vm, uint32_t msr, uint64_t *val)
 	KERN_ASSERT(vm != NULL);
 	KERN_ASSERT(val != NULL);
 
-	if (!((0x00000000 <= msr && msr <= 0x00001fff) ||
-	      (0xc0000000 <= msr && msr <= 0xc0001fff)))
+	if (!(msr <= 0x00001fff || (0xc0000000 <= msr && msr <= 0xc0001fff)))
 		return 1;
 
 	*val = rdmsr(msr);
@@ -1265,8 +1264,7 @@ vmx_set_msr(struct vm *vm, uint32_t msr, uint64_t val)
 {
 	KERN_ASSERT(vm != NULL);
 
-	if (!((0x00000000 <= msr && msr <= 0x00001fff) ||
-	      (0xc0000000 <= msr && msr <= 0xc0001fff)))
+	if (!(msr <= 0x00001fff || (0xc0000000 <= msr && msr <= 0xc0001fff)))
 		return 1;
 
 	wrmsr(msr, val);

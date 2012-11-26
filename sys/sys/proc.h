@@ -23,7 +23,6 @@
 #define PID_INV		((pid_t) -1)
 
 struct proc;
-typedef int (*trap_cb_t) (struct context *, int guest);
 
 /*
  *                              (3)

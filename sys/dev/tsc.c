@@ -58,8 +58,7 @@ tsc_calibrate(uint32_t latch, uint32_t ms, int loopmin)
 
 	/* Calculate the PIT value */
 	delta = t2 - t1;
-	do_div(delta, ms);
-	return delta;
+	return delta / ms;
 }
 
 int

@@ -243,8 +243,6 @@ int vdev_get_request(struct proc *dev_p, void *req, size_t *size, int blocking);
 
 #include <types.h>
 
-typedef int vid_t;
-
 #endif /* _KERN_ */
 
 enum vdev_msg_magic {
