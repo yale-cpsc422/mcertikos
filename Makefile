@@ -19,15 +19,10 @@ TESTDIR		:= $(TOP)/test
 OBJDIRS		:=
 
 # Compiler and Linker
+CC		:= gcc
 LD		:= ld
 CFLAGS		:= -MD -Wall -Werror -Wno-strict-aliasing -Wno-unused-function -pipe -fno-builtin -nostdinc -fno-stack-protector
 LDFLAGS		:= -nostdlib
-ifndef CLANG_CC
-CC		:= gcc
-else
-CC		:= clang
-CFLAGS		+= -no-integrated-as
-endif
 
 # other tools
 PERL		:= perl
