@@ -1,8 +1,6 @@
 #ifndef _KERN_TYPES_H_
 #define _KERN_TYPES_H_
 
-#ifdef _KERN_
-
 #include <sys/gcc.h>
 
 #include <machine/types.h>
@@ -23,9 +21,22 @@ typedef __uintptr_t	uintptr_t;
 typedef __size_t	size_t;
 typedef __ssize_t	ssize_t;
 
-typedef __reg_t		reg_t;
+typedef uint8_t		bool;
+#define TRUE		((bool) 1)
+#define FALSE		((bool) 0)
+
+#define NULL		((void *) 0)
 
 typedef int32_t		pid_t;
+typedef int32_t		vmid_t;
+typedef int32_t		vid_t;
+typedef int32_t		chid_t;
+
+typedef enum data_sz_t {
+	SZ8, 	/* 1 byte */
+	SZ16, 	/* 2 byte */
+	SZ32	/* 4 byte */
+} data_sz_t;
 
 #define MIN(a, b)				\
 	({					\
@@ -58,29 +69,6 @@ typedef int32_t		pid_t;
 	})
 
 /* Return the offset of 'member' relative to the beginning of a struct type */
-#define offsetof(type, member)		__builtin_offsetof(type, member)
-
-typedef uint8_t		bool;
-
-#define TRUE		((bool) 1)
-#define FALSE		((bool) 0)
-
-#define NULL		0
-
-/*
- * Types for VMM
- */
-
-typedef int32_t vmid_t;
-typedef int32_t vid_t;
-typedef int32_t sid_t;
-
-typedef enum data_sz_t {
-	SZ8, 	/* 1 byte */
-	SZ16, 	/* 2 byte */
-	SZ32	/* 4 byte */
-} data_sz_t;
-
-#endif /* _KERN_ */
+#define offsetof(type, member)	__builtin_offsetof(type, member)
 
 #endif /* !_KERN_TYPES_H_ */

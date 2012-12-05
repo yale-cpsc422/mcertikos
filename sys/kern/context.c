@@ -7,6 +7,7 @@
 #include <sys/vm.h>
 #include <sys/x86.h>
 
+#include <machine/pmap.h>
 #include <machine/trap.h>
 
 /*
@@ -17,7 +18,7 @@ ctx_init(struct proc *p, void (*entry)(void), uintptr_t stack)
 {
 	KERN_ASSERT(p != NULL && entry != NULL);
 
-	struct context *ctx = &p->ctx;
+	struct context *ctx = &p->uctx;
 	tf_t *tf = &ctx->tf;
 
 	ctx->p = p;
@@ -46,10 +47,14 @@ ctx_start(struct context *ctx)
 {
 	KERN_ASSERT(ctx != NULL);
 
+	struct proc *cur_p = proc_cur();
+	KERN_ASSERT(cur_p != NULL);
+	pmap_install(cur_p->pmap);
+
 	tf_t *tf = &ctx->tf;
 
 	if (ctx->p != NULL) {
-		KERN_ASSERT(spinlock_holding(&ctx->p->lk) == FALSE);
+		KERN_ASSERT(spinlock_holding(&ctx->p->proc_lk) == FALSE);
 	} else {
 		KERN_ASSERT(tf->eip < VM_USERLO);
 		KERN_ASSERT(tf->eflags & FL_IF);

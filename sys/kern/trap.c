@@ -3,6 +3,7 @@
 #include <sys/intr.h>
 #include <sys/pcpu.h>
 #include <sys/proc.h>
+#include <sys/sched.h>
 #include <sys/string.h>
 #include <sys/trap.h>
 #include <sys/types.h>
@@ -74,8 +75,7 @@ post_handle_user(tf_t *tf)
 {
 	struct proc *cur_p = proc_cur();
 	KERN_ASSERT(cur_p);
-	pmap_install(cur_p->pmap);
-	ctx_start(&cur_p->ctx);
+	ctx_start(&cur_p->uctx);
 }
 
 gcc_noreturn void
@@ -96,7 +96,7 @@ trap(tf_t *tf)
 	f = (*pcpu_cur()->trap_handler)[tf->trapno];
 
 	if (f) {
-		f(&proc_cur()->ctx, guest);
+		f(&proc_cur()->uctx, guest);
 	} else {
 		if (guest)
 			default_handler_guest(tf);
@@ -242,20 +242,10 @@ timer_intr_handler(struct context *ctx, int guest)
 {
 	intr_eoi();
 
-	if (guest) {
+	if (guest)
 		vmm_handle_extint(vmm_cur_vm(), IRQ_TIMER);
-	} else {
-		proc_sched_update();
-
-		struct pcpu *c = pcpu_cur();
-		sched_lock(c);
-		if (c->sched.run_ticks > SCHED_SLICE) {
-			/* KERN_DEBUG("Resched on CPU%d (run ticks %lld).\n", */
-			/* 	   pcpu_cpu_idx(pcpu_cur()), c->sched.run_ticks); */
-			proc_sched(FALSE);
-		}
-		sched_unlock(c);
-	}
+	else
+		sched_update();
 
 	return 0;
 }
@@ -292,10 +282,11 @@ ipi_resched_handler(struct context *ctx, int guest)
 	intr_eoi();
 
 	if (guest) {
-		vmm_handle_extint(vmm_cur_vm(), IRQ_IPI_RESCHED);
+		/* vmm_handle_extint(vmm_cur_vm(), IRQ_IPI_RESCHED); */
+		vmm_cur_vm()->exit_handled = TRUE;
 	} else {
 		sched_lock(pcpu_cur());
-		proc_sched(TRUE);
+		sched_resched(TRUE);
 		sched_unlock(pcpu_cur());
 	}
 

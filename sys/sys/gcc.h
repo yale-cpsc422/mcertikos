@@ -1,8 +1,6 @@
 #ifndef _KERN_GCC_H_
 #define _KERN_GCC_H_
 
-#ifdef _KERN_
-
 #define gcc_aligned(mult)       __attribute__((aligned (mult)))
 
 #define gcc_packed              __attribute__((packed))
@@ -15,7 +13,5 @@
 
 #define likely(x)		__builtin_expect (!!(x), 1)
 #define unlikely(x)		__builtin_expect (!!(x), 0)
-
-#endif /* _KERN_ */
 
 #endif /* !_KERN_GCC_H_ */

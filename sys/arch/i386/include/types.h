@@ -1,10 +1,6 @@
 #ifndef _MACHINE_TYPES_H_
 #define _MACHINE_TYPES_H_
 
-#ifndef _KERN_
-#error "This is a kernel header; do not include it in userspace programs."
-#endif
-
 typedef signed char		__int8_t;
 typedef unsigned char		__uint8_t;
 typedef short			__int16_t;

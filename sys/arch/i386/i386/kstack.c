@@ -3,6 +3,7 @@
 #include <sys/gcc.h>
 #include <sys/mem.h>
 #include <sys/pcpu.h>
+#include <sys/proc.h>
 #include <sys/string.h>
 #include <sys/types.h>
 #include <sys/x86.h>
@@ -127,7 +128,7 @@ kstack_init_proc(struct proc *p, struct pcpu *c, void (*kern_entry)(void))
 	 */
 	/* put the parameter of ctx_start() at the top of the kernel stack */
 	sp -= sizeof(struct context *);
-	*(struct context **) sp = &p->ctx;
+	*(struct context **) sp = &p->uctx;
 	/* put a dummy return address on the kernel stack */
 	sp -= sizeof(uintptr_t);
 	*(uintptr_t *) sp = 0;

@@ -91,9 +91,14 @@ ifneq "$(strip $(DEBUG_CHANNEL) $(DEBUG_ALL))" ""
 KERN_CFLAGS	+= -DDEBUG_CHANNEL -DDEBUG_MSG
 endif
 
-# If set, enable debugging sessions
-ifneq "$(strip $(DEBUG_SESSION) $(DEBUG_ALL))" ""
-KERN_CFLAGS	+= -DDEBUG_SESSION -DDEBUG_MSG
+# If set, enable debugging scheduler
+ifneq "$(strip $(DEBUG_SCHED) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_SCHED -DDEBUG_MSG
+endif
+
+# If set, enable debugging IPC
+ifneq "$(strip $(DEBUG_IPC) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_IPC -DDEBUG_MSG
 endif
 
 #
