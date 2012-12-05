@@ -1,4 +1,6 @@
+#include <sys/channel.h>
 #include <sys/debug.h>
+#include <sys/ipc.h>
 #include <sys/proc.h>
 #include <sys/spinlock.h>
 #include <sys/string.h>
@@ -30,31 +32,47 @@ vdev_init(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
 
-	uint32_t port;
-	uint16_t irq;
+	struct vdev *vdev = &vm->vdev;
+	int i;
+
+	spinlock_init(&vdev->dev_lk);
+
+	/*
+	 * Initialize the kernel virtual devices.
+	 */
 
 	KERN_DEBUG("Initialize virtual i8259.\n");
-	spinlock_init(&vm->vdev.vpic_lk);
-	vpic_init(&vm->vdev.vpic, vm);
+	spinlock_init(&vdev->vpic_lk);
+	vpic_init(&vdev->vpic, vm);
+
+	/*
+	 * Intialize the user virtual device interface.
+	 */
 
 	KERN_DEBUG("Initialize virtual device interface.\n");
-	spinlock_init(&vm->vdev.dev_lk);
+
 	memzero(vm->vdev.dev, sizeof(struct proc *) * MAX_VID);
-	memzero(vm->vdev.ch, sizeof(struct channel *) * MAX_VID);
-	for (port = 0; port < MAX_IOPORT; port++) {
-		spinlock_init(&vm->vdev.ioport[port].ioport_lk);
-		vm->vdev.ioport[port].vid = -1;
+	memzero(vm->vdev.dev_in, sizeof(struct channel *) * MAX_VID);
+	memzero(vm->vdev.dev_out, sizeof(struct channel *) * MAX_VID);
+
+	for (i = 0; i < MAX_IOPORT; i++) {
+		spinlock_init(&vdev->ioport[i].ioport_lk);
+		vdev->ioport[i].vid = -1;
 	}
-	for (irq = 0; irq < MAX_IRQ; irq++) {
-		spinlock_init(&vm->vdev.irq[irq].irq_lk);
-		vm->vdev.irq[irq].vid = -1;
+
+	for (i = 0; i < MAX_IRQ; i++) {
+		spinlock_init(&vdev->irq[i].irq_lk);
+		vdev->irq[i].vid = -1;
 	}
 }
 
 vid_t
-vdev_register_device(struct vm *vm, struct proc *p)
+vdev_register_device(struct vm *vm, struct proc *p,
+		     struct channel *in_ch, struct channel *out_ch)
 {
-	KERN_ASSERT(vm != NULL && p != NULL);
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(in_ch != NULL);
+	KERN_ASSERT(out_ch != NULL);
 
 	vid_t vid;
 
@@ -63,10 +81,12 @@ vdev_register_device(struct vm *vm, struct proc *p)
 	for (vid = 0; vid < MAX_VID; vid++)
 		if (vm->vdev.dev[vid] == NULL) {
 			vm->vdev.dev[vid] = p;
-			vm->vdev.ch[vid] = p->parent_ch;
+			vm->vdev.dev_in[vid] = in_ch;
+			vm->vdev.dev_out[vid] = out_ch;
 
 			proc_lock(p);
 			p->vid = vid;
+			p->master_vm = vm;
 			proc_unlock(p);
 
 			break;
@@ -91,13 +111,19 @@ vdev_unregister_device(struct vm *vm, vid_t vid)
 	uint32_t port;
 	uint16_t irq;
 
+	struct proc *dev_p;
+
 	spinlock_acquire(&vm->vdev.dev_lk);
 
-	channel_free(vm->vdev.ch[vid], vm->proc);
-	channel_free(vm->vdev.ch[vid], vm->vdev.dev[vid]);
-	vm->vdev.ch[vid] = NULL;
+	dev_p = vm->vdev.dev[vid];
+
+	proc_lock(dev_p);
+	dev_p->vid = -1;
+	dev_p->master_vm = NULL;
+	proc_unlock(dev_p);
 
 	vm->vdev.dev[vid] = NULL;
+	vm->vdev.dev_in[vid] = vm->vdev.dev_out[vid] = NULL;
 
 	for (port = 0; port < MAX_IOPORT; port++)
 		if (vm->vdev.ioport[port].vid == vid)
@@ -268,75 +294,24 @@ vdev_unregister_irq(struct vm *vm, uint8_t irq, vid_t vid)
 static int
 vdev_send_request(struct vm *vm, struct channel *ch, void *req, size_t size)
 {
-	KERN_ASSERT(vm != NULL && vm->proc != NULL);
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(vm->proc != NULL);
+	KERN_ASSERT(vm->proc == proc_cur());
 	KERN_ASSERT(ch != NULL);
 	KERN_ASSERT(req != NULL);
 	KERN_ASSERT(size > 0);
-
-	struct proc *receiver;
-	int rc;
-
-	do {
-		spinlock_acquire(&ch->lk);
-		rc = channel_send(ch, vm->proc, req, size);
-		spinlock_release(&ch->lk);
-	} while (rc == E_CHANNEL_BUSY);
-
-	if (rc) {
-		VDEV_DEBUG("Cannot sent request through channel %d.\n",
-			   channel_getid(ch));
-		return 1;
-	}
-
-	receiver = (ch->p1 == vm->proc) ? ch->p2 : ch->p1;
-	sched_lock(receiver->cpu);
-	if (receiver->state == PROC_BLOCKED &&
-	    receiver->block_reason == WAITING_FOR_RECEIVING &&
-	    receiver->block_channel == ch) {
-		VDEV_DEBUG("Unblock process %d to receive from channel %d.\n",
-			   receiver->pid, channel_getid(ch));
-		proc_unblock(receiver);
-	}
-	sched_unlock(receiver->cpu);
-
-	return 0;
+	return ipc_send(ch, (uintptr_t) req, size, TRUE, TRUE);
 }
 
 static int
-vdev_recv_result(struct vm *vm, struct channel *ch, void *result, size_t *size)
+vdev_recv_result(struct vm *vm, struct channel *ch, void *result, size_t size)
 {
 	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(vm->proc != NULL);
+	KERN_ASSERT(vm->proc == proc_cur());
 	KERN_ASSERT(ch != NULL);
 	KERN_ASSERT(result != NULL);
-	KERN_ASSERT(size != NULL);
-
-	struct proc *sender;
-	int rc;
-
-	do {
-		spinlock_acquire(&ch->lk);
-		rc = channel_receive(ch, vm->proc, result, size);
-		spinlock_release(&ch->lk);
-	} while (rc == E_CHANNEL_IDLE);
-
-	if (rc) {
-		VDEV_DEBUG("Cannot receive result from channel %d.\n",
-			   channel_getid(ch));
-		return 1;
-	}
-
-	sender = (ch->p1 == vm->proc) ? ch->p2 : ch->p1;
-	sched_lock(sender->cpu);
-	if (sender->state == PROC_BLOCKED &&
-	    sender->block_reason == WAITING_FOR_SENDING &&
-	    sender->block_channel == ch) {
-		VDEV_DEBUG("Unblock process %d to send to channel %d.\n",
-			   sender->pid, channel_getid(ch));
-		proc_unblock(sender);
-	}
-	sched_unlock(sender->cpu);
-
-	return 0;
+	return ipc_recv(ch, (uintptr_t) result, size, TRUE, TRUE);
 }
 
 static int
@@ -386,7 +361,6 @@ vdev_read_guest_ioport(struct vm *vm,
 	int rc = 0;
 
 	uint8_t *recv_buf;
-	size_t recv_size;
 
 	struct vdev *vdev = &vm->vdev;
 	struct channel *ch;
@@ -401,7 +375,7 @@ vdev_read_guest_ioport(struct vm *vm,
 
 	KERN_ASSERT(0 <= vid && vid < MAX_VID);
 
-	ch = vdev->ch[vid];
+	ch = vdev->dev_in[vid];
 
 	struct vdev_ioport_info req = { .magic = VDEV_READ_GUEST_IOPORT,
 				        .port  = port, .width = width };
@@ -415,14 +389,14 @@ vdev_read_guest_ioport(struct vm *vm,
 	}
 
 	recv_buf = vm->proc->sys_buf;
+	ch = vdev->dev_out[vid];
 
 	VDEV_DEBUG("Wait for data from virtual device %d.\n", vid);
 
-	rc = vdev_recv_result(vm, ch, recv_buf, &recv_size);
+	rc = vdev_recv_result(vm, ch, recv_buf, sizeof(struct vdev_ioport_info));
 	result = (struct vdev_ioport_info *) recv_buf;
 
-	if (rc || recv_size != sizeof(struct vdev_ioport_info) ||
-	    result->magic != VDEV_GUEST_IOPORT_DATA) {
+	if (rc || result->magic != VDEV_GUEST_IOPORT_DATA) {
 		VDEV_DEBUG("Cannot receive data (port 0x%x, "
 			   "width %d bytes) from process %d.\n",
 			   port, 1 << width, vdev->dev[vid]->pid);
@@ -472,7 +446,7 @@ vdev_write_guest_ioport(struct vm *vm,
 	struct vdev_ioport_info req = {	.magic = VDEV_WRITE_GUEST_IOPORT,
 					.port  = port, .width = width };
 	SET_IOPORT_DATA(&req.val, data, width);
-	if ((rc = vdev_send_request(vm, vdev->ch[vid], &req, sizeof(req)))) {
+	if ((rc = vdev_send_request(vm, vdev->dev_in[vid], &req, sizeof(req)))) {
 		VDEV_DEBUG("Cannot send write request (port 0x%x, "
 			   "width %d bytes, data 0x%x) to process %d.\n",
 			   port, 1 << width, req.val, vdev->dev[vid]->pid);
@@ -683,7 +657,7 @@ vdev_sync_dev(struct vm *vm, vid_t vid)
 		return 1;
 	}
 
-	if ((ch = vdev->ch[vid]) == NULL) {
+	if ((ch = vdev->dev_in[vid]) == NULL) {
 		VDEV_DEBUG("No available channel.\n");
 		spinlock_release(&vdev->dev_lk);
 		return 2;
@@ -721,14 +695,14 @@ vdev_wait_all_devices_ready(struct vm *vm)
 	struct channel *ch;
 
 	uint8_t *recv_buf;
-	size_t recv_size;
+	size_t recv_size = sizeof(struct vdev_device_ready);
 	struct vdev_device_ready *rdy;
 
 	recv_buf = vm->proc->sys_buf;
 
 	for (vid = 0; vid < MAX_VID; vid++) {
 		p = vdev->dev[vid];
-		ch = vdev->ch[vid];
+		ch = vdev->dev_out[vid];
 
 		if (p == NULL || ch == NULL)
 			continue;
@@ -736,8 +710,7 @@ vdev_wait_all_devices_ready(struct vm *vm)
 		VDEV_DEBUG("Waiting for DEVICE_RDY from virtual device %d.\n",
 			   vid);
 
-		if (vdev_recv_result(vm, ch, recv_buf, &recv_size) ||
-		    recv_size != sizeof(struct vdev_device_ready)) {
+		if (vdev_recv_result(vm, ch, recv_buf, recv_size)) {
 			VDEV_DEBUG("Cannot receve DEVICE_RDY from process %d.\n",
 				   p->pid);
 			continue;

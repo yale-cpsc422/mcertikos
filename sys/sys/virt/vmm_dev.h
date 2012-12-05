@@ -39,7 +39,8 @@ void vdev_init(struct vm *);
  *
  * @return a valid virtual device id (>= 0) if successful; otherwise, return -1.
  */
-vid_t vdev_register_device(struct vm *vm, struct proc *p);
+vid_t vdev_register_device(struct vm *vm, struct proc *p,
+			   struct channel *in_ch, struct channel *out_ch);
 void  vdev_unregister_device(struct vm *vm, vid_t vid);
 
 /*

@@ -5,13 +5,14 @@
 
 #include <sys/mem.h>
 #include <sys/proc.h>
+#include <sys/queue.h>
 #include <sys/spinlock.h>
 #include <sys/trap.h>
 #include <sys/types.h>
 
 #include <sys/virt/dev/pic.h>
 
-#define MAX_VMID		32
+#define MAX_VMID		1
 #define MAX_IOPORT		0x10000
 #define MAX_IRQ			0x100
 #define MAX_VID			32
@@ -126,21 +127,52 @@ struct vm_perf_trace {
 
 #endif
 
+/*
+ * CertiKOS provides two categories of virtual devices: kernel virtual devices
+ * and user virtual devices.
+ *
+ * The kernel virtual devices are parts of CertiKOS kernel.
+ *
+ * The user virtual devices are executing in the userspace.
+ * - A user virtual device can serve at most one virtual machine.
+ * - A user virtual device can emulate only the I/O ports it has already
+ *   registered.
+ * - A user virtual device can access the host I/O ports identical to the I/O
+ *   ports it's emulating.
+ * - A user virtual device can emulate only the interrupts it has already
+ *   registered.
+ * - XXX: Currently, there's no restriction of the guest physical memory access
+ *        on the user virtual devices.
+ */
+
 struct vdev {
+	spinlock_t	dev_lk;
+
+	/*
+	 * kernel virtual devices
+	 */
+
+	/* virtual interrupt controller */
 	struct vpic	vpic;
 	spinlock_t	vpic_lk;
 
-	spinlock_t	dev_lk;
+	/*
+	 * user virtual devices
+	 */
+
 	struct proc	*dev[MAX_VID];
-	struct channel	*ch[MAX_VID];
+	struct channel	*dev_in[MAX_VID];
+	struct channel	*dev_out[MAX_VID];
+
 	struct {
 		spinlock_t ioport_lk;
-		vid_t      vid;
-	}		ioport[MAX_IOPORT];
+		vid_t vid;
+	} ioport[MAX_IOPORT];	/* I/O ports registry */
+
 	struct {
 		spinlock_t irq_lk;
-		vid_t      vid;
-	}		irq[MAX_IRQ];
+		vid_t vid;
+	} irq[MAX_IRQ];		/* interrupts registry */
 };
 
 struct vm {
