@@ -639,7 +639,7 @@ vpic_read_ioport(struct vpic *vpic, uint16_t port, uint8_t *data)
 int
 vpic_write_ioport(struct vpic *vpic, uint16_t port, uint8_t data)
 {
-	KERN_ASSERT(vpic != NULL && data != NULL);
+	KERN_ASSERT(vpic != NULL);
 
 #ifdef DEBUG_VPIC
 	KERN_DEBUG("Write i8259 port 0x%x, val 0x%x.\n", port, data);
