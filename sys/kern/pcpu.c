@@ -30,7 +30,6 @@ pcpu_init(void)
 
 	for (i = 0; i < MAX_CPU; i++) {
 		spinlock_init(&pcpu[i].lk);
-		proc_sched_init(&pcpu[i].sched);
 		pcpu[i].vm = NULL;
 		pcpu[i].inited = TRUE;
 		pcpu[i].vm_inited = FALSE;

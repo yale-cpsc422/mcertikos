@@ -4,8 +4,6 @@
 #ifdef _KERN_
 
 #include <sys/context.h>
-#include <sys/proc.h>
-#include <sys/queue.h>
 #include <sys/spinlock.h>
 #include <sys/trap.h>
 #include <sys/types.h>
@@ -26,27 +24,6 @@
  */
 #define PCPU_AP_START_ADDR	0x8000
 
-/*
- * There's a scheduler per processor core. The scheduler is responsible to
- * schedule to all processes on that core.
- */
-struct sched {
-	struct proc	*cur_proc;	/* current running process */
-
-	uint64_t	run_ticks;	/* time current process is running */
-
-	/*
-	 * ready_queue   all process which are ready to run
-	 * blocked_queue all process which are blocked
-	 * dead_queue    all process which are being killed
-	 */
-	TAILQ_HEAD(readyq, proc)   ready_queue;
-	TAILQ_HEAD(blockedq, proc) blocked_queue;
-	TAILQ_HEAD(deadq, proc)    dead_queue;
-
-	spinlock_t	lk;		/* scheduler lock */
-};
-
 struct vm;
 
 struct pcpu {
@@ -55,7 +32,6 @@ struct pcpu {
 	volatile bool	booted;		/* does this processor boot up ? */
 	struct kstack	*kstack;	/* bootstrap kernel stack */
 	struct pcpuinfo	arch_info;	/* arch-dependent information */
-	struct sched	sched;		/* process scheduler */
 	trap_cb_t	**trap_handler;	/* arrays of trap handlers */
 	struct vm	*vm;
 	bool		vm_inited;	/* is the virtualization initialzied? */
@@ -136,24 +112,6 @@ bool pcpu_is_smp(void);
  * @return the local APIC id of the processor core
  */
 lapicid_t pcpu_cpu_lapicid(int cpu_idx);
-
-#define SCHED_SLICE	20	/* schedule every 20ms */
-
-/*
- * Lock the scheduler on the processor c.
- */
-#define sched_lock(c)				\
-	do {					\
-		spinlock_acquire(&c->sched.lk);	\
-	} while (0)
-
-/*
- * Unlock the scheduler on the processor c.
- */
-#define sched_unlock(c)				\
-	do {					\
-		spinlock_release(&c->sched.lk);	\
-	} while (0)
 
 #endif /* _KERN_ */
 
