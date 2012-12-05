@@ -1,9 +1,10 @@
+#include <sys/channel.h>
 #include <sys/debug.h>
+#include <sys/ipc.h>
 #include <sys/mmu.h>
 #include <sys/pcpu.h>
 #include <sys/proc.h>
 #include <sys/string.h>
-#include <sys/session.h>
 #include <sys/syscall.h>
 #include <sys/trap.h>
 #include <sys/types.h>
@@ -28,9 +29,9 @@ static char *syscall_name[MAX_SYSCALL_NR] =
 		[SYS_yield]		= "sys_yield",
 		[SYS_getpid]		= "sys_getpid",
 		[SYS_getppid]		= "sys_getppid",
-		[SYS_session]		= "sys_session",
-		[SYS_getsid]		= "sys_getsid",
 		[SYS_getchid]		= "sys_getchid",
+		[SYS_channel]		= "sys_channel",
+		[SYS_grant]		= "sys_grant",
 		[SYS_send]		= "sys_send",
 		[SYS_recv]		= "sys_recv",
 		[SYS_disk_op]		= "sys_disk_op",
@@ -57,7 +58,6 @@ static char *errno_name[MAX_ERROR_NR] =
 		[E_MEM]			= "E_MEM",
 		[E_INVAL_CALLNR]	= "E_INVAL_CALLNR",
 		[E_INVAL_CPU]		= "E_INVAL_CPU",
-		[E_INVAL_SID]		= "E_INVAL_SID",
 		[E_INVAL_ADDR]		= "E_INVAL_ADDR",
 		[E_INVAL_PID]		= "E_INVAL_PID",
 		[E_INVAL_CHID]		= "E_INVAL_CHID",
@@ -166,7 +166,7 @@ sys_puts(uintptr_t str_la)
 	struct proc *p = proc_cur();
 
 	if (copy_from_user((uintptr_t) p->sys_buf,
-			   p->pmap, str_la, PAGESIZE) == NULL)
+			   p->pmap, str_la, PAGESIZE) == 0)
 		return E_MEM;
 
 	((char *) (p->sys_buf))[PAGESIZE - 1] = '\0';
@@ -182,38 +182,53 @@ sys_getc(uintptr_t buf_la)
 	char c;
 
 	c = getchar();
-	if (copy_to_user(p->pmap, buf_la, (uintptr_t) &c, sizeof(char)) == NULL)
+	if (copy_to_user(p->pmap, buf_la, (uintptr_t) &c, sizeof(char)) == 0)
 		return E_MEM;
 	else
 		return E_SUCC;
 }
 
 static int
-sys_create_proc(uintptr_t binary_la, uintptr_t pid_la)
+sys_create_proc(uintptr_t pid_la, chid_t chid)
 {
-	struct proc *new_p, *cur_p;;
+	struct proc *new_p, *cur_p;
+	struct channel *ch;
 
-	/* if (!(VM_USERLO <= binary_la && */
-	/*       binary_la + sizeof(uintptr_t) <= VM_USERHI)) */
-	/* 	return E_INVAL_ADDR; */
 	if (!(VM_USERLO <= pid_la && pid_la + sizeof(pid_t) <= VM_USERHI))
 		return E_INVAL_ADDR;
 
 	if (unlikely((cur_p = proc_cur()) == NULL))
 		return E_INVAL_PID;
 
-	if ((new_p = proc_new(binary_la, cur_p->session)) == NULL)
+	if (chid != -1) {
+		if ((ch = channel_getch(chid)) == NULL)
+			return E_INVAL_CHID;
+
+		channel_lock(ch);
+
+		if (channel_getperm(ch, cur_p) !=
+		    (CHANNEL_PERM_SEND | CHANNEL_PERM_RECV)) {
+			channel_unlock(ch);
+			return E_INVAL_CHID;
+		}
+
+		channel_unlock(ch);
+	} else {
+		ch = NULL;
+	}
+
+	if ((new_p = proc_new(cur_p, ch)) == NULL)
 		return E_INVAL_PID;
 
 	if (copy_to_user(cur_p->pmap, pid_la,
-			 (uintptr_t) &new_p->pid, sizeof(pid_t)) == NULL)
+			 (uintptr_t) &new_p->pid, sizeof(pid_t)) == 0)
 		return E_MEM;
 
 	return E_SUCC;
 }
 
 static int
-sys_run_proc(pid_t pid, uint32_t cpu_idx)
+sys_run_proc(pid_t pid, uint32_t cpu_idx, uintptr_t binary_la)
 {
 	struct pcpu *c;
 	struct proc *p;
@@ -225,7 +240,7 @@ sys_run_proc(pid_t pid, uint32_t cpu_idx)
 	if ((p = proc_pid2proc(pid)) == NULL || p->state != PROC_INITED)
 		return E_INVAL_PID;
 
-	proc_run(c, p);
+	proc_exec(p, c, binary_la);
 	return E_SUCC;
 }
 
@@ -246,7 +261,7 @@ sys_getpid(uintptr_t pid_la)
 	KERN_ASSERT(p != NULL);
 
 	if (copy_to_user(p->pmap, pid_la,
-			 (uintptr_t) &p->pid, sizeof(pid_t)) == NULL)
+			 (uintptr_t) &p->pid, sizeof(pid_t)) == 0)
 		return E_MEM;
 	else
 		return E_SUCC;
@@ -261,7 +276,7 @@ sys_getppid(uintptr_t ppid_la)
 	struct proc *p = proc_cur();
 
 	if (copy_to_user(p->pmap, ppid_la,
-			 (uintptr_t) &p->parent->pid, sizeof(pid_t)) == NULL)
+			 (uintptr_t) &p->parent->pid, sizeof(pid_t)) == 0)
 		return E_MEM;
 	else
 		return E_SUCC;
@@ -272,7 +287,7 @@ sys_getchid(uintptr_t chid_la)
 {
 	struct proc *cur_p;
 	struct channel *ch;
-	int chid;
+	chid_t chid;
 
 	if (!(VM_USERLO <= chid_la && chid_la + sizeof(int) <= VM_USERHI))
 		return E_INVAL_ADDR;
@@ -286,74 +301,16 @@ sys_getchid(uintptr_t chid_la)
 	chid = channel_getid(ch);
 
 	if (copy_to_user(cur_p->pmap, chid_la,
-			 (uintptr_t) &chid, sizeof(int)) == NULL)
+			 (uintptr_t) &chid, sizeof(int)) == 0)
 		return E_MEM;
 
 	return E_SUCC;
-}
-
-static int
-sys_session(int type, uintptr_t sid_la)
-{
-	if (sid_la < VM_USERLO || sid_la + sizeof(sid_t) > VM_USERHI)
-		return E_INVAL_ADDR;
-
-	struct proc *p = proc_cur();
-	struct session *s, *old_s;
-
-	if ((s = session_new(type)) == NULL)
-		return E_INVAL_SID;
-
-	old_s = p->session;
-
-	sched_lock(p->cpu);
-
-	if (session_remove_proc(old_s, p)) {
-		session_free(s);
-		sched_unlock(p->cpu);
-		return E_INVAL_SID;
-	}
-
-	if (session_add_proc(s, p)) {
-		session_free(s);
-		session_add_proc(old_s, p);
-		sched_unlock(p->cpu);
-		return E_INVAL_SID;
-	}
-
-	sched_unlock(p->cpu);
-
-	if (copy_to_user(p->pmap, sid_la,
-			 (uintptr_t) &s->sid, sizeof(int)) == NULL)
-		return E_MEM;
-
-	return E_SUCC;
-
-}
-
-static int
-sys_getsid(uintptr_t sid_la)
-{
-	if (sid_la < VM_USERLO || sid_la + sizeof(sid_t) > VM_USERHI)
-		return E_INVAL_ADDR;
-
-	struct proc *p = proc_cur();
-
-	if (copy_to_user(p->pmap, sid_la,
-			 (uintptr_t) &p->session->sid, sizeof(sid_t)) == NULL)
-		return E_MEM;
-	else
-		return E_SUCC;
 }
 
 static int
 sys_send(int chid, uintptr_t msg_la, size_t size)
 {
-	struct proc *sender, *receiver;
 	struct channel *ch;
-
-	if (size > CHANNEL_BUFFER_SIZE)
-		return E_SEND;
 
 	if (!(VM_USERLO <= msg_la && msg_la + size <= VM_USERHI))
 		return E_INVAL_ADDR;
@@ -361,60 +318,25 @@ sys_send(int chid, uintptr_t msg_la, size_t size)
 	if ((ch = channel_getch(chid)) == NULL)
 		return E_INVAL_CHID;
 
-	if ((sender = proc_cur()) == NULL ||
-	    (sender != ch->p1 && sender != ch->p2))
-		return E_INVAL_PID;
-
-	receiver = (sender == ch->p1) ? ch->p2 : ch->p1;
-
-	if (sender->session != receiver->session)
-		return E_INVAL_SID;
-
-	if (copy_from_user((uintptr_t) sender->sys_buf,
-			   sender->pmap, msg_la, size) == NULL)
-		return E_MEM;
-
-	if (proc_send_msg(ch, sender, sender->sys_buf, size))
+	if (ipc_send(ch, (uintptr_t) msg_la, size, FALSE, TRUE))
 		return E_SEND;
 
 	return E_SUCC;
 }
 
 static int
-sys_recv(int chid, uintptr_t buf_la, uintptr_t size_la)
+sys_recv(int chid, uintptr_t msg_la, size_t size)
 {
-	struct proc *sender, *receiver;
 	struct channel *ch;
-	size_t size;
 
-	if (!(VM_USERLO <= size_la && size_la + sizeof(size_t) <= VM_USERHI))
+	if (!(VM_USERLO <= msg_la && msg_la + size <= VM_USERHI))
 		return E_INVAL_ADDR;
 
 	if ((ch = channel_getch(chid)) == NULL)
 		return E_INVAL_CHID;
 
-	if ((receiver = proc_cur()) == NULL ||
-	    (receiver != ch->p1 && receiver != ch->p2))
-		return E_INVAL_PID;
-
-	sender = (receiver == ch->p1) ? ch->p2 : ch->p1;
-
-	if (sender->session != receiver->session)
-		return E_INVAL_SID;
-
-	if (proc_recv_msg(ch, receiver, receiver->sys_buf, &size, TRUE))
+	if (ipc_recv(ch, (uintptr_t) msg_la, size, FALSE, TRUE))
 		return E_RECV;
-
-	if (!(VM_USERLO <= size_la && size_la + size <= VM_USERHI))
-		return E_INVAL_ADDR;
-
-	if (copy_to_user(receiver->pmap, buf_la,
-			 (uintptr_t) receiver->sys_buf, size) == NULL)
-		return E_MEM;
-
-	if (copy_to_user(receiver->pmap, size_la,
-			 (uintptr_t) &size, sizeof(size_t)) == NULL)
-		return E_MEM;
 
 	return E_SUCC;
 }
@@ -427,23 +349,15 @@ sys_new_vm(uintptr_t vmid_la)
 	if (p->vm != NULL)
 		return E_INVAL_PID;
 
-	struct session *s = p->session;
-
-	if (s->type != SESSION_VM)
-		return E_INVAL_SID;
-
 	if ((p->vm = vmm_create_vm(800 * 1000 * 1000,
-				   256 * 1024 *1024)) == NULL) {
-		proc_unlock(p);
+				   256 * 1024 *1024)) == NULL)
 		return E_INVAL_VMID;
-	}
 
 	if (copy_to_user(p->pmap, vmid_la,
-			 (uintptr_t) &p->vm->vmid, sizeof(vmid_t)) == NULL)
+			 (uintptr_t) &p->vm->vmid, sizeof(vmid_t)) == 0)
 		return E_MEM;
 
 	p->vm->proc = p;
-	s->vm = p->vm;
 
 	return E_SUCC;
 }
@@ -463,12 +377,18 @@ sys_run_vm(void)
 }
 
 static int
-sys_attach_vdev(pid_t pid, uintptr_t vid_la)
+sys_attach_vdev(pid_t pid, uintptr_t vid_la, uintptr_t user_vdev_la)
 {
 	struct proc *vm_p, *dev_p;
 	vid_t vid;
+	struct user_vdev user_vdev;
+	struct channel *in_ch, *out_ch;
 
 	if (!(VM_USERLO <= vid_la && vid_la + sizeof(vid_t) <= VM_USERHI))
+		return E_INVAL_ADDR;
+
+	if (!(VM_USERLO <= user_vdev_la &&
+	      user_vdev_la + sizeof(struct user_vdev) <= VM_USERHI))
 		return E_INVAL_ADDR;
 
 	if ((vm_p = proc_cur()) == NULL)
@@ -477,14 +397,19 @@ sys_attach_vdev(pid_t pid, uintptr_t vid_la)
 	if ((dev_p = proc_pid2proc(pid)) == NULL)
 		return E_INVAL_PID;
 
-	if (dev_p->session != vm_p->session)
-		return E_INVAL_SID;
+	if (copy_from_user((uintptr_t) &user_vdev, proc_cur()->pmap,
+			   user_vdev_la, sizeof(struct user_vdev)) == 0)
+		return E_MEM;
 
-	if ((vid = vdev_register_device(vm_p->vm, dev_p)) == -1)
+	if ((in_ch = channel_getch(user_vdev.in_chid)) == NULL ||
+	    (out_ch = channel_getch(user_vdev.out_chid)) == NULL)
+		return E_INVAL_CHID;
+
+	if ((vid = vdev_register_device(vm_p->vm, dev_p, in_ch, out_ch)) == -1)
 		return E_ATTACH;
 
 	if (copy_to_user(vm_p->pmap, vid_la,
-			 (uintptr_t) &vid, sizeof(vid_t)) == NULL)
+			 (uintptr_t) &vid, sizeof(vid_t)) == 0)
 		return E_MEM;
 
 	return E_SUCC;
@@ -509,20 +434,13 @@ static int
 sys_setup_port(uint16_t port, data_sz_t width, int attach)
 {
 	struct proc *dev_p;
-	struct session *session;
 	vid_t vid;
 	struct vm *vm;
 
 	dev_p = proc_cur();
-	session = dev_p->session;
-	vm = session->vm;
-	vid = dev_p->vid;
 
-	if (vm == NULL)
-		return E_INVAL_SID;
-
-	if (vid == -1)
-		return E_INVAL_VID;
+	if ((vm = dev_p->master_vm) == NULL || (vid = dev_p->vid) == -1)
+		return E_INVAL_PID;
 
 	if (attach) {
 		if (vdev_register_ioport(vm, port, width, vid))
@@ -542,20 +460,13 @@ static int
 sys_setup_irq(uint8_t irq, int attach)
 {
 	struct proc *dev_p;
-	struct session *session;
 	vid_t vid;
 	struct vm *vm;
 
 	dev_p = proc_cur();
-	session = dev_p->session;
-	vm = session->vm;
-	vid = dev_p->vid;
 
-	if (vm == NULL)
-		return E_INVAL_SID;
-
-	if (vid == -1)
-		return E_INVAL_VID;
+	if ((vm = dev_p->master_vm) == NULL || (vid = dev_p->vid) == -1)
+		return E_INVAL_PID;
 
 	if (!(0 <= irq && irq < MAX_IRQ))
 		return E_INVAL_IRQ;
@@ -584,17 +495,11 @@ sys_ioport_inout(uintptr_t user_ioport_la, uintptr_t val_la, int in)
 	struct user_ioport portinfo;
 	uint32_t val;
 
-	if ((vm = dev_p->session->vm) == NULL)
-		return E_INVAL_VMID;
-
-	if (dev_p->session != vm->proc->session)
-		return E_INVAL_SID;
-
-	if (dev_p->vid == -1)
-		return E_INVAL_VID;
+	if ((vm = dev_p->master_vm) == NULL || dev_p->vid == -1)
+		return E_INVAL_PID;
 
 	if ((copy_from_user((uintptr_t) &portinfo, dev_p->pmap, user_ioport_la,
-			    sizeof(struct user_ioport))) == NULL)
+			    sizeof(struct user_ioport))) == 0)
 		return E_MEM;
 
 	if (in) {
@@ -605,7 +510,7 @@ sys_ioport_inout(uintptr_t user_ioport_la, uintptr_t val_la, int in)
 			return E_IOPORT;
 
 		if (copy_to_user(dev_p->pmap, val_la,
-				 (uintptr_t) &val, 1 << portinfo.width) == NULL)
+				 (uintptr_t) &val, 1 << portinfo.width) == 0)
 			return E_MEM;
 	} else {
 		val = val_la;
@@ -627,16 +532,10 @@ static int
 sys_set_irq(uint8_t irq, int mode)
 {
 	struct proc *dev_p = proc_cur();
-	struct vm *vm = dev_p->session->vm;
+	struct vm *vm = dev_p->master_vm;
 
-	if (vm == NULL)
-		return E_INVAL_VMID;
-
-	if (dev_p->session != vm->proc->session)
-		return E_INVAL_SID;
-
-	if (dev_p->vid == -1)
-		return E_INVAL_VID;
+	if (vm == NULL || dev_p->vid == -1)
+		return E_INVAL_PID;
 
 	if (!(0 <= irq && irq < MAX_IRQ))
 		return E_INVAL_IRQ;
@@ -654,19 +553,13 @@ static int
 sys_guest_rw(uintptr_t gpa, uintptr_t la, size_t size, int write)
 {
 	struct proc *dev_p = proc_cur();
-	struct vm *vm = dev_p->session->vm;
+	struct vm *vm = dev_p->master_vm;
 
 	if (la < VM_USERLO || la > VM_USERHI - size || vm->memsize - la < size)
 		return E_INVAL_ADDR;
 
-	if (vm == NULL)
-		return E_INVAL_VMID;
-
-	if (dev_p->session != vm->proc->session)
-		return E_INVAL_SID;
-
-	if (dev_p->vid == -1)
-		return E_INVAL_VID;
+	if (vm == NULL || dev_p->vid == 01)
+		return E_INVAL_PID;
 
 	if (vdev_rw_guest_mem(vm, gpa, dev_p->pmap, la, size, write))
 		return E_MEM;
@@ -681,26 +574,20 @@ static int
 sys_guest_tsc(uintptr_t tsc_la)
 {
 	struct proc *dev_p = proc_cur();
-	struct vm *vm = dev_p->session->vm;
+	struct vm *vm = dev_p->master_vm;
 
 	uint64_t guest_tsc;
 
 	if (tsc_la < VM_USERLO || VM_USERHI - tsc_la < sizeof(uint64_t))
 		return E_INVAL_ADDR;
 
-	if (vm == NULL)
-		return E_INVAL_VMID;
-
-	if (dev_p->session != vm->proc->session)
-		return E_INVAL_SID;
-
-	if (dev_p->vid == -1)
-		return E_INVAL_VID;
+	if (vm == NULL || dev_p->vid == -1)
+		return E_INVAL_PID;
 
 	guest_tsc = vmm_rdtsc(vm);
 
 	if (copy_to_user(dev_p->pmap, tsc_la,
-			 (uintptr_t) &guest_tsc, sizeof(uint64_t)) == NULL)
+			 (uintptr_t) &guest_tsc, sizeof(uint64_t)) == 0)
 		return E_MEM;
 
 	return E_SUCC;
@@ -710,26 +597,20 @@ static int
 sys_guest_cpufreq(uintptr_t freq_la)
 {
 	struct proc *dev_p = proc_cur();
-	struct vm *vm = dev_p->session->vm;
+	struct vm *vm = dev_p->master_vm;
 
 	uint64_t freq;
 
 	if (freq_la < VM_USERLO || VM_USERHI - freq_la < sizeof(uint64_t))
 		return E_INVAL_ADDR;
 
-	if (vm == NULL)
-		return E_INVAL_VMID;
-
-	if (dev_p->session != vm->proc->session)
-		return E_INVAL_SID;
-
-	if (dev_p->vid == -1)
-		return E_INVAL_VID;
+	if (vm == NULL || dev_p->vid == -1)
+		return E_INVAL_PID;
 
 	freq = vm->cpufreq;
 
 	if (copy_to_user(dev_p->pmap, freq_la,
-			 (uintptr_t) &freq, sizeof(uint64_t)) == NULL)
+			 (uintptr_t) &freq, sizeof(uint64_t)) == 0)
 		return E_MEM;
 
 	return E_SUCC;
@@ -739,26 +620,20 @@ static int
 sys_guest_memsize(uintptr_t size_la)
 {
 	struct proc *dev_p = proc_cur();
-	struct vm *vm = dev_p->session->vm;
+	struct vm *vm = dev_p->master_vm;
 
 	uint64_t size;
 
 	if (size_la < VM_USERLO || VM_USERHI - size_la < sizeof(uint64_t))
 		return E_INVAL_ADDR;
 
-	if (vm == NULL)
-		return E_INVAL_VMID;
-
-	if (dev_p->session != vm->proc->session)
-		return E_INVAL_SID;
-
-	if (dev_p->vid == -1)
-		return E_INVAL_VID;
+	if (vm == NULL || dev_p->vid == -1)
+		return E_INVAL_PID;
 
 	size = vm->memsize;
 
 	if (copy_to_user(dev_p->pmap, size_la,
-			 (uintptr_t) &size, sizeof(uint64_t)) == NULL)
+			 (uintptr_t) &size, sizeof(uint64_t)) == 0)
 		return E_MEM;
 
 	return E_SUCC;
@@ -781,7 +656,7 @@ __sys_disk_read(uint64_t lba, uint64_t nsectors, uintptr_t buf)
 		if (ahci_disk_read(0, cur_lba, n, p->sys_buf))
 			return E_DISK_OP;
 		if (copy_to_user(p->pmap, cur_la, (uintptr_t) p->sys_buf,
-				 n * ATA_SECTOR_SIZE) == NULL)
+				 n * ATA_SECTOR_SIZE) == 0)
 			return E_MEM;
 		cur_lba += n;
 		remaining -= n;
@@ -806,7 +681,7 @@ __sys_disk_write(uint64_t lba, uint64_t nsectors, uintptr_t buf)
 	while (remaining > 0) {
 		uint64_t n = MIN(remaining, PAGESIZE / ATA_SECTOR_SIZE);
 		if (copy_from_user((uintptr_t) p->sys_buf, p->pmap, cur_la,
-				   n * ATA_SECTOR_SIZE) == NULL)
+				   n * ATA_SECTOR_SIZE) == 0)
 			return E_MEM;
 		if (ahci_disk_write(0, cur_lba, n, p->sys_buf))
 			return E_DISK_OP;
@@ -833,7 +708,7 @@ sys_disk_op(uintptr_t dop_la)
 	p = proc_cur();
 	pmap = p->pmap;
 
-	if (copy_from_user((uintptr_t) &dop, pmap, dop_la, sizeof(dop)) == NULL)
+	if (copy_from_user((uintptr_t) &dop, pmap, dop_la, sizeof(dop)) == 0)
 		return E_MEM;
 
 	if (!(VM_USERLO <= dop.buf &&
@@ -873,13 +748,84 @@ sys_disk_cap(uintptr_t lo_la, uintptr_t hi_la)
 	cap_hi = (cap >> 32) & 0xffffffff;
 
 	if ((copy_to_user(proc_cur()->pmap, lo_la,
-			  (uintptr_t) &cap_lo, sizeof(uint32_t))) == NULL)
+			  (uintptr_t) &cap_lo, sizeof(uint32_t))) == 0)
 		return E_MEM;
 	if ((copy_to_user(proc_cur()->pmap, hi_la,
-			  (uintptr_t) &cap_hi, sizeof(uint32_t))) == NULL)
+			  (uintptr_t) &cap_hi, sizeof(uint32_t))) == 0)
 		return E_MEM;
 
 	return E_SUCC;
+}
+
+int
+sys_channel(uintptr_t chid_la, size_t msg_size)
+{
+	struct channel *ch;
+	chid_t chid;
+
+	if (!(VM_USERLO <= chid_la && chid_la + sizeof(chid_t) <= VM_USERHI))
+		return E_INVAL_ADDR;
+
+	if ((ch = channel_alloc(msg_size)) == NULL)
+		return E_CHANNEL;
+
+	channel_lock(ch);
+	channel_setperm(ch, proc_cur(), CHANNEL_PERM_SEND | CHANNEL_PERM_RECV);
+	channel_unlock(ch);
+
+	chid = channel_getid(ch);
+
+	if (copy_to_user(proc_cur()->pmap, chid_la,
+			 (uintptr_t) &chid, sizeof(chid_t)) == 0)
+		return E_MEM;
+
+	return E_SUCC;
+}
+
+int
+sys_grant(chid_t chid, pid_t pid, uint8_t perm)
+{
+	struct channel *ch;
+	struct proc *cur_p, *p;
+	uint8_t granter_perm;
+
+	if ((ch = channel_getch(chid)) == NULL)
+		return E_INVAL_CHID;
+
+	if ((p = proc_pid2proc(pid)) == NULL)
+		return E_INVAL_PID;
+
+	cur_p = proc_cur();
+
+	channel_lock(ch);
+
+	granter_perm = channel_getperm(ch, cur_p);
+
+	/* Does the granter have the permission? */
+	if ((granter_perm & perm) == 0) {
+		/* KERN_DEBUG("Granter %d doesn't hold the permission %d of " */
+		/* 	   "channel %d.\n", cur_p->pid, perm, chid); */
+		goto err_noperm;
+	}
+
+	/* Remove the permission from the granter */
+	if (channel_setperm(ch, cur_p, granter_perm ^ perm)) {
+		/* KERN_DEBUG("Cannot remove permission from granter.\n"); */
+		goto err_noperm;
+	}
+
+	/* Grant permission to the grantee */
+	if (channel_setperm(ch, p, perm)) {
+		/* KERN_DEBUG("Cannot grant permission to grantee.\n"); */
+		goto err_noperm;
+	}
+
+	channel_unlock(ch);
+	return E_SUCC;
+
+ err_noperm:
+	channel_unlock(ch);
+	return E_PERM;
 }
 
 /*
@@ -931,19 +877,20 @@ syscall_handler(struct context *ctx, int guest)
 	case SYS_create_proc:
 		/*
 		 * Create a new process.
-		 * a[0]: the linear address where the binary code is
-		 * a[1]: the linear address where hte process ID is returned to
+		 * a[0]: the linear address where the process ID is returned to
+		 * a[1]: the id of the channel to the parent process
 		 */
-		errno = sys_create_proc((uintptr_t) vdev_elf_addr[(int) a[0]],
-					(uintptr_t) a[1]);
+		errno = sys_create_proc((uintptr_t) a[0], (chid_t) a[1]);
 		break;
 	case SYS_run_proc:
 		/*
 		 * Run a process.
 		 * a[0]: the process ID
 		 * a[1]: the CPU index on which the process is going to run
+		 * a[2]: the linear address where the binary code is
 		 */
-		errno = sys_run_proc((uint32_t) a[0], (pid_t) a[1]);
+		errno = sys_run_proc((uint32_t) a[0], (pid_t) a[1],
+				     (uintptr_t) vdev_elf_addr[(int) a[2]]);
 		break;
 	case SYS_yield:
 		/*
@@ -974,26 +921,6 @@ syscall_handler(struct context *ctx, int guest)
 		 */
 		errno = sys_getchid((uintptr_t) a[0]);
 		break;
-	case SYS_session:
-		/*
-		 * Create a new session. The caller will be moved from its
-		 * current session to the new session after a successful
-		 * creation.
-		 * a[0]: the type of the session:
-		 *       0 indicates a normal session,
-		 *       1 indicates a session for a virtual machine
-		 * a[1]: the linear address where the session id of the new
-		 *       session will be returned to
-		 */
-		errno = sys_session((int) a[0], (uintptr_t) a[1]);
-		break;
-	case SYS_getsid:
-		/*
-		 * Get the session id of the caller.
-		 * a[0]: the linear address where the session id will be
-		 *       returned to
-		 */
-		errno = sys_getsid((uintptr_t) a[0]);
 	case SYS_send:
 		/*
 		 * Send a message to a channel.
@@ -1008,10 +935,9 @@ syscall_handler(struct context *ctx, int guest)
 		 * Receive a message from a channel.
 		 * a[0]: the identity of the channel
 		 * a[1]: the linear address where the message will be stored
-		 * a[2]: the linear address where the size of the message will
-		 *       be stored
+		 * a[2]: the size of the message
 		 */
-		errno = sys_recv((int) a[0], (uintptr_t) a[1], (uintptr_t) a[2]);
+		errno = sys_recv((int) a[0], (uintptr_t) a[1], (size_t) a[2]);
 		break;
 	case SYS_new_vm:
 		/*
@@ -1035,8 +961,10 @@ syscall_handler(struct context *ctx, int guest)
 		 * a[0]: the process ID
 		 * a[1]: the linear address where the virtual device ID will be
 		 *       returned to
+		 * a[2]: the linear address of the user_vdev object
 		 */
-		errno = sys_attach_vdev((pid_t) a[0], (uintptr_t) a[1]);
+		errno = sys_attach_vdev((pid_t) a[0], (uintptr_t) a[1],
+					(uintptr_t) a[2]);
 		break;
 	case SYS_detach_vdev:
 		/*
@@ -1171,6 +1099,25 @@ syscall_handler(struct context *ctx, int guest)
 		 *       capability are returned to
 		 */
 		errno = sys_disk_cap((uintptr_t) a[0], (uintptr_t) a[1]);
+		break;
+	case SYS_channel:
+		/*
+		 * Create a channel and grant both the sending and receiving
+		 * permissions to the current process.
+		 * a[0]: the linear address where the channel id is returned to
+		 * a[1]: the size in bytes of a message
+		 */
+		errno = sys_channel((uintptr_t) a[0], (size_t) a[1]);
+		break;
+	case SYS_grant:
+		/*
+		 * Grant the access permission of a channel to a process.
+		 * a[0]: the channel id
+		 * a[1]: the process id
+		 * a[2]: the permission: bit 0 - receiving permission,
+		 *                       bit 1 - sending permission
+		 */
+		errno = sys_grant((chid_t) a[0], (pid_t) a[1], (uint8_t) a[2]);
 		break;
 
 	default:

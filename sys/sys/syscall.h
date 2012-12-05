@@ -12,6 +12,7 @@ int syscall_handler(struct context *, int guest);
 
 #endif /* _KERN_ */
 
+#include <sys/types.h>
 #include <sys/virt/vmm_dev.h>
 
 #define T_SYSCALL	48
@@ -30,8 +31,8 @@ enum __syscall_nr {
 			   calling process */
 	SYS_getchid,	/* get the identity of the channel to communicate with
 			   the parent process */
-	SYS_session,	/* create a new session */
-	SYS_getsid,	/* get the session id of the calling process */
+	SYS_channel,	/* create a channel */
+	SYS_grant,	/* grant the access permission of a channel */
 	SYS_send,	/* send a message */
 	SYS_recv,	/* recv a message */
 	SYS_disk_op,	/* perform a disk operation */
@@ -72,7 +73,6 @@ enum __error_nr {
 	E_MEM,		/* memory failure */
 	E_INVAL_CALLNR,	/* invalid syscall number */
 	E_INVAL_CPU,	/* invalid CPU index */
-	E_INVAL_SID,	/* invalid session ID */
 	E_INVAL_ADDR,	/* invalid address */
 	E_INVAL_PID,	/* invalid process ID */
 	E_INVAL_CHID,	/* invalid channel ID */
@@ -88,6 +88,8 @@ enum __error_nr {
 	E_DEV_RDY,	/* fail to send DEVIDE_READY */
 	E_SEND,		/* fail to send */
 	E_RECV,		/* fail to receive */
+	E_CHANNEL,	/* fail to create a channel */
+	E_PERM,		/* no permission */
 	E_DISK_OP,	/* disk operation failure */
 	MAX_ERROR_NR	/* XXX: always pu it at the end of __error_nr */
 };
@@ -98,6 +100,10 @@ enum __dev {
 	VDEV_NVRAM,
 	VDEV_VIRTIO,
 	MAX_VDEV
+};
+
+struct user_vdev {
+	chid_t		in_chid, out_chid;
 };
 
 struct user_ioport {

@@ -1,9 +1,14 @@
 #include <sys/channel.h>
 #include <sys/debug.h>
+#include <sys/gcc.h>
+#include <sys/mem.h>
+#include <sys/pcpu.h>
 #include <sys/proc.h>
+#include <sys/queue.h>
 #include <sys/spinlock.h>
 #include <sys/string.h>
 #include <sys/types.h>
+#include <sys/vm.h>
 
 #ifdef DEBUG_CHANNEL
 
@@ -20,186 +25,332 @@
 
 #endif
 
-#define MAX_CHANNEL	256
+#define MAX_CHANNEL	(1 << 16)
 
-static bool channel_inited = FALSE;
+static spinlock_t	channel_pool_lk;
+static TAILQ_HEAD(chpool, channel) channel_pool;
+static struct channel	channels[MAX_CHANNEL];
+static bool		channel_inited = FALSE;
 
-static struct channel channel_pool[MAX_CHANNEL];
+#define CHANNEL_LOCKED(ch)	(spinlock_holding(&(ch->lk)))
 
 void
 channel_init(void)
 {
 	int i;
 
-	if (channel_inited == TRUE)
+	if (pcpu_onboot() == FALSE || channel_inited == TRUE)
 		return;
 
+	spinlock_init(&channel_pool_lk);
+
+	memzero(channels, sizeof(struct channel) * MAX_CHANNEL);
+
+	TAILQ_INIT(&channel_pool);
 	for (i = 0; i < MAX_CHANNEL; i++) {
-		memzero(&channel_pool[i], sizeof(struct channel));
-		spinlock_init(&channel_pool[i].lk);
+		channels[i].chid = i;
+		TAILQ_INSERT_TAIL(&channel_pool, &channels[i], entry);
 	}
 
 	channel_inited = TRUE;
 }
 
 struct channel *
-channel_alloc(struct proc *p1, struct proc *p2, channel_type type)
+channel_alloc(size_t msg_size)
 {
 	KERN_ASSERT(channel_inited == TRUE);
-	KERN_ASSERT(p1 != NULL && p1->state != PROC_INVAL);
-	KERN_ASSERT(p2 != NULL && p2->state != PROC_INVAL);
 
 	struct channel *ch;
-	int i;
+	pageinfo_t *buf_pi;
+	size_t size;
 
-	for (i = 0; i < MAX_CHANNEL; i++) {
-		ch = &channel_pool[i];
-		spinlock_acquire(&ch->lk);
-		if (!(ch->state & CHANNEL_STAT_INITED))
-			break;
-		spinlock_release(&ch->lk);
-	}
-
-	if (i == MAX_CHANNEL)
+	if (msg_size == 0)
 		return NULL;
 
-	KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
+	size = ROUNDUP(msg_size, PAGESIZE);
+	if ((buf_pi = mem_pages_alloc(size)) == NULL)
+		return NULL;
 
-	ch->p1 = p1;
-	ch->p2 = p2;
-	ch->type = type;
-	ch->state = CHANNEL_STAT_INITED;
+	spinlock_acquire(&channel_pool_lk);
 
-	spinlock_release(&ch->lk);
+	if (TAILQ_EMPTY(&channel_pool)) {
+		CHANNEL_DEBUG("Channel pool is empty.\n");
+		spinlock_release(&channel_pool_lk);
+		return NULL;
+	}
+
+	ch = TAILQ_FIRST(&channel_pool);
+	TAILQ_REMOVE(&channel_pool, ch, entry);
+
+	spinlock_release(&channel_pool_lk);
+
+	spinlock_init(&ch->lk);
+	ch->sender = ch->receiver = NULL;
+	ch->sender_waiting = ch->recver_waiting = FALSE;
+	ch->msg_buf = mem_pi2ptr(buf_pi);
+	ch->msg_size = msg_size;
+	ch->empty = TRUE;
+	ch->full = FALSE;
+	ch->inuse = TRUE;
 
 	return ch;
 }
 
 void
-channel_free(struct channel *ch, struct proc *p)
+channel_free(struct channel *ch)
 {
 	KERN_ASSERT(channel_inited == TRUE);
 	KERN_ASSERT(ch != NULL);
+	KERN_ASSERT(0 <= ch - channels && ch - channels < MAX_CHANNEL);
+	KERN_ASSERT(CHANNEL_LOCKED(ch) == TRUE);
+	KERN_ASSERT(ch->inuse == TRUE);
+
+	ch->sender = ch->receiver = NULL;
+	mem_pages_free(mem_ptr2pi(ch->msg_buf));
+	ch->inuse = FALSE;
+
+	spinlock_acquire(&channel_pool_lk);
+	TAILQ_INSERT_TAIL(&channel_pool, ch, entry);
+	spinlock_release(&channel_pool_lk);
+}
+
+int
+channel_setperm(struct channel *ch, struct proc *p, uint8_t perm)
+{
+	KERN_ASSERT(channel_inited == TRUE);
+	KERN_ASSERT(ch != NULL);
+	KERN_ASSERT(0 <= ch - channels && ch - channels < MAX_CHANNEL);
+	KERN_ASSERT(CHANNEL_LOCKED(ch));
 	KERN_ASSERT(p != NULL);
 
-	if (!(ch->state & CHANNEL_STAT_INITED))
-		return;
+	if (ch->inuse == FALSE)
+		return E_CHANNEL_NOPERM;
 
+	if (perm & CHANNEL_PERM_SEND) {
+		if (ch->sender == NULL) {
+			ch->sender = p;
+			CHANNEL_DEBUG("Grant sending permission of channel %d "
+				      "to process %d.\n", ch->chid, p->pid);
+		} else if (ch->sender != NULL && ch->sender != p) {
+			CHANNEL_DEBUG("Sending permission of channel %d is "
+				      "already granted to process %d.\n",
+				      ch->chid, ch->sender->pid);
+			return E_CHANNEL_NOPERM;
+		}
+	} else {
+		if (ch->sender == p) {
+			ch->sender = NULL;
+			CHANNEL_DEBUG("Revoke sending permission of channel %d "
+				      "from process %d.\n", ch->chid, p->pid);
+		}
+	}
+
+	if (perm & CHANNEL_PERM_RECV) {
+		if (ch->receiver == NULL) {
+			ch->receiver = p;
+			CHANNEL_DEBUG("Grant receiving permission of channel %d "
+				      "to process %d.\n", ch->chid, p->pid);
+		} else if (ch->receiver != NULL && ch->receiver != p) {
+			CHANNEL_DEBUG("Receiving permission of channel %d is "
+				      "already granted to process %d.\n",
+				      ch->chid, ch->receiver->pid);
+			return E_CHANNEL_NOPERM;
+		}
+	} else {
+		if (ch->receiver == p) {
+			ch->receiver = NULL;
+			CHANNEL_DEBUG("Revoke receiving permission of channel %d "
+				      "from process %d.\n", ch->chid, p->pid);
+		}
+	}
+
+	return E_CHANNEL_SUCC;
+}
+
+uint8_t
+channel_getperm(struct channel *ch, struct proc *p)
+{
+	KERN_ASSERT(channel_inited == TRUE);
+	KERN_ASSERT(ch != NULL);
+	KERN_ASSERT(0 <= ch - channels && ch - channels < MAX_CHANNEL);
+	KERN_ASSERT(CHANNEL_LOCKED(ch));
+	KERN_ASSERT(p != NULL);
+
+	uint8_t perm = 0;
+
+	if (ch->sender == p)
+		perm |= CHANNEL_PERM_SEND;
+	if (ch->receiver == p)
+		perm |= CHANNEL_PERM_RECV;
+
+	return perm;
+}
+
+int
+channel_send(struct channel *ch, struct proc *p, uintptr_t msg, size_t size,
+	     bool in_kern, bool blocking)
+{
+	KERN_ASSERT(channel_inited == TRUE);
+	KERN_ASSERT(ch != NULL);
+	KERN_ASSERT(0 <= ch - channels && ch - channels < MAX_CHANNEL);
+	KERN_ASSERT(CHANNEL_LOCKED(ch) == TRUE);
+	KERN_ASSERT(p != NULL);
+	KERN_ASSERT(size > 0);
+	KERN_ASSERT(in_kern == TRUE ||
+		    (VM_USERLO <= msg && msg + size <= VM_USERHI));
+
+	if (ch->sender != p) {
+		CHANNEL_DEBUG("Cannot send to channel %d: process %d is not "
+			      "an authorized sender.\n", ch->chid, p->pid);
+		return E_CHANNEL_NOPERM;
+	}
+
+	if (ch->sender_waiting == TRUE)
+		ch->sender_waiting = FALSE;
+
+	if (ch->full == TRUE) {
+		CHANNEL_DEBUG("Cannot send to channel %d: buffer is full.\n",
+			      ch->chid);
+		if (blocking == TRUE)
+			ch->sender_waiting = TRUE;
+		return E_CHANNEL_FULL;
+	}
+
+	if (size > ch->msg_size) {
+		CHANNEL_DEBUG("Cannot send to channel %d: message size %d is "
+			      "larger than %d.\n", ch->chid, size, ch->msg_size);
+		return E_CHANNEL_OVERCAP;
+	}
+
+	if (in_kern == TRUE)
+		memcpy(ch->msg_buf, (void *) msg, size);
+	else
+		pmap_copy(pmap_kern, (uintptr_t) ch->msg_buf,
+			  p->pmap, msg, size);
+	ch->empty = FALSE;
+	ch->full = TRUE;
+
+	CHANNEL_DEBUG("%d bytes are sent to channel %d from process %d.\n",
+		      size, ch->chid, p->pid);
+
+	return E_CHANNEL_SUCC;
+}
+
+int
+channel_recv(struct channel *ch, struct proc *p, uintptr_t msg, size_t size,
+	     bool in_kern, bool blocking)
+{
+	KERN_ASSERT(channel_inited == TRUE);
+	KERN_ASSERT(ch != NULL);
+	KERN_ASSERT(0 <= ch - channels && ch - channels < MAX_CHANNEL);
+	KERN_ASSERT(CHANNEL_LOCKED(ch) == TRUE);
+	KERN_ASSERT(p != NULL);
+	KERN_ASSERT(in_kern == TRUE ||
+		    (VM_USERLO <= msg && msg + size <= VM_USERHI));
+
+	if (ch->receiver != p) {
+		CHANNEL_DEBUG("Cannot receive from channel %d: process %d is "
+			      "not an authorized receiver.\n", ch->chid, p->pid);
+		return E_CHANNEL_NOPERM;
+	}
+
+	if (ch->recver_waiting == TRUE)
+		ch->recver_waiting = FALSE;
+
+	if (ch->empty == TRUE) {
+		CHANNEL_DEBUG("Cannot receive from channel %d: "
+			      "buffer is empty.\n", ch->chid);
+		if (blocking == TRUE)
+			ch->recver_waiting = TRUE;
+		return E_CHANNEL_EMPTY;
+	}
+
+	if (size > 0 && in_kern == TRUE)
+		memcpy((void *) msg, ch->msg_buf, MIN(size, ch->msg_size));
+	else if (size > 0)
+		pmap_copy(p->pmap, msg, pmap_kern,
+			  (uintptr_t) ch->msg_buf, MIN(size, ch->msg_size));
+	ch->empty = TRUE;
+	ch->full = FALSE;
+
+	CHANNEL_DEBUG("%d bytes are received from channel %d to process %d.\n",
+		      MIN(size, ch->msg_size), ch->chid, p->pid);
+
+	return E_CHANNEL_SUCC;
+}
+
+void
+channel_lock(struct channel *ch)
+{
+	KERN_ASSERT(channel_inited == TRUE);
+	KERN_ASSERT(ch != NULL);
+	KERN_ASSERT(0 <= ch - channels && ch - channels < MAX_CHANNEL);
 	spinlock_acquire(&ch->lk);
+}
 
-	if (ch->p1 != p && ch->p2 != p) {
-		spinlock_release(&ch->lk);
-		return;
-	}
-
-	ch->state |= (ch->p1 == p) ? CHANNEL_STAT_P1_FREE : CHANNEL_STAT_P2_FREE;
-
-	if ((ch->state & (CHANNEL_STAT_P1_FREE | CHANNEL_STAT_P2_FREE)) ==
-	    (CHANNEL_STAT_P1_FREE | CHANNEL_STAT_P2_FREE)) {
-		ch->p1 = ch->p2 = NULL;
-		ch->state = 0;
-	}
-
+void
+channel_unlock(struct channel *ch)
+{
+	KERN_ASSERT(channel_inited == TRUE);
+	KERN_ASSERT(ch != NULL);
+	KERN_ASSERT(0 <= ch - channels && ch - channels < MAX_CHANNEL);
 	spinlock_release(&ch->lk);
 }
 
-int
-channel_send(struct channel *ch, struct proc *p, void *msg, size_t size)
+struct proc *
+channel_sender(struct channel *ch)
 {
 	KERN_ASSERT(channel_inited == TRUE);
 	KERN_ASSERT(ch != NULL);
-	KERN_ASSERT(ch->state & CHANNEL_STAT_INITED);
-	KERN_ASSERT(p != NULL && p->state != PROC_INVAL);
-	KERN_ASSERT(msg != NULL);
-	KERN_ASSERT(size > 0);
-	KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
-
-	if (size > CHANNEL_BUFFER_SIZE) {
-		CHANNEL_DEBUG("(%d) Size of the message (%d) is too large.\n",
-			      p->pid, size);
-		return E_CHANNEL_MSG_TOO_LARGE;
-	}
-
-	if ((ch->type == CHANNEL_TYPE_P1_P2 && ch->p1 != p) ||
-	    (ch->type == CHANNEL_TYPE_P2_P1 && ch->p2 != p)) {
-		CHANNEL_DEBUG("Illegal sending process %d.\n", p->pid);
-		return E_CHANNEL_ILL_SENDER;
-	}
-
-	if (ch->state & (CHANNEL_STAT_P1_BUSY | CHANNEL_STAT_P2_BUSY)) {
-		CHANNEL_DEBUG("(%d) There's a pending message in channel %d.\n",
-			      p->pid, channel_getid(ch));
-		return E_CHANNEL_BUSY;
-	}
-
-	if (ch->size > size)
-		memzero(ch->buf, ch->size);
-	memcpy(ch->buf, msg, size);
-	ch->size = size;
-	ch->state |=
-		(ch->p1 == p) ? CHANNEL_STAT_P1_BUSY : CHANNEL_STAT_P2_BUSY;
-
-	CHANNEL_DEBUG("(%d) %d bytes are sent to channel %d.\n",
-		      p->pid, size, channel_getid(ch));
-
-	return 0;
+	KERN_ASSERT(0 <= ch - channels && ch - channels < MAX_CHANNEL);
+	KERN_ASSERT(CHANNEL_LOCKED(ch) == TRUE);
+	return ch->sender;
 }
 
-int
-channel_receive(struct channel *ch, struct proc *p, void *msg, size_t *size)
+struct proc *
+channel_receiver(struct channel *ch)
 {
 	KERN_ASSERT(channel_inited == TRUE);
 	KERN_ASSERT(ch != NULL);
-	KERN_ASSERT(ch->state & CHANNEL_STAT_INITED);
-	KERN_ASSERT(p != NULL && p->state != PROC_INVAL);
-	KERN_ASSERT(msg != NULL);
-	KERN_ASSERT(size != NULL);
-	KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
-
-	if ((ch->type == CHANNEL_TYPE_P1_P2 && ch->p2 != p) ||
-	    (ch->type == CHANNEL_TYPE_P2_P1 && ch->p1 != p)) {
-		CHANNEL_DEBUG("Illegal receiving process %d.\n", p->pid);
-		return E_CHANNEL_ILL_RECEIVER;
-	}
-
-	if ((ch->p1 == p && !(ch->state & CHANNEL_STAT_P2_BUSY)) ||
-	    (ch->p2 == p && !(ch->state & CHANNEL_STAT_P1_BUSY))) {
-		CHANNEL_DEBUG("(%d) There's no message in channel %d.\n",
-			      p->pid, channel_getid(ch));
-		return E_CHANNEL_IDLE;
-	}
-
-	memcpy(msg, ch->buf, ch->size);
-	*size = ch->size;
-	ch->state &=
-		~((ch->p1 == p) ? CHANNEL_STAT_P2_BUSY : CHANNEL_STAT_P1_BUSY);
-
-	CHANNEL_DEBUG("(%d) %d bytes are received from channel %d.\n",
-		      p->pid, *size, channel_getid(ch));
-
-	return 0;
-}
-
-int
-channel_getid(struct channel *ch)
-{
-	uintptr_t addr = (uintptr_t) ch;
-
-	if (addr < (uintptr_t) channel_pool ||
-	    addr > (uintptr_t) &channel_pool[MAX_CHANNEL-1])
-		return -1;
-
-	if ((addr - (uintptr_t) channel_pool) % sizeof(struct channel))
-		return -1;
-
-	return (ch - channel_pool);
+	KERN_ASSERT(0 <= ch - channels && ch - channels < MAX_CHANNEL);
+	KERN_ASSERT(CHANNEL_LOCKED(ch) == TRUE);
+	return ch->receiver;
 }
 
 struct channel *
-channel_getch(int channel_id)
+channel_getch(chid_t chid)
 {
-	if (channel_id < 0 || channel_id >= MAX_CHANNEL)
+	KERN_ASSERT(channel_inited == TRUE);
+	if (!(0 <= chid && chid < MAX_CHANNEL))
 		return NULL;
+	return &channels[chid];
+}
 
-	return &channel_pool[channel_id];
+chid_t
+channel_getid(struct channel *ch)
+{
+	if (ch == NULL ||
+	    !(0 <= ch - channels && ch - channels < MAX_CHANNEL))
+		return -1;
+	return ch->chid;
+}
+
+bool
+channel_sender_waiting(struct channel *ch)
+{
+	KERN_ASSERT(channel_inited == TRUE);
+	KERN_ASSERT(ch != NULL);
+	KERN_ASSERT(0 <= ch - channels && ch - channels < MAX_CHANNEL);
+	KERN_ASSERT(CHANNEL_LOCKED(ch) == TRUE);
+	return ch->sender_waiting;
+}
+
+bool
+channel_receiver_waiting(struct channel *ch)
+{
+	KERN_ASSERT(channel_inited == TRUE);
+	KERN_ASSERT(ch != NULL);
+	KERN_ASSERT(0 <= ch - channels && ch - channels < MAX_CHANNEL);
+	KERN_ASSERT(CHANNEL_LOCKED(ch) == TRUE);
+	return ch->recver_waiting;
 }
