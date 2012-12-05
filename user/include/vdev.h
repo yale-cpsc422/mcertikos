@@ -7,12 +7,14 @@
  * Attach a process as a virtual device to the virtual machine in the same
  * session.
  *
- * @param pid the identity of the process
+ * @param pid     the identity of the process
+ * @param dev_in  the identity of the channel to receive requests
+ * @param dev_out the identity of the channel to send results
  *
  * @return the identity of the virtual device if successful; otherwise, return
  *         -1
  */
-vid_t vdev_attach_proc(pid_t pid);
+vid_t vdev_attach_proc(pid_t pid, chid_t dev_in, chid_t dev_out);
 
 /*
  * Detach a virtual device from the virtual machine in the same session
@@ -67,42 +69,36 @@ int vdev_detach_irq(uint8_t irq);
  * Notify the virtual machine the virtual device emulated by the caller process
  * is ready to receive and handle requests.
  *
- * @param chid the identity of the channel which is used to communicate with the
- *             virtual machine.
+ * @param chid the identity of the channel to send the result
  *
  * @param 0 if successful; otherwise, return a non-zero value.
  */
-int vdev_ready(int chid);
+int vdev_ready(chid_t dev_out);
 
 /*
  * Get a request from the virtual machine to the virtual device which is
  * emulated by the caller process.
  *
- * @param chid     the identity of the channel which is used to communicate with
- *                 the virtual machine.
- * @param req      where the received request will be stored
- * @param blocking if non-zero, the function will block the caller process
- *                 until getting a request; if zero, the function will
- *                 return immediately.
+ * @param dev_in the ideentity of the channel to receive the requests
+ * @param req    the buffer to store the request
+ * @param size   how many bytes will be received at most
  *
- * @return the size (in bytes) of the received request; 0 indicates no request
- *         is requested
+ * @return 0 if successful; otherwise, return a non-zero value.
  */
-size_t vdev_get_request(int chid, void *req, int blocking);
+int vdev_get_request(chid_t dev_in, void *req, size_t size);
 
 /*
  * Return the data on a guest I/O port, which is attached to the virtual device
  * emulated by the caller process, to the virtual machine.
  *
- * @param chid  the identity of the channel which is used to communicate with
- *              the virtual machine
- * @param port  the guest I/O port
- * @param width the width of the data
- * @param val   the data on the guest I/O port
+ * @param dev_out the identity of the channel to send the results
+ * @param port    the guest I/O port
+ * @param width   the width of the data
+ * @param val     the data on the guest I/O port
  *
  * @param 0 if successful; otherwise, return a non-zero value.
  */
-int vdev_return_guest_ioport(int chid,
+int vdev_return_guest_ioport(chid_t dev_out,
 			     uint16_t port, data_sz_t width, uint32_t val);
 
 /*
@@ -175,11 +171,10 @@ uint64_t vdev_guest_cpufreq(void);
  */
 uint64_t vdev_guest_memsize(void);
 
-
-
 struct vdev {
 	char	desc[48];
 	void	*opaque_dev;
+	chid_t	dev_in, dev_out;
 
 	int	(*init)(void *opaque_dev);
 	int	(*read_ioport)(void *opaque_dev,
@@ -188,6 +183,8 @@ struct vdev {
 				uint16_t port, data_sz_t width, uint32_t val);
 	int	(*sync)(void *opaque_dev);
 };
+
+#define VM_TO_VDEV_ACK		((uint32_t) 0xdeadbeef)
 
 /*
  * Initialize a virtual device.
@@ -218,5 +215,8 @@ int vdev_init(struct vdev *vdev, void *opaque_dev, char *desc,
  * @return 0 if successful; otherwise, return a non-zero value.
  */
 int vdev_start(struct vdev *vdev);
+
+int vdev_send_ack(chid_t dev_in);
+int vdev_recv_ack(chid_t dev_in);
 
 #endif /* !_USER_VDEV_H_ */

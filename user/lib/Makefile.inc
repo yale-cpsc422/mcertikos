@@ -8,7 +8,6 @@ USER_LIB_SRC	+= $(USER_DIR)/lib/atoi.c
 USER_LIB_SRC	+= $(USER_DIR)/lib/printf.c
 USER_LIB_SRC	+= $(USER_DIR)/lib/printfmt.c
 USER_LIB_SRC	+= $(USER_DIR)/lib/proc.c
-USER_LIB_SRC	+= $(USER_DIR)/lib/session.c
 USER_LIB_SRC	+= $(USER_DIR)/lib/spinlock.c
 USER_LIB_SRC	+= $(USER_DIR)/lib/string.c
 USER_LIB_SRC	+= $(USER_DIR)/lib/vdev.c

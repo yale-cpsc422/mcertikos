@@ -1,4 +1,5 @@
 #include <debug.h>
+#include <proc.h>
 #include <string.h>
 #include <syscall.h>
 #include <types.h>
@@ -11,8 +12,37 @@ vdev_init(struct vdev *vdev, void *opaque_dev, char *desc,
 	  int (*write_ioport)(void *, uint16_t, data_sz_t, uint32_t),
 	  int (*sync)(void *))
 {
+	pid_t ppid;
+	chid_t dev_in, dev_out;
+
 	if (vdev == NULL || opaque_dev == NULL)
 		return 1;
+
+	dev_out = sys_getchid();
+
+	if ((dev_in = sys_channel(sizeof(vdev_req_t))) == -1) {
+		DEBUG("Cannot create IN channel.\n");
+		return 2;
+	}
+
+	if ((ppid = getppid()) == -1) {
+		DEBUG("Cannot find parent.\n");
+		return 3;
+	}
+
+	if (sys_grant(dev_in, ppid, CHANNEL_PERM_SEND)) {
+		DEBUG("Cannot grant sending permission of channel %d "
+		      "to parent %d.\n", dev_in, ppid);
+		return 4;
+	}
+
+	if (sys_send(dev_out, &dev_in, sizeof(chid_t))) {
+		DEBUG("Cannot send IN channel to parent.\n");
+		return 5;
+	}
+
+	vdev->dev_in = dev_in;
+	vdev->dev_out = dev_out;
 
 	strncpy(vdev->desc, desc, 47);
 	vdev->desc[47] = '\0';
@@ -30,7 +60,6 @@ int
 vdev_start(struct vdev *vdev)
 {
 	void *opaque_dev;
-	int chid;
 	vdev_req_t req;
 	struct vdev_ioport_info *read_req, *write_req;
 	uint32_t data;
@@ -41,16 +70,16 @@ vdev_start(struct vdev *vdev)
 	if ((opaque_dev = vdev->opaque_dev) == NULL)
 		return 2;
 
-	if ((chid = sys_getchid()) == -1)
+	if (vdev_recv_ack(vdev->dev_in))
 		return 3;
 
 	if (vdev->init && vdev->init(opaque_dev))
 		return 4;
 
-	vdev_ready(chid);
+	vdev_ready(vdev->dev_out);
 
 	while (1) {
-		if (!vdev_get_request(chid, &req, TRUE))
+		if (vdev_get_request(vdev->dev_in, &req, sizeof(vdev_req_t)))
 			continue;
 
 		switch (((uint32_t *) &req)[0]) {
@@ -60,10 +89,9 @@ vdev_start(struct vdev *vdev)
 			    vdev->read_ioport(opaque_dev, read_req->port,
 					      read_req->width, &data))
 				data = 0xffffffff;
-			vdev_return_guest_ioport(chid, read_req->port,
+			vdev_return_guest_ioport(vdev->dev_out, read_req->port,
 						 read_req->width, data);
 			continue;
-
 
 		case VDEV_WRITE_GUEST_IOPORT:
 			write_req = (struct vdev_ioport_info *) &req;
@@ -86,10 +114,26 @@ vdev_start(struct vdev *vdev)
 	return 0;
 }
 
-vid_t
-vdev_attach_proc(pid_t pid)
+int
+vdev_send_ack(chid_t dev_in)
 {
-	return sys_attach_vdev(pid);
+	uint32_t ack = VM_TO_VDEV_ACK;
+	return sys_send(dev_in, &ack, sizeof(ack));
+}
+
+int
+vdev_recv_ack(chid_t dev_in)
+{
+	uint32_t ack;
+	if (sys_recv(dev_in, &ack, sizeof(ack)) || ack != VM_TO_VDEV_ACK)
+		return 1;
+	return 0;
+}
+
+vid_t
+vdev_attach_proc(pid_t pid, chid_t dev_in, chid_t dev_out)
+{
+	return sys_attach_vdev(pid, dev_in, dev_out);
 }
 
 int
@@ -123,30 +167,27 @@ vdev_detach_irq(uint8_t irq)
 }
 
 int
-vdev_ready(int chid)
+vdev_ready(chid_t dev_out)
 {
 	struct vdev_device_ready rdy = { .magic = VDEV_DEVICE_READY };
-	return sys_send(chid, &rdy, sizeof(rdy));
-}
-
-size_t
-vdev_get_request(int chid, void *req, int blocking)
-{
-	size_t size;
-	if (sys_recv(chid, req, &size))
-		return 0;
-	else
-		return size;
+	return sys_send(dev_out, &rdy, sizeof(rdy));
 }
 
 int
-vdev_return_guest_ioport(int chid, uint16_t port, data_sz_t width, uint32_t val)
+vdev_get_request(chid_t dev_in, void *req, size_t size)
+{
+	return sys_recv(dev_in, req, size);
+}
+
+int
+vdev_return_guest_ioport(chid_t dev_out,
+			 uint16_t port, data_sz_t width, uint32_t val)
 {
 	struct vdev_ioport_info info = { .magic = VDEV_GUEST_IOPORT_DATA,
 					 .port = port,
 					 .width = width,
 					 .val = val };
-	return sys_send(chid, &info, sizeof(info));
+	return sys_send(dev_out, &info, sizeof(info));
 }
 
 int

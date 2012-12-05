@@ -726,17 +726,35 @@ main(int argc, char **argv)
 	data_sz_t width;
 	uint32_t data;
 
-	int chid = sys_getchid();
+	chid_t dev_in, dev_out;
+	pid_t ppid;
+
+	dev_out = sys_getchid();
+
+	if ((dev_in = sys_channel(sizeof(vdev_req_t))) == -1)
+		return 1;
+
+	if ((ppid = getppid()) == -1)
+		return 2;
+
+	if (sys_grant(dev_in, ppid, CHANNEL_PERM_SEND))
+		return 3;
+
+	if (sys_send(dev_out, &dev_in, sizeof(chid_t)))
+		return 4;
+
+	if (vdev_recv_ack(dev_in))
+		return 5;
 
 	vpci_init(&vpci_host);
 	virtio_blk_init(&blk, &vpci_host);
 
 	device = &blk.common_header;
 
-	vdev_ready(chid);
+	vdev_ready(dev_out);
 
 	while (1) {
-		if (!vdev_get_request(chid, &req, TRUE))
+		if (vdev_get_request(dev_in, &req, sizeof(vdev_req_t)))
 			continue;
 
 		switch (((uint32_t *) &req)[0]) {
@@ -753,7 +771,7 @@ main(int argc, char **argv)
 					(&blk, port, width, &data);
 			else
 				data = 0xffffffff;
-			vdev_return_guest_ioport(chid,
+			vdev_return_guest_ioport(dev_out,
 						 port, read_req->width, data);
 			continue;
 

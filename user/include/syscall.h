@@ -32,7 +32,7 @@ sys_getc(void)
 }
 
 static gcc_inline pid_t
-sys_create_proc(uintptr_t exe)
+sys_create_proc(chid_t chid)
 {
 	int errno;
 	pid_t pid;
@@ -41,15 +41,15 @@ sys_create_proc(uintptr_t exe)
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
 		       "a" (SYS_create_proc),
-		       "b" (exe),
-		       "c" (&pid)
+		       "b" (&pid),
+		       "c" (chid)
 		     : "cc", "memory");
 
 	return errno ? -1 : pid;
 }
 
 static gcc_inline int
-sys_run_proc(pid_t pid, uint32_t cpu_idx)
+sys_run_proc(pid_t pid, uint32_t cpu_idx, uintptr_t exec)
 {
 	int errno;
 
@@ -58,7 +58,8 @@ sys_run_proc(pid_t pid, uint32_t cpu_idx)
 		     : "i" (T_SYSCALL),
 		       "a" (SYS_run_proc),
 		       "b" (pid),
-		       "c" (cpu_idx)
+		       "c" (cpu_idx),
+		       "d" (exec)
 		     : "cc", "memory");
 
 	return errno;
@@ -138,7 +139,7 @@ sys_send(int chid, void *buf, size_t size)
 }
 
 static gcc_inline int
-sys_recv(int chid, void *buf, size_t *size)
+sys_recv(int chid, void *buf, size_t size)
 {
 	int errno;
 
@@ -152,39 +153,6 @@ sys_recv(int chid, void *buf, size_t *size)
 		     : "cc", "memory");
 
 	return errno;
-}
-
-static gcc_inline sid_t
-sys_session(int type)
-{
-	int errno;
-	sid_t sid;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_session),
-		       "b" (type),
-		       "c" (&sid)
-		     : "cc", "memory");
-
-	return errno ? -1 : sid;
-}
-
-static gcc_inline sid_t
-sys_getsid(void)
-{
-	int errno;
-	sid_t sid;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_getsid),
-		       "b" (&sid)
-		     : "cc", "memory");
-
-	return errno ? -1 : sid;
 }
 
 static gcc_inline vmid_t
@@ -218,17 +186,19 @@ sys_runvm(void)
 }
 
 static gcc_inline vid_t
-sys_attach_vdev(pid_t pid)
+sys_attach_vdev(pid_t pid, chid_t in_chid, chid_t out_chid)
 {
 	int errno;
 	vid_t vid;
+	struct user_vdev user_vdev = { .in_chid = in_chid, .out_chid = out_chid };
 
 	asm volatile("int %1"
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
 		       "a" (SYS_attach_vdev),
 		       "b" (pid),
-		       "c" (&vid)
+		       "c" (&vid),
+		       "d" (&user_vdev)
 		     : "cc", "memory");
 
 	return errno ? -1 : vid;
@@ -493,6 +463,43 @@ sys_disk_capacity(void)
 		     : "cc", "memory");
 
 	return errno ? 0 : ((uint64_t) size_hi << 32 | size_lo);
+}
+
+static gcc_inline chid_t
+sys_channel(size_t msg_size)
+{
+	int errno;
+	chid_t chid;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_channel),
+		       "b" (&chid),
+		       "c" (msg_size)
+		     : "cc", "memory");
+
+	return errno ? -1 : chid;
+}
+
+#define CHANNEL_PERM_SEND	((uint8_t) (1 << 0))
+#define CHANNEL_PERM_RECV	((uint8_t) (1 << 1))
+
+static gcc_inline int
+sys_grant(chid_t chid, pid_t pid, uint8_t perm)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_grant),
+		       "b" (chid),
+		       "c" (pid),
+		       "d" (perm)
+		     : "cc", "memory");
+
+	return errno;
 }
 
 #endif /* !_USER_SYSCALL_H_ */

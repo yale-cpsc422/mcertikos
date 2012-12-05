@@ -1,5 +1,4 @@
 #include <proc.h>
-#include <session.h>
 #include <stdio.h>
 #include <syscall.h>
 #include <types.h>
@@ -9,46 +8,50 @@ static int
 create_vdev(int vdev, char *desc)
 {
 	pid_t pid;
+	vid_t vid;
+	chid_t dev_in, dev_out;
 
 	printf("Create virtual %s ... ", desc);
 
-	pid = sys_create_proc(vdev);
+	if ((dev_out = sys_channel(sizeof(vdev_ack_t))) == -1) {
+		printf("failed to create OUT channel.\n");
+		return 1;
+	}
+
+	pid = spawn(1, vdev, dev_out);
 	if (pid == -1) {
 		printf("failed to create a process.\n");
-		return -1;
+		return 2;
 	}
 
-	if (vdev_attach_proc(pid) == -1) {
+	if (sys_recv(dev_out, &dev_in, sizeof(chid_t)) ||
+	    dev_in == -1) {
+		printf("failed to receive IN channel.\n");
+		return 3;
+	}
+
+	if ((vid = vdev_attach_proc(pid, dev_in, dev_out)) == -1) {
 		printf("failed to attach the process as a virtual device.\n");
-		return -2;
+		return 4;
 	}
 
-	if (sys_run_proc(pid, 1)) {
-		printf("failed to start the process %d.\n", pid);
-		return -3;
-	}
+	printf("done. (pid = %d, vid = %d, in = %d, out = %d)\n",
+	       pid, vid, dev_in, dev_out);
 
-	printf("done. (pid = %d)\n", pid);
+	vdev_send_ack(dev_in);
+
 	return 0;
 }
 
 int
 main(int argc, char **argv)
 {
-	sid_t vm_sid;
-	pid_t my_pid;
+	pid_t self_pid;
 	vmid_t vmid;
 
-	my_pid = getpid();
+	self_pid = getpid();
 
-	printf("Guest %d: create VM session ... ", my_pid);
-	if ((vm_sid = session(SESSION_VM)) == -1) {
-		printf("failed.\n");
-		return 1;
-	}
-	printf("done (sid %d).\n", vm_sid);
-
-	printf("Guest %d: create VM ... ", my_pid);
+	printf("Guest %d: create VM ... ", self_pid);
 	if ((vmid = sys_newvm()) == -1) {
 		printf("failed.\n");
 		return 1;
