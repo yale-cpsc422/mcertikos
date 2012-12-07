@@ -72,7 +72,7 @@ pci_conf_read(struct pci_func *f, uint32_t off)
 	return inl(pci_conf1_data_ioport);
 }
 
-static void
+void
 pci_conf_write(struct pci_func *f, uint32_t off, uint32_t v)
 {
 	pci_conf1_set_addr(f->bus->busno, f->dev, f->func, off);
