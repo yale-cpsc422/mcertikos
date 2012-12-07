@@ -113,13 +113,13 @@ intr_init(void)
 }
 
 void
-intr_enable(int irq, int cpunum)
+intr_enable(uint8_t irq, int cpunum)
 {
-	KERN_ASSERT(irq >= 0);
-	KERN_ASSERT(0 <= cpunum && cpunum < pcpu_ncpu());
+	KERN_ASSERT(cpunum == 0xff || (0 <= cpunum && cpunum < pcpu_ncpu()));
 
 	if (using_apic == TRUE) {
-		ioapic_enable(irq, pcpu_cpu_lapicid(cpunum));
+		ioapic_enable(irq, (cpunum == 0xff) ?
+			      0xff : pcpu_cpu_lapicid(cpunum));
 	} else {
 		KERN_ASSERT(irq < 16);
 		pic_enable(irq);
