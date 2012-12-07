@@ -191,13 +191,13 @@ kern_main_ap(void)
 	KERN_INFO("done.\n");
 
 	/* enable interrupts */
-	KERN_INFO("[AP%d KERN] Enable TIMER interrupt ... ", cpu_idx);
-	intr_enable(IRQ_TIMER, 0);
-	KERN_INFO("done.\n");
+	/* KERN_INFO("[AP%d KERN] Enable TIMER interrupt ... ", cpu_idx); */
+	/* intr_enable(IRQ_TIMER, 0); */
+	/* KERN_INFO("done.\n"); */
 
-	KERN_INFO("[AP%d KERN] Enable KBD interrupt ... ", cpu_idx);
-	kbd_intenable();
-	KERN_INFO("done.\n");
+	/* KERN_INFO("[AP%d KERN] Enable KBD interrupt ... ", cpu_idx); */
+	/* kbd_intenable(); */
+	/* KERN_INFO("done.\n"); */
 
 	KERN_INFO("[AP%d KERN] Enable IPI ... ", cpu_idx);
 	intr_enable(IRQ_IPI_RESCHED, 0);
