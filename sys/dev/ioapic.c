@@ -86,7 +86,7 @@ ioapic_init(void)
 }
 
 void
-ioapic_enable(int irq, lapicid_t apicid)
+ioapic_enable(uint8_t irq, lapicid_t apicid)
 {
 	KERN_ASSERT(pcpu_is_smp());
 	// Mark interrupt edge-triggered, active high,
