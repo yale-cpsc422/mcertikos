@@ -16,7 +16,13 @@
 	} while(0)
 
 void intr_init(void);
-void intr_enable(int irq, int cpunum);
+void intr_enable(uint8_t irq, int cpunum);
+
+#define intr_enable_all(irq)			\
+	do {					\
+		intr_enable((irq), 0xff);	\
+	} while (0)
+
 void intr_eoi(void);
 
 #endif /* _KERN_ */
