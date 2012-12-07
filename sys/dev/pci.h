@@ -534,7 +534,8 @@ struct pci_bus {
 int  pci_init(void);
 void pci_func_enable(struct pci_func *f);
 void pci_iterate(int (*hook)(struct pci_func *f));
-uint32_t pci_conf_read(struct pci_func *f,uint32_t off);
+uint32_t pci_conf_read(struct pci_func *f, uint32_t off);
+void pci_conf_write(struct pci_func *f, uint32_t off, uint32_t v);
 
 #endif /* _KERN_ */
 
