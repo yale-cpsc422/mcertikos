@@ -46,12 +46,9 @@ static int ahci_spinup_port(struct ahci_controller *, int port);
 static void ahci_prepare_sata_command(struct ahci_controller *,
 				      int port,
 				      int command);
-static int ahci_command(struct ahci_controller *,
-			int port,
-			int write,
-			int atapi,
-			void *buffer,
-			size_t bsize);
+static void ahci_command(struct ahci_controller *, int port,
+			 int write, int atapi, void *buffer, size_t bsize);
+static int ahci_poll(struct ahci_controller *, int port);
 
 static gcc_inline uint8_t
 ahci_readb(uintptr_t dev, uintptr_t offset)
@@ -411,9 +408,9 @@ ahci_detect_drive(struct ahci_controller *sc, int port)
 	switch (channel->sig) {
 	case AHCI_P_SIG_ATA:
 		ahci_prepare_sata_command(sc, port, ATA_ATA_IDENTIFY);
-		ret = ahci_command(sc, port, 0, 0, buf, sizeof(buf));
+		ahci_command(sc, port, 0, 0, buf, sizeof(buf));
 
-		if (ret)
+		if ((ret = ahci_poll(sc, port)))
 			return;
 
 		if (buf[83] & (1 << 10)) {
@@ -471,12 +468,11 @@ ahci_prepare_sata_command(struct ahci_controller *sc, int port, int ata_cmd)
 	fis->command = ata_cmd;
 }
 
-static int
+static void
 ahci_command(struct ahci_controller *sc, int port, int write, int atapi,
 	     void *buffer, size_t bsize)
 {
-	int i;
-	uint32_t ci, is, status, cmd, serr, tfd, sctl;
+	uint32_t is;
 #ifdef DEBUG_AHCI
 	uint32_t error = 0;
 #endif
@@ -484,7 +480,6 @@ ahci_command(struct ahci_controller *sc, int port, int write, int atapi,
 	struct ahci_cmd_header *cmdh;
 	struct ahci_cmd_tbl *tbl;
 	struct sata_fis_reg *fis;
-	struct ahci_r_fis *rfis;
 
 	KERN_ASSERT(sc != NULL);
 	KERN_ASSERT(0 <= port && port < sc->nchannels);
@@ -494,7 +489,6 @@ ahci_command(struct ahci_controller *sc, int port, int write, int atapi,
 	tbl = (struct ahci_cmd_tbl *)(uintptr_t)
 		(((uint64_t) cmdh->cmdh_cmdtbau << 32) | (cmdh->cmdh_cmdtba));
 	fis = (struct sata_fis_reg *) tbl->cmdt_cfis;
-	rfis = channel->rfis;
 
 	fis->type = SATA_FIS_TYPE_REG_H2D;
 	fis->flag = (1 << 7);
@@ -517,6 +511,24 @@ ahci_command(struct ahci_controller *sc, int port, int write, int atapi,
 	ahci_writel(sc->hba, AHCI_P_SACT(port), 1);
 	ahci_writel(sc->hba, AHCI_P_CI(port), 1);
 	AHCI_DEBUG("port %d, issue command %x.\n", port, fis->command);
+}
+
+static int
+ahci_poll(struct ahci_controller *sc, int port)
+{
+	int i;
+	uint32_t ci, is, status, cmd, serr, tfd, sctl;
+#ifdef DEBUG_AHCI
+	uint32_t error = 0;
+#endif
+	struct ahci_channel *channel;
+	struct ahci_r_fis *rfis;
+
+	KERN_ASSERT(sc != NULL);
+	KERN_ASSERT(0 <= port && port < sc->nchannels);
+
+	channel = &sc->channels[port];
+	rfis = channel->rfis;
 
 	/* wait up to 31 sec */
 	for (i = 0; i < 3100; i++) {
@@ -695,6 +707,7 @@ ahci_pci_attach(struct pci_func *f)
 	struct ahci_controller *sc;
 	int port;
 	uint32_t pi;
+	uint16_t pci_cmd;
 
 	/* XXX: only attach the first AHCI controller */
 	if (pcpu_onboot() == FALSE || ahci_inited == TRUE)
@@ -730,6 +743,12 @@ ahci_pci_attach(struct pci_func *f)
 		if (ahci_init_port(sc, port))
 			AHCI_DEBUG("failed to initialize port %d.\n", port);
 	}
+
+	/* enable IRQ_IDE on this device */
+	pci_cmd = (uint16_t) pci_conf_read(f, PCI_COMMAND_STATUS_REG);
+	pci_cmd &= ~(uint16_t) (1 << 10);
+	pci_conf_write(f, PCI_COMMAND_STATUS_REG, pci_cmd);
+	pci_conf_write(f, PCI_INTERRUPT_REG, (uint8_t) IRQ_IDE);
 
 	ahci_inited = TRUE;
 	spinlock_init(&ahci_lk);
@@ -809,7 +828,7 @@ ahci_disk_rw(struct ahci_controller *sc, int port, int write,
 	fis->dev = (uint8_t) ((lba >> 24) & 0xf) | 0x40;
 	fis->countl = (uint8_t) nsects & 0xff;
 
-	ret = ahci_command(sc, port, write, 0, buf, nsects * ATA_SECTOR_SIZE);
+	ahci_command(sc, port, write, 0, buf, nsects * ATA_SECTOR_SIZE);
 	AHCI_DEBUG("port %d, %s %d sectors %s LBA %llx %s %x, ",
 		   port,
 		   write ? "write" : "read",
@@ -818,7 +837,7 @@ ahci_disk_rw(struct ahci_controller *sc, int port, int write,
 		   lba,
 		   write ? "from" : "to",
 		   buf);
-	if (ret) {
+	if ((ret = ahci_poll(sc, port))) {
 #ifdef DEBUG_AHCI
 		dprintf("failed.\n");
 #endif
