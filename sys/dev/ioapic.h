@@ -37,7 +37,7 @@ struct ioapic_t {
 } ioapic_t;
 
 void ioapic_init(void);
-void ioapic_enable(int irq, lapicid_t);
+void ioapic_enable(uint8_t irq, lapicid_t);
 void ioapic_register(uintptr_t base, lapicid_t, int gsi);
 int ioapic_number(void);
 ioapic_t *ioapic_get(uint32_t);
