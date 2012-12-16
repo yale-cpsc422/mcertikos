@@ -21,6 +21,7 @@
 #include <machine/kstack.h>
 #include <machine/pmap.h>
 
+#include <dev/disk.h>
 #include <dev/kbd.h>
 #include <dev/lapic.h>
 #include <dev/pci.h>
@@ -94,6 +95,7 @@ kern_main(void)
 	trap_handler_register(T_IRQ0+IRQ_TIMER, timer_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_KBD, kbd_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_IPI_RESCHED, ipi_resched_handler);
+	disk_register_intr();
 	KERN_INFO("done.\n");
 
 	/* enable interrupts */
@@ -103,6 +105,10 @@ kern_main(void)
 
 	KERN_INFO("[BSP KERN] Enable KBD interrupt ... ");
 	kbd_intenable();
+	KERN_INFO("done.\n");
+
+	KERN_INFO("[BSP KERN] Enable disk interrupt ... ");
+	disk_intr_enable();
 	KERN_INFO("done.\n");
 
 	KERN_INFO("[BSP KERN] Enable IPI ... ");
@@ -188,17 +194,10 @@ kern_main_ap(void)
 	trap_handler_register(T_IRQ0+IRQ_TIMER, timer_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_KBD, kbd_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_IPI_RESCHED, ipi_resched_handler);
+	disk_register_intr();
 	KERN_INFO("done.\n");
 
 	/* enable interrupts */
-	/* KERN_INFO("[AP%d KERN] Enable TIMER interrupt ... ", cpu_idx); */
-	/* intr_enable(IRQ_TIMER, 0); */
-	/* KERN_INFO("done.\n"); */
-
-	/* KERN_INFO("[AP%d KERN] Enable KBD interrupt ... ", cpu_idx); */
-	/* kbd_intenable(); */
-	/* KERN_INFO("done.\n"); */
-
 	KERN_INFO("[AP%d KERN] Enable IPI ... ", cpu_idx);
 	intr_enable(IRQ_IPI_RESCHED, 0);
 	KERN_INFO("done.\n");
@@ -329,7 +328,19 @@ kern_init(mboot_info_t *mbi)
 			KERN_INFO("done.\n");
 	}
 
-	/* Initialize PCI bus */
+	/*
+	 * Initialize disk management module.
+	 */
+	KERN_INFO("Initialize disk management module ... ");
+	if (disk_init()) {
+		KERN_INFO("failed.\n");
+		KERN_PANIC("Stop here.\n");
+	}
+	KERN_INFO("done.\n");
+
+	/*
+	 * Initialize PCI bus.
+	 **/
 	KERN_INFO("Initialize PCI ... \n");
 	pci_init();
 	KERN_INFO("done.\n");

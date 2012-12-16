@@ -96,7 +96,7 @@ trap(tf_t *tf)
 	f = (*pcpu_cur()->trap_handler)[tf->trapno];
 
 	if (f) {
-		f(&proc_cur()->uctx, guest);
+		f(tf->trapno, &proc_cur()->uctx, guest);
 	} else {
 		if (guest)
 			default_handler_guest(tf);
@@ -139,7 +139,7 @@ trap_handler_register(int trapno, trap_cb_t cb)
 }
 
 int
-default_exception_handler(struct context *ctx, int guest)
+default_exception_handler(uint8_t trapno, struct context *ctx, int guest)
 {
 	KERN_ASSERT(ctx != NULL);
 	KERN_ASSERT(proc_cur() != NULL);
@@ -155,7 +155,7 @@ default_exception_handler(struct context *ctx, int guest)
 }
 
 int
-gpf_handler(struct context *ctx, int guest)
+gpf_handler(uint8_t trapno, struct context *ctx, int guest)
 {
 	KERN_ASSERT(ctx != NULL);
 	KERN_ASSERT(proc_cur() != NULL);
@@ -174,7 +174,7 @@ gpf_handler(struct context *ctx, int guest)
 }
 
 int
-pgf_handler(struct context *ctx, int guest)
+pgf_handler(uint8_t trapno, struct context *ctx, int guest)
 {
 	KERN_ASSERT(ctx != NULL);
 	KERN_ASSERT(!guest);
@@ -218,7 +218,7 @@ pgf_handler(struct context *ctx, int guest)
 }
 
 int
-spurious_intr_handler(struct context *ctx, int guest)
+spurious_intr_handler(uint8_t trapno, struct context *ctx, int guest)
 {
 	KERN_DEBUG("Ignore spurious interrupt.\n");
 	/* XXX: do not send EOI for spurious interrupts */
@@ -238,7 +238,7 @@ spurious_intr_handler(struct context *ctx, int guest)
  * Otherwise, handle the interrupts as normal.
  */
 int
-timer_intr_handler(struct context *ctx, int guest)
+timer_intr_handler(uint8_t trapno, struct context *ctx, int guest)
 {
 	intr_eoi();
 
@@ -260,7 +260,7 @@ timer_intr_handler(struct context *ctx, int guest)
  * Otherwise, handle the interrupts as normal.
  */
 int
-kbd_intr_handler(struct context *ctx, int guest)
+kbd_intr_handler(uint8_t trapno, struct context *ctx, int guest)
 {
 	intr_eoi();
 
@@ -277,7 +277,7 @@ kbd_intr_handler(struct context *ctx, int guest)
  * reschedule.
  */
 int
-ipi_resched_handler(struct context *ctx, int guest)
+ipi_resched_handler(uint8_t trapno, struct context *ctx, int guest)
 {
 	intr_eoi();
 
@@ -290,12 +290,5 @@ ipi_resched_handler(struct context *ctx, int guest)
 		sched_unlock(pcpu_cur());
 	}
 
-	return 0;
-}
-
-int
-ipi_vintr_handler(struct context *ctx)
-{
-	intr_eoi();
 	return 0;
 }

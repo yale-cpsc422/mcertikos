@@ -28,6 +28,12 @@ spinlock_acquire(spinlock_t *lk)
 		pause();
 }
 
+static int gcc_inline
+spinlock_try_acquire(spinlock_t *lk)
+{
+	return xchg(lk, 1);
+}
+
 static void gcc_inline
 spinlock_release(spinlock_t *lk)
 {

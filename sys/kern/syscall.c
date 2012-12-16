@@ -15,6 +15,7 @@
 #include <sys/virt/vmm_dev.h>
 
 #include <dev/ahci.h>
+#include <dev/disk.h>
 
 #include <machine/pmap.h>
 
@@ -74,6 +75,7 @@ static char *errno_name[MAX_ERROR_NR] =
 		[E_SEND]		= "E_SEND",
 		[E_RECV]		= "E_RECV",
 		[E_DISK_OP]		= "E_DISK_OP",
+		[E_DISK_NODRV]		= "E_DISK_NODRV",
 	};
 
 #define SYSCALL_DEBUG(fmt, ...)				\
@@ -645,7 +647,11 @@ __sys_disk_read(uint64_t lba, uint64_t nsectors, uintptr_t buf)
 	uint64_t cur_lba, remaining;
 	uintptr_t cur_la;
 
+	struct disk_dev *drv;
 	struct proc *p = proc_cur();
+
+	if ((drv = disk_get_dev(0)) == NULL)
+		return E_DISK_NODRV;
 
 	cur_lba = lba;
 	remaining = nsectors;
@@ -653,7 +659,7 @@ __sys_disk_read(uint64_t lba, uint64_t nsectors, uintptr_t buf)
 
 	while (remaining > 0) {
 		uint64_t n = MIN(remaining, PAGESIZE / ATA_SECTOR_SIZE);
-		if (ahci_disk_read(0, cur_lba, n, p->sys_buf))
+		if (disk_xfer(drv, cur_lba, (uintptr_t) p->sys_buf, n, FALSE))
 			return E_DISK_OP;
 		if (copy_to_user(p->pmap, cur_la, (uintptr_t) p->sys_buf,
 				 n * ATA_SECTOR_SIZE) == 0)
@@ -672,7 +678,11 @@ __sys_disk_write(uint64_t lba, uint64_t nsectors, uintptr_t buf)
 	uint64_t cur_lba, remaining;
 	uintptr_t cur_la;
 
+	struct disk_dev *drv;
 	struct proc *p = proc_cur();
+
+	if ((drv = disk_get_dev(0)) == NULL)
+		return E_DISK_NODRV;
 
 	cur_lba = lba;
 	remaining = nsectors;
@@ -683,7 +693,7 @@ __sys_disk_write(uint64_t lba, uint64_t nsectors, uintptr_t buf)
 		if (copy_from_user((uintptr_t) p->sys_buf, p->pmap, cur_la,
 				   n * ATA_SECTOR_SIZE) == 0)
 			return E_MEM;
-		if (ahci_disk_write(0, cur_lba, n, p->sys_buf))
+		if (disk_xfer(drv, cur_lba, (uintptr_t) p->sys_buf, n, TRUE))
 			return E_DISK_OP;
 		cur_lba += n;
 		remaining -= n;
@@ -737,13 +747,17 @@ sys_disk_cap(uintptr_t lo_la, uintptr_t hi_la)
 {
 	uint64_t cap;
 	uint32_t cap_lo, cap_hi;
+	struct disk_dev *drv;
 
 	if (!(VM_USERLO <= lo_la && lo_la + sizeof(uint32_t) <= VM_USERHI))
 		return E_INVAL_ADDR;
 	if (!(VM_USERLO <= hi_la && hi_la + sizeof(uint32_t) <= VM_USERHI))
 		return E_INVAL_ADDR;
 
-	cap = ahci_disk_capacity(0);
+	if ((drv = disk_get_dev(0)) == NULL)
+		return E_DISK_NODRV;
+
+	cap = disk_capacity(drv);
 	cap_lo = cap & 0xffffffff;
 	cap_hi = (cap >> 32) & 0xffffffff;
 
@@ -844,7 +858,7 @@ sys_grant(chid_t chid, pid_t pid, uint8_t perm)
  * - Changes to other arguments maybe not returned to the caller.
  */
 int
-syscall_handler(struct context *ctx, int guest)
+syscall_handler(uint8_t trapno, struct context *ctx, int guest)
 {
 	KERN_ASSERT(ctx != NULL);
 	KERN_ASSERT(!guest);
@@ -1089,6 +1103,10 @@ syscall_handler(struct context *ctx, int guest)
 		 * a[0]: the linear address where the user_disk_op is
 		 */
 		errno = sys_disk_op((uintptr_t) a[0]);
+#ifdef DEBUG_DISK
+		if (errno)
+			KERN_DEBUG("sys_disk_op() failed. (errno %d)\n", errno);
+#endif
 		break;
 	case SYS_disk_cap:
 		/*
@@ -1099,6 +1117,10 @@ syscall_handler(struct context *ctx, int guest)
 		 *       capability are returned to
 		 */
 		errno = sys_disk_cap((uintptr_t) a[0], (uintptr_t) a[1]);
+#ifdef DEBUG_DISK
+		if (errno)
+			KERN_DEBUG("sys_disk_cap() failed. (errno %d)\n", errno);
+#endif
 		break;
 	case SYS_channel:
 		/*

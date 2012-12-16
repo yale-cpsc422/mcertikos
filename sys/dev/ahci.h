@@ -273,6 +273,7 @@ struct ahci_r_fis {
 #define		AHCI_P_TFD_ST		0x000000ff /* status register */
 #define		AHCI_P_TFD_ST_SHIFT	0
 #define		AHCI_P_TFD_ST_BSY	(1<<7)
+#define		AHCI_P_TFD_ST_DF	(1<<5)
 #define		AHCI_P_TFD_ST_DRQ	(1<<3)
 #define		AHCI_P_TFD_ST_ERR	(1<<0)
 
@@ -346,24 +347,6 @@ struct ahci_r_fis {
 /* SNotification: one bit per port */
 #define AHCI_P_FNTF(p)	(0x13c + AHCI_P_OFFSET(p))
 
-/* #define AHCI_READ(dev, offset, type)				\ */
-/* 	({							\ */
-/* 		uintptr_t _dev = (uintptr_t) dev;		\ */
-/* 		uintptr_t _offset = (uintptr_t) offset;		\ */
-/* 		uintptr_t _reg = _dev + _offset;		\ */
-/* 		AHCI_DEBUG("read %08x\n", _reg, _offset);	\ */
-/* 		*(type *) _reg;					\ */
-/* 	}) */
-
-/* #define AHCI_WRITE(dev, offset, val, type)				\ */
-/* 	({								\ */
-/* 		uintptr_t _dev = (uintptr_t) dev;			\ */
-/* 		uintptr_t _offset = (uintptr_t) offset;			\ */
-/* 		uintptr_t _reg = _dev + _offset;			\ */
-/* 		AHCI_DEBUG("write %08x, val %08x\n", _reg, val);	\ */
-/* 		*(volatile type *) _reg = (type) val;			\ */
-/* 	}) */
-
 /* ATA command */
 #define ATA_READ_DMA48			0x25	/* read DMA 48bit LBA */
 #define ATA_WRITE_DMA48			0x35	/* write DMA 48bit LBA */
@@ -388,32 +371,7 @@ struct ahci_r_fis {
 
 #define ATA_SECTOR_SIZE		512	/* 512 bytes */
 
-struct ahci_controller {
-	uintptr_t hba;
-	uint32_t cap1, cap2;
-	int nchannels;
-	int ncmds;
-	uint32_t revision;
-	struct ahci_channel {
-		bool present;
-
-		bool atapi;
-		bool lba48;
-		uint64_t nsectors;
-
-		struct ahci_cmd_header *cmd_header_list;
-		struct ahci_r_fis *rfis;
-		int active_slots;
-		uint32_t status;
-		uint32_t error;
-		uint32_t sig;
-	} channels[AHCI_MAX_PORTS];
-};
-
 int ahci_pci_attach(struct pci_func *);
-int ahci_disk_read(int port, uint64_t lba, uint16_t nsects, void *buf);
-int ahci_disk_write(int port, uint64_t lba, uint16_t nsects, void *buf);
-uint64_t ahci_disk_capacity(int port);
 
 #endif /* _KERN_ */
 

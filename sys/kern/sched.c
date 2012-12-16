@@ -261,13 +261,14 @@ sched_wake(struct proc *p)
 	/*
 	 * If the process is on another processor, send an IPI to trigger the
 	 * scheduler on the processor.
+	 *
+	 * XXX: DON'T reschedule if the waken process is on the current
+	 *      processor.
 	 */
 	if (p->cpu != pcpu_cur())
 		lapic_send_ipi(p->cpu->arch_info.lapicid,
 			       T_IRQ0+IRQ_IPI_RESCHED,
 			       LAPIC_ICRLO_FIXED, LAPIC_ICRLO_NOBCAST);
-	else
-		sched_resched(TRUE);
 }
 
 /*

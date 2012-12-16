@@ -8,7 +8,7 @@
 
 #include <machine/trap.h>
 
-int syscall_handler(struct context *, int guest);
+int syscall_handler(uint8_t trapno, struct context *, int guest);
 
 #endif /* _KERN_ */
 
@@ -91,6 +91,7 @@ enum __error_nr {
 	E_CHANNEL,	/* fail to create a channel */
 	E_PERM,		/* no permission */
 	E_DISK_OP,	/* disk operation failure */
+	E_DISK_NODRV,	/* disk drive does not exist */
 	MAX_ERROR_NR	/* XXX: always pu it at the end of __error_nr */
 };
 
