@@ -71,6 +71,11 @@ endif
 # Debugging switches of the conventional kernel.
 #
 
+# If set, enable debugging disk management
+ifneq "$(strip $(DEBUG_DISK) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_DISK
+endif
+
 # If set, enable debugging AHCI driver
 ifneq "$(strip $(DEBUG_AHCI) $(DEBUG_ALL))" ""
 KERN_CFLAGS	+= -DDEBUG_AHCI
