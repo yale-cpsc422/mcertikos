@@ -188,7 +188,7 @@ channel_getperm(struct channel *ch, struct proc *p)
 
 int
 channel_send(struct channel *ch, struct proc *p, uintptr_t msg, size_t size,
-	     bool in_kern, bool blocking)
+	     bool in_kern)
 {
 	KERN_ASSERT(channel_inited == TRUE);
 	KERN_ASSERT(ch != NULL);
@@ -205,14 +205,9 @@ channel_send(struct channel *ch, struct proc *p, uintptr_t msg, size_t size,
 		return E_CHANNEL_NOPERM;
 	}
 
-	if (ch->sender_waiting == TRUE)
-		ch->sender_waiting = FALSE;
-
 	if (ch->full == TRUE) {
 		CHANNEL_DEBUG("Cannot send to channel %d: buffer is full.\n",
 			      ch->chid);
-		if (blocking == TRUE)
-			ch->sender_waiting = TRUE;
 		return E_CHANNEL_FULL;
 	}
 
@@ -238,7 +233,7 @@ channel_send(struct channel *ch, struct proc *p, uintptr_t msg, size_t size,
 
 int
 channel_recv(struct channel *ch, struct proc *p, uintptr_t msg, size_t size,
-	     bool in_kern, bool blocking)
+	     bool in_kern)
 {
 	KERN_ASSERT(channel_inited == TRUE);
 	KERN_ASSERT(ch != NULL);
@@ -254,14 +249,9 @@ channel_recv(struct channel *ch, struct proc *p, uintptr_t msg, size_t size,
 		return E_CHANNEL_NOPERM;
 	}
 
-	if (ch->recver_waiting == TRUE)
-		ch->recver_waiting = FALSE;
-
 	if (ch->empty == TRUE) {
 		CHANNEL_DEBUG("Cannot receive from channel %d: "
 			      "buffer is empty.\n", ch->chid);
-		if (blocking == TRUE)
-			ch->recver_waiting = TRUE;
 		return E_CHANNEL_EMPTY;
 	}
 
@@ -353,4 +343,24 @@ channel_receiver_waiting(struct channel *ch)
 	KERN_ASSERT(0 <= ch - channels && ch - channels < MAX_CHANNEL);
 	KERN_ASSERT(CHANNEL_LOCKED(ch) == TRUE);
 	return ch->recver_waiting;
+}
+
+void
+channel_set_sender_waiting(struct channel *ch, bool waiting)
+{
+	KERN_ASSERT(channel_inited == TRUE);
+	KERN_ASSERT(ch != NULL);
+	KERN_ASSERT(0 <= ch - channels && ch - channels < MAX_CHANNEL);
+	KERN_ASSERT(CHANNEL_LOCKED(ch) == TRUE);
+	ch->sender_waiting = waiting;
+}
+
+void
+channel_set_recver_waiting(struct channel *ch, bool waiting)
+{
+	KERN_ASSERT(channel_inited == TRUE);
+	KERN_ASSERT(ch != NULL);
+	KERN_ASSERT(0 <= ch - channels && ch - channels < MAX_CHANNEL);
+	KERN_ASSERT(CHANNEL_LOCKED(ch) == TRUE);
+	ch->recver_waiting = waiting;
 }

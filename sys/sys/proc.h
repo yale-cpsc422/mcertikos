@@ -132,8 +132,19 @@ int proc_exec(struct proc *p, struct pcpu *c, uintptr_t u_elf);
 
 /*
  * Make a process to sleep.
+ *
+ * XXX: proc_sleep() releases the lock inv after the process sleeps, and regains
+ *      it after the process wakes up.
+ *
+ * XXX: Releasing inv and making the process sleeping are made as an atomic
+ *      operation, so are regaining inv and waking up the process.
+ *
+ * XXX: If inv != NULL, it must be acquired before entering proc_sleep().
+ *
+ * @param p   the process to be sleeping
+ * @param inv the invariant lock
  */
-void proc_sleep(struct proc *p);
+void proc_sleep(struct proc *p, spinlock_t *inv);
 
 /*
  * Wake a sleeping process.

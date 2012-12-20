@@ -101,7 +101,7 @@ uint8_t channel_getperm(struct channel *ch, struct proc *p);
  * @return 0 if successful; otherwise, return a non-zero value.
  */
 int channel_send(struct channel *ch, struct proc *p, uintptr_t msg, size_t size,
-		 bool in_kern, bool blocking);
+		 bool in_kern);
 
 /*
  * Receive a message from a channel to a process.
@@ -117,7 +117,7 @@ int channel_send(struct channel *ch, struct proc *p, uintptr_t msg, size_t size,
  * @return 0 if successful; otherwise, return a non-zero value.
  */
 int channel_recv(struct channel *ch, struct proc *p, uintptr_t msg, size_t size,
-		 bool in_kern, bool blocking);
+		 bool in_kern);
 
 /*
  * Lock/Unlock a channel.
@@ -143,6 +143,9 @@ chid_t channel_getid(struct channel *ch);
 
 bool channel_sender_waiting(struct channel *ch);
 bool channel_receiver_waiting(struct channel *ch);
+
+void channel_set_sender_waiting(struct channel *ch, bool waiting);
+void channel_set_recver_waiting(struct channel *ch, bool waiting);
 
 #endif /* _KERN_ */
 
