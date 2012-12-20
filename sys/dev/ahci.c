@@ -242,10 +242,9 @@ ahci_init_port(int port, uint8_t irq)
 		return 1;
 
 	/* enable interrupts on this port */
-	/* XXX: do we really need to enable all these interrupts? */
+	/* XXX: only interrupt for errors and D2H FIS */
 	ahci_writel(AHCI_P_IE(port), AHCI_P_IX_TFES | AHCI_P_IX_HBFS |
-		    AHCI_P_IX_HBDS | AHCI_P_IX_IFS | AHCI_P_IX_SDBS |
-		    AHCI_P_IX_PSS | AHCI_P_IX_DHRS);
+		    AHCI_P_IX_HBDS | AHCI_P_IX_IFS | AHCI_P_IX_DHRS);
 
 	ports[port].status = PORT_READY;
 
@@ -791,6 +790,7 @@ ahci_port_intr_handler(struct disk_dev *dev, int port)
 	}
 
 	/* transfer succeeds */
+	KERN_ASSERT(ports[port].status == PORT_XFERRING);
 	do {
 		ci = ahci_readl(AHCI_P_CI(port));
 	} while (ci);

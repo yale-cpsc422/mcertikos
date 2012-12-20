@@ -151,7 +151,7 @@ disk_xfer(struct disk_dev *dev, uint64_t lba, uintptr_t pa, uint16_t nsect,
 	 *      risky to do so which may cause dead locks.
 	 */
 	DISK_DEBUG("Process %d is sleeping ...\n", caller->pid);
-	proc_sleep(caller);
+	proc_sleep(caller, NULL);
 
 	KERN_ASSERT(dev->status != XFER_PROCESSING);
 
