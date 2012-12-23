@@ -19,8 +19,8 @@
 #include <dev/pci.h>
 
 // Flag to do "lspci" at bootup
-static int pci_show_devs = 0;
-static int pci_show_addrs = 0;
+static int pci_show_devs = 1;
+static int pci_show_addrs = 1;
 
 // PCI "configuration mechanism one"
 static uint32_t pci_conf1_addr_ioport = 0x0cf8;
@@ -42,17 +42,21 @@ static struct pci_driver pci_attach_class[] = {
 };
 
 static struct pci_driver pci_attach_vendor[] = {
-#if LAB >= 5		// was SOL >= 5
-	{ 0x8086, 0x1209, &e100_attach },
-#endif
 	{ 0, 0, 0 },
 };
 
+static void pci_conf1_set_addr(uint32_t bus,
+			       uint32_t dev, uint32_t func, uint32_t offset);
+static int pci_attach_match(uint32_t key1, uint32_t key2,
+			    struct pci_driver *list, struct pci_func *pcif);
+static int pci_attach(struct pci_func *f);
+static void pci_print_func(struct pci_func *f);
+static uint8_t pci_search_capability(struct pci_func *f, uint8_t cap_sig);
+static int pci_scan_bus(struct pci_bus *bus);
+static int pci_bridge_attach(struct pci_func *pcif);
+
 static void
-pci_conf1_set_addr(uint32_t bus,
-		   uint32_t dev,
-		   uint32_t func,
-		   uint32_t offset)
+pci_conf1_set_addr(uint32_t bus, uint32_t dev, uint32_t func, uint32_t offset)
 {
 	KERN_ASSERT(bus < 256);
 	KERN_ASSERT(dev < 32);
@@ -63,20 +67,6 @@ pci_conf1_set_addr(uint32_t bus,
 	uint32_t v = (1 << 31) |		// config-space
 		(bus << 16) | (dev << 11) | (func << 8) | (offset);
 	outl(pci_conf1_addr_ioport, v);
-}
-
-uint32_t
-pci_conf_read(struct pci_func *f, uint32_t off)
-{
-	pci_conf1_set_addr(f->bus->busno, f->dev, f->func, off);
-	return inl(pci_conf1_data_ioport);
-}
-
-void
-pci_conf_write(struct pci_func *f, uint32_t off, uint32_t v)
-{
-	pci_conf1_set_addr(f->bus->busno, f->dev, f->func, off);
-	outl(pci_conf1_data_ioport, v);
 }
 
 static int __attribute__((warn_unused_result))
@@ -130,11 +120,41 @@ pci_print_func(struct pci_func *f)
 	if (PCI_CLASS(f->dev_class) < sizeof(pci_class) / sizeof(pci_class[0]))
 		class = pci_class[PCI_CLASS(f->dev_class)];
 
-	KERN_INFO("PCI: %02x:%02x.%d: %04x:%04x: class: %x.%x (%s) irq: %d\n",
-		  f->bus->busno, f->dev, f->func,
+	KERN_INFO("PCI: %02x:%02x.%d: %04x:%04x: class: %x.%x (%s) irq: %d, "
+		  "pin %s, msi %02x\n", f->bus->busno, f->dev, f->func,
 		  PCI_VENDOR(f->dev_id), PCI_PRODUCT(f->dev_id),
 		  PCI_CLASS(f->dev_class), PCI_SUBCLASS(f->dev_class), class,
-		  f->irq_line);
+		  f->irq_line,
+		  (f->irq_pin == PCI_INTERRUPT_PIN_NONE) ? "null" :
+		  (f->irq_pin == PCI_INTERRUPT_PIN_A) ? "A" :
+		  (f->irq_pin == PCI_INTERRUPT_PIN_B) ? "B" :
+		  (f->irq_pin == PCI_INTERRUPT_PIN_C) ? "C" : "D",
+		  f->msi);
+}
+
+static uint8_t
+pci_search_capability(struct pci_func *f, uint8_t cap_sig)
+{
+	KERN_ASSERT(f != NULL);
+
+	uint32_t cap;
+	uint8_t sig, next;
+
+	next = pci_conf_read(f, PCI_CAPABILITY_POINTER) &
+		PCI_CAPABILITY_POINTER_MASK;
+
+	while (next != 0) {
+		cap = pci_conf_read(f, next);
+		sig = cap & PCI_CAPABILITY_SIG_MASK;
+
+		if (sig == cap_sig)
+			return next;
+
+		next = (cap & PCI_CAPABILITY_NEXT_MASK) >>
+			PCI_CAPABILITY_NEXT_SHIFT;
+	}
+
+	return next;
 }
 
 static int
@@ -161,8 +181,16 @@ pci_scan_bus(struct pci_bus *bus)
 			if (PCI_VENDOR(af.dev_id) == 0xffff)
 				continue;
 
+			/* pin-based interrupt */
 			uint32_t intr = pci_conf_read(&af, PCI_INTERRUPT_REG);
 			af.irq_line = PCI_INTERRUPT_LINE(intr);
+			af.irq_pin = PCI_INTERRUPT_PIN(intr);
+
+			/* MSI */
+			uint16_t msi_ctl;
+			af.msi = pci_search_capability(&af, PCI_MSI_CAP_SIG);
+			msi_ctl = PCI_MSI_CONTROL(pci_conf_read(&af, af.msi));
+			af.msi_a64 = (msi_ctl & PCI_MSI_CONTROL_ADDR64) ? 1 : 0;
 
 			af.dev_class = pci_conf_read(&af, PCI_CLASS_REG);
 			if (pci_show_devs)
@@ -207,7 +235,6 @@ pci_iterate(int (*hook)(struct pci_func *f))
 	}
 }
 
-
 static int
 pci_bridge_attach(struct pci_func *pcif)
 {
@@ -248,48 +275,47 @@ pci_func_enable(struct pci_func *f)
 	uint32_t bar_width;
 	uint32_t bar;
 	for (bar = PCI_MAPREG_START; bar < PCI_MAPREG_END;
-	     bar += bar_width)
-		{
-			uint32_t oldv = pci_conf_read(f, bar);
+	     bar += bar_width) {
+		uint32_t oldv = pci_conf_read(f, bar);
 
-			bar_width = 4;
-			pci_conf_write(f, bar, 0xffffffff);
-			uint32_t rv = pci_conf_read(f, bar);
+		bar_width = 4;
+		pci_conf_write(f, bar, 0xffffffff);
+		uint32_t rv = pci_conf_read(f, bar);
 
-			if (rv == 0)
-				continue;
+		if (rv == 0)
+			continue;
 
-			int regnum = PCI_MAPREG_NUM(bar);
-			uint32_t base, size;
-			if (PCI_MAPREG_TYPE(rv) == PCI_MAPREG_TYPE_MEM) {
-				if (PCI_MAPREG_MEM_TYPE(rv) == PCI_MAPREG_MEM_TYPE_64BIT)
-					bar_width = 8;
+		int regnum = PCI_MAPREG_NUM(bar);
+		uint32_t base, size;
+		if (PCI_MAPREG_TYPE(rv) == PCI_MAPREG_TYPE_MEM) {
+			if (PCI_MAPREG_MEM_TYPE(rv) == PCI_MAPREG_MEM_TYPE_64BIT)
+				bar_width = 8;
 
-				size = PCI_MAPREG_MEM_SIZE(rv);
-				base = PCI_MAPREG_MEM_ADDR(oldv);
-				if (pci_show_addrs)
-					KERN_INFO("  mem region %d: %d bytes at 0x%x\n",
-						  regnum, size, base);
-			} else {
-				size = PCI_MAPREG_IO_SIZE(rv);
-				base = PCI_MAPREG_IO_ADDR(oldv);
-				if (pci_show_addrs)
-					KERN_INFO("  io region %d: %d bytes at 0x%x\n",
-						  regnum, size, base);
-			}
-
-			pci_conf_write(f, bar, oldv);
-			f->reg_base[regnum] = base;
-			f->reg_size[regnum] = size;
-
-			if (size && !base)
-				KERN_INFO("PCI device %02x:%02x.%d (%04x:%04x) "
-					  "may be misconfigured: "
-					  "region %d: base 0x%x, size %d\n",
-					  f->bus->busno, f->dev, f->func,
-					  PCI_VENDOR(f->dev_id), PCI_PRODUCT(f->dev_id),
-					  regnum, base, size);
+			size = PCI_MAPREG_MEM_SIZE(rv);
+			base = PCI_MAPREG_MEM_ADDR(oldv);
+			if (pci_show_addrs)
+				KERN_INFO("  mem region %d: %d bytes at 0x%x\n",
+					  regnum, size, base);
+		} else {
+			size = PCI_MAPREG_IO_SIZE(rv);
+			base = PCI_MAPREG_IO_ADDR(oldv);
+			if (pci_show_addrs)
+				KERN_INFO("  io region %d: %d bytes at 0x%x\n",
+					  regnum, size, base);
 		}
+
+		pci_conf_write(f, bar, oldv);
+		f->reg_base[regnum] = base;
+		f->reg_size[regnum] = size;
+
+		if (size && !base)
+			KERN_INFO("PCI device %02x:%02x.%d (%04x:%04x) "
+				  "may be misconfigured: "
+				  "region %d: base 0x%x, size %d\n",
+				  f->bus->busno, f->dev, f->func,
+				  PCI_VENDOR(f->dev_id), PCI_PRODUCT(f->dev_id),
+				  regnum, base, size);
+	}
 }
 
 int
@@ -302,4 +328,46 @@ pci_init(void)
 	memset(&root_bus, 0, sizeof(root_bus));
 
 	return pci_scan_bus(&root_bus);
+}
+
+uint32_t
+pci_conf_read(struct pci_func *f, uint32_t off)
+{
+	pci_conf1_set_addr(f->bus->busno, f->dev, f->func, off);
+	return inl(pci_conf1_data_ioport);
+}
+
+void
+pci_conf_write(struct pci_func *f, uint32_t off, uint32_t v)
+{
+	pci_conf1_set_addr(f->bus->busno, f->dev, f->func, off);
+	outl(pci_conf1_data_ioport, v);
+}
+
+void
+pci_enable_msi(struct pci_func *f, uint8_t vector, uint8_t dest)
+{
+	KERN_ASSERT(f != NULL);
+	KERN_ASSERT(vector >= T_MSI0);
+	if (f->msi == 0)
+		return;
+	/* direct interrupt to the destination */
+	pci_conf_write(f, PCI_MSI_MSG_ADDR(f->msi),
+		       PCI_MSI_MSG_ADDR_CODE(dest, PCI_MSI_HINT_FIXED, 0));
+	/* fixed mode, edge-triggered */
+	pci_conf_write(f, PCI_MSI_MSG_DATA(f->msi, f->msi_a64),
+		       PCI_MSI_MSG_DATA_CODE(PCI_MSI_TRIGGER_EDGE, 0,
+					     PCI_MSI_DELIVER_FIXED, vector));
+	pci_conf_write(f, f->msi,
+		       PCI_MSI_CONTROL_ENABLE << PCI_MSI_CONTROL_SHIFT);
+}
+
+void
+pci_disable_msi(struct pci_func *f)
+{
+	KERN_ASSERT(f != NULL);
+	if (f->msi == 0)
+		return;
+	pci_conf_write(f, f->msi,
+		       ~(PCI_MSI_CONTROL_ENABLE << PCI_MSI_CONTROL_SHIFT));
 }

@@ -130,9 +130,6 @@ disk_xfer(struct disk_dev *dev, uint64_t lba, uintptr_t pa, uint16_t nsect,
 
 	KERN_ASSERT(dev->status != XFER_PROCESSING);
 
-	/* redirect the disk interrupt to the processor where the caller is */
-	intr_enable(dev->irq, pcpu_cpu_idx(pcpu_cur()));
-
 	rc = (write == TRUE) ? dev->dma_write(dev, lba, nsect, pa) :
 		dev->dma_read(dev, lba, nsect, pa);
 	if (rc) {
@@ -170,7 +167,7 @@ disk_intr_handler(uint8_t trapno, struct context *ctx, int guest)
 {
 	KERN_ASSERT(disk_mgmt_inited == TRUE);
 
-	uint8_t irq = trapno - T_IRQ0;
+	uint8_t irq = trapno;
 	struct disk_dev *dev;
 	struct proc *p;
 
@@ -207,8 +204,9 @@ disk_register_intr(void)
 	struct disk_dev *dev = NULL;
 	spinlock_acquire(&disk_mgmt_lock);
 	TAILQ_FOREACH(dev, &all_disk_devices, entry) {
-		trap_handler_register(T_IRQ0 + dev->irq, disk_intr_handler);
-		DISK_DEBUG("Register handler for IRQ 0x%x.\n", dev->irq);
+		trap_handler_register(dev->irq, disk_intr_handler);
+		DISK_DEBUG("Register handler 0x%08x for IRQ 0x%x.\n",
+			   disk_intr_handler, dev->irq);
 	}
 	spinlock_release(&disk_mgmt_lock);
 }

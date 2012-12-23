@@ -267,7 +267,7 @@ sched_wake(struct proc *p)
 	 */
 	if (p->cpu != pcpu_cur())
 		lapic_send_ipi(p->cpu->arch_info.lapicid,
-			       T_IRQ0+IRQ_IPI_RESCHED,
+			       T_IPI0 + IPI_RESCHED,
 			       LAPIC_ICRLO_FIXED, LAPIC_ICRLO_NOBCAST);
 }
 

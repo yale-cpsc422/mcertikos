@@ -5,7 +5,7 @@
 
 /* Trap numbers */
 
-/* These are processor defined: */
+/* (0 ~ 31) Exceptions: reserved by hardware  */
 #define T_DIVIDE	0	/* divide error */
 #define T_DEBUG		1	/* debug exception */
 #define T_NMI		2	/* non-maskable interrupt */
@@ -28,36 +28,47 @@
 #define T_SIMD		19	/* SIMD floating point exception */
 #define T_SECEV		30	/* Security-sensitive event */
 
+/* (32 ~ 47) ISA interrupts: used by i8259 */
 #define T_IRQ0		32	/* Legacy ISA hardware interrupts: IRQ0-15. */
-
-/*
- * The rest are arbitrarily chosen, but with care not to overlap
- * processor defined exceptions or ISA hardware interrupt vectors.
- */
-#define T_SYSCALL	48	/* System call */
-
-/* We use these vectors to receive local per-CPU interrupts */
-#define T_LTIMER	49	/* Local APIC timer interrupt */
-#define T_LERROR	50	/* Local APIC error interrupt */
-#define T_PERFCTR	51	/* Performance counter overflow interrupt */
-
-#define T_DEFAULT	500	/* Unused trap vectors produce this value */
-#define T_ICNT		501	/* Child process instruction count expired */
-
-#define T_MAX		512
-
-/* ISA hardware IRQ numbers. We receive these as (T_IRQ0 + IRQ_WHATEVER) */
 #define IRQ_TIMER	0	/* 8253 Programmable Interval Timer (PIT) */
 #define IRQ_KBD		1	/* Keyboard interrupt */
-#define IRQ_SERIAL	4	/* Serial (COM) interrup */
-#define IRQ_SPURIOUS	7	/* Spurious interrupt */
+#define IRQ_SLAVE	2	/* cascaded to slave 8259 */
+#define IRQ_SERIAL24	3	/* Serial (COM2 and COM4) intertupt */
+#define IRQ_SERIAL13	4	/* Serial (COM1 and COM4) interrupt */
+#define IRQ_LPT2	5	/* Parallel (LPT2) interrupt */
+#define IRQ_FLOPPY	6	/* Floppy interrupt */
+#define IRQ_SPURIOUS	7	/* Spurious interrupt or LPT1 interrupt */
+#define IRQ_RTC		8	/* RTC interrupt */
 #define IRQ_MOUSE	12	/* Mouse interrupt */
-#define IRQ_IDE		14	/* IDE disk controller interrupt */
+#define IRQ_COPROCESSOR	13	/* Math coprocessor interrupt */
+#define IRQ_IDE1	14	/* IDE disk controller 1 interrupt */
+#define IRQ_IDE2	15	/* IDE disk controller 2 interrupt */
 
-#define IRQ_ERROR	19	/* */
+/* (48 ~ 254) User defined */
 
-#define IRQ_IPI_RESCHED	20	/* IPI: force another processor to reschedule */
-#define IRQ_IPI_VINTR	21	/* IPI: an interrupt from the virtual PIC */
+/* (48) reserved for system call */
+#define T_SYSCALL	48	/* System call */
+
+/* (49 ~ 54) reserved for local interrupts of local APIC */
+#define T_CMCI		49	/* CMCI */
+#define T_LINT0		50	/* LINT0 */
+#define T_LINT1		51	/* LINT1 */
+#define T_LERROR	52	/* Local APIC error interrupt */
+#define T_PERFCTR	53	/* Performance counter overflow interrupt */
+#define T_LTHERMAL	54	/* Thermal sensor interrupt */
+
+/* (55 ~ 63) reserved for IPI */
+#define T_IPI0		55
+#define IPI_RESCHED	0
+
+/* (64 ~ 253) reserved for others */
+#define T_MSI0		64
+#define MSI_AHCI	0
+
+/* (254) Default ? */
+#define T_DEFAULT	254
+
+#define T_MAX		256
 
 #ifndef __ASSEMBLER__
 

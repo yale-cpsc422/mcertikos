@@ -249,7 +249,7 @@ ahci_init_port(int port, uint8_t irq)
 	ports[port].status = PORT_READY;
 
 	devices[port].dev = &ports[port];
-	devices[port].irq = irq;
+	devices[port].irq = T_MSI0 + MSI_AHCI;
 	devices[port].capacity = ports[port].nsects;
 	devices[port].dma_read = ahci_sata_xfer_read;
 	devices[port].dma_write = ahci_sata_xfer_write;
@@ -655,6 +655,9 @@ ahci_sata_xfer(int port, uint64_t lba, uint16_t nsects, uintptr_t pa, int write)
 
 	ports[port].status = PORT_XFERRING;
 
+	pci_enable_msi(&hba.pci_func, T_MSI0 + MSI_AHCI,
+		       pcpu_cpu_lapicid(pcpu_cpu_idx(pcpu_cur())));
+
 	ahci_issue_command(port, write, (void *) pa, nsects * ATA_SECTOR_SIZE);
 
 	if (write)
@@ -811,8 +814,6 @@ ahci_port_intr_handler(struct disk_dev *dev, int port)
 int
 ahci_pci_attach(struct pci_func *f)
 {
-	uint32_t pci_cmd_status;
-
 	/* XXX: only attach the first AHCI controller */
 	if (pcpu_onboot() == FALSE || ahci_inited == TRUE)
 		return 1;
@@ -839,9 +840,9 @@ ahci_pci_attach(struct pci_func *f)
 		return 0;
 
 	/* enable PCI interrupt */
-	pci_cmd_status = pci_conf_read(f, PCI_COMMAND_STATUS_REG);
-	pci_cmd_status &= ~PCI_COMMAND_INTERRUPT_DISABLE;
-	pci_conf_write(f, PCI_COMMAND_STATUS_REG, pci_cmd_status);
+	KERN_ASSERT(f->msi != 0);
+	pci_enable_msi(f, T_MSI0 + MSI_AHCI, 0);
+
 	ahci_inited = TRUE;
 
 	return 1;

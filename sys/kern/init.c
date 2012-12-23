@@ -94,7 +94,7 @@ kern_main(void)
 	trap_handler_register(T_IRQ0+IRQ_SPURIOUS, spurious_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_TIMER, timer_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_KBD, kbd_intr_handler);
-	trap_handler_register(T_IRQ0+IRQ_IPI_RESCHED, ipi_resched_handler);
+	trap_handler_register(T_IPI0+IPI_RESCHED, ipi_resched_handler);
 	disk_register_intr();
 	KERN_INFO("done.\n");
 
@@ -109,10 +109,6 @@ kern_main(void)
 
 	KERN_INFO("[BSP KERN] Enable disk interrupt ... ");
 	disk_intr_enable();
-	KERN_INFO("done.\n");
-
-	KERN_INFO("[BSP KERN] Enable IPI ... ");
-	intr_enable(IRQ_IPI_RESCHED, 0);
 	KERN_INFO("done.\n");
 
 	/* boot APs  */
@@ -193,14 +189,11 @@ kern_main_ap(void)
 	trap_handler_register(T_IRQ0+IRQ_SPURIOUS, spurious_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_TIMER, timer_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_KBD, kbd_intr_handler);
-	trap_handler_register(T_IRQ0+IRQ_IPI_RESCHED, ipi_resched_handler);
+	trap_handler_register(T_IPI0+IPI_RESCHED, ipi_resched_handler);
 	disk_register_intr();
 	KERN_INFO("done.\n");
 
 	/* enable interrupts */
-	KERN_INFO("[AP%d KERN] Enable IPI ... ", cpu_idx);
-	intr_enable(IRQ_IPI_RESCHED, 0);
-	KERN_INFO("done.\n");
 
 	c->booted = TRUE;
 

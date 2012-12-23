@@ -108,14 +108,13 @@ lapic_init()
 
 	/* debug("Use local APIC at %x\n", (uintptr_t) lapic); */
 
-	// Enable local APIC; set spurious interrupt vector.
+	/* enable local APIC */
 	lapic_write(LAPIC_SVR, LAPIC_SVR_ENABLE | (T_IRQ0 + IRQ_SPURIOUS));
 
+	/* enable internal timer of local APIC */
 	lapic_write(LAPIC_TDCR, LAPIC_TIMER_X1);
 	lapic_write(LAPIC_TIMER, LAPIC_TIMER_PERIODIC | (T_IRQ0 + IRQ_TIMER));
-	/*
-	 * FIXME: The APIC timer calibration here maybe incorrect !!
-	 */
+
 	/*
 	 * Calibrate the internal timer of LAPIC using TSC.
 	 * XXX: TSC should be already calibrated before here.
@@ -140,10 +139,7 @@ lapic_init()
 	KERN_DEBUG("Set LAPIC TICR = %x.\n", ticr);
 	lapic_write(LAPIC_TICR, ticr);
 
-	/* disable lapic timer */
-	/* lapic_write(LAPIC_TIMER, LAPIC_TIMER_MASKED); */
-
-	// Disable logical interrupt lines.
+	/* Disable logical interrupt lines. */
 	lapic_write(LAPIC_LINT0, LAPIC_LINT_MASKED);
 	lapic_write(LAPIC_LINT1, LAPIC_LINT_MASKED);
 
@@ -159,7 +155,7 @@ lapic_init()
 	lapic_write(LAPIC_LDR, 0x0);
 
 	// Map error interrupt to IRQ_ERROR.
-	lapic_write(LAPIC_ERROR, T_IRQ0 + IRQ_ERROR);
+	lapic_write(LAPIC_ERROR, T_LERROR);
 
 	// Clear error status register (requires back-to-back writes).
 	lapic_write(LAPIC_ESR, 0);
@@ -246,6 +242,7 @@ lapic_send_ipi(lapicid_t apicid, uint8_t vector,
 {
 	KERN_ASSERT(deliver_mode != LAPIC_ICRLO_INIT &&
 		    deliver_mode != LAPIC_ICRLO_STARTUP);
+	KERN_ASSERT(vector >= T_IPI0);
 
 	while (lapic_read(LAPIC_ICRLO) & LAPIC_ICRLO_DELIVS)
 		pause();

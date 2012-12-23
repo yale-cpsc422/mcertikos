@@ -26,13 +26,13 @@ typedef uint16_t pci_product_id_t;
 
 #define	PCI_VENDOR_SHIFT			0
 #define	PCI_VENDOR_MASK				0xffff
-#define	PCI_VENDOR(id) \
-	    (((id) >> PCI_VENDOR_SHIFT) & PCI_VENDOR_MASK)
+#define	PCI_VENDOR(id)					\
+	(((id) >> PCI_VENDOR_SHIFT) & PCI_VENDOR_MASK)
 
 #define	PCI_PRODUCT_SHIFT			16
 #define	PCI_PRODUCT_MASK			0xffff
-#define	PCI_PRODUCT(id) \
-	    (((id) >> PCI_PRODUCT_SHIFT) & PCI_PRODUCT_MASK)
+#define	PCI_PRODUCT(id)						\
+	(((id) >> PCI_PRODUCT_SHIFT) & PCI_PRODUCT_MASK)
 
 #define PCI_ID_CODE(vid,pid)					\
 	((((vid) & PCI_VENDOR_MASK) << PCI_VENDOR_SHIFT) |	\
@@ -91,28 +91,28 @@ typedef uint8_t pci_revision_t;
 
 #define	PCI_CLASS_SHIFT				24
 #define	PCI_CLASS_MASK				0xff
-#define	PCI_CLASS(cr) \
-	    (((cr) >> PCI_CLASS_SHIFT) & PCI_CLASS_MASK)
+#define	PCI_CLASS(cr)					\
+	(((cr) >> PCI_CLASS_SHIFT) & PCI_CLASS_MASK)
 
 #define	PCI_SUBCLASS_SHIFT			16
 #define	PCI_SUBCLASS_MASK			0xff
-#define	PCI_SUBCLASS(cr) \
-	    (((cr) >> PCI_SUBCLASS_SHIFT) & PCI_SUBCLASS_MASK)
+#define	PCI_SUBCLASS(cr)					\
+	(((cr) >> PCI_SUBCLASS_SHIFT) & PCI_SUBCLASS_MASK)
 
 #define	PCI_INTERFACE_SHIFT			8
 #define	PCI_INTERFACE_MASK			0xff
-#define	PCI_INTERFACE(cr) \
-	    (((cr) >> PCI_INTERFACE_SHIFT) & PCI_INTERFACE_MASK)
+#define	PCI_INTERFACE(cr)					\
+	(((cr) >> PCI_INTERFACE_SHIFT) & PCI_INTERFACE_MASK)
 
 #define	PCI_REVISION_SHIFT			0
 #define	PCI_REVISION_MASK			0xff
-#define	PCI_REVISION(cr) \
-	    (((cr) >> PCI_REVISION_SHIFT) & PCI_REVISION_MASK)
+#define	PCI_REVISION(cr)					\
+	(((cr) >> PCI_REVISION_SHIFT) & PCI_REVISION_MASK)
 
-#define	PCI_CLASS_CODE(mainclass, subclass, interface) \
-	    ((((mainclass) & PCI_CLASS_MASK) << PCI_CLASS_SHIFT) | \
-	     (((subclass) & PCI_SUBCLASS_MASK) << PCI_SUBCLASS_SHIFT) | \
-	     (((interface) & PCI_INTERFACE_MASK) << PCI_INTERFACE_SHIFT))
+#define	PCI_CLASS_CODE(mainclass, subclass, interface)			\
+	((((mainclass) & PCI_CLASS_MASK) << PCI_CLASS_SHIFT) |		\
+	 (((subclass) & PCI_SUBCLASS_MASK) << PCI_SUBCLASS_SHIFT) |	\
+	 (((interface) & PCI_INTERFACE_MASK) << PCI_INTERFACE_SHIFT))
 
 /* base classes */
 #define	PCI_CLASS_PREHISTORIC			0x00
@@ -280,35 +280,35 @@ typedef uint8_t pci_revision_t;
 
 #define	PCI_BIST_SHIFT				24
 #define	PCI_BIST_MASK				0xff
-#define	PCI_BIST(bhlcr) \
-	    (((bhlcr) >> PCI_BIST_SHIFT) & PCI_BIST_MASK)
+#define	PCI_BIST(bhlcr)					\
+	(((bhlcr) >> PCI_BIST_SHIFT) & PCI_BIST_MASK)
 
 #define	PCI_HDRTYPE_SHIFT			16
 #define	PCI_HDRTYPE_MASK			0xff
-#define	PCI_HDRTYPE(bhlcr) \
-	    (((bhlcr) >> PCI_HDRTYPE_SHIFT) & PCI_HDRTYPE_MASK)
+#define	PCI_HDRTYPE(bhlcr)					\
+	(((bhlcr) >> PCI_HDRTYPE_SHIFT) & PCI_HDRTYPE_MASK)
 
-#define	PCI_HDRTYPE_TYPE(bhlcr) \
-	    (PCI_HDRTYPE(bhlcr) & 0x7f)
-#define	PCI_HDRTYPE_MULTIFN(bhlcr) \
-	    ((PCI_HDRTYPE(bhlcr) & 0x80) != 0)
+#define	PCI_HDRTYPE_TYPE(bhlcr)			\
+	(PCI_HDRTYPE(bhlcr) & 0x7f)
+#define	PCI_HDRTYPE_MULTIFN(bhlcr)		\
+	((PCI_HDRTYPE(bhlcr) & 0x80) != 0)
 
 #define	PCI_LATTIMER_SHIFT			8
 #define	PCI_LATTIMER_MASK			0xff
-#define	PCI_LATTIMER(bhlcr) \
-	    (((bhlcr) >> PCI_LATTIMER_SHIFT) & PCI_LATTIMER_MASK)
+#define	PCI_LATTIMER(bhlcr)					\
+	(((bhlcr) >> PCI_LATTIMER_SHIFT) & PCI_LATTIMER_MASK)
 
 #define	PCI_CACHELINE_SHIFT			0
 #define	PCI_CACHELINE_MASK			0xff
-#define	PCI_CACHELINE(bhlcr) \
-	    (((bhlcr) >> PCI_CACHELINE_SHIFT) & PCI_CACHELINE_MASK)
+#define	PCI_CACHELINE(bhlcr)					\
+	(((bhlcr) >> PCI_CACHELINE_SHIFT) & PCI_CACHELINE_MASK)
 
 #define PCI_BHLC_CODE(bist,type,multi,latency,cacheline)		\
-	    ((((bist) & PCI_BIST_MASK) << PCI_BIST_SHIFT) |		\
-	     (((type) & PCI_HDRTYPE_MASK) << PCI_HDRTYPE_SHIFT) |	\
-	     (((multi)?0x80:0) << PCI_HDRTYPE_SHIFT) |			\
-	     (((latency) & PCI_LATTIMER_MASK) << PCI_LATTIMER_SHIFT) |	\
-	     (((cacheline) & PCI_CACHELINE_MASK) << PCI_CACHELINE_SHIFT))
+	((((bist) & PCI_BIST_MASK) << PCI_BIST_SHIFT) |			\
+	 (((type) & PCI_HDRTYPE_MASK) << PCI_HDRTYPE_SHIFT) |		\
+	 (((multi)?0x80:0) << PCI_HDRTYPE_SHIFT) |			\
+	 (((latency) & PCI_LATTIMER_MASK) << PCI_LATTIMER_SHIFT) |	\
+	 (((cacheline) & PCI_CACHELINE_MASK) << PCI_CACHELINE_SHIFT))
 
 /*
  * PCI header type
@@ -326,16 +326,16 @@ typedef uint8_t pci_revision_t;
 #define	PCI_MAPREG_PPB_END		0x18
 #define	PCI_MAPREG_PCB_END		0x14
 
-#define	PCI_MAPREG_TYPE(mr)						\
-	    ((mr) & PCI_MAPREG_TYPE_MASK)
+#define	PCI_MAPREG_TYPE(mr)			\
+	((mr) & PCI_MAPREG_TYPE_MASK)
 #define	PCI_MAPREG_TYPE_MASK			0x00000001
 
 #define	PCI_MAPREG_TYPE_MEM			0x00000000
 #define	PCI_MAPREG_TYPE_IO			0x00000001
 #define	PCI_MAPREG_ROM_ENABLE			0x00000001
 
-#define	PCI_MAPREG_MEM_TYPE(mr)						\
-	    ((mr) & PCI_MAPREG_MEM_TYPE_MASK)
+#define	PCI_MAPREG_MEM_TYPE(mr)			\
+	((mr) & PCI_MAPREG_MEM_TYPE_MASK)
 #define	PCI_MAPREG_MEM_TYPE_MASK		0x00000006
 
 #define	PCI_MAPREG_MEM_TYPE_32BIT		0x00000000
@@ -343,32 +343,98 @@ typedef uint8_t pci_revision_t;
 #define	PCI_MAPREG_MEM_TYPE_64BIT		0x00000004
 
 #define	PCI_MAPREG_MEM_PREFETCHABLE(mr)				\
-	    (((mr) & PCI_MAPREG_MEM_PREFETCHABLE_MASK) != 0)
+	(((mr) & PCI_MAPREG_MEM_PREFETCHABLE_MASK) != 0)
 #define	PCI_MAPREG_MEM_PREFETCHABLE_MASK	0x00000008
 
-#define	PCI_MAPREG_MEM_ADDR(mr)						\
-	    ((mr) & PCI_MAPREG_MEM_ADDR_MASK)
-#define	PCI_MAPREG_MEM_SIZE(mr)						\
-	    (PCI_MAPREG_MEM_ADDR(mr) & -PCI_MAPREG_MEM_ADDR(mr))
+#define	PCI_MAPREG_MEM_ADDR(mr)			\
+	((mr) & PCI_MAPREG_MEM_ADDR_MASK)
+#define	PCI_MAPREG_MEM_SIZE(mr)					\
+	(PCI_MAPREG_MEM_ADDR(mr) & -PCI_MAPREG_MEM_ADDR(mr))
 #define	PCI_MAPREG_MEM_ADDR_MASK		0xfffffff0
 
-#define	PCI_MAPREG_MEM64_ADDR(mr)					\
-	    ((mr) & PCI_MAPREG_MEM64_ADDR_MASK)
+#define	PCI_MAPREG_MEM64_ADDR(mr)		\
+	((mr) & PCI_MAPREG_MEM64_ADDR_MASK)
 #define	PCI_MAPREG_MEM64_SIZE(mr)					\
-	    (PCI_MAPREG_MEM64_ADDR(mr) & -PCI_MAPREG_MEM64_ADDR(mr))
+	(PCI_MAPREG_MEM64_ADDR(mr) & -PCI_MAPREG_MEM64_ADDR(mr))
 #define	PCI_MAPREG_MEM64_ADDR_MASK		0xfffffffffffffff0ULL
 
-#define	PCI_MAPREG_IO_ADDR(mr)						\
-	    ((mr) & PCI_MAPREG_IO_ADDR_MASK)
-#define	PCI_MAPREG_IO_SIZE(mr)						\
-	    (PCI_MAPREG_IO_ADDR(mr) & -PCI_MAPREG_IO_ADDR(mr))
+#define	PCI_MAPREG_IO_ADDR(mr)			\
+	((mr) & PCI_MAPREG_IO_ADDR_MASK)
+#define	PCI_MAPREG_IO_SIZE(mr)					\
+	(PCI_MAPREG_IO_ADDR(mr) & -PCI_MAPREG_IO_ADDR(mr))
 #define	PCI_MAPREG_IO_ADDR_MASK			0xfffffffc
 
-#define PCI_MAPREG_SIZE_TO_MASK(size)					\
-	    (-(size))
+#define PCI_MAPREG_SIZE_TO_MASK(size)		\
+	(-(size))
 
-#define PCI_MAPREG_NUM(offset)						\
-	    (((unsigned)(offset)-PCI_MAPREG_START)/4)
+#define PCI_MAPREG_NUM(offset)				\
+	(((unsigned)(offset)-PCI_MAPREG_START)/4)
+
+/*
+ * Capabilities Pointer
+ */
+#define PCI_CAPABILITY_POINTER		0x34
+#define PCI_CAPABILITY_POINTER_MASK	0xff
+#define PCI_CAPABILITY_SIG_MASK		0xff
+#define PCI_CAPABILITY_NEXT_MASK	0xff00
+#define PCI_CAPABILITY_NEXT_SHIFT	8
+#define PCI_CAPABILITY_CONTROL_MASK	0xffff0000
+#define PCI_CAPABILITY_CONTROL_SHIFT	16
+
+/*
+ * MSI
+ */
+#define PCI_MSI_CAP_SIG			0x05
+/* MSI Control */
+#define PCI_MSI_CONTROL_MASK		0xffff0000
+#define PCI_MSI_CONTROL_SHIFT		16
+#define PCI_MSI_CONTROL(id)						\
+	(((id) & PCI_MSI_CONTROL_MASK) >> PCI_MSI_CONTROL_SHIFT)
+#define PCI_MSI_CONTROL_PERVEC		0x0100
+#define PCI_MSI_CONTROL_ADDR64		0x0080
+#define PCI_MSI_CONTROL_MME_MASK	0x0070
+#define PCI_MSI_CONTROL_MME1		0x0000
+#define PCI_MSI_CONTROL_MME2		0x0010
+#define PCI_MSI_CONTROL_MME4		0x0020
+#define PCI_MSI_CONTROL_MME8		0x0030
+#define PCI_MSI_CONTROL_MME16		0x0040
+#define PCI_MSI_CONTROL_MME32		0x0050
+#define PCI_MSI_CONTROL_MMC_MASK	0x000e
+#define PCI_MSI_CONTROL_MMC1		0x0000
+#define PCI_MSI_CONTROL_MMC2		0x0002
+#define PCI_MSI_CONTROL_MMC4		0x0004
+#define PCI_MSI_CONTROL_MMC8		0x0006
+#define PCI_MSI_CONTROL_MMC16		0x0008
+#define PCI_MSI_CONTROL_MMC32		0x000a
+#define PCI_MSI_CONTROL_ENABLE		0x0001
+/* MSI Message Address */
+#define PCI_MSI_MSG_ADDR(off)		((off) + 0x4)
+#define PCI_MSI_MSG_ADDRU(off)		((off) + 0x8)
+#define PCI_MSI_HINT_FIXED		0
+#define PCI_MSI_HINT_LOWEST		1
+#define PCI_MSI_DM_PHYSICAL		0
+#define PCI_MSI_DM_LOGICAL		1
+#define PCI_MSI_MSG_ADDR_CODE(dest, hint, mode)				\
+	((0x00000fee << 20) | (((dest) & 0x000000ff) << 12) |		\
+	 (((hint) & 0x00000001) << 3) | (((mode) & 0x00000001) << 2))
+/* MSI Message Data */
+#define PCI_MSI_MSG_DATA(off, a64)	((a64) ? (off) + 0xc : (off) + 0x8)
+#define PCI_MSI_TRIGGER_EDGE		0
+#define PCI_MSI_TRIGGER_LEVEL		1
+#define PCI_MSI_LEVEL_DEASSERT		0
+#define PCI_MSI_LEVEL_ASSERT		1
+#define PCI_MSI_DELIVER_FIXED		0
+#define PCI_MSI_DELIVER_LOWEST		1
+#define PCI_MSI_DELIVER_SMI		2
+#define PCI_MSI_DELIVER_NMI		4
+#define PCI_MSI_DELIVER_INIT		5
+#define PCI_MSI_DELIVER_EXTINT		7
+#define PCI_MSI_MSG_DATA_CODE(trigger, level, deliver, vector)		\
+	((((trigger) & 0x00000001) << 15) | (((level) & 0x00000001) << 14) | \
+	 (((deliver) & 0x00000007) << 8) | ((vector) & 0x000000ff))
+/* Other MSI fields */
+#define PCI_MSI_MASK_BITS(off, a64)	((a64) ? (off) + 0x10 : (off) + 0xc)
+#define PCI_MSI_PENDING_BITS(off, a64)	((a64) ? (off) + 0x14 : (off) + 0x10)
 
 /*
  * Interrupt Configuration Register; contains interrupt pin and line.
@@ -382,39 +448,39 @@ typedef uint8_t pci_intr_line_t;
 
 #define PCI_MAX_LAT_SHIFT			24
 #define	PCI_MAX_LAT_MASK			0xff
-#define	PCI_MAX_LAT(icr) \
-	    (((icr) >> PCI_MAX_LAT_SHIFT) & PCI_MAX_LAT_MASK)
+#define	PCI_MAX_LAT(icr)					\
+	(((icr) >> PCI_MAX_LAT_SHIFT) & PCI_MAX_LAT_MASK)
 
 #define PCI_MIN_GNT_SHIFT			16
 #define	PCI_MIN_GNT_MASK			0xff
-#define	PCI_MIN_GNT(icr) \
-	    (((icr) >> PCI_MIN_GNT_SHIFT) & PCI_MIN_GNT_MASK)
+#define	PCI_MIN_GNT(icr)					\
+	(((icr) >> PCI_MIN_GNT_SHIFT) & PCI_MIN_GNT_MASK)
 
 #define	PCI_INTERRUPT_GRANT_SHIFT		24
 #define	PCI_INTERRUPT_GRANT_MASK		0xff
-#define	PCI_INTERRUPT_GRANT(icr) \
-	    (((icr) >> PCI_INTERRUPT_GRANT_SHIFT) & PCI_INTERRUPT_GRANT_MASK)
+#define	PCI_INTERRUPT_GRANT(icr)					\
+	(((icr) >> PCI_INTERRUPT_GRANT_SHIFT) & PCI_INTERRUPT_GRANT_MASK)
 
 #define	PCI_INTERRUPT_LATENCY_SHIFT		16
 #define	PCI_INTERRUPT_LATENCY_MASK		0xff
-#define	PCI_INTERRUPT_LATENCY(icr) \
-	    (((icr) >> PCI_INTERRUPT_LATENCY_SHIFT) & PCI_INTERRUPT_LATENCY_MASK)
+#define	PCI_INTERRUPT_LATENCY(icr)					\
+	(((icr) >> PCI_INTERRUPT_LATENCY_SHIFT) & PCI_INTERRUPT_LATENCY_MASK)
 
 #define	PCI_INTERRUPT_PIN_SHIFT			8
 #define	PCI_INTERRUPT_PIN_MASK			0xff
-#define	PCI_INTERRUPT_PIN(icr) \
-	    (((icr) >> PCI_INTERRUPT_PIN_SHIFT) & PCI_INTERRUPT_PIN_MASK)
+#define	PCI_INTERRUPT_PIN(icr)						\
+	(((icr) >> PCI_INTERRUPT_PIN_SHIFT) & PCI_INTERRUPT_PIN_MASK)
 
 #define	PCI_INTERRUPT_LINE_SHIFT		0
 #define	PCI_INTERRUPT_LINE_MASK			0xff
-#define	PCI_INTERRUPT_LINE(icr) \
-	    (((icr) >> PCI_INTERRUPT_LINE_SHIFT) & PCI_INTERRUPT_LINE_MASK)
+#define	PCI_INTERRUPT_LINE(icr)						\
+	(((icr) >> PCI_INTERRUPT_LINE_SHIFT) & PCI_INTERRUPT_LINE_MASK)
 
-#define PCI_INTERRUPT_CODE(lat,gnt,pin,line)		\
-	  ((((lat)&PCI_INTERRUPT_LATENCY_MASK)<<PCI_INTERRUPT_LATENCY_SHIFT)| \
-	   (((gnt)&PCI_INTERRUPT_GRANT_MASK)  <<PCI_INTERRUPT_GRANT_SHIFT)  | \
-	   (((pin)&PCI_INTERRUPT_PIN_MASK)    <<PCI_INTERRUPT_PIN_SHIFT)    | \
-	   (((line)&PCI_INTERRUPT_LINE_MASK)  <<PCI_INTERRUPT_LINE_SHIFT))
+#define PCI_INTERRUPT_CODE(lat,gnt,pin,line)				\
+	((((lat)&PCI_INTERRUPT_LATENCY_MASK)<<PCI_INTERRUPT_LATENCY_SHIFT)| \
+	 (((gnt)&PCI_INTERRUPT_GRANT_MASK)  <<PCI_INTERRUPT_GRANT_SHIFT)  | \
+	 (((pin)&PCI_INTERRUPT_PIN_MASK)    <<PCI_INTERRUPT_PIN_SHIFT)    | \
+	 (((line)&PCI_INTERRUPT_LINE_MASK)  <<PCI_INTERRUPT_LINE_SHIFT))
 
 #define	PCI_INTERRUPT_PIN_NONE			0x00
 #define	PCI_INTERRUPT_PIN_A			0x01
@@ -425,9 +491,9 @@ typedef uint8_t pci_intr_line_t;
 
 /* Header Type 1 (Bridge) configuration registers */
 #define PCI_BRIDGE_BUS_REG		0x18
-#define   PCI_BRIDGE_BUS_PRIMARY_SHIFT		0
-#define   PCI_BRIDGE_BUS_SECONDARY_SHIFT	8
-#define   PCI_BRIDGE_BUS_SUBORDINATE_SHIFT	16
+#define	  PCI_BRIDGE_BUS_PRIMARY_SHIFT		0
+#define	  PCI_BRIDGE_BUS_SECONDARY_SHIFT	8
+#define	  PCI_BRIDGE_BUS_SUBORDINATE_SHIFT	16
 
 #define PCI_BRIDGE_STATIO_REG		0x1C
 #define	  PCI_BRIDGE_STATIO_IOBASE_SHIFT	0
@@ -463,18 +529,18 @@ typedef uint8_t pci_intr_line_t;
 #define PCI_BRIDGE_CONTROL_REG		0x3C
 #define	  PCI_BRIDGE_CONTROL_SHIFT		16
 #define	  PCI_BRIDGE_CONTROL_MASK		0xffff
-#define   PCI_BRIDGE_CONTROL_PERE		(1 <<  0)
-#define   PCI_BRIDGE_CONTROL_SERR		(1 <<  1)
-#define   PCI_BRIDGE_CONTROL_ISA		(1 <<  2)
-#define   PCI_BRIDGE_CONTROL_VGA		(1 <<  3)
+#define	  PCI_BRIDGE_CONTROL_PERE		(1 <<  0)
+#define	  PCI_BRIDGE_CONTROL_SERR		(1 <<  1)
+#define	  PCI_BRIDGE_CONTROL_ISA		(1 <<  2)
+#define	  PCI_BRIDGE_CONTROL_VGA		(1 <<  3)
 /* Reserved					(1 <<  4) */
-#define   PCI_BRIDGE_CONTROL_MABRT		(1 <<  5)
-#define   PCI_BRIDGE_CONTROL_SECBR		(1 <<  6)
-#define   PCI_BRIDGE_CONTROL_SECFASTB2B		(1 <<  7)
-#define   PCI_BRIDGE_CONTROL_PRI_DISC_TIMER	(1 <<  8)
-#define   PCI_BRIDGE_CONTROL_SEC_DISC_TIMER	(1 <<  9)
-#define   PCI_BRIDGE_CONTROL_DISC_TIMER_STAT	(1 << 10)
-#define   PCI_BRIDGE_CONTROL_DISC_TIMER_SERR	(1 << 11)
+#define	  PCI_BRIDGE_CONTROL_MABRT		(1 <<  5)
+#define	  PCI_BRIDGE_CONTROL_SECBR		(1 <<  6)
+#define	  PCI_BRIDGE_CONTROL_SECFASTB2B		(1 <<  7)
+#define	  PCI_BRIDGE_CONTROL_PRI_DISC_TIMER	(1 <<  8)
+#define	  PCI_BRIDGE_CONTROL_SEC_DISC_TIMER	(1 <<  9)
+#define	  PCI_BRIDGE_CONTROL_DISC_TIMER_STAT	(1 << 10)
+#define	  PCI_BRIDGE_CONTROL_DISC_TIMER_SERR	(1 << 11)
 /* Reserved					(1 << 12) - (1 << 15) */
 
 struct pci_common_header {
@@ -515,22 +581,26 @@ enum { pci_res_bus, pci_res_mem, pci_res_io, pci_res_max };
 struct pci_bus;
 
 struct pci_func {
-    struct pci_bus *bus;	// Primary bus for bridges
+	struct pci_bus *bus;	// Primary bus for bridges
 
-    uint32_t dev;
-    uint32_t func;
+	uint32_t dev;
+	uint32_t func;
 
-    uint32_t dev_id;
-    uint32_t dev_class;
+	uint32_t dev_id;
+	uint32_t dev_class;
 
-    uint32_t reg_base[6];
-    uint32_t reg_size[6];
-    uint8_t irq_line;
+	uint32_t reg_base[6];
+	uint32_t reg_size[6];
+	uint8_t irq_line;
+	uint8_t irq_pin;
+
+	uint8_t	msi;
+	int msi_a64;
 };
 
 struct pci_bus {
-    struct pci_func *parent_bridge;
-    uint32_t busno;
+	struct pci_func *parent_bridge;
+	uint32_t busno;
 };
 
 int  pci_init(void);
@@ -538,6 +608,8 @@ void pci_func_enable(struct pci_func *f);
 void pci_iterate(int (*hook)(struct pci_func *f));
 uint32_t pci_conf_read(struct pci_func *f, uint32_t off);
 void pci_conf_write(struct pci_func *f, uint32_t off, uint32_t v);
+void pci_enable_msi(struct pci_func *f, uint8_t vector, uint8_t dest);
+void pci_disable_msi(struct pci_func *f);
 
 #endif /* _KERN_ */
 
