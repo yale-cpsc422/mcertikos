@@ -33,6 +33,8 @@
  */
 uint8_t bsp_kstack[KSTACK_SIZE] gcc_aligned(KSTACK_SIZE);
 
+static volatile int all_ready = FALSE;
+
 extern uint8_t _binary___obj_user_guest_guest_start[];
 extern uint8_t _binary___obj_user_idle_idle_start[];
 
@@ -112,6 +114,7 @@ kern_main(void)
 	KERN_INFO("done.\n");
 
 	/* boot APs  */
+	all_ready = FALSE;
 	for (i = 1; i < pcpu_ncpu(); i++) {
 		KERN_INFO("Boot CPU%d ... ", i);
 
@@ -128,6 +131,7 @@ kern_main(void)
 
 		KERN_INFO("done.\n");
 	}
+	all_ready = TRUE;
 
 	/* create the first user process */
 	if ((idle_proc = proc_new(NULL, NULL)) == NULL)
@@ -196,6 +200,7 @@ kern_main_ap(void)
 	/* enable interrupts */
 
 	c->booted = TRUE;
+	while (all_ready == FALSE);
 
 	/* create idle process */
 	if ((idle_proc = proc_new(NULL, NULL)) == NULL)
