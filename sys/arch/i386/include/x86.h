@@ -375,6 +375,24 @@ cpuid(uint32_t info,
 }
 
 static gcc_inline void
+cpuid_subleaf(uint32_t leaf, uint32_t subleaf,
+	      uint32_t *eaxp, uint32_t *ebxp, uint32_t *ecxp, uint32_t *edxp)
+{
+	uint32_t eax, ebx, ecx, edx;
+	asm volatile("cpuid"
+		     : "=a" (eax), "=b" (ebx), "=c" (ecx), "=d" (edx)
+		     : "a" (leaf), "c" (subleaf));
+	if (eaxp)
+		*eaxp = eax;
+	if (ebxp)
+		*ebxp = ebx;
+	if (ecxp)
+		*ecxp = ecx;
+	if (edxp)
+		*edxp = edx;
+}
+
+static gcc_inline void
 cli(void)
 {
 	__asm __volatile("cli":::"memory");

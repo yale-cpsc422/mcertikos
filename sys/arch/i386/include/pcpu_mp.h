@@ -9,6 +9,8 @@
 
 #include <dev/lapic.h>
 
+typedef enum { UNKNOWN, INTEL, AMD } cpu_vendor;
+
 struct pcpuinfo {
 	uint32_t	lapicid;
 	bool		bsp;
@@ -16,7 +18,8 @@ struct pcpuinfo {
 	/* cpuid 0x0 */
 	uint32_t	cpuid_high;	/* Maximum input value for basic CPUID
 					   information (%eax)*/
-	char		vendor[20];	/* CPU vendor (%ebx, %ecx, %edx) */
+	char		vendor[20];	/* CPU vendor string (%ebx, %ecx, %edx) */
+	cpu_vendor	cpu_vendor;	/* CPU vendor */
 
 	/* cpuid 0x1 */
 	uint8_t		family;		/* CPU family (%eax[11:8]) */
@@ -31,6 +34,10 @@ struct pcpuinfo {
 	uint8_t		apic_id;	/* initial APIC id (%ebx[31:24]) */
 	uint32_t	feature1;	/* CPU features (%ecx) */
 	uint32_t	feature2;	/* CPU features (%edx) */
+
+	/* L1 cache information */
+	size_t		l1_cache_size;		/* L1 cache size in KBs */
+	size_t		l1_cache_line_size;	/* L1 cache line size in bytes */
 
 	/* cpuid 0x80000000 */
 	uint32_t	cpuid_exthigh;	/* Maximum Input Value for Extended

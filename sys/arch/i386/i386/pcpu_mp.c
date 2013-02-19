@@ -24,11 +24,12 @@ static gcc_inline void
 pcpu_print_cpuinfo(uint32_t cpu_idx, struct pcpuinfo *cpuinfo)
 {
 	KERN_INFO("CPU%d: %s, FAMILY %d(%d), MODEL %d(%d), STEP %d, "
-		  "FEATURE 0x%x 0x%x\n",
+		  "FEATURE 0x%x 0x%x, L1 Cache %d KB (%d bytes) \n",
 		  cpu_idx, cpuinfo->vendor,
 		  cpuinfo->family, cpuinfo->ext_family,
 		  cpuinfo->model, cpuinfo->ext_model,
-		  cpuinfo->step, cpuinfo->feature1, cpuinfo->feature2);
+		  cpuinfo->step, cpuinfo->feature1, cpuinfo->feature2,
+		  cpuinfo->l1_cache_size, cpuinfo->l1_cache_line_size);
 }
 
 static void
@@ -37,12 +38,35 @@ pcpu_identify(void)
 	struct pcpuinfo *cpuinfo = &pcpu_cur()->arch_info;
 	uint32_t eax, ebx, ecx, edx;
 
+	int i, j;
+	uint8_t *desc;
+	uint32_t *regs[4] = { &eax, &ebx, &ecx, &edx };
+
+	static const int intel_cache_info[0xff][2] = {
+		[0x0a] = {  8, 32 },
+		[0x0c] = { 16, 32 },
+		[0x0d] = { 16, 64 },
+		[0x0e] = { 24, 64 },
+		[0x2c] = { 32, 64 },
+		[0x60] = { 16, 64 },
+		[0x66] = {  8, 64 },
+		[0x67] = { 16, 64 },
+		[0x68] = { 32, 64 }
+	};
+
 	cpuid(0x0, &eax, &ebx, &ecx, &edx);
 	cpuinfo->cpuid_high = eax;
 	((uint32_t *) cpuinfo->vendor)[0] = ebx;
 	((uint32_t *) cpuinfo->vendor)[1] = edx;
 	((uint32_t *) cpuinfo->vendor)[2] = ecx;
 	cpuinfo->vendor[12] = '\0';
+
+	if (strncmp(cpuinfo->vendor, "GenuineIntel", 20) == 0)
+		cpuinfo->cpu_vendor = INTEL;
+	else if (strncmp(cpuinfo->vendor, "AuthenticAMD", 20) == 0)
+		cpuinfo->cpu_vendor = AMD;
+	else
+		cpuinfo->cpu_vendor = UNKNOWN;
 
 	cpuid(0x1, &eax, &ebx, &ecx, &edx);
 	cpuinfo->family = (eax >> 8) & 0xf;
@@ -56,6 +80,62 @@ pcpu_identify(void)
 	cpuinfo->apic_id = (ebx >> 24) & 0xff;
 	cpuinfo->feature1 = ecx;
 	cpuinfo->feature2 = edx;
+
+	switch (cpuinfo->cpu_vendor) {
+	case INTEL:
+		/* try cpuid 2 first */
+		cpuid(0x00000002, &eax, &ebx, &ecx, &edx);
+		i = eax & 0x000000ff;
+		while (i--)
+			cpuid(0x00000002, &eax, &ebx, &ecx, &edx);
+
+		KERN_DEBUG("eax 0x%08x, ebx 0x%08x, ecx 0x%08x, edx 0x%08x.\n",
+			   eax, ebx, ecx, edx);
+
+		for (i = 0; i < 4; i++) {
+			desc = (uint8_t *) regs[i];
+			for (j = 0; j < 4; j++) {
+				cpuinfo->l1_cache_size =
+					intel_cache_info[desc[j]][0];
+				cpuinfo->l1_cache_line_size =
+					intel_cache_info[desc[j]][1];
+			}
+		}
+
+		/* try cpuid 4 if no cache info are got by cpuid 2 */
+		if (cpuinfo->l1_cache_size && cpuinfo->l1_cache_line_size)
+			break;
+
+		for (i = 0; i < 3; i++) {
+			cpuid_subleaf(0x00000004, i, &eax, &ebx, &ecx, &edx);
+			if ((eax & 0xf) == 1 && ((eax & 0xe0) >> 5) == 1)
+				break;
+		}
+
+		if (i == 3) {
+			KERN_WARN("Cannot determine L1 cache size.\n");
+			break;
+		}
+
+		cpuinfo->l1_cache_size =
+			(((ebx & 0xffc00000) >> 22) + 1) *	/* ways */
+			(((ebx & 0x003ff000) >> 12) + 1) *	/* partitions */
+			(((ebx & 0x00000fff)) + 1) *		/* line size */
+			(ecx + 1) /				/* sets */
+			1024;
+		cpuinfo->l1_cache_line_size = ((ebx & 0x00000fff)) + 1;
+
+		break;
+	case AMD:
+		cpuid(0x80000005, &eax, &ebx, &ecx, &edx);
+		cpuinfo->l1_cache_size = (ecx & 0xff000000) >> 24;
+		cpuinfo->l1_cache_line_size = (ecx & 0x000000ff);
+		break;
+	default:
+		cpuinfo->l1_cache_size = 0;
+		cpuinfo->l1_cache_line_size = 0;
+		break;
+	}
 
 	cpuid(0x80000000, &eax, &ebx, &ecx, &edx);
 	cpuinfo->cpuid_exthigh = eax;
