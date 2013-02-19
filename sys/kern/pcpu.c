@@ -43,7 +43,7 @@ pcpu_cur(void)
 {
 	struct kstack *kstack =
 		(struct kstack *) ROUNDDOWN(get_stack_pointer(), KSTACK_SIZE);
-	KERN_ASSERT(kstack->magic = KSTACK_MAGIC);
+	KERN_ASSERT(kstack->magic == KSTACK_MAGIC);
 	return &pcpu[kstack->cpu_idx];
 }
 
