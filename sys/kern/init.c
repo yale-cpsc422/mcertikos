@@ -10,6 +10,7 @@
 #include <sys/proc.h>
 #include <sys/sched.h>
 #include <sys/spinlock.h>
+#include <sys/slab.h>
 #include <sys/string.h>
 #include <sys/trap.h>
 #include <sys/syscall.h>
@@ -285,6 +286,16 @@ kern_init(mboot_info_t *mbi)
 	 */
 	KERN_INFO("Initialize kernel page table ... ");
 	pmap_init();
+	KERN_INFO("done.\n");
+
+	/*
+	 * Initialize slab allocator.
+	 */
+	KERN_INFO("Initialize slab allocator ... ");
+	if (kmem_cache_init()) {
+		KERN_INFO("failed.\n");
+		KERN_PANIC("Cannot initialize slab allocator.\n");
+	}
 	KERN_INFO("done.\n");
 
 	/*

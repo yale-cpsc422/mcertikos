@@ -4,6 +4,7 @@ OBJDIRS		+= $(KERN_OBJDIR)/kern
 
 KERN_SRCFILES	+= $(KERN_DIR)/kern/init.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/console.c
+KERN_SRCFILES	+= $(KERN_DIR)/kern/slab.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/pcpu.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/context.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/trap.c

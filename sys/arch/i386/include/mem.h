@@ -19,6 +19,7 @@ struct page_info {
 	int	refcount;	/* the amount of users of the physical
 				   memory page */
 	struct page_info *prev, *next;
+	void	*slab, *cache;	/* used by slab allocator */
 };
 
 typedef struct page_info pageinfo_t;

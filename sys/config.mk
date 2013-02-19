@@ -71,6 +71,11 @@ endif
 # Debugging switches of the conventional kernel.
 #
 
+# If set, enable debugging the slab allocator
+ifneq "$(strip $(DEBUG_SLAB) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_SLAB -DDEBUG_MSG
+endif
+
 # If set, enable debugging disk management
 ifneq "$(strip $(DEBUG_DISK) $(DEBUG_ALL))" ""
 KERN_CFLAGS	+= -DDEBUG_DISK
