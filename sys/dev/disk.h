@@ -33,7 +33,6 @@ struct disk_dev {
 	 * Following fields should only be used within the disk mamangement
 	 * module.
 	 */
-	struct proc	*p;		/* accessor */
 	spinlock_t	lk;		/* lock to enforce exclusive accesses */
 	TAILQ_ENTRY(disk_dev) entry;	/* used by disk module */
 };
@@ -42,7 +41,8 @@ enum __disk_errno {
 	E_DISK_SUCC = 0,
 	E_DISK_DUPDEV,
 	E_DISK_NODEV,
-	E_DISK_XFER
+	E_DISK_XFER,
+	E_DISK_ERROR,
 };
 
 /*

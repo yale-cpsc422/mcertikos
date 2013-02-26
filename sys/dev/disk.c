@@ -4,6 +4,7 @@
 #include <sys/pcpu.h>
 #include <sys/proc.h>
 #include <sys/queue.h>
+#include <sys/sched.h>
 #include <sys/spinlock.h>
 #include <sys/trap.h>
 #include <sys/types.h>
@@ -67,9 +68,13 @@ disk_add_device(struct disk_dev *dev)
 		}
 	}
 
+	if (sched_add_slpq(dev)) {
+		DISK_DEBUG("Cannot add a sleep queue.\n");
+		return E_DISK_ERROR;
+	}
+
 	spinlock_acquire(&dev->lk);
 	dev->status = XFER_SUCC;
-	dev->p = NULL;
 	TAILQ_INSERT_TAIL(&all_disk_devices, dev, entry);
 	DISK_DEBUG("Add a disk device 0x%08x.\n", dev);
 	spinlock_release(&dev->lk);
@@ -91,6 +96,11 @@ disk_remove_device(struct disk_dev *dev)
 	KERN_ASSERT(dev != NULL);
 
 	struct disk_dev *existing_dev;
+
+	if (sched_remove_slpq(dev)) {
+		DISK_DEBUG("Device 0x%08x is busy.\n", dev);
+		return E_DISK_ERROR;
+	}
 
 	spinlock_acquire(&disk_mgmt_lock);
 
@@ -140,17 +150,17 @@ disk_xfer(struct disk_dev *dev, uint64_t lba, uintptr_t pa, uint16_t nsect,
 	}
 
 	/* sleep to wait for the completion of the transfer */
-	KERN_ASSERT(dev->p == NULL);
-	dev->p = caller;
 	dev->status = XFER_PROCESSING;
 	/*
 	 * XXX: The process caller is sleeping with the spinlock dev->lk. It's
 	 *      risky to do so which may cause dead locks.
 	 */
-	DISK_DEBUG("Process %d is sleeping ...\n", caller->pid);
-	proc_sleep(caller, NULL);
+	DISK_DEBUG("Process %d is sleeping for device 0x%08x...\n",
+		   caller->pid, dev);
+	proc_sleep(caller, dev, NULL);
 
 	KERN_ASSERT(dev->status != XFER_PROCESSING);
+	KERN_ASSERT(spinlock_holding(&dev->lk) == TRUE);
 
 	/* transfer is accomplished */
 	if (dev->status == XFER_SUCC) {
@@ -169,7 +179,6 @@ disk_intr_handler(uint8_t trapno, struct context *ctx, int guest)
 
 	uint8_t irq = trapno;
 	struct disk_dev *dev;
-	struct proc *p;
 
 	intr_eoi();
 
@@ -180,15 +189,12 @@ disk_intr_handler(uint8_t trapno, struct context *ctx, int guest)
 
 	TAILQ_FOREACH(dev, &all_disk_devices, entry) {
 		if (dev->irq == irq) {
-			KERN_ASSERT(dev->p == NULL ||
-				    spinlock_holding(&dev->lk) == TRUE);
 			if (dev->intr_handler)
 				dev->intr_handler(dev);
-			if (dev->p && dev->status != XFER_PROCESSING) {
-				DISK_DEBUG("Wake process %d.\n", dev->p->pid);
-				p = dev->p;
-				dev->p = NULL;
-				proc_wake(p);
+			if (dev->status != XFER_PROCESSING) {
+				DISK_DEBUG("Wake process(s) waiting fo "
+					   "device 0x%08x.\n", dev);
+				proc_wake(dev);
 			}
 		}
 	}
