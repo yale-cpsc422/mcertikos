@@ -40,26 +40,25 @@ ipc_send(struct channel *ch, uintptr_t msg, size_t size,
 	channel_lock(ch);
 
 	do {
-		KERN_ASSERT(channel_sender_waiting(ch) == FALSE);
+		KERN_ASSERT(sender->state == PROC_RUNNING);
 		rc = channel_send(ch, sender, msg, size, in_kern);
 		if (rc != E_CHANNEL_FULL)
 			break;
 		if (blocking == TRUE) {
-			IPC_DEBUG("Cannot send to channel %d from process %d. "
+			IPC_DEBUG("Process %d cannot send to channel %d. "
 				  "Waiting ... \n",
-				  channel_getid(ch), sender->pid);
-			channel_set_sender_waiting(ch, TRUE);
-			proc_sleep(sender, &ch->lk);
+				  sender->pid, channel_getid(ch));
+			proc_sleep(sender, ch, &ch->lk);
 			KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
 		} else {
-			IPC_DEBUG("Cannot send to channel %d from process %d. "
-				  "Return.\n", channel_getid(ch), sender->pid);
+			IPC_DEBUG("Process %d cannot send to channel %d. "
+				  "Return.\n", sender->pid, channel_getid(ch));
 			channel_unlock(ch);
 			return E_IPC_SEND_BUSY;
 		}
 	} while (1);
 
-	KERN_ASSERT(channel_sender_waiting(ch) == FALSE);
+	KERN_ASSERT(sender->state == PROC_RUNNING);
 
 	channel_unlock(ch);
 
@@ -74,12 +73,10 @@ ipc_send(struct channel *ch, uintptr_t msg, size_t size,
 
 	channel_lock(ch);
 
-	if (channel_receiver_waiting(ch) == TRUE &&
-	    (receiver = channel_receiver(ch)) != NULL) {
-		channel_set_recver_waiting(ch, FALSE);
-		proc_wake(receiver);
-		IPC_DEBUG("Wake process %d waiting to receive from channel %d.\n",
-			  receiver->pid, channel_getid(ch));
+	if ((receiver = channel_get_receiver(ch)) != NULL) {
+		proc_wake(ch);
+		IPC_DEBUG("Wake process(s) waiting to receive from channel %d.\n",
+			  channel_getid(ch));
 	}
 
 	channel_unlock(ch);
@@ -104,27 +101,26 @@ ipc_recv(struct channel *ch, uintptr_t msg, size_t size,
 	channel_lock(ch);
 
 	do {
-		KERN_ASSERT(channel_receiver_waiting(ch) == FALSE);
+		KERN_ASSERT(receiver->state == PROC_RUNNING);
 		rc = channel_recv(ch, receiver, msg, size, in_kern);
 		if (rc != E_CHANNEL_EMPTY)
 			break;
 		if (blocking == TRUE) {
-			IPC_DEBUG("Cannot receive from channel %d to process "
-				  "%d. Waiting ... \n",
-				  channel_getid(ch), receiver->pid);
-			channel_set_recver_waiting(ch, TRUE);
-			proc_sleep(receiver, &ch->lk);
+			IPC_DEBUG("Process %d cannot receive from channel %d. "
+				  "Waiting ... \n",
+				  receiver->pid, channel_getid(ch));
+			proc_sleep(receiver, ch, &ch->lk);
 			KERN_ASSERT(spinlock_holding(&ch->lk) == TRUE);
 		} else {
-			IPC_DEBUG("Cannot receive from channel %d to process "
-				  "%d. Return.\n",
-				  channel_getid(ch), receiver->pid);
+			IPC_DEBUG("Process %d cannot receive from channel %d. "
+				  "Return.\n",
+				  receiver->pid, channel_getid(ch));
 			channel_unlock(ch);
 			return E_IPC_RECV_EMPTY;
 		}
 	} while (1);
 
-	KERN_ASSERT(channel_receiver_waiting(ch) == FALSE);
+	KERN_ASSERT(receiver->state == PROC_RUNNING);
 
 	channel_unlock(ch);
 
@@ -139,12 +135,10 @@ ipc_recv(struct channel *ch, uintptr_t msg, size_t size,
 
 	channel_lock(ch);
 
-	if (channel_sender_waiting(ch) == TRUE &&
-	    (sender = channel_sender(ch)) != NULL) {
-		channel_set_sender_waiting(ch, FALSE);
-		proc_wake(sender);
-		IPC_DEBUG("Wake process %d waiting to send to channel %d.\n",
-			  sender->pid, channel_getid(ch));
+	if ((sender = channel_get_sender(ch)) != NULL) {
+		proc_wake(ch);
+		IPC_DEBUG("Wake process(s) waiting to send to channel %d.\n",
+			  channel_getid(ch));
 	}
 
 	channel_unlock(ch);

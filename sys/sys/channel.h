@@ -15,10 +15,6 @@ struct channel {
 	struct proc	*sender;	/* the sending process */
 	struct proc	*receiver;	/* the receiving process */
 
-	bool		sender_waiting;	/* is the sender waiting for sending? */
-	bool		recver_waiting;	/* is the receiver waiting for
-					   receiving? */
-
 	void		*msg_buf;	/* the buffer for transfering messages */
 	size_t		msg_size;	/* the size of the message buffer */
 
@@ -57,8 +53,10 @@ struct channel *channel_alloc(size_t msg_size);
  * this channel.
  *
  * @param ch the channel to be freed
+ *
+ * @return 0 if successful; otherwise, return a non-zero value.
  */
-void channel_free(struct channel * ch);
+int channel_free(struct channel *ch);
 
 /*
  * Set the permission how a process is allowed to use the channel.
@@ -128,8 +126,8 @@ void channel_unlock(struct channel *ch);
 /*
  * Get the sender/receiver of a channel.
  */
-struct proc *channel_sender(struct channel *ch);
-struct proc *channel_receiver(struct channel *ch);
+struct proc *channel_get_sender(struct channel *ch);
+struct proc *channel_get_receiver(struct channel *ch);
 
 /*
  * Get the channel from a channel id.
@@ -140,12 +138,6 @@ struct channel *channel_getch(chid_t chid);
  * Get the id of a channel.
  */
 chid_t channel_getid(struct channel *ch);
-
-bool channel_sender_waiting(struct channel *ch);
-bool channel_receiver_waiting(struct channel *ch);
-
-void channel_set_sender_waiting(struct channel *ch, bool waiting);
-void channel_set_recver_waiting(struct channel *ch, bool waiting);
 
 #endif /* _KERN_ */
 

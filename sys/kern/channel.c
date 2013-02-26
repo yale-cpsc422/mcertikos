@@ -5,6 +5,7 @@
 #include <sys/pcpu.h>
 #include <sys/proc.h>
 #include <sys/queue.h>
+#include <sys/sched.h>
 #include <sys/spinlock.h>
 #include <sys/string.h>
 #include <sys/types.h>
@@ -84,9 +85,17 @@ channel_alloc(size_t msg_size)
 
 	spinlock_release(&channel_pool_lk);
 
+	if (sched_add_slpq(ch)) {
+		CHANNEL_DEBUG("Cannot add sleep queue for channel %d.\n",
+			      channel_getid(ch));
+		spinlock_acquire(&channel_pool_lk);
+		TAILQ_INSERT_TAIL(&channel_pool, ch, entry);
+		spinlock_release(&channel_pool_lk);
+		return NULL;
+	}
+
 	spinlock_init(&ch->lk);
 	ch->sender = ch->receiver = NULL;
-	ch->sender_waiting = ch->recver_waiting = FALSE;
 	ch->msg_buf = mem_pi2ptr(buf_pi);
 	ch->msg_size = msg_size;
 	ch->empty = TRUE;
@@ -96,7 +105,7 @@ channel_alloc(size_t msg_size)
 	return ch;
 }
 
-void
+int
 channel_free(struct channel *ch)
 {
 	KERN_ASSERT(channel_inited == TRUE);
@@ -105,6 +114,11 @@ channel_free(struct channel *ch)
 	KERN_ASSERT(CHANNEL_LOCKED(ch) == TRUE);
 	KERN_ASSERT(ch->inuse == TRUE);
 
+	if (sched_remove_slpq(ch)) {
+		CHANNEL_DEBUG("Channel %d is busy.\n", channel_getid(ch));
+		return -1;
+	}
+
 	ch->sender = ch->receiver = NULL;
 	mem_pages_free(mem_ptr2pi(ch->msg_buf));
 	ch->inuse = FALSE;
@@ -112,6 +126,8 @@ channel_free(struct channel *ch)
 	spinlock_acquire(&channel_pool_lk);
 	TAILQ_INSERT_TAIL(&channel_pool, ch, entry);
 	spinlock_release(&channel_pool_lk);
+
+	return 0;
 }
 
 int
@@ -288,7 +304,7 @@ channel_unlock(struct channel *ch)
 }
 
 struct proc *
-channel_sender(struct channel *ch)
+channel_get_sender(struct channel *ch)
 {
 	KERN_ASSERT(channel_inited == TRUE);
 	KERN_ASSERT(ch != NULL);
@@ -298,7 +314,7 @@ channel_sender(struct channel *ch)
 }
 
 struct proc *
-channel_receiver(struct channel *ch)
+channel_get_receiver(struct channel *ch)
 {
 	KERN_ASSERT(channel_inited == TRUE);
 	KERN_ASSERT(ch != NULL);
@@ -323,44 +339,4 @@ channel_getid(struct channel *ch)
 	    !(0 <= ch - channels && ch - channels < MAX_CHANNEL))
 		return -1;
 	return ch->chid;
-}
-
-bool
-channel_sender_waiting(struct channel *ch)
-{
-	KERN_ASSERT(channel_inited == TRUE);
-	KERN_ASSERT(ch != NULL);
-	KERN_ASSERT(0 <= ch - channels && ch - channels < MAX_CHANNEL);
-	KERN_ASSERT(CHANNEL_LOCKED(ch) == TRUE);
-	return ch->sender_waiting;
-}
-
-bool
-channel_receiver_waiting(struct channel *ch)
-{
-	KERN_ASSERT(channel_inited == TRUE);
-	KERN_ASSERT(ch != NULL);
-	KERN_ASSERT(0 <= ch - channels && ch - channels < MAX_CHANNEL);
-	KERN_ASSERT(CHANNEL_LOCKED(ch) == TRUE);
-	return ch->recver_waiting;
-}
-
-void
-channel_set_sender_waiting(struct channel *ch, bool waiting)
-{
-	KERN_ASSERT(channel_inited == TRUE);
-	KERN_ASSERT(ch != NULL);
-	KERN_ASSERT(0 <= ch - channels && ch - channels < MAX_CHANNEL);
-	KERN_ASSERT(CHANNEL_LOCKED(ch) == TRUE);
-	ch->sender_waiting = waiting;
-}
-
-void
-channel_set_recver_waiting(struct channel *ch, bool waiting)
-{
-	KERN_ASSERT(channel_inited == TRUE);
-	KERN_ASSERT(ch != NULL);
-	KERN_ASSERT(0 <= ch - channels && ch - channels < MAX_CHANNEL);
-	KERN_ASSERT(CHANNEL_LOCKED(ch) == TRUE);
-	ch->recver_waiting = waiting;
 }
