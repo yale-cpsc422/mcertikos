@@ -325,6 +325,16 @@ kern_init(mboot_info_t *mbi)
 	intr_init();
 	KERN_INFO("done.\n");
 
+	/* Initialize process module. */
+	KERN_INFO("Initialize process module ... ");
+	proc_init();
+	KERN_INFO("done.\n");
+
+	/* Initialize channel module. */
+	KERN_INFO("Initialize channel module ... ");
+	channel_init();
+	KERN_INFO("done.\n");
+
 	/*
 	 * Initialize virtual machine monitor module.
 	 */
@@ -352,16 +362,6 @@ kern_init(mboot_info_t *mbi)
 	 **/
 	KERN_INFO("Initialize PCI ... \n");
 	pci_init();
-	KERN_INFO("done.\n");
-
-	/* Initialize process module. */
-	KERN_INFO("Initialize process module ... ");
-	proc_init();
-	KERN_INFO("done.\n");
-
-	/* Initialize channel module. */
-	KERN_INFO("Initialize channel module ... ");
-	channel_init();
 	KERN_INFO("done.\n");
 
 	/* Start master kernel on BSP */

@@ -216,6 +216,7 @@ proc_new(struct proc *parent, struct channel *ch)
 	/* other fields */
 	p->vm = NULL;
 	p->vid = -1;
+	p->inv = NULL;
 	spinlock_init(&p->proc_lk);
 	p->state = PROC_INITED;
 
@@ -249,32 +250,26 @@ proc_exec(struct proc *p, struct pcpu *c, uintptr_t u_elf)
 }
 
 void
-proc_sleep(struct proc *p, spinlock_t *inv)
+proc_sleep(struct proc *p, void *wchan, spinlock_t *inv)
 {
 	KERN_ASSERT(proc_inited == TRUE);
 	KERN_ASSERT(p != NULL);
+	KERN_ASSERT(wchan != NULL);
 	KERN_ASSERT(inv == NULL || spinlock_holding(inv) == TRUE);
 
 	sched_lock(p->cpu);
-	if (inv != NULL)
-		spinlock_release(inv);
-
-	sched_sleep(p);
-
-	if (inv != NULL)
-		spinlock_acquire(inv);
+	sched_sleep(p, wchan, inv);
 	sched_unlock(p->cpu);
+
+	KERN_ASSERT(inv == NULL || spinlock_holding(inv) == TRUE);
 }
 
 void
-proc_wake(struct proc *p)
+proc_wake(void *wchan)
 {
 	KERN_ASSERT(proc_inited == TRUE);
-	KERN_ASSERT(p != NULL);
-
-	sched_lock(p->cpu);
-	sched_wake(p);
-	sched_unlock(p->cpu);
+	KERN_ASSERT(wchan != NULL);
+	sched_wake(wchan);
 }
 
 void

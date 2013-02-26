@@ -42,26 +42,24 @@ void sched_resched(bool select_new);
 void sched_add(struct proc *p, struct pcpu *c);
 
 /*
- * Wake a sleeping process.
+ * Wake the processes being sleeping on the specified resource.
  *
- * XXX: The scheduler on the processor where the sleeping process is must be
- *      locked before entering sched_wake().
- *
- * @param p the sleeping process to be waken
+ * @param wchan the resource
  */
-void sched_wake(struct proc *p);
+void sched_wake(void *wchan);
 
 /*
- * Make a the currently running process to sleep.
+ * Make a process sleeping on the specified resource.
  *
  * XXX: The scheduler on the current processor must be locked before entering
  *      sched_sleep().
  *
  * XXX: The process must be running on the current processor.
  *
- * @param p the process to sleep
+ * @param p     the process to sleep
+ * @param wchan the resource
  */
-void sched_sleep(struct proc *p);
+void sched_sleep(struct proc *p, void *wchan, spinlock_t *inv);
 
 /*
  * Abandon the processor time.
@@ -89,6 +87,24 @@ void sched_update(void);
  * @return the current process if there's any; otherwise, return NULL.
  */
 struct proc *sched_cur_proc(struct pcpu *c);
+
+/*
+ * Add a sleep queue for the specified resource.
+ *
+ * @param wchan the resource to block on
+ *
+ * @return 0 if successful; otherwise, return a non-zero value.
+ */
+int sched_add_slpq(void *wchan);
+
+/*
+ * Remove the sleep queue of the specified resource.
+ *
+ * @param wchan the resource to block on
+ *
+ * @return 0 if successful; otherwise, return a non-zero value.
+ */
+int sched_remove_slpq(void *wchan);
 
 #endif /* _KERN_ */
 #endif /* !_KERN_SCHED_H_ */

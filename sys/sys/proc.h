@@ -83,6 +83,8 @@ struct proc {
 	struct kstack	*kstack;	/* (s) kernel stack */
 	struct kern_ctx	*kctx;		/* (s) kernel context */
 
+	spinlock_t	*inv;		/* (?) invariant */
+
 	TAILQ_ENTRY(proc) entry;	/* (s) entry in scheduler queues */
 };
 
@@ -131,7 +133,10 @@ struct proc *proc_new(struct proc *parent, struct channel *ch);
 int proc_exec(struct proc *p, struct pcpu *c, uintptr_t u_elf);
 
 /*
- * Make a process to sleep.
+ * Make a process to sleep. If an invariant lock is acquired when calling
+ * proc_sleep(), it will be released when switching to another process and be
+ * acquired again when the sleeping process is awaken. It's the caller's
+ * responsibility to avoid deadlocks.
  *
  * XXX: proc_sleep() releases the lock inv after the process sleeps, and regains
  *      it after the process wakes up.
@@ -141,15 +146,18 @@ int proc_exec(struct proc *p, struct pcpu *c, uintptr_t u_elf);
  *
  * XXX: If inv != NULL, it must be acquired before entering proc_sleep().
  *
- * @param p   the process to be sleeping
- * @param inv the invariant lock
+ * @param p     the process to be sleeping
+ * @param wchan the resource on which the process is going to sleep
+ * @param inv   the invariant lock
  */
-void proc_sleep(struct proc *p, spinlock_t *inv);
+void proc_sleep(struct proc *p, void *wchan, spinlock_t *inv);
 
 /*
- * Wake a sleeping process.
+ * Wake the processes sleeping on the specified resource.
+ *
+ * @param wchan the resource on which the processes are sleeping
  */
-void proc_wake(struct proc *p);
+void proc_wake(void *wchan);
 
 /*
  * Yield to another process.
