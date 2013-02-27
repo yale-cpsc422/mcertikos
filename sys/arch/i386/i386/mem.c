@@ -1,6 +1,5 @@
 #include <sys/debug.h>
 #include <sys/mboot.h>
-#include <sys/pcpu.h>
 #include <sys/spinlock.h>
 #include <sys/string.h>
 #include <sys/types.h>
@@ -280,7 +279,7 @@ mem_in_reserved_page(uintptr_t addr)
 static void
 mem_test(void)
 {
-	if (mem_inited == FALSE || pcpu_onboot() == FALSE)
+	if (mem_inited == FALSE)
 		return;
 
 	struct page_info *pi0, *pi1, *pi2;
@@ -326,7 +325,7 @@ mem_init(mboot_info_t *mbi)
 	pmmap_t *e820_entry;
 	struct page_info *last_free;
 
-	if (mem_inited == TRUE || pcpu_onboot() == FALSE)
+	if (mem_inited == TRUE)
 		return;
 
 	/* get a usable physical memory map */
