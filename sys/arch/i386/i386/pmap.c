@@ -2,7 +2,6 @@
 #include <sys/gcc.h>
 #include <sys/mem.h>
 #include <sys/mmu.h>
-#include <sys/pcpu.h>
 #include <sys/string.h>
 #include <sys/types.h>
 #include <sys/vm.h>
@@ -16,6 +15,8 @@ typedef pmap_t pde_t;
 typedef pmap_t pte_t;
 
 static pmap_t pmap_boot[NPDENTRIES] gcc_aligned(PAGESIZE);
+
+volatile static bool pmap_boot_inited = FALSE;
 
 #define PTE_INV		(~((pte_t) 0))
 #define PTE_NULL	((pte_t) NULL)
@@ -178,13 +179,14 @@ pmap_init_kern(void)
 void
 pmap_init(void)
 {
-	if (pcpu_onboot() == TRUE) {
+	if (pmap_boot_inited == FALSE) {
 		/* pmap_new() cannot be useable right now. */
 		if (pmap_init_boot() == NULL)
 			KERN_PANIC("Cannot initialize the bootstrap "
 				   "page map.\n");
 		if (pmap_init_kern() == NULL)
 			KERN_PANIC("Cannot initialize the kernel page map.");
+		pmap_boot_inited = TRUE;
 	}
 
 
