@@ -167,7 +167,11 @@ smp_rmb(void)
 	__asm __volatile("":::"memory");
 }
 
-#endif /* !_CCOMP_ */
+#else /* !_CCOMP_ */
+
+void ccomp_rdtscp(uint64_t *tsc);
+
+#endif /* _CCOMP_ */
 
 #endif /* _KERN_ */
 

@@ -10,6 +10,14 @@ KERN_BINFILES	+= $(UTILSDIR)/vgabios.bin
 
 # Targets
 
+ifdef ENABLE_CCOMP
+$(KERN_OBJDIR)/virt/vmm.o: $(KERN_DIR)/virt/vmm.c
+	@echo + ccomp[KERN/virt] $<
+	@mkdir -p $(@D)
+	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
+
+endif
+
 $(KERN_OBJDIR)/virt/%.o: $(KERN_DIR)/virt/%.c
 	@echo + cc[KERN/virt] $<
 	@mkdir -p $(@D)

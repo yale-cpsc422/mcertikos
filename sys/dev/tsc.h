@@ -3,14 +3,13 @@
 
 #ifdef _KERN_
 
-#ifndef _CCOMP_
+#include <sys/types.h>
 
 volatile uint64_t tsc_per_ms;	/* TSC ticks per microsecond */
 
-#endif
-
 int tsc_init(void);
 void delay(uint32_t);
+
 uint64_t time_ms(void);
 
 #endif /* _KERN_ */

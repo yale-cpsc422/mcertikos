@@ -11,7 +11,10 @@ KERN_SRCFILES	+= $(KERN_DIR)/lib/elf.c
 KERN_SRCFILES	+= $(KERN_DIR)/lib/mqueue.c
 
 ifdef ENABLE_CCOMP
-KERN_SRCFILES	+= $(KERN_DIR)/lib/spinlock.c
+KERN_SRCFILES	+= $(KERN_DIR)/lib/ccomp_spinlock.c
+KERN_SRCFILES	+= $(KERN_DIR)/lib/ccomp_u64.c
+KERN_SRCFILES	+= $(KERN_DIR)/lib/ccomp_vmm.c
+KERN_SRCFILES	+= $(KERN_DIR)/lib/ccomp_x86.c
 endif
 
 # Targets
