@@ -8,8 +8,12 @@
 
 typedef uintptr_t pmap_t;
 
+#ifndef _CCOMP_
+
 /* the kernel page map */
 pmap_t pmap_kern[NPDENTRIES] gcc_aligned(PAGESIZE);
+
+#endif
 
 /*
  * Initialize the page map module and turn on paging.
