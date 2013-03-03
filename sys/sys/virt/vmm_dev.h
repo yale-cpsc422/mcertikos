@@ -246,6 +246,8 @@ int vdev_get_request(struct proc *dev_p, void *req, size_t *size, int blocking);
 
 #endif /* _KERN_ */
 
+#ifndef _CCOMP_
+
 enum vdev_msg_magic {
 	VDEV_DEVICE_READY = 0xabcd0001,
 	VDEV_DEVICE_SYNC,
@@ -254,6 +256,17 @@ enum vdev_msg_magic {
 	VDEV_GUEST_IOPORT_DATA,
 	MAX_VDEV_MSG_MAGIC
 };
+
+#else
+
+#define VDEV_DEVICE_READY	0xabcd0001
+#define VDEV_DEVICE_SYNC	0xabcd0002
+#define VDEV_READ_GUEST_IOPORT	0xabcd0003
+#define VDEV_WRITE_GUEST_IOPORT	0xabcd0004
+#define VDEV_GUEST_IOPORT_DATA	0xabcd0005
+#define MAX_VDEV_MSG_MAGIC	0xabcd0006
+
+#endif
 
 struct vdev_device_ready {
 	uint32_t	magic;
