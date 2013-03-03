@@ -15,7 +15,6 @@
 #include <sys/trap.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
-#include <sys/x86.h>
 
 #include <sys/virt/vmm.h>
 
@@ -377,8 +376,7 @@ kern_init_ap(void (*f)(void))
 {
 	KERN_INFO("\n");
 
-	struct kstack *ks =
-		(struct kstack *) ROUNDDOWN(get_stack_pointer(), KSTACK_SIZE);
+	struct kstack *ks = kstack_get_stack();
 
 	kstack_init(ks);
 	pcpu_cur()->kstack = ks;

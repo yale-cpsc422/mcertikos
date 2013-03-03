@@ -1,9 +1,7 @@
 #ifndef _MACHINE_X86_H_
 #define _MACHINE_X86_H_
 
-#ifndef _KERN_
-#error "This is a kernel header; do not include it in userspace programs."
-#endif
+#ifdef _KERN_
 
 #include <sys/gcc.h>
 #include <sys/types.h>
@@ -184,6 +182,8 @@
 #define CPUID_X_FEATURE_DE		(1<<2)
 #define CPUID_X_FEATURE_VME		(1<<1)
 #define CPUID_X_FEATURE_FPU		(1<<0)
+
+#ifndef _CCOMP_
 
 static gcc_inline uint16_t
 read_cs(void)
@@ -456,5 +456,9 @@ read_eflags(void)
         __asm __volatile("pushfl; popl %0" : "=r" (flags));
         return flags;
 }
+
+#endif /* !_CCOMP_ */
+
+#endif /* _KERN_ */
 
 #endif /* !_MACHINE_X86_H_ */

@@ -1,14 +1,14 @@
 #ifndef _KERN_X86_H_
 #define _KERN_X86_H_
 
-#ifndef _KERN_
-#error "This is a kernel header file; do not include it in userspace program."
-#endif /* !_KERN_ */
+#ifdef _KERN_
 
 #include <sys/gcc.h>
 #include <sys/types.h>
 
 #include <machine/x86.h>
+
+#ifndef _CCOMP_
 
 static gcc_inline uint8_t
 inb(int port)
@@ -166,5 +166,9 @@ smp_rmb(void)
 {
 	__asm __volatile("":::"memory");
 }
+
+#endif /* !_CCOMP_ */
+
+#endif /* _KERN_ */
 
 #endif /* !_KERN_X86_H_ */

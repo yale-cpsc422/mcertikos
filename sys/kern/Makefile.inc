@@ -17,6 +17,23 @@ KERN_SRCFILES	+= $(KERN_DIR)/kern/ipc.c
 
 # Targets
 
+ifdef ENABLE_CCOMP
+$(KERN_OBJDIR)/kern/init.o: $(KERN_DIR)/kern/init.c
+	@echo + ccomp[KERN/kern] $<
+	@mkdir -p $(@D)
+	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
+
+$(KERN_OBJDIR)/kern/proc.o: $(KERN_DIR)/kern/proc.c
+	@echo + ccomp[KERN/kern] $<
+	@mkdir -p $(@D)
+	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
+
+$(KERN_OBJDIR)/kern/sched.o: $(KERN_DIR)/kern/sched.c
+	@echo + ccomp[KERN/kern] $<
+	@mkdir -p $(@D)
+	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
+endif
+
 $(KERN_OBJDIR)/kern/%.o: $(KERN_DIR)/kern/%.c
 	@echo + cc[KERN/kern] $<
 	@mkdir -p $(@D)

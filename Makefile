@@ -24,6 +24,17 @@ LD		:= ld
 CFLAGS		:= -MD -Wall -Werror -Wno-strict-aliasing -Wno-unused-function -pipe -fno-builtin -nostdinc -fno-stack-protector
 LDFLAGS		:= -nostdlib
 
+ifdef ENABLE_CCOMP
+CCOMP		:= ccomp
+CCOMP_CFLAGS	:= -finline-asm -fpacked-structs -flonglong -D_CCOMP_
+
+# Uncomment following two lines when you suspect differences between gcc and
+# compcert cause problems.
+
+#CCOMP		:= gcc
+#CCOMP_CFLAGS	:= -MD -Wall -Werror -Wno-strict-aliasing -Wno-unused-function -pipe -fno-builtin -nostdinc -fno-stack-protector -m32 -D_CCOMP_
+endif
+
 # other tools
 PERL		:= perl
 OBJDUMP		:= objdump
@@ -57,8 +68,16 @@ QEMUOPTS_BIOS	:= -L $(UTILSDIR)/qemu/
 
 .PHONY: all boot dev kern lib sys user deps
 
+
+ifndef ENABLE_CCOMP
 all: boot sys user
 	@echo "All targets are done."
+else
+# Compcert dones't support -MD, so we have to clean all the already generated
+# files.
+all: clean boot sys user
+	@echo "All targets are done."
+endif
 
 install_img: install_boot install_sys install_user
 	@echo "CertiKOS is installed on the disk image."

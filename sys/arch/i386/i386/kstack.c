@@ -196,3 +196,9 @@ kstack_switch(struct kstack *to)
 	c->kstack->gdt[CPU_GDT_TSS >> 3].sd_s = 0;
 	ltr(CPU_GDT_TSS);
 }
+
+gcc_inline struct kstack *
+ccomp_kstack_get_stack(void)
+{
+	return (struct kstack *) ROUNDDOWN(get_stack_pointer(), KSTACK_SIZE);
+}

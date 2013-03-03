@@ -10,6 +10,10 @@ KERN_SRCFILES	+= $(KERN_DIR)/lib/debug.c
 KERN_SRCFILES	+= $(KERN_DIR)/lib/elf.c
 KERN_SRCFILES	+= $(KERN_DIR)/lib/mqueue.c
 
+ifdef ENABLE_CCOMP
+KERN_SRCFILES	+= $(KERN_DIR)/lib/spinlock.c
+endif
+
 # Targets
 
 $(KERN_OBJDIR)/lib/%.o: $(KERN_DIR)/lib/%.c

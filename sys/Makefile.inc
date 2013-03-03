@@ -7,11 +7,16 @@ OBJDIRS		+= $(KERN_OBJDIR)
 
 # Arch-independent compiling and linking options
 KERN_CFLAGS	:= $(CFLAGS) -D_KERN_ -I$(KERN_DIR) -I.
+ifdef ENABLE_CCOMP
+CCOMP_KERN_CFLAGS := $(CCOMP_CFLAGS) -D_KERN_ -I$(KERN_DIR) -I.
+endif
+
 ifdef DEBUG_MSG
 KERN_CFLAGS	+= -O0
 else
 KERN_CFLAGS	+= -O2
 endif
+
 KERN_LDFLAGS	:= $(LDFLAGS) -e start
 
 # Sub-makefiles

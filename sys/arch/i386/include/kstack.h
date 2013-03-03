@@ -68,6 +68,23 @@ void kstack_free(struct kstack *ks);
  */
 void kstack_switch(struct kstack *to);
 
+/*
+ * Get the kernel stack where the caller is.
+ */
+#ifdef _CCOMP_
+
+extern gcc_inline struct kstack *ccomp_kstack_get_stack(void);
+
+#define kstack_get_stack()			\
+	ccomp_kstack_get_stack()
+
+#else
+
+#define kstack_get_stack()						\
+	((struct kstack *) ROUNDDOWN(get_stack_pointer(), KSTACK_SIZE))
+
+#endif
+
 #endif /* _KERN_ */
 
 #endif /* !_MACHINE_KSTACK_H_ */

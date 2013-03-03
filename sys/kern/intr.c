@@ -144,3 +144,15 @@ intr_eoi(void)
 	else
 		pic_eoi();
 }
+
+void
+ccomp_intr_local_enable(void)
+{
+	sti();
+}
+
+void
+ccomp_intr_local_disable(void)
+{
+	cli();
+}

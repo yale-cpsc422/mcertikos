@@ -1,15 +1,15 @@
 #ifndef _MACHINE_MMU_H_
 #define _MACHINE_MMU_H_
 
-#ifndef _KERN_
-#error "This is a kernel header; do not include it in userspace programs."
-#endif
+#ifdef _KERN_
 
 #define PAGE_SIZE		4096
 
 /********************
  * Part I. Segments *
  ********************/
+
+#ifndef _CCOMP_
 
 #ifdef __ASSEMBLER__
 
@@ -193,6 +193,56 @@ struct gatedesc {
 
 #endif /* !__ASSEMBLER__ */
 
+#else /* !_CCOMP_ */
+
+/* Segment Descriptors */
+typedef uint64_t segdesc_t;
+
+#define CPU_GDT_NDESC	6	    /* number of GDT entries used */
+
+typedef
+struct tasksate {
+	uint32_t	ts_link;
+	uint32_t	ts_esp0;
+	uint16_t	ts_ss0;
+	uint16_t	ts_padding1;
+	uint32_t	ts_esp1;
+	uint16_t	ts_ss1;
+	uint16_t	ts_padding2;
+	uint32_t	ts_esp2;
+	uint16_t	ts_ss2;
+	uint16_t	ts_padding3;
+	uint32_t	ts_cr3;
+	uint32_t	ts_eip;
+	uint32_t	ts_eflags;
+	uint32_t	ts_eax;
+	uint32_t        ts_ecx;
+	uint32_t	ts_edx;
+	uint32_t	ts_ebx;
+	uint32_t	ts_esp;
+	uint32_t	ts_ebp;
+	uint32_t	ts_esi;
+	uint32_t	ts_edi;
+	uint16_t	ts_es;
+	uint16_t	ts_padding4;
+	uint16_t	ts_cs;
+	uint16_t	ts_padding5;
+	uint16_t	ts_ss;
+	uint16_t	ts_padding6;
+	uint16_t	ts_ds;
+	uint16_t	ts_padding7;
+	uint16_t	ts_fs;
+	uint16_t	ts_padding8;
+	uint16_t	ts_gs;
+	uint16_t	ts_padding9;
+	uint16_t	ts_ldt;
+	uint16_t	ts_padding10;
+	uint16_t	ts_trap;
+	uint16_t	ts_iomb;
+} tss_t;
+
+#endif /* _CCOMP_ */
+
 /*******************
  * Part II. Paging *
  *******************/
@@ -280,5 +330,7 @@ struct gatedesc {
 #define	PAT_WRITE_PROTECTED	0x05
 #define	PAT_WRITE_BACK		0x06
 #define	PAT_UNCACHED		0x07
+
+#endif /* _KERN_ */
 
 #endif /* !_MACHINE_MMU_H_ */

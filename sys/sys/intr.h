@@ -3,7 +3,10 @@
 
 #ifdef _KERN_
 
+#include <sys/types.h>
 #include <sys/x86.h>
+
+#ifndef _CCOMP_
 
 #define intr_local_enable()			\
 	do {					\
@@ -14,6 +17,16 @@
 	do {					\
 		cli();				\
 	} while(0)
+
+#else /* !_CCOMP_ */
+
+extern void ccomp_intr_local_enable(void);
+extern void ccomp_intr_local_disable(void);
+
+#define intr_local_enable()	ccomp_intr_local_enable()
+#define intr_local_disable()	ccomp_intr_local_disable()
+
+#endif
 
 void intr_init(void);
 void intr_enable(uint8_t irq, int cpunum);

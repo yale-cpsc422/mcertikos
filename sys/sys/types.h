@@ -38,12 +38,24 @@ typedef enum data_sz_t {
 	SZ32	/* 4 byte */
 } data_sz_t;
 
+#ifndef _CCOMP_
+
 #define MIN(a, b)				\
 	({					\
 		typeof(a) _a = (a);		\
 		typeof(b) _b = (b);		\
 		_a <= _b ? _a : _b;		\
 	})
+
+#else
+
+static gcc_inline size_t
+MIN_SIZE(size_t a, size_t b)
+{
+	return a <= b ? a : b;
+}
+
+#endif
 
 #define MAX(a, b)				\
 	({					\
@@ -52,6 +64,8 @@ typedef enum data_sz_t {
 		_a >= _b ? _a : _b;		\
 	})
 
+#ifndef _CCOMP_
+
 /* Round down to the nearest multiple of n */
 #define ROUNDDOWN(a, n)				\
 	({					\
@@ -59,6 +73,16 @@ typedef enum data_sz_t {
 		typeof(n) _n = (n);		\
 		(typeof(a)) (_a - _a % _n);	\
 	})
+
+#else
+
+static gcc_inline uintptr_t
+ROUNDDOWN_PTR(uintptr_t a, uintptr_t n)
+{
+	return a - a % n;
+}
+
+#endif
 
 /* Round up to the nearest multiple of n */
 #define ROUNDUP(_a, _n)						\

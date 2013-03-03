@@ -71,8 +71,13 @@ struct sched {
 	spinlock_t		sched_lk;	/* scheduler lock */
 
 	struct proc		*cur_proc;	/* current process */
+#ifndef _CCOMP_
 	uint64_t		run_ticks;	/* how long has the current
 						   process run? */
+#else
+	uint32_t		run_ticks;	/* XXX: no 64-bit integer in
+						        CompCert */
+#endif
 
 	TAILQ_HEAD(, proc)	rdyq;
 	TAILQ_HEAD(, proc)	deadq;

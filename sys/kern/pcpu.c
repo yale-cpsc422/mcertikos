@@ -1,15 +1,12 @@
 #include <sys/types.h>
 #include <sys/debug.h>
 #include <sys/gcc.h>
-#include <sys/mmu.h>
 #include <sys/pcpu.h>
 #include <sys/queue.h>
 #include <sys/spinlock.h>
 #include <sys/string.h>
-#include <sys/x86.h>
 
 #include <machine/pcpu_mp.h>
-#include <machine/pmap.h>
 
 static bool pcpu_inited = FALSE;
 
@@ -41,8 +38,7 @@ pcpu_init(void)
 struct pcpu *
 pcpu_cur(void)
 {
-	struct kstack *kstack =
-		(struct kstack *) ROUNDDOWN(get_stack_pointer(), KSTACK_SIZE);
+	struct kstack *kstack = kstack_get_stack();
 	KERN_ASSERT(kstack->magic == KSTACK_MAGIC);
 	return &pcpu[kstack->cpu_idx];
 }
