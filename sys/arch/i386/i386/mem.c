@@ -126,7 +126,11 @@ pmmap_merge(void)
 		 */
 		if (p->start <= q->start && p->end >= q->start &&
 		    p->type == q->type) {
+#ifndef _CCOMP_
 			p->end = MAX(p->end, q->end);
+#else
+			p->end = MAX_PTR(p->end, q->end);
+#endif
 			p->next = q->next;
 		} else
 			p = q;
@@ -272,7 +276,11 @@ static gcc_inline int
 mem_in_reserved_page(uintptr_t addr)
 {
 	return (addr < (uintptr_t)
+#ifndef _CCOMP_
 		ROUNDUP((uintptr_t) (mem_all_pages + mem_npages), PAGESIZE)) ||
+#else
+		ROUNDUP_PTR((uintptr_t) (mem_all_pages + mem_npages), PAGESIZE)) ||
+#endif
 		addr >= 0xf0000000;
 }
 
@@ -332,7 +340,11 @@ mem_init(mboot_info_t *mbi)
 	pmmap_init(mbi);
 
 	/* reserve memory for mem_npage pageinfo_t structures */
+#ifndef _CCOMP_
 	mem_npages = ROUNDDOWN(pmmap_max(), PAGESIZE) / PAGESIZE;
+#else
+	mem_npages = ROUNDDOWN_PTR(pmmap_max(), PAGESIZE) / PAGESIZE;
+#endif
 	memzero(mem_all_pages, sizeof(struct page_info) * mem_npages);
 
 	mem_free_pages = NULL;
@@ -350,8 +362,13 @@ mem_init(mboot_info_t *mbi)
 		pg_type type;
 		struct page_info *pi;
 
+#ifndef _CCOMP_
 		lo = (uintptr_t) ROUNDUP(e820_entry->start, PAGESIZE);
 		hi = (uintptr_t) ROUNDDOWN(e820_entry->end, PAGESIZE);
+#else
+		lo = (uintptr_t) ROUNDUP_PTR(e820_entry->start, PAGESIZE);
+		hi = (uintptr_t) ROUNDDOWN_PTR(e820_entry->end, PAGESIZE);
+#endif
 
 		if (lo >= hi)
 			continue;

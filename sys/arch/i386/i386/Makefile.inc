@@ -14,6 +14,15 @@ KERN_BINFILES	+= $(ARCH_OBJDIR)/i386/boot_ap
 
 # Targets
 
+ifdef ENABLE_CCOMP
+
+$(ARCH_OBJDIR)/i386/mem.o: $(ARCH_DIR)/i386/mem.c
+	@echo + ccomp[KERN/i386] $<
+	@mkdir -p $(@D)
+	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
+
+endif
+
 $(ARCH_OBJDIR)/i386/%.o: $(ARCH_DIR)/i386/%.c
 	@echo + cc[KERN/i386] $<
 	@mkdir -p $(@D)

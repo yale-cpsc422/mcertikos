@@ -47,24 +47,12 @@ typedef enum data_sz_t {
 		_a <= _b ? _a : _b;		\
 	})
 
-#else
-
-static gcc_inline size_t
-MIN_SIZE(size_t a, size_t b)
-{
-	return a <= b ? a : b;
-}
-
-#endif
-
 #define MAX(a, b)				\
 	({					\
 		typeof(a) _a = (a);		\
 		typeof(b) _b = (b);		\
 		_a >= _b ? _a : _b;		\
 	})
-
-#ifndef _CCOMP_
 
 /* Round down to the nearest multiple of n */
 #define ROUNDDOWN(a, n)				\
@@ -74,16 +62,6 @@ MIN_SIZE(size_t a, size_t b)
 		(typeof(a)) (_a - _a % _n);	\
 	})
 
-#else
-
-static gcc_inline uintptr_t
-ROUNDDOWN_PTR(uintptr_t a, uintptr_t n)
-{
-	return a - a % n;
-}
-
-#endif
-
 /* Round up to the nearest multiple of n */
 #define ROUNDUP(_a, _n)						\
 	({							\
@@ -91,6 +69,34 @@ ROUNDDOWN_PTR(uintptr_t a, uintptr_t n)
 		typeof(_n) __n = (_n);				\
 		(typeof(_a)) (ROUNDDOWN(__a + __n - 1, __n));	\
 	})
+
+#else /* !_CCOMP_ */
+
+static gcc_inline size_t
+MIN_SIZE(size_t a, size_t b)
+{
+	return a <= b ? a : b;
+}
+
+static gcc_inline uintptr_t
+MAX_PTR(uintptr_t a, uintptr_t b)
+{
+	return a >= b ? a : b;
+}
+
+static gcc_inline uintptr_t
+ROUNDDOWN_PTR(uintptr_t a, uintptr_t n)
+{
+	return a - a % n;
+}
+
+static gcc_inline uintptr_t
+ROUNDUP_PTR(uintptr_t a, uintptr_t n)
+{
+	return ROUNDDOWN_PTR(a + n - 1, n);
+}
+
+#endif /* _CCOMP_ */
 
 /* Return the offset of 'member' relative to the beginning of a struct type */
 #define offsetof(type, member)	__builtin_offsetof(type, member)
