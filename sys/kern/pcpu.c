@@ -10,6 +10,8 @@
 
 static bool pcpu_inited = FALSE;
 
+static struct pcpu pcpu[MAX_CPU];
+
 void
 pcpu_init(void)
 {
@@ -55,4 +57,12 @@ pcpu_cpu_idx(struct pcpu *c)
 		return -1;
 
 	return (c - pcpu);
+}
+
+struct pcpu *
+pcpu_get_cpu(int pcpu_idx)
+{
+	if (pcpu_idx < 0 || pcpu_idx >= MAX_CPU)
+		return NULL;
+	return &pcpu[pcpu_idx];
 }

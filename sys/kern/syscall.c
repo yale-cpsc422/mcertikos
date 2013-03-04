@@ -237,7 +237,7 @@ sys_run_proc(pid_t pid, uint32_t cpu_idx, uintptr_t binary_la)
 
 	if (cpu_idx >= pcpu_ncpu())
 		return E_INVAL_CPU;
-	c = &pcpu[cpu_idx];
+	c = pcpu_get_cpu(cpu_idx);
 
 	if ((p = proc_pid2proc(pid)) == NULL || p->state != PROC_INITED)
 		return E_INVAL_PID;

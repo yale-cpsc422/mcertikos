@@ -37,8 +37,6 @@ struct pcpu {
 	bool		vm_inited;	/* is the virtualization initialzied? */
 };
 
-struct pcpu pcpu[MAX_CPU];
-
 /*
  * Initialize PCPU module.
  */
@@ -112,6 +110,11 @@ bool pcpu_is_smp(void);
  * @return the local APIC id of the processor core
  */
 lapicid_t pcpu_cpu_lapicid(int cpu_idx);
+
+/*
+ * Get the pcpu structure for the i'th CPU.
+ */
+struct pcpu *pcpu_get_cpu(int cpu_idx);
 
 #endif /* _KERN_ */
 

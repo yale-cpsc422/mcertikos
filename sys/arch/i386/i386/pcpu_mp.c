@@ -151,7 +151,7 @@ pcpu_mp_init_cpu(uint32_t idx, uint8_t lapic_id, bool is_bsp)
 	if (idx >= MAX_CPU)
 		return;
 
-	struct pcpuinfo *info = &pcpu[idx].arch_info;
+	struct pcpuinfo *info = &pcpu_get_cpu(idx)->arch_info;
 
 	info->lapicid = lapic_id;
 	info->bsp = is_bsp;
@@ -463,14 +463,16 @@ int
 pcpu_boot_ap(uint32_t cpu_idx, void (*f)(void), uintptr_t stack_addr)
 {
 	KERN_ASSERT(cpu_idx > 0 && cpu_idx < pcpu_ncpu());
-	KERN_ASSERT(pcpu[cpu_idx].inited == TRUE);
+	KERN_ASSERT(pcpu_get_cpu(cpu_idx)->inited == TRUE);
 	KERN_ASSERT(f != NULL);
+
+	struct pcpu *c = pcpu_get_cpu(cpu_idx);
 
 	/* avoid being called by AP */
 	if (pcpu_onboot() == FALSE)
 		return 1;
 
-	if (pcpu[cpu_idx].booted == TRUE)
+	if (c->booted == TRUE)
 		return 0;
 
 	extern void kern_init_ap(void);		/* defined in sys/kern/init.c */
@@ -481,10 +483,10 @@ pcpu_boot_ap(uint32_t cpu_idx, void (*f)(void), uintptr_t stack_addr)
 	lapic_startcpu(pcpu_cpu_lapicid(cpu_idx), (uintptr_t) boot);
 
 	/* wait until the processor is intialized */
-	while (pcpu[cpu_idx].booted == FALSE)
+	while (c->booted == FALSE)
 		pause();
 
-	KERN_ASSERT(pcpu[cpu_idx].booted == TRUE);
+	KERN_ASSERT(c->booted == TRUE);
 
 	return 0;
 }
@@ -518,5 +520,5 @@ lapicid_t
 pcpu_cpu_lapicid(int cpu_idx)
 {
 	KERN_ASSERT(0 <= cpu_idx && cpu_idx < ncpu);
-	return pcpu[cpu_idx].arch_info.lapicid;
+	return pcpu_get_cpu(cpu_idx)->arch_info.lapicid;
 }

@@ -148,7 +148,7 @@ ccomp_vmm_update_guest_tsc(struct vm *vm,
 	ccomp_u64_assign_val(1000, 0, &tmp);
 	ccomp_u64_sub(cur_h_tsc, last_h_tsc, &delta);
 	ccomp_u64_mul(&delta, &vm->cpufreq, &delta);
-	ccomp_u64_mul((uint64_t *) &tsc_per_ms, &tmp, &tmp);
+	ccomp_u64_mul(ccomp_tsc_per_ms(), &tmp, &tmp);
 	ccomp_u64_div(&delta, &tmp, &tmp);
 	ccomp_u64_add(&vm->tsc, &tmp, &vm->tsc);
 }
@@ -877,7 +877,7 @@ vmm_create_vm(uint64_t cpufreq, size_t memsize)
 #else
 	uint64_t tmp;
 	ccomp_u64_assign_val(1000, 0, &tmp);
-	ccomp_u64_mul((uint64_t *) &tsc_per_ms, &tmp, &tmp);
+	ccomp_u64_mul(ccomp_tsc_per_ms(), &tmp, &tmp);
 	if (ccomp_u64_ge(&cpufreq, &tmp)) {
 #endif
 		VIRT_DEBUG("Guest CPU frequency cannot be higher than the host "

@@ -127,7 +127,7 @@ kern_main(void)
 		ap_kstack->cpu_idx = i;
 
 		pcpu_boot_ap(i, kern_main_ap, (uintptr_t) ap_kstack);
-		while (pcpu[i].booted == FALSE);
+		while (pcpu_get_cpu(i)->booted == FALSE);
 
 		KERN_INFO("done.\n");
 	}
