@@ -71,7 +71,7 @@ void kstack_switch(struct kstack *to);
 /*
  * Get the kernel stack where the caller is.
  */
-#ifdef _CCOMP_
+#ifdef __COMPCERT__
 
 extern gcc_inline struct kstack *ccomp_kstack_get_stack(void);
 

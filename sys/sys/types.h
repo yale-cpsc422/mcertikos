@@ -38,7 +38,7 @@ typedef enum data_sz_t {
 	SZ32	/* 4 byte */
 } data_sz_t;
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 
 #define MIN(a, b)				\
 	({					\
@@ -70,7 +70,7 @@ typedef enum data_sz_t {
 		(typeof(_a)) (ROUNDDOWN(__a + __n - 1, __n));	\
 	})
 
-#else /* !_CCOMP_ */
+#else /* !__COMPCERT__ */
 
 static gcc_inline size_t
 MIN_SIZE(size_t a, size_t b)
@@ -96,12 +96,12 @@ ROUNDUP_PTR(uintptr_t a, uintptr_t n)
 	return ROUNDDOWN_PTR(a + n - 1, n);
 }
 
-#endif /* _CCOMP_ */
+#endif /* __COMPCERT__ */
 
 /* Return the offset of 'member' relative to the beginning of a struct type */
 #define offsetof(type, member)	__builtin_offsetof(type, member)
 
-#ifdef _CCOMP_
+#ifdef __COMPCERT__
 
 void ccomp_u64_assign_var(uint64_t *a, uint64_t *b);		/* *b = *a */
 void ccomp_u64_assign_val(uint32_t a_lo, uint32_t a_hi, uint64_t *b);
@@ -122,6 +122,6 @@ void ccomp_u64_mod(uint64_t *a, uint64_t *b, uint64_t *c);	/* *c = *a % *b */
 #define ccomp_u64_le(a, b)	(ccomp_u64_cmp((a), (b)) != 2)
 #define ccomp_u64_ge(a, b)	(ccomp_u64_cmp((a), (b)) != 1)
 
-#endif /* _CCOMP_ */
+#endif /* __COMPCERT__ */
 
 #endif /* !_KERN_TYPES_H_ */

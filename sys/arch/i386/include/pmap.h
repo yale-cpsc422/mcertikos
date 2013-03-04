@@ -8,7 +8,7 @@
 
 typedef uintptr_t pmap_t;
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 
 /* the kernel page map */
 pmap_t pmap_kern[NPDENTRIES] gcc_aligned(PAGESIZE);

@@ -5,7 +5,7 @@
 
 #define gcc_packed              __attribute__((packed))
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 #define gcc_inline              __inline __attribute__((always_inline))
 #else
 #define gcc_inline		inline
@@ -15,16 +15,16 @@
 
 #define gcc_noreturn            __attribute__((noreturn))
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 
 #define likely(x)		__builtin_expect (!!(x), 1)
 #define unlikely(x)		__builtin_expect (!!(x), 0)
 
-#else /* !_CCOMP_ */
+#else /* !__COMPCERT__ */
 
 #define likely(x)		(x)
 #define unlikely(x)		(x)
 
-#endif /* _CCOMP_ */
+#endif /* __COMPCERT__ */
 
 #endif /* !_KERN_GCC_H_ */

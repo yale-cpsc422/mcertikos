@@ -126,7 +126,7 @@ pmmap_merge(void)
 		 */
 		if (p->start <= q->start && p->end >= q->start &&
 		    p->type == q->type) {
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 			p->end = MAX(p->end, q->end);
 #else
 			p->end = MAX_PTR(p->end, q->end);
@@ -276,7 +276,7 @@ static gcc_inline int
 mem_in_reserved_page(uintptr_t addr)
 {
 	return (addr < (uintptr_t)
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 		ROUNDUP((uintptr_t) (mem_all_pages + mem_npages), PAGESIZE)) ||
 #else
 		ROUNDUP_PTR((uintptr_t) (mem_all_pages + mem_npages), PAGESIZE)) ||
@@ -340,7 +340,7 @@ mem_init(mboot_info_t *mbi)
 	pmmap_init(mbi);
 
 	/* reserve memory for mem_npage pageinfo_t structures */
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 	mem_npages = ROUNDDOWN(pmmap_max(), PAGESIZE) / PAGESIZE;
 #else
 	mem_npages = ROUNDDOWN_PTR(pmmap_max(), PAGESIZE) / PAGESIZE;
@@ -362,7 +362,7 @@ mem_init(mboot_info_t *mbi)
 		pg_type type;
 		struct page_info *pi;
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 		lo = (uintptr_t) ROUNDUP(e820_entry->start, PAGESIZE);
 		hi = (uintptr_t) ROUNDDOWN(e820_entry->end, PAGESIZE);
 #else

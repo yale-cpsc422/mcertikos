@@ -9,7 +9,7 @@
 
 typedef volatile uint32_t spinlock_t;
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 
 static void gcc_inline
 spinlock_init(spinlock_t *lk)
@@ -45,7 +45,7 @@ spinlock_release(spinlock_t *lk)
 	xchg(lk, 0);
 }
 
-#else /* !_CCOMP_ */
+#else /* !__COMPCERT__ */
 
 extern gcc_inline void ccomp_spinlock_init(spinlock_t *lk);
 extern gcc_inline bool ccomp_spinlock_holding(spinlock_t *lk);
@@ -59,7 +59,7 @@ extern gcc_inline void ccomp_spinlock_release(spinlock_t *lk);
 #define spinlock_try_acquire(lk) ccomp_spinlock_try_acquire((lk))
 #define spinlock_release(lk)	ccomp_spinlock_release((lk))
 
-#endif /* _CCOMP_ */
+#endif /* __COMPCERT__ */
 
 #endif /* _KERN_ */
 

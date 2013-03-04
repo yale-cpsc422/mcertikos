@@ -6,7 +6,7 @@
 #include <sys/types.h>
 #include <sys/x86.h>
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 
 #define intr_local_enable()			\
 	do {					\
@@ -18,7 +18,7 @@
 		cli();				\
 	} while(0)
 
-#else /* !_CCOMP_ */
+#else /* !__COMPCERT__ */
 
 extern void ccomp_intr_local_enable(void);
 extern void ccomp_intr_local_disable(void);

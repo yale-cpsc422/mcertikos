@@ -43,7 +43,7 @@ static struct vmm_ops *vmm_ops = NULL;
 #define LDT_AR      (GUEST_SEG_ATTR_P | GUEST_SEG_TYPE_LDT)
 #define TSS_AR      (GUEST_SEG_ATTR_P | GUEST_SEG_TYPE_TSS)
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 
 static struct guest_seg_desc guest_seg_desc[GUEST_MAX_SEG_DESC] = {
 	/* 0: code segment */
@@ -123,7 +123,7 @@ vmm_alloc_vm(void)
 	return new_vm;
 }
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 
 static void
 vmm_update_guest_tsc(struct vm *vm, uint64_t last_h_tsc, uint64_t cur_h_tsc)
@@ -236,7 +236,7 @@ vmm_handle_rdmsr(struct vm *vm)
 	KERN_DEBUG("Guest rdmsr 0x%08x = 0x%llx.\n", msr, val);
 #endif
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 	vmm_ops->set_reg(vm, GUEST_EAX, val & 0xffffffff);
 	vmm_ops->set_reg(vm, GUEST_EDX, (val >> 32) & 0xffffffff);
 #else
@@ -268,13 +268,13 @@ vmm_handle_wrmsr(struct vm *vm)
 
 	vmm_ops->get_reg(vm, GUEST_EAX, &eax);
 	vmm_ops->get_reg(vm, GUEST_EDX, &edx);
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 	val = ((uint64_t) edx << 32) | (uint64_t) eax;
 #else
 	ccomp_u64_assign_val(eax, edx, &val);
 #endif
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 	if (cpl != 0 || vmm_ops->set_msr(vm, msr, val)) {
 #else
 	if (cpl != 0 || ccomp_vmm_set_msr(vmm_ops, vm, msr, &val)) {
@@ -373,7 +373,7 @@ vmm_handle_rdtsc(struct vm *vm)
 
 	uint32_t next_eip;
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 	vmm_ops->set_reg(vm, GUEST_EDX, (vm->tsc >> 32) & 0xffffffff);
 	vmm_ops->set_reg(vm, GUEST_EAX, vm->tsc & 0xffffffff);
 #else
@@ -829,7 +829,7 @@ vmm_init(void)
 		return 0;
 
 	if (vmm_inited == FALSE && pcpu_onboot() == TRUE) {
-#ifdef _CCOMP_
+#ifdef __COMPCERT__
 		ccomp_init_guest_seg_desc();
 #endif
 
@@ -872,7 +872,7 @@ vmm_create_vm(uint64_t cpufreq, size_t memsize)
 
 	struct vm *vm ;
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 	if (cpufreq >= tsc_per_ms * 1000) {
 #else
 	uint64_t tmp;
@@ -893,13 +893,13 @@ vmm_create_vm(uint64_t cpufreq, size_t memsize)
 	vm->proc = NULL;
 	vm->state = VM_STATE_STOP;
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 	vm->cpufreq = cpufreq;
 #else
 	ccomp_u64_assign_var(&cpufreq, &vm->cpufreq);
 #endif
 	vm->memsize = memsize;
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 	vm->tsc = 0;
 #else
 	ccomp_u64_assign_val(0, 0, &vm->tsc);
@@ -982,7 +982,7 @@ vmm_run_vm(struct vm *vm)
 	while (1) {
 		KERN_ASSERT(vm->exit_handled == TRUE);
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 		start_tsc = rdtscp();
 #else
 		ccomp_rdtscp(&start_tsc);
@@ -995,7 +995,7 @@ vmm_run_vm(struct vm *vm)
 		if ((rc = vmm_ops->vm_run(vm)))
 			break;
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 		exit_tsc = rdtscp();
 		vmm_update_guest_tsc(vm, start_tsc, exit_tsc);
 #else
@@ -1045,7 +1045,7 @@ vmm_cur_vm(void)
 	return pcpu_cur()->vm;
 }
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 
 uint64_t
 vmm_rdtsc(struct vm *vm)
@@ -1061,7 +1061,7 @@ vmm_get_mmap(struct vm *vm, uintptr_t gpa, uintptr_t *hpa)
 {
 	KERN_ASSERT(vm != NULL);
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 	if (ROUNDDOWN(gpa, PAGESIZE) != gpa ||
 #else
 	if (ROUNDDOWN_PTR(gpa, PAGESIZE) != gpa ||
@@ -1080,7 +1080,7 @@ vmm_set_mmap(struct vm *vm, uintptr_t gpa, pageinfo_t *pi)
 {
 	KERN_ASSERT(vm != NULL);
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 	if (ROUNDDOWN(gpa, PAGESIZE) != gpa ||
 #else
 	if (ROUNDDOWN_PTR(gpa, PAGESIZE) != gpa ||
@@ -1099,7 +1099,7 @@ vmm_unset_mmap(struct vm *vm, uintptr_t gpa)
 {
 	KERN_ASSERT(vm != NULL);
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 	if (ROUNDDOWN(gpa, PAGESIZE) != gpa ||
 #else
 	if (ROUNDDOWN_PTR(gpa, PAGESIZE) != gpa ||
@@ -1155,7 +1155,7 @@ vmm_memcpy_to_guest(struct vm *vm,
 		return 1;
 
 	vmm_ops->get_mmap(vm, dest_gpa, &dest_hpa);
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 	dest_hpa += dest_gpa - ROUNDDOWN(dest_gpa, PAGESIZE);
 #else
 	dest_hpa += dest_gpa - ROUNDDOWN_PTR(dest_gpa, PAGESIZE);
@@ -1164,7 +1164,7 @@ vmm_memcpy_to_guest(struct vm *vm,
 	src = src_hpa;
 	remaining = size;
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 	copied = PAGESIZE - (dest_gpa - ROUNDDOWN(dest_gpa, PAGESIZE));
 	copied = MIN(copied, remaining);
 #else
@@ -1180,7 +1180,7 @@ vmm_memcpy_to_guest(struct vm *vm,
 		dest += copied;
 		vmm_ops->get_mmap(vm, dest, &dest_hpa);
 		src += copied;
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 		copied = MIN(PAGESIZE, remaining);
 #else
 		copied = MIN_SIZE(PAGESIZE, remaining);
@@ -1204,7 +1204,7 @@ vmm_memcpy_to_host(struct vm *vm,
 		return 1;
 
 	vmm_ops->get_mmap(vm, src_gpa, &src_hpa);
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 	src_hpa += src_gpa - ROUNDDOWN(src_gpa, PAGESIZE);
 #else
 	src_hpa += src_gpa - ROUNDDOWN_PTR(src_gpa, PAGESIZE);
@@ -1213,7 +1213,7 @@ vmm_memcpy_to_host(struct vm *vm,
 	dest = dest_hpa;
 	remaining = size;
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 	copied = PAGESIZE - (src_gpa - ROUNDDOWN(src_gpa, PAGE_SIZE));
 	copied = MIN(copied, remaining);
 #else
@@ -1229,7 +1229,7 @@ vmm_memcpy_to_host(struct vm *vm,
 		dest += copied;
 		src += copied;
 		vmm_ops->get_mmap(vm, src, &src_hpa);
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 		copied = MIN(PAGESIZE, remaining);
 #else
 		copied = MIN_SIZE(PAGESIZE, remaining);
@@ -1245,7 +1245,7 @@ vmm_translate_gp2hp(struct vm *vm, uintptr_t gpa)
 {
 	KERN_ASSERT(vm != NULL);
 	uintptr_t hpa;
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 	vmm_ops->get_mmap(vm, ROUNDDOWN(gpa, PAGESIZE), &hpa);
 	return hpa + (gpa - ROUNDDOWN(gpa, PAGESIZE));
 #else

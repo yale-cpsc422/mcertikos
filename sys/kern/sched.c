@@ -71,7 +71,7 @@ struct sched {
 	spinlock_t		sched_lk;	/* scheduler lock */
 
 	struct proc		*cur_proc;	/* current process */
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 	uint64_t		run_ticks;	/* how long has the current
 						   process run? */
 #else

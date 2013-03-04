@@ -246,7 +246,7 @@ int vdev_get_request(struct proc *dev_p, void *req, size_t *size, int blocking);
 
 #endif /* _KERN_ */
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 
 enum vdev_msg_magic {
 	VDEV_DEVICE_READY = 0xabcd0001,

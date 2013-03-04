@@ -183,7 +183,7 @@
 #define CPUID_X_FEATURE_VME		(1<<1)
 #define CPUID_X_FEATURE_FPU		(1<<0)
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 
 static gcc_inline uint16_t
 read_cs(void)
@@ -457,7 +457,7 @@ read_eflags(void)
         return flags;
 }
 
-#endif /* !_CCOMP_ */
+#endif /* !__COMPCERT__ */
 
 #endif /* _KERN_ */
 

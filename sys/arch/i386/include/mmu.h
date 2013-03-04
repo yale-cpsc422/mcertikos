@@ -9,7 +9,7 @@
  * Part I. Segments *
  ********************/
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 
 #ifdef __ASSEMBLER__
 
@@ -193,7 +193,7 @@ struct gatedesc {
 
 #endif /* !__ASSEMBLER__ */
 
-#else /* !_CCOMP_ */
+#else /* !__COMPCERT__ */
 
 /* Segment Descriptors */
 typedef uint64_t segdesc_t;
@@ -241,7 +241,7 @@ struct tasksate {
 	uint16_t	ts_iomb;
 } tss_t;
 
-#endif /* _CCOMP_ */
+#endif /* __COMPCERT__ */
 
 /*******************
  * Part II. Paging *

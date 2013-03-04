@@ -626,7 +626,7 @@ int vmm_memcpy_to_host(struct vm *vm,
  */
 uintptr_t vmm_translate_gp2hp(struct vm *vm, uintptr_t gpa);
 
-#ifdef _CCOMP_
+#ifdef __COMPCERT__
 
 int ccomp_vmm_set_msr(struct vmm_ops *ops,
 		      struct vm *vm, uint32_t msr, uint64_t *v);

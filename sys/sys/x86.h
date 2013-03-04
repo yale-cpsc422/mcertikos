@@ -8,7 +8,7 @@
 
 #include <machine/x86.h>
 
-#ifndef _CCOMP_
+#ifndef __COMPCERT__
 
 static gcc_inline uint8_t
 inb(int port)
@@ -167,11 +167,11 @@ smp_rmb(void)
 	__asm __volatile("":::"memory");
 }
 
-#else /* !_CCOMP_ */
+#else /* !__COMPCERT__ */
 
 void ccomp_rdtscp(uint64_t *tsc);
 
-#endif /* _CCOMP_ */
+#endif /* __COMPCERT__ */
 
 #endif /* _KERN_ */
 
