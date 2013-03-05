@@ -72,29 +72,15 @@ typedef enum data_sz_t {
 
 #else /* !__COMPCERT__ */
 
-static gcc_inline size_t
-MIN_SIZE(size_t a, size_t b)
-{
-	return a <= b ? a : b;
-}
+uint32_t ccomp_min(uint32_t a, uint32_t b);
+uint32_t ccomp_max(uint32_t a, uint32_t b);
+uint32_t ccomp_rounddown(uint32_t a, size_t n);
+uint32_t ccomp_roundup(uint32_t a, size_t n);
 
-static gcc_inline uintptr_t
-MAX_PTR(uintptr_t a, uintptr_t b)
-{
-	return a >= b ? a : b;
-}
-
-static gcc_inline uintptr_t
-ROUNDDOWN_PTR(uintptr_t a, uintptr_t n)
-{
-	return a - a % n;
-}
-
-static gcc_inline uintptr_t
-ROUNDUP_PTR(uintptr_t a, uintptr_t n)
-{
-	return ROUNDDOWN_PTR(a + n - 1, n);
-}
+#define MIN(a, b)	ccomp_min((a), (b))
+#define MAX(a, b)	ccomp_max((a), (b))
+#define ROUNDDOWN(a, n)	ccomp_rounddown((a), (n))
+#define ROUNDUP(a, n)	ccomp_roundup((a), (n))
 
 #endif /* __COMPCERT__ */
 

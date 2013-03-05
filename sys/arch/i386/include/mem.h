@@ -37,18 +37,8 @@ pageinfo_t *mem_pages_alloc_align(size_t n, int p);
 #define mem_page_alloc()			\
 	mem_pages_alloc_align(1, 0)
 
-#ifndef __COMPCERT__
-
 #define mem_pages_alloc(size)						\
 	mem_pages_alloc_align(ROUNDUP((size), PAGESIZE)/PAGESIZE, 0)
-
-#else
-
-#define mem_pages_alloc(size)						\
-	mem_pages_alloc_align(ROUNDUP_PTR((size), PAGESIZE)/PAGESIZE, 0)
-
-
-#endif
 
 pageinfo_t *mem_pages_free(pageinfo_t *);
 

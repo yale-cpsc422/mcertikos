@@ -1061,11 +1061,7 @@ vmm_get_mmap(struct vm *vm, uintptr_t gpa, uintptr_t *hpa)
 {
 	KERN_ASSERT(vm != NULL);
 
-#ifndef __COMPCERT__
 	if (ROUNDDOWN(gpa, PAGESIZE) != gpa ||
-#else
-	if (ROUNDDOWN_PTR(gpa, PAGESIZE) != gpa ||
-#endif
 	    (gpa >= vm->memsize && gpa < 0xf0000000))
 		return 1;
 
@@ -1080,11 +1076,7 @@ vmm_set_mmap(struct vm *vm, uintptr_t gpa, pageinfo_t *pi)
 {
 	KERN_ASSERT(vm != NULL);
 
-#ifndef __COMPCERT__
 	if (ROUNDDOWN(gpa, PAGESIZE) != gpa ||
-#else
-	if (ROUNDDOWN_PTR(gpa, PAGESIZE) != gpa ||
-#endif
 	    (gpa >= vm->memsize && gpa < 0xf0000000))
 		return 1;
 
@@ -1099,11 +1091,7 @@ vmm_unset_mmap(struct vm *vm, uintptr_t gpa)
 {
 	KERN_ASSERT(vm != NULL);
 
-#ifndef __COMPCERT__
 	if (ROUNDDOWN(gpa, PAGESIZE) != gpa ||
-#else
-	if (ROUNDDOWN_PTR(gpa, PAGESIZE) != gpa ||
-#endif
 	    (gpa >= vm->memsize && gpa < 0xf0000000))
 		return 1;
 
@@ -1155,22 +1143,13 @@ vmm_memcpy_to_guest(struct vm *vm,
 		return 1;
 
 	vmm_ops->get_mmap(vm, dest_gpa, &dest_hpa);
-#ifndef __COMPCERT__
 	dest_hpa += dest_gpa - ROUNDDOWN(dest_gpa, PAGESIZE);
-#else
-	dest_hpa += dest_gpa - ROUNDDOWN_PTR(dest_gpa, PAGESIZE);
-#endif
 	dest = dest_gpa;
 	src = src_hpa;
 	remaining = size;
 
-#ifndef __COMPCERT__
 	copied = PAGESIZE - (dest_gpa - ROUNDDOWN(dest_gpa, PAGESIZE));
 	copied = MIN(copied, remaining);
-#else
-	copied = PAGESIZE - (dest_gpa - ROUNDDOWN_PTR(dest_gpa, PAGESIZE));
-	copied = MIN_SIZE(copied, remaining);
-#endif
 
 	do {
 		memcpy((void *) dest_hpa, (void *) src, copied);
@@ -1180,11 +1159,7 @@ vmm_memcpy_to_guest(struct vm *vm,
 		dest += copied;
 		vmm_ops->get_mmap(vm, dest, &dest_hpa);
 		src += copied;
-#ifndef __COMPCERT__
 		copied = MIN(PAGESIZE, remaining);
-#else
-		copied = MIN_SIZE(PAGESIZE, remaining);
-#endif
 	} while (remaining);
 
 	return 0;
@@ -1204,22 +1179,13 @@ vmm_memcpy_to_host(struct vm *vm,
 		return 1;
 
 	vmm_ops->get_mmap(vm, src_gpa, &src_hpa);
-#ifndef __COMPCERT__
 	src_hpa += src_gpa - ROUNDDOWN(src_gpa, PAGESIZE);
-#else
-	src_hpa += src_gpa - ROUNDDOWN_PTR(src_gpa, PAGESIZE);
-#endif
 	src = src_gpa;
 	dest = dest_hpa;
 	remaining = size;
 
-#ifndef __COMPCERT__
 	copied = PAGESIZE - (src_gpa - ROUNDDOWN(src_gpa, PAGE_SIZE));
 	copied = MIN(copied, remaining);
-#else
-	copied = PAGESIZE - (src_gpa - ROUNDDOWN_PTR(src_gpa, PAGE_SIZE));
-	copied = MIN_SIZE(copied, remaining);
-#endif
 
 	do {
 		memcpy((void *) dest, (void *) src_hpa, copied);
@@ -1229,11 +1195,7 @@ vmm_memcpy_to_host(struct vm *vm,
 		dest += copied;
 		src += copied;
 		vmm_ops->get_mmap(vm, src, &src_hpa);
-#ifndef __COMPCERT__
 		copied = MIN(PAGESIZE, remaining);
-#else
-		copied = MIN_SIZE(PAGESIZE, remaining);
-#endif
 	} while (remaining);
 
 
@@ -1245,11 +1207,6 @@ vmm_translate_gp2hp(struct vm *vm, uintptr_t gpa)
 {
 	KERN_ASSERT(vm != NULL);
 	uintptr_t hpa;
-#ifndef __COMPCERT__
 	vmm_ops->get_mmap(vm, ROUNDDOWN(gpa, PAGESIZE), &hpa);
 	return hpa + (gpa - ROUNDDOWN(gpa, PAGESIZE));
-#else
-	vmm_ops->get_mmap(vm, ROUNDDOWN_PTR(gpa, PAGESIZE), &hpa);
-	return hpa + (gpa - ROUNDDOWN_PTR(gpa, PAGESIZE));
-#endif
 }
