@@ -26,7 +26,7 @@ LDFLAGS		:= -nostdlib
 
 ifdef ENABLE_CCOMP
 CCOMP		:= ccomp
-CCOMP_CFLAGS	:= -finline-asm -fpacked-structs -flonglong
+CCOMP_CFLAGS	:= -finline-asm -fpacked-structs -flonglong -fno-sse
 
 # Uncomment following two lines when you suspect differences between gcc and
 # compcert cause problems.

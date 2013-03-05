@@ -151,9 +151,9 @@ rw_user(uintptr_t ka, pmap_t *pmap, uintptr_t la, size_t size, int write)
 		return 0;
 
 	if (write)
-		return pmap_copy(pmap, la, pmap_kern, ka, size);
+		return pmap_copy(pmap, la, pmap_kern_map(), ka, size);
 	else
-		return pmap_copy(pmap_kern, ka, pmap, la, size);
+		return pmap_copy(pmap_kern_map(), ka, pmap, la, size);
 }
 
 #define copy_from_user(ka, pmap, la, size)	\

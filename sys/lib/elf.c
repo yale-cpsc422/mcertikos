@@ -19,7 +19,7 @@ elf_load(uintptr_t exe, pmap_t *pmap)
 	elfhdr *eh;
 	proghdr *ph, *eph;
 
-	cur_pmap = pmap_kern;
+	cur_pmap = pmap_kern_map();
 
 	if (cur_pmap == pmap)
 		return;

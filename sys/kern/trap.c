@@ -47,7 +47,7 @@ pre_handle_user(tf_t *tf)
 	struct proc *cur_p = proc_cur();
 	KERN_ASSERT(cur_p);
 	proc_save(cur_p, tf);		/* save the user context */
-	pmap_install(pmap_kern);	/* switch to kernel pmap */
+	pmap_install(pmap_kern_map());	/* switch to kernel pmap */
 }
 
 static gcc_inline void

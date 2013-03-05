@@ -21,6 +21,11 @@ $(ARCH_OBJDIR)/i386/mem.o: $(ARCH_DIR)/i386/mem.c
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
 
+$(ARCH_OBJDIR)/i386/pmap.o: $(ARCH_DIR)/i386/pmap.c
+	@echo + ccomp[KERN/i386] $<
+	@mkdir -p $(@D)
+	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
+
 endif
 
 $(ARCH_OBJDIR)/i386/%.o: $(ARCH_DIR)/i386/%.c

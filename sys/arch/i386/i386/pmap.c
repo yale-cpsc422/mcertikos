@@ -14,7 +14,11 @@
 typedef pmap_t pde_t;
 typedef pmap_t pte_t;
 
+/* the bootstrap page map */
 static pmap_t pmap_boot[NPDENTRIES] gcc_aligned(PAGESIZE);
+
+/* the kernel page map */
+static pmap_t pmap_kern[NPDENTRIES] gcc_aligned(PAGESIZE);
 
 volatile static bool pmap_boot_inited = FALSE;
 
@@ -116,7 +120,11 @@ pmap_init_boot(void)
 
 	KERN_DEBUG("Bootstrap pmap at 0x%08x.\n", pmap_boot);
 
+#ifndef __COMPCERT__
 	for (addr = 0; addr < MIN(VM_USERLO, memsize); addr += PAGESIZE)
+#else
+	for (addr = 0; addr < MIN_SIZE(VM_USERLO, memsize); addr += PAGESIZE)
+#endif
 		if (pmap_insert(pmap_boot,
 				mem_phys2pi(addr), addr, PTE_W | PTE_G) == NULL)
 			return NULL;
@@ -191,9 +199,17 @@ pmap_init(void)
 
 
 	/* enable global pages (Sec 4.10.2.4, Intel ASDM Vol3) */
+#ifndef __COMPCERT__
 	uint32_t cr4 = rcr4();
+#else
+	uint32_t cr4 = ccomp_rcr4();
+#endif
 	cr4 |= CR4_PGE;
+#ifndef __COMPCERT__
 	lcr4(cr4);
+#else
+	ccomp_lcr4(cr4);
+#endif
 
 	/* load page table */
 	pmap_install(pmap_kern);
@@ -201,7 +217,11 @@ pmap_init(void)
 	/* turn on paging */
 	uint32_t cr0 = CR0_PE|CR0_PG|CR0_AM|CR0_WP|CR0_NE|CR0_TS|CR0_MP;
 	cr0 &= ~CR0_EM;
+#ifndef __COMPCERT__
 	lcr0(cr0);
+#else
+	ccomp_lcr0(cr0);
+#endif
 }
 
 /*
@@ -366,7 +386,11 @@ pmap_install(pmap_t *pmap)
 {
 	/* KERN_DEBUG("pmap_install: 0x%08x\n", pmap); */
 
+#ifndef __COMPCERT__
 	lcr3((uintptr_t) pmap);
+#else
+	ccomp_lcr3((uintptr_t) pmap);
+#endif
 }
 
 void
@@ -389,7 +413,11 @@ bool
 pmap_checkrange(pmap_t *pmap, uintptr_t la, size_t size)
 {
 	pte_t pte;
+#ifndef __COMPCERT__
 	uintptr_t addr = ROUNDDOWN(la, PAGESIZE);
+#else
+	uintptr_t addr = ROUNDDOWN_PTR(la, PAGE_SIZE);
+#endif
 	ssize_t remain_size = size;
 
 	pte = pmap_lookup(pmap, addr);
@@ -448,9 +476,17 @@ pmap_copy(pmap_t *d_pmap, uintptr_t d_la,
 		if (copied_bytes == size)
 			break;
 
+#ifndef __COMPCERT__
 		if (d_cur_la == ROUNDDOWN(d_cur_la, PAGESIZE))
+#else
+		if (d_cur_la == ROUNDDOWN_PTR(d_cur_la, PAGESIZE))
+#endif
 			d_cur_pa = pmap_la2pa(d_pmap, d_cur_la);
+#ifndef __COMPCERT__
 		if (s_cur_la == ROUNDDOWN(s_cur_la, PAGESIZE))
+#else
+		if (s_cur_la == ROUNDDOWN_PTR(s_cur_la, PAGESIZE))
+#endif
 			s_cur_pa = pmap_la2pa(s_pmap, s_cur_la);
 	} while (copied_bytes < size);
 
@@ -477,7 +513,11 @@ pmap_memset(pmap_t *pmap, uintptr_t la, char c, size_t size)
 		if (set_bytes == size)
 			break;
 
+#ifndef __COMPCERT__
 		if (d_la == ROUNDDOWN(d_la, PAGESIZE))
+#else
+		if (d_la == ROUNDDOWN_PTR(d_la, PAGESIZE))
+#endif
 			d_pa = pmap_la2pa(pmap, d_la);
 	} while (set_bytes < size);
 
@@ -498,15 +538,33 @@ pmap_la2pa(pmap_t *pmap, uintptr_t la)
 		perm = PTE_W |
 			((VM_USERLO <= la && la < VM_USERHI) ? PTE_U : 0);
 
+#ifndef __COMPCERT__
 		if (pmap_insert(pmap, pi, ROUNDDOWN(la,PAGESIZE), perm) == NULL)
+#else
+		if (pmap_insert(pmap, pi, ROUNDDOWN_PTR(la,PAGESIZE), perm) == NULL)
+#endif
 			KERN_PANIC("Cannot map linear address 0x%08x to "
 				   "physical address 0x%08x.\n",
+#ifndef __COMPCERT__
 				   ROUNDDOWN(la,PAGESIZE), mem_pi2phys(pi));
+#else
+				   ROUNDDOWN_PTR(la,PAGESIZE), mem_pi2phys(pi));
+#endif
 
 		pmap_install(pmap);
 
+#ifndef __COMPCERT__
 		return ROUNDDOWN(mem_pi2phys(pi), PAGESIZE) + PGOFF(la);
+#else
+		return ROUNDDOWN_PTR(mem_pi2phys(pi), PAGESIZE) + PGOFF(la);
+#endif
 	} else {
 		return PGADDR(pte) + PGOFF(la);
 	}
+}
+
+pmap_t *
+pmap_kern_map(void)
+{
+	return pmap_kern;
 }

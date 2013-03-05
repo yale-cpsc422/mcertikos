@@ -457,6 +457,13 @@ read_eflags(void)
         return flags;
 }
 
+#else /* !__COMPCERT__ */
+
+uint32_t ccomp_rcr4(void);
+void     ccomp_lcr4(uint32_t cr4);
+void     ccomp_lcr0(uint32_t cr0);
+void     ccomp_lcr3(uint32_t cr3);
+
 #endif /* !__COMPCERT__ */
 
 #endif /* _KERN_ */

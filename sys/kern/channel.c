@@ -236,7 +236,7 @@ channel_send(struct channel *ch, struct proc *p, uintptr_t msg, size_t size,
 	if (in_kern == TRUE)
 		memcpy(ch->msg_buf, (void *) msg, size);
 	else
-		pmap_copy(pmap_kern, (uintptr_t) ch->msg_buf,
+		pmap_copy(pmap_kern_map(), (uintptr_t) ch->msg_buf,
 			  p->pmap, msg, size);
 	ch->empty = FALSE;
 	ch->full = TRUE;
@@ -274,7 +274,7 @@ channel_recv(struct channel *ch, struct proc *p, uintptr_t msg, size_t size,
 	if (size > 0 && in_kern == TRUE)
 		memcpy((void *) msg, ch->msg_buf, MIN(size, ch->msg_size));
 	else if (size > 0)
-		pmap_copy(p->pmap, msg, pmap_kern,
+		pmap_copy(p->pmap, msg, pmap_kern_map(),
 			  (uintptr_t) ch->msg_buf, MIN(size, ch->msg_size));
 	ch->empty = TRUE;
 	ch->full = FALSE;
