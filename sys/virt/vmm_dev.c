@@ -300,7 +300,13 @@ vdev_send_request(struct vm *vm, struct channel *ch, void *req, size_t size)
 	KERN_ASSERT(ch != NULL);
 	KERN_ASSERT(req != NULL);
 	KERN_ASSERT(size > 0);
-	return ipc_send(ch, (uintptr_t) req, size, TRUE, TRUE);
+
+	int rc;
+	do {
+		rc = ipc_send(ch, (uintptr_t) req, size, TRUE, FALSE);
+	} while (rc != E_IPC_SUCC && rc != E_IPC_FAIL);
+
+	return rc;
 }
 
 static int
@@ -311,7 +317,13 @@ vdev_recv_result(struct vm *vm, struct channel *ch, void *result, size_t size)
 	KERN_ASSERT(vm->proc == proc_cur());
 	KERN_ASSERT(ch != NULL);
 	KERN_ASSERT(result != NULL);
-	return ipc_recv(ch, (uintptr_t) result, size, TRUE, TRUE);
+
+	int rc;
+	do {
+		rc = ipc_recv(ch, (uintptr_t) result, size, TRUE, FALSE);
+	} while (rc != E_IPC_SUCC && rc != E_IPC_FAIL);
+
+	return rc;
 }
 
 static int
