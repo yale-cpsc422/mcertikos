@@ -32,6 +32,16 @@ $(KERN_OBJDIR)/kern/sched.o: $(KERN_DIR)/kern/sched.c
 	@echo + ccomp[KERN/kern] $<
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
+
+$(KERN_OBJDIR)/kern/channel.o: $(KERN_DIR)/kern/channel.c
+	@echo + ccomp[KERN/kern] $<
+	@mkdir -p $(@D)
+	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
+
+$(KERN_OBJDIR)/kern/ipc.o: $(KERN_DIR)/kern/ipc.c
+	@echo + ccomp[KERN/kern] $<
+	@mkdir -p $(@D)
+	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
 endif
 
 $(KERN_OBJDIR)/kern/%.o: $(KERN_DIR)/kern/%.c
