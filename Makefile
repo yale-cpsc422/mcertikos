@@ -32,7 +32,7 @@ CCOMP_CFLAGS	:= -finline-asm -fpacked-structs -flonglong -fno-sse
 # compcert cause problems.
 
 #CCOMP		:= gcc
-#CCOMP_CFLAGS	:= -MD -Wall -Werror -Wno-strict-aliasing -Wno-unused-function -pipe -fno-builtin -nostdinc -fno-stack-protector -m32 -D_CCOMP_
+#CCOMP_CFLAGS	:= -MD -Wall -Werror -Wno-strict-aliasing -Wno-unused-function -pipe -fno-builtin -nostdinc -fno-stack-protector -m32 -D__COMPCERT__
 endif
 
 # other tools
