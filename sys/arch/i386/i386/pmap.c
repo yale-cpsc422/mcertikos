@@ -199,7 +199,8 @@ pmap_init(void)
 	pmap_install(pmap_kern);
 
 	/* turn on paging */
-	uint32_t cr0 = CR0_PE|CR0_PG|CR0_AM|CR0_WP|CR0_NE|CR0_TS|CR0_MP;
+	uint32_t cr0 = rcr0();
+	cr0 |= CR0_PE|CR0_PG|CR0_AM|CR0_WP|CR0_NE|CR0_TS|CR0_MP;
 	cr0 &= ~CR0_EM;
 	lcr0(cr0);
 }

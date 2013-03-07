@@ -24,11 +24,19 @@ static gcc_inline void
 pcpu_print_cpuinfo(uint32_t cpu_idx, struct pcpuinfo *cpuinfo)
 {
 	KERN_INFO("CPU%d: %s, FAMILY %d(%d), MODEL %d(%d), STEP %d, "
-		  "FEATURE 0x%x 0x%x, L1 Cache %d KB (%d bytes) \n",
+		  "FEATURE 0x%x 0x%x,%s%s%s%s%s%s%s "
+		  "L1 Cache %d KB (%d bytes) \n",
 		  cpu_idx, cpuinfo->vendor,
 		  cpuinfo->family, cpuinfo->ext_family,
-		  cpuinfo->model, cpuinfo->ext_model,
-		  cpuinfo->step, cpuinfo->feature1, cpuinfo->feature2,
+		  cpuinfo->model, cpuinfo->ext_model, cpuinfo->step,
+		  cpuinfo->feature1, cpuinfo->feature2,
+		  cpuinfo->feature2 & CPUID_FEATURE_SSE ? " SSE," : "",
+		  cpuinfo->feature2 & CPUID_FEATURE_SSE2 ? " SSE2," : "",
+		  cpuinfo->feature1 & CPUID_FEATURE_SSE3 ? " SSE3," : "",
+		  cpuinfo->feature1 & CPUID_FEATURE_SSSE3 ? " SSSE3," : "",
+		  cpuinfo->feature1 & CPUID_FEATURE_SSE41 ? " SSE41," : "",
+		  cpuinfo->feature1 & CPUID_FEATURE_SSE42 ? " SSE42," : "",
+		  cpuinfo->feature1 & CPUID_FEATURE_POPCNT ? " POPCNT," : "",
 		  cpuinfo->l1_cache_size, cpuinfo->l1_cache_line_size);
 }
 
