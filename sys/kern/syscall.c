@@ -351,8 +351,14 @@ sys_new_vm(uintptr_t vmid_la)
 	if (p->vm != NULL)
 		return E_INVAL_PID;
 
+#ifndef _CCOMP_
 	if ((p->vm = vmm_create_vm(800 * 1000 * 1000,
 				   256 * 1024 *1024)) == NULL)
+#else
+	if ((p->vm = vmm_create_vm((800 * 1000 * 1000) & 0xffffffff ,
+				   ((800 * 1000 * 1000) >> 32) & 0xffffffff,
+				   256 * 1024 *1024)) == NULL)
+#endif
 		return E_INVAL_VMID;
 
 	if (copy_to_user(p->pmap, vmid_la,

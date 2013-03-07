@@ -866,7 +866,11 @@ vmm_init(void)
 }
 
 struct vm *
+#ifndef __COMPCERT__
 vmm_create_vm(uint64_t cpufreq, size_t memsize)
+#else
+vmm_create_vm(uint32_t cpufreq_lo, uint32_t cpufreq_hi, size_t memsize)
+#endif
 {
 	KERN_ASSERT(vmm_inited == TRUE);
 
@@ -875,8 +879,10 @@ vmm_create_vm(uint64_t cpufreq, size_t memsize)
 #ifndef __COMPCERT__
 	if (cpufreq >= tsc_per_ms * 1000) {
 #else
-	uint64_t tmp;
+	KERN_DEBUG("alternative version: memsize %d.\n", memsize);
+	uint64_t tmp, cpufreq;
 	ccomp_u64_assign_val(1000, 0, &tmp);
+	ccomp_u64_assign_val(cpufreq_lo, cpufreq_hi, &cpufreq);
 	ccomp_u64_mul(ccomp_tsc_per_ms(), &tmp, &tmp);
 	if (ccomp_u64_ge(&cpufreq, &tmp)) {
 #endif
@@ -896,7 +902,7 @@ vmm_create_vm(uint64_t cpufreq, size_t memsize)
 #ifndef __COMPCERT__
 	vm->cpufreq = cpufreq;
 #else
-	ccomp_u64_assign_var(&cpufreq, &vm->cpufreq);
+	ccomp_u64_assign_val(cpufreq_lo, cpufreq_hi, &vm->cpufreq);
 #endif
 	vm->memsize = memsize;
 #ifndef __COMPCERT__
@@ -953,8 +959,10 @@ vmm_create_vm(uint64_t cpufreq, size_t memsize)
 	/* setup the virtual device interface */
 	vdev_init(vm);
 
+#ifndef __COMPCERT__
 	VIRT_DEBUG("VM (CPU %lld Hz, MEM %d bytes) is created.\n",
 		   cpufreq, memsize);
+#endif
 
 	return vm;
 }

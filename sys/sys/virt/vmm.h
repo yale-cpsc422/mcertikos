@@ -509,7 +509,19 @@ int vmm_init(void);
  * @return the pointer to the virtual machine if successful; otherwise, return
  *         NULL
  */
+#ifndef __COMPCERT__
 struct vm *vmm_create_vm(uint64_t cpufreq, size_t memsize);
+#else
+/*
+ * CompCert doesn't completely support 64-bit integers.
+ */
+struct vm *vmm_create_vm(uint32_t freq_lo, uint32_t freq_hi, size_t memsize);
+
+#ifndef _CCOMP_
+#define _CCOMP_
+#endif
+
+#endif
 
 /*
  * Run a virtual machine.
