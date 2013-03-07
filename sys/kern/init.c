@@ -246,6 +246,14 @@ kern_init(mboot_info_t *mbi)
 	memzero(edata, bsp_kstack - edata);
 	memzero(bsp_kstack + KSTACK_SIZE, end - bsp_kstack - KSTACK_SIZE);
 
+#ifdef __COMPCERT__
+	/*
+	 * CompCert may generate the code using XMM* registers even though
+	 * the source code contains no floating-point operations.
+	 */
+	ccomp_enable_sse();
+#endif
+
 	/*
 	 * Initialize the console so that we can output debug messages to the
 	 * screen and/or the serial port.
@@ -375,6 +383,14 @@ void
 kern_init_ap(void (*f)(void))
 {
 	KERN_INFO("\n");
+
+#ifdef __COMPCERT__
+	/*
+	 * CompCert may generate the code using XMM* registers even though
+	 * the source code contains no floating-point operations.
+	 */
+	ccomp_enable_sse();
+#endif
 
 	struct kstack *ks = kstack_get_stack();
 

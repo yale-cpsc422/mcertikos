@@ -170,6 +170,7 @@ smp_rmb(void)
 #else /* !__COMPCERT__ */
 
 void ccomp_rdtscp(uint64_t *tsc);
+void ccomp_enable_sse(void);
 
 #endif /* __COMPCERT__ */
 

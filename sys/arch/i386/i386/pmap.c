@@ -196,7 +196,7 @@ pmap_init(void)
 
 	/* enable global pages (Sec 4.10.2.4, Intel ASDM Vol3) */
 	uint32_t cr4 = rcr4();
-	cr4 |= CR4_PGE;
+	cr4 |= CR4_PGE | CR4_OSFXSR | CR4_OSXMMEXCPT;
 	lcr4(cr4);
 
 	/* load page table */
@@ -206,6 +206,9 @@ pmap_init(void)
 	uint32_t cr0 = rcr0();
 	cr0 |= CR0_PE|CR0_PG|CR0_AM|CR0_WP|CR0_NE|CR0_TS|CR0_MP;
 	cr0 &= ~CR0_EM;
+#ifdef __COMPCERT__
+	cr0 &= ~CR0_TS;
+#endif
 	lcr0(cr0);
 }
 

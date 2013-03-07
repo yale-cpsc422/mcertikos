@@ -463,11 +463,13 @@ uint32_t ccomp_rcr4(void);
 void     ccomp_lcr4(uint32_t cr4);
 void     ccomp_lcr0(uint32_t cr0);
 void     ccomp_lcr3(uint32_t cr3);
+uint32_t ccomp_rcr0(void);
 
 #define rcr4()		ccomp_rcr4()
 #define lcr4(cr4)	ccomp_lcr4((cr4))
 #define lcr0(cr0)	ccomp_lcr0((cr0))
 #define lcr3(cr3)	ccomp_lcr3((cr3))
+#define rcr0()		ccomp_rcr0()
 
 #endif /* !__COMPCERT__ */
 
