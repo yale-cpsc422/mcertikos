@@ -248,8 +248,8 @@ kern_init(mboot_info_t *mbi)
 
 #ifdef __COMPCERT__
 	/*
-	 * CompCert may generate the code using XMM* registers even though
-	 * the source code contains no floating-point operations.
+	 * XXX: CompCert may generate the code using XMM* registers even though
+	 *      the source code contains no floating-point operations.
 	 */
 	ccomp_enable_sse();
 #endif
@@ -386,8 +386,8 @@ kern_init_ap(void (*f)(void))
 
 #ifdef __COMPCERT__
 	/*
-	 * CompCert may generate the code using XMM* registers even though
-	 * the source code contains no floating-point operations.
+	 * XXX: CompCert may generate the code using XMM* registers even though
+	 *      the source code contains no floating-point operations.
 	 */
 	ccomp_enable_sse();
 #endif
