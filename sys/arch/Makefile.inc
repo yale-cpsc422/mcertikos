@@ -13,4 +13,4 @@ include		$(ARCH_DIR)/Makefile.inc
 arch_headers:
 	$(V)mkdir -p $(OBJDIR)/headers
 	$(V)rm -f $(ARCH_HEADERS)
-	$(V)ln -bs $(shell pwd)/$(ARCH_DIR)/include $(ARCH_HEADERS)
+	$(V)ln -fs $(shell pwd)/$(ARCH_DIR)/include $(ARCH_HEADERS)

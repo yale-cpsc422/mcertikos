@@ -10,6 +10,19 @@ endif
 
 ARCH		:= i386
 
+# Cross-compiler toolchain
+#
+# This Makefile will automatically use a cross-compiler toolchain installed
+# as 'pios-*' or 'i386-elf-*', if one exists.  If the host tools ('gcc',
+# 'objdump', and so forth) compile for a 32-bit x86 ELF target, that will
+# be detected as well.  If you have the right compiler toolchain installed
+# using a different name, set GCCPREFIX explicitly in conf/env.mk
+
+# try to infer the correct GCCPREFIX
+ifndef GCCPREFIX
+GCCPREFIX := $(shell sh misc/gccprefix.sh)
+endif
+
 # Directories
 TOP		:= .
 SRCDIR		:= $(TOP)
@@ -19,17 +32,17 @@ TESTDIR		:= $(TOP)/test
 OBJDIRS		:=
 
 # Compiler and Linker
-CC		:= gcc
-LD		:= ld
+CC		:= $(GCCPREFIX)gcc
+LD		:= $(GCCPREFIX)ld
 CFLAGS		:= -MD -Wall -Werror -Wno-strict-aliasing -Wno-unused-function -pipe -fno-builtin -nostdinc -fno-stack-protector
 LDFLAGS		:= -nostdlib
 
 # other tools
 PERL		:= perl
-OBJDUMP		:= objdump
-OBJCOPY		:= objcopy
-DD		:= dd
-NM		:= nm
+OBJDUMP		:= $(GCCPREFIX)objdump
+OBJCOPY		:= $(GCCPREFIX)objcopy
+DD		:= $(GCCPREFIX)dd
+NM		:= $(GCCPREFIX)nm
 CSCOPE		:= cscope
 
 # others
