@@ -41,6 +41,10 @@ ifdef ENABLE_CCOMP
 CCOMP		:= ccomp
 CCOMP_CFLAGS	:= -finline-asm -fpacked-structs -flonglong -fno-sse
 
+ifeq ($(V),)
+CCOMP_CFLAGS	+= -v
+endif
+
 # Uncomment following two lines when you suspect differences between gcc and
 # compcert cause problems.
 
