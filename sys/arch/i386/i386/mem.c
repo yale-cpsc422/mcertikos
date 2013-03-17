@@ -1,5 +1,6 @@
 #include <sys/debug.h>
 #include <sys/mboot.h>
+#include <sys/queue.h>
 #include <sys/spinlock.h>
 #include <sys/string.h>
 #include <sys/types.h>
@@ -11,19 +12,29 @@
  * Data structures and variables for BIOS E820 table.
  */
 
-typedef
-struct pmmap_t {
-	uintptr_t	start;
-	uintptr_t	end;
-	uint32_t	type;
-	struct pmmap_t	*next;
-	struct pmmap_t	*type_next;
-} pmmap_t;
+struct pmmap {
+	uintptr_t		start;
+	uintptr_t		end;
+	uint32_t		type;
+	SLIST_ENTRY(pmmap)	next;
+	SLIST_ENTRY(pmmap)	type_next;
+};
 
-static pmmap_t pmmap[128];
-static pmmap_t *pmmap_usable, *pmmap_resv, *pmmap_acpi, *pmmap_nvs;
+static struct pmmap pmmap_slots[128];
+static int pmmap_slots_next_free = 0;
 
-static int __free_pmmap_ent_idx = 0;
+static SLIST_HEAD(, pmmap) pmmap_list;	/* all memory regions */
+static SLIST_HEAD(, pmmap) pmmap_sublist[4];
+
+enum __pmmap_type { PMMAP_USABLE, PMMAP_RESV, PMMAP_ACPI, PMMAP_NVS };
+
+#define PMMAP_SUBLIST_NR(type)				\
+	(((type) == MEM_RAM) ? PMMAP_USABLE :		\
+	 ((type) == MEM_RESERVED) ? PMMAP_RESV :	\
+	 ((type) == MEM_ACPI) ? PMMAP_ACPI :		\
+	 ((type) == MEM_NVS) ? PMMAP_NVS : -1)
+
+static uintptr_t max_usable_memory = 0;
 
 /*
  * Data structures and variables for the physical memory allocator.
@@ -71,6 +82,14 @@ mem_ptr2pi(void *ptr)
 #define mem_page_index(pi)				\
 	((struct page_info *) (pi) - mem_all_pages)
 
+struct pmmap *
+pmmap_alloc_slot(void)
+{
+	if (unlikely(pmmap_slots_next_free == 128))
+		return NULL;
+	return &pmmap_slots[pmmap_slots_next_free++];
+}
+
 /*
  * Insert an physical memory map entry in pmmap[].
  *
@@ -85,133 +104,84 @@ mem_ptr2pi(void *ptr)
 static void
 pmmap_insert(uintptr_t start, uintptr_t end, uint32_t type)
 {
-	pmmap_t *pre, *p;
+	struct pmmap *free_slot, *slot;
 
-	pre = NULL;
-	if (__free_pmmap_ent_idx == 0)
-		p = NULL;
-	else
-		p = &pmmap[0];
+	if ((free_slot = pmmap_alloc_slot()) == NULL)
+		KERN_PANIC("More than 128 E820 entries.\n");
 
-	while (p != NULL) {
-		if (start < p->start)
+	free_slot->start = start;
+	free_slot->end = end;
+	free_slot->type = type;
+
+	SLIST_FOREACH(slot, &pmmap_list, next) {
+		if (start >= slot->start)
 			break;
-		pre = p;
-		p = p->next;
 	}
 
-	pmmap[__free_pmmap_ent_idx].start = start;
-	pmmap[__free_pmmap_ent_idx].end = end;
-	pmmap[__free_pmmap_ent_idx].type = type;
-	pmmap[__free_pmmap_ent_idx].next = p;
-	if (pre != NULL)
-		pre->next = &pmmap[__free_pmmap_ent_idx];
-	__free_pmmap_ent_idx++;
+	if (slot != NULL)
+		SLIST_INSERT_AFTER(slot, free_slot, next);
+	else
+		SLIST_INSERT_HEAD(&pmmap_list, free_slot, next);
 }
 
 static void
 pmmap_merge(void)
 {
-	pmmap_t *p = &pmmap[0];
+	struct pmmap *slot, *next_slot;
+	struct pmmap *last_slot[4] = { NULL, NULL, NULL, NULL };
+	int sublist_nr;
 
-	while (p != NULL) {
-		if (p->next == NULL) /* we reach the last entry */
+	/*
+	 * Step 1: Merge overlaped entries in pmmap_list.
+	 */
+	SLIST_FOREACH(slot, &pmmap_list, next) {
+		if ((next_slot = SLIST_NEXT(slot, next)) == NULL)
 			break;
-
-		pmmap_t *q = p->next;
-
-		/*
-		 * Merge p and q if they are overlapped; otherwise turn to next
-		 * pair of pmmap entries.
-		 */
-		if (p->start <= q->start && p->end >= q->start &&
-		    p->type == q->type) {
-			p->end = MAX(p->end, q->end);
-			p->next = q->next;
-		} else
-			p = q;
-	}
-
-	/* link the entries of the same type together */
-	pmmap_t *last_usable, *last_resv, *last_acpi_reclaim, *last_acpi_nvs;
-
-	pmmap_usable = pmmap_resv = pmmap_acpi = pmmap_nvs = NULL;
-	last_usable = last_resv = last_acpi_reclaim = last_acpi_nvs = NULL;
-	p = &pmmap[0];
-
-	while (p != NULL) {
-		switch (p->type) {
-		case MEM_RAM:
-			if (pmmap_usable == NULL)
-				pmmap_usable = p;
-			if (last_usable != NULL)
-				last_usable->type_next = p;
-			p->type_next = NULL;
-			last_usable = p;
-
-			break;
-
-		case MEM_RESERVED:
-			if (pmmap_resv == NULL)
-				pmmap_resv = p;
-			if (last_resv != NULL)
-				last_resv->type_next = p;
-			p->type_next = NULL;
-			last_resv = p;
-
-			break;
-
-		case MEM_ACPI:
-			if (pmmap_acpi == NULL)
-				pmmap_acpi = p;
-			if (last_acpi_reclaim != NULL)
-				last_acpi_reclaim->type_next = p;
-			p->type_next = NULL;
-			last_acpi_reclaim = p;
-
-			break;
-
-		case MEM_NVS:
-			if (pmmap_nvs == NULL)
-				pmmap_nvs = p;
-			if (last_acpi_nvs != NULL)
-				last_acpi_nvs->type_next = p;
-			p->type_next = NULL;
-			last_acpi_nvs = p;
-
-			break;
-
-		default:
-			break;
+		if (slot->start <= next_slot->start &&
+		    slot->end >= next_slot->start) {
+			/*
+			 * XXX: CertiKOS assumes all overlaped E820 entries are
+			 *      of the same type.
+			 */
+			KERN_ASSERT(slot->type == next_slot->type);
+			slot->end = MAX(slot->end, next_slot->end);
+			SLIST_REMOVE_AFTER(slot, next);
 		}
-
-		p = p->next;
 	}
+
+	/*
+	 * Step 2: Create the specfic lists: pmmap_usable, pmmap_resv,
+	 *         pmmap_acpi, pmmap_nvs.
+	 */
+	SLIST_FOREACH(slot, &pmmap_list, next) {
+		sublist_nr = PMMAP_SUBLIST_NR(slot->type);
+		KERN_ASSERT(sublist_nr != -1);
+		if (last_slot[sublist_nr] != NULL)
+			SLIST_INSERT_AFTER(last_slot[sublist_nr], slot,
+					   type_next);
+		else
+			SLIST_INSERT_HEAD(&pmmap_sublist[sublist_nr], slot,
+					  type_next);
+		last_slot[sublist_nr] = slot;
+	}
+
+	if (last_slot[PMMAP_USABLE] != NULL)
+		max_usable_memory = last_slot[PMMAP_USABLE]->end;
 }
 
 static void
 pmmap_dump(void)
 {
-	pmmap_t *p = pmmap;
-	while (p != NULL) {
-		uintptr_t start = p->start;
-		uintptr_t end = p->end;
-		uint32_t type = p->type;
-
-		KERN_INFO("\tBIOS-e820: %08x - %08x",
-			  start, (start == end) ? end : end-1);
-		if (type == MEM_RAM)
-			KERN_INFO(" (usable)\n");
-		else if (type == MEM_RESERVED)
-			KERN_INFO(" (reserved)\n");
-		else if (type == MEM_ACPI)
-			KERN_INFO(" (ACPI data)\n");
-		else if (type == MEM_NVS)
-			KERN_INFO(" (ACPI NVS)\n");
-		else
-			KERN_INFO(" (unknown)\n");
-
-		p = p->next;
+	struct pmmap *slot;
+	SLIST_FOREACH(slot, &pmmap_list, next) {
+		KERN_INFO("BIOS-e820: 0x%08x - 0x%08x (%s)\n",
+			  slot->start,
+			  (slot->start == slot->end) ? slot->end : slot->end-1,
+			  (slot->type == MEM_RAM) ? "usable" :
+			  (slot->type == MEM_RESERVED) ? "reserved" :
+			  (slot->type == MEM_ACPI) ? "ACPI data" :
+			  (slot->type == MEM_NVS) ? "ACPI NVS" :
+			  "unknown");
 	}
 }
 
@@ -221,6 +191,12 @@ pmmap_init(mboot_info_t *mbi)
 	KERN_INFO("\n");
 
 	mboot_mmap_t *p = (mboot_mmap_t *) mbi->mmap_addr;
+
+	SLIST_INIT(&pmmap_list);
+	SLIST_INIT(&pmmap_sublist[PMMAP_USABLE]);
+	SLIST_INIT(&pmmap_sublist[PMMAP_RESV]);
+	SLIST_INIT(&pmmap_sublist[PMMAP_ACPI]);
+	SLIST_INIT(&pmmap_sublist[PMMAP_NVS]);
 
 	/*
 	 * Copy memory map information from multiboot information mbi to pmmap.
@@ -251,21 +227,6 @@ pmmap_init(mboot_info_t *mbi)
 	/* merge overlapped memory regions */
 	pmmap_merge();
 	pmmap_dump();
-}
-
-static uintptr_t
-pmmap_max()
-{
-	pmmap_t *ent, *last_mem_ent = NULL;
-
-	for (ent = pmmap; ent != NULL && ent->next != NULL; ent = ent->next)
-		if (ent->type == MEM_RAM)
-			last_mem_ent = ent;
-
-	if (last_mem_ent == NULL)
-		return 0;
-	else
-		return last_mem_ent->end;
 }
 
 static gcc_inline int
@@ -322,8 +283,8 @@ mem_init(mboot_info_t *mbi)
 {
 	extern uint8_t end[];
 
-	pmmap_t *e820_entry;
-	struct page_info *last_free;
+	struct pmmap *slot;
+	struct page_info *last_free = NULL;
 
 	if (mem_inited == TRUE)
 		return;
@@ -332,7 +293,7 @@ mem_init(mboot_info_t *mbi)
 	pmmap_init(mbi);
 
 	/* reserve memory for mem_npage pageinfo_t structures */
-	mem_npages = ROUNDDOWN(pmmap_max(), PAGESIZE) / PAGESIZE;
+	mem_npages = ROUNDDOWN(max_usable_memory, PAGESIZE) / PAGESIZE;
 	memzero(mem_all_pages, sizeof(struct page_info) * mem_npages);
 
 	mem_free_pages = NULL;
@@ -343,24 +304,24 @@ mem_init(mboot_info_t *mbi)
 	/*
 	 * Initialize page info structures.
 	 */
-	for (e820_entry = pmmap;
-	     e820_entry != NULL && e820_entry->end <= pmmap_max();
-	     e820_entry = e820_entry->next) {
-		uintptr_t lo, hi, i;
+	memzero(mem_all_pages, sizeof(struct page_info) * (1 << 20));
+	SLIST_FOREACH(slot, &pmmap_sublist[PMMAP_USABLE], type_next) {
+		uintptr_t lo, hi, addr;
 		pg_type type;
 		struct page_info *pi;
 
-		lo = (uintptr_t) ROUNDUP(e820_entry->start, PAGESIZE);
-		hi = (uintptr_t) ROUNDDOWN(e820_entry->end, PAGESIZE);
+		lo = (uintptr_t) ROUNDUP(slot->start, PAGESIZE);
+		hi = (uintptr_t) ROUNDDOWN(slot->end, PAGESIZE);
 
 		if (lo >= hi)
 			continue;
 
-		type = e820_entry->type;
+		type = slot->type;
 
-		for (i = lo, pi = mem_phys2pi(lo); i < hi; i+= PAGESIZE, pi++) {
+		for (addr = lo, pi = mem_phys2pi(lo); addr < hi;
+		     addr += PAGESIZE, pi++) {
 			pi->type = (type != MEM_RAM) ? PG_RESERVED :
-				(i < (uintptr_t) end) ? PG_KERNEL : PG_NORMAL;
+				(addr < (uintptr_t) end) ? PG_KERNEL : PG_NORMAL;
 
 			if (pi->type == PG_NORMAL) {
 				if (unlikely(mem_free_pages == NULL))

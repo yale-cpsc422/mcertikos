@@ -507,7 +507,11 @@ vmm_handle_exit(struct vm *vm)
 	return rc;
 }
 
-static void
+/*
+ * @return 0 if no interrupt is injected; otherwise, return the number of
+ *         injected interrupts.
+ */
+static int
 vmm_intr_assist(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
@@ -521,7 +525,7 @@ vmm_intr_assist(struct vm *vm)
 #if defined (DEBUG_GUEST_INTR) || defined (DEBUG_GUEST_INJECT)
 		KERN_DEBUG("Found no interrupt.\n");
 #endif
-		return;
+		return 0;
 	}
 
 	if (vmm_ops->pending_event(vm) == TRUE) {
@@ -556,11 +560,11 @@ vmm_intr_assist(struct vm *vm)
 	 */
 	if (blocked) {
 		vmm_ops->intercept_intr_window(vm, TRUE);
-		return;
+		return 0;
 	}
 
 	if ((vector = vdev_read_intout(vm)) == -1)
-		return;
+		return 0;
 
 	/* inject the interrupt and disable intercepting the interrupt window */
 #if defined (DEBUG_GUEST_INTR) || defined (DEBUG_GUEST_INJECT)
@@ -568,6 +572,8 @@ vmm_intr_assist(struct vm *vm)
 #endif
 	vmm_ops->inject_event(vm, EVENT_EXTINT, vector, 0, FALSE);
 	vmm_ops->intercept_intr_window(vm, FALSE);
+
+	return 1;
 }
 
 static int
@@ -974,7 +980,7 @@ vmm_run_vm(struct vm *vm)
 	KERN_ASSERT(vm != NULL);
 
 	uint64_t start_tsc, exit_tsc;
-	int rc;
+	int rc, injected;
 
 	pcpu_cur()->vm = vm;
 
@@ -989,6 +995,8 @@ vmm_run_vm(struct vm *vm)
 	rc = 0;
 	while (1) {
 		KERN_ASSERT(vm->exit_handled == TRUE);
+
+		injected = 0;
 
 #ifndef __COMPCERT__
 		start_tsc = rdtscp();
@@ -1015,6 +1023,8 @@ vmm_run_vm(struct vm *vm)
 		vmm_trace_vmexit(vm, exit_tsc);
 #endif
 
+		injected = vmm_intr_assist(vm);
+
 		/*
 		 * If the exit is caused by the interrupt, set the IF bit on the
 		 * current processor so that the interrupt handler in CertiKOS
@@ -1039,7 +1049,8 @@ vmm_run_vm(struct vm *vm)
 		vm->exit_handled = TRUE;
 
 		/* post-handling of the interrupts from the virtual machine */
-		vmm_intr_assist(vm);
+		if (injected == 0)
+			vmm_intr_assist(vm);
 	}
 
 	if (rc)
