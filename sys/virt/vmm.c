@@ -353,7 +353,7 @@ vmm_handle_exit(struct vm *vm)
 #if defined (DEBUG_VMEXIT) || defined (DEBUG_GUEST_INTR)
 		KERN_DEBUG("VMEXIT for external interrupt.\n");
 #endif
-		KERN_ASSERT(vm->exit_handled = TRUE);
+		KERN_ASSERT(vm->exit_handled == TRUE);
 		break;
 
 	case EXIT_FOR_INTWIN:
