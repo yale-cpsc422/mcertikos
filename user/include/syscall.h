@@ -155,70 +155,6 @@ sys_recv(int chid, void *buf, size_t size)
 	return errno;
 }
 
-static gcc_inline vmid_t
-sys_newvm(void)
-{
-	int errno;
-	vmid_t vmid;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_new_vm),
-		       "b" (&vmid)
-		     : "cc", "memory");
-
-	return errno ? -1 : vmid;
-}
-
-static gcc_inline int
-sys_runvm(void)
-{
-	int errno;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_run_vm)
-		     : "cc", "memory");
-
-	return errno;
-}
-
-static gcc_inline vid_t
-sys_attach_vdev(pid_t pid, chid_t in_chid, chid_t out_chid)
-{
-	int errno;
-	vid_t vid;
-	struct user_vdev user_vdev = { .in_chid = in_chid, .out_chid = out_chid };
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_attach_vdev),
-		       "b" (pid),
-		       "c" (&vid),
-		       "d" (&user_vdev)
-		     : "cc", "memory");
-
-	return errno ? -1 : vid;
-}
-
-static gcc_inline int
-sys_detach_vdev(vid_t vid)
-{
-	int errno;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_detach_vdev),
-		       "b" (vid)
-		     : "cc", "memory");
-
-	return errno;
-}
-
 static gcc_inline int
 sys_attach_port(uint16_t port, data_sz_t width)
 {
@@ -482,24 +418,36 @@ sys_channel(size_t msg_size)
 	return errno ? -1 : chid;
 }
 
-#define CHANNEL_PERM_SEND	((uint8_t) (1 << 0))
-#define CHANNEL_PERM_RECV	((uint8_t) (1 << 1))
-
-static gcc_inline int
-sys_grant(chid_t chid, pid_t pid, uint8_t perm)
+static gcc_inline chid_t
+sys_get_inchan(void)
 {
 	int errno;
+	chid_t chid;
 
 	asm volatile("int %1"
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
-		       "a" (SYS_grant),
-		       "b" (chid),
-		       "c" (pid),
-		       "d" (perm)
+		       "a" (SYS_get_inchan),
+		       "b" (&chid)
 		     : "cc", "memory");
 
-	return errno;
+	return errno ? -1 : chid;
+}
+
+static gcc_inline chid_t
+sys_get_outchan(void)
+{
+	int errno;
+	chid_t chid;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_get_outchan),
+		       "b" (&chid)
+		     : "cc", "memory");
+
+	return errno ? -1 : chid;
 }
 
 #endif /* !_USER_SYSCALL_H_ */

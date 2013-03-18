@@ -148,6 +148,8 @@ struct vm_perf_trace {
 struct vdev {
 	spinlock_t	dev_lk;
 
+	void		*msg_buf;
+
 	/*
 	 * kernel virtual devices
 	 */
@@ -177,7 +179,6 @@ struct vdev {
 
 struct vm {
 	vmid_t		vmid;	/* the identity of the virtual machine */
-	struct proc	*proc;	/* the process hosting the virtual machine */
 	vm_stat_t	state;	/* the state of the virtual machine */
 	bool		used;	/* is the virtual machine in use? */
 

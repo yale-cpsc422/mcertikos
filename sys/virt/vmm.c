@@ -902,7 +902,6 @@ vmm_create_vm(uint32_t cpufreq_lo, uint32_t cpufreq_hi, size_t memsize)
 		return NULL;
 	}
 
-	vm->proc = NULL;
 	vm->state = VM_STATE_STOP;
 
 #ifndef __COMPCERT__

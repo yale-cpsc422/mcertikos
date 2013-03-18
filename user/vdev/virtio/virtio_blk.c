@@ -727,24 +727,11 @@ main(int argc, char **argv)
 	uint32_t data;
 
 	chid_t dev_in, dev_out;
-	pid_t ppid;
 
-	dev_out = sys_getchid();
-
-	if ((dev_in = sys_channel(sizeof(vdev_req_t))) == -1)
+	if ((dev_in = sys_get_inchan()) == -1)
 		return 1;
-
-	if ((ppid = getppid()) == -1)
+	if ((dev_out = sys_get_outchan()) == -1)
 		return 2;
-
-	if (sys_grant(dev_in, ppid, CHANNEL_PERM_SEND))
-		return 3;
-
-	if (sys_send(dev_out, &dev_in, sizeof(chid_t)))
-		return 4;
-
-	if (vdev_recv_ack(dev_in))
-		return 5;
 
 	vpci_init(&vpci_host);
 	virtio_blk_init(&blk, &vpci_host);

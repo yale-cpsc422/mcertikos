@@ -15,6 +15,7 @@
 #include <sys/trap.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
+#include <sys/x86.h>
 
 #include <sys/virt/vmm.h>
 
@@ -33,10 +34,25 @@
  */
 uint8_t bsp_kstack[KSTACK_SIZE] gcc_aligned(KSTACK_SIZE);
 
-static volatile int all_ready = FALSE;
+static volatile bool all_cpus_ready = FALSE;
+static volatile bool vm_ready = FALSE;
+static volatile bool all_vdevs_ready = FALSE;
 
-extern uint8_t _binary___obj_user_guest_guest_start[];
-extern uint8_t _binary___obj_user_idle_idle_start[];
+extern uint8_t _binary___obj_user_idle_idle_start[],
+	_binary___obj_user_vdev_i8042_i8042_start[],
+	_binary___obj_user_vdev_i8254_i8254_start[],
+	_binary___obj_user_vdev_nvram_nvram_start[],
+	_binary___obj_user_vdev_virtio_virtio_start[];
+
+static uint8_t *vdev_binary[4] =
+	{
+		_binary___obj_user_vdev_nvram_nvram_start,
+		_binary___obj_user_vdev_i8042_i8042_start,
+		_binary___obj_user_vdev_i8254_i8254_start,
+		_binary___obj_user_vdev_virtio_virtio_start
+	};
+
+volatile struct vm *vm = NULL;
 
 static void kern_main_ap(void);
 
@@ -57,7 +73,6 @@ static void
 kern_main(void)
 {
 	struct pcpu *c;
-	struct proc *guest_proc, *idle_proc;
 	struct kstack *ap_kstack;
 	int i;
 
@@ -114,7 +129,7 @@ kern_main(void)
 	KERN_INFO("done.\n");
 
 	/* boot APs  */
-	all_ready = FALSE;
+	all_cpus_ready = FALSE;
 	for (i = 1; i < pcpu_ncpu(); i++) {
 		KERN_INFO("Boot CPU%d ... ", i);
 
@@ -131,21 +146,22 @@ kern_main(void)
 
 		KERN_INFO("done.\n");
 	}
-	all_ready = TRUE;
+	all_cpus_ready = TRUE;
 
-	/* create the first user process */
-	if ((idle_proc = proc_new(NULL, NULL)) == NULL)
-		KERN_PANIC("Cannot create idle process on BSP.\n");
-	proc_exec(idle_proc, c, (uintptr_t) _binary___obj_user_idle_idle_start);
+	/* create VM */
+#ifndef __COMPCERT__
+	vm = vmm_create_vm(800 * 1000 * 1000, 256 * 1024 * 1024);
+#else
+	vm = vmm_create_vm(800 * 1000 * 1000, 0, 256 * 1024 * 1024);
+#endif
+	KERN_ASSERT(vm != NULL);
+	vm_ready = TRUE;
 
-	if ((guest_proc = proc_new(idle_proc, NULL)) == NULL)
-		KERN_PANIC("Cannot create guest process on BSP.\n");
-	proc_exec(guest_proc, c, (uintptr_t) _binary___obj_user_guest_guest_start);
-
-	/* jump to userspace */
-	KERN_INFO("[BSP KERN] Go to userspace ... \n");
-	sched_lock(c);
-	sched_resched(FALSE);
+	/* launch VM */
+	while (all_vdevs_ready != TRUE)
+		pause();
+	KERN_INFO("Start VM ...\n");
+	vmm_run_vm((struct vm *) vm);
 
 	KERN_PANIC("[BSP KERN] CertiKOS should not be here!\n");
 }
@@ -155,7 +171,11 @@ kern_main_ap(void)
 {
 	struct pcpu *c;
 	int cpu_idx;
-	struct proc *idle_proc;
+
+	struct proc *idle_proc, *vdev_proc;
+	struct channel *in, *out;
+	vid_t vid;
+	int i;
 
 	c = pcpu_cur();
 	KERN_ASSERT(c != NULL && c->booted == FALSE);
@@ -200,14 +220,35 @@ kern_main_ap(void)
 	/* enable interrupts */
 
 	c->booted = TRUE;
-	while (all_ready == FALSE);
+	while (all_cpus_ready == FALSE)
+		pause();
 
 	/* create idle process */
 	if ((idle_proc = proc_new(NULL, NULL)) == NULL)
 		KERN_PANIC("Cannot create idle process on AP%d.\n", cpu_idx);
 	proc_exec(idle_proc, c, (uintptr_t) _binary___obj_user_idle_idle_start);
 
+	if (pcpu_cpu_idx(pcpu_cur()) != 1)
+		goto enter_user;
 
+	/* create virtual devices  */
+	while (vm_ready != TRUE)
+		pause();
+	for (i = 0; i < 4; i++) {
+		out = channel_alloc(sizeof(vdev_ack_t));
+		KERN_ASSERT(out != NULL);
+		in = channel_alloc(sizeof(vdev_req_t));
+		KERN_ASSERT(in != NULL);
+		vdev_proc = proc_new(NULL, NULL);
+		vid = vdev_register_device((struct vm *) vm, vdev_proc, in, out);
+		proc_exec(vdev_proc, pcpu_cur(), (uintptr_t) vdev_binary[i]);
+		KERN_DEBUG("Attach process %d to vdev %d, in %d, out %d.\n",
+			   vdev_proc->pid, vid,
+			   channel_getid(in), channel_getid(out));
+	}
+	all_vdevs_ready = TRUE;
+
+ enter_user:
 	/* jump to userspace */
 	KERN_INFO("[AP%d KERN] Go to userspace ... \n", cpu_idx);
 	sched_lock(c);

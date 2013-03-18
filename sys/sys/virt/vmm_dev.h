@@ -240,6 +240,9 @@ int vdev_wait_all_devices_ready(struct vm *vm);
  */
 int vdev_get_request(struct proc *dev_p, void *req, size_t *size, int blocking);
 
+struct channel *vdev_get_in_channel(struct vm *vm, struct proc *dev_p);
+struct channel *vdev_get_out_channel(struct vm *vm, struct proc *dev_p);
+
 #else /* !_KERN_ */
 
 #include <types.h>

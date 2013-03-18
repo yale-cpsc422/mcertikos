@@ -171,6 +171,9 @@ smp_rmb(void)
 
 void ccomp_rdtscp(uint64_t *tsc);
 void ccomp_enable_sse(void);
+void ccomp_pause(void);
+
+#define pause()		ccomp_pause()
 
 #endif /* __COMPCERT__ */
 

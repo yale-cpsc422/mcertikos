@@ -32,7 +32,6 @@ enum __syscall_nr {
 	SYS_getchid,	/* get the identity of the channel to communicate with
 			   the parent process */
 	SYS_channel,	/* create a channel */
-	SYS_grant,	/* grant the access permission of a channel */
 	SYS_send,	/* send a message */
 	SYS_recv,	/* recv a message */
 	SYS_disk_op,	/* perform a disk operation */
@@ -40,10 +39,6 @@ enum __syscall_nr {
 	/*
 	 * system calls to setup the virtual machines
 	 */
-	SYS_new_vm,	/* create a new virtual machine */
-	SYS_run_vm,	/* start a virtual machine */
-	SYS_attach_vdev,/* attach a virtual device to a virtual machine */
-	SYS_detach_vdev,/* detach a virtual device from a virtual machine */
 	SYS_attach_port,/* attach an I/O port to a virtual device */
 	SYS_detach_port,/* detach an I/O port from a virtual device */
 	SYS_attach_irq,	/* attach an IRQ to a virtual device */
@@ -51,6 +46,8 @@ enum __syscall_nr {
 	/*
 	 * system calls for virtual devices to commnicate with virtual machines
 	 */
+	SYS_get_inchan,	/* get the in channel */
+	SYS_get_outchan,/* get the out channel */
 	SYS_ret_in,	/* return the value on an guest I/O port */
 	SYS_host_in,	/* read from a host I/O port */
 	SYS_host_out,	/* write to a host I/O port */

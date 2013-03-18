@@ -73,8 +73,6 @@ struct proc {
 	struct context	uctx;		/* (p) user context */
 	uint8_t		*sys_buf;	/* (p) buffer for handling system calls */
 
-	struct vm	*vm;		/* (p) hosted virtual machine */
-
 	vid_t		vid;		/* (p) hosted virtual device */
 	struct vm	*master_vm;	/* (p) virtual machine connected to */
 

@@ -33,9 +33,14 @@ vdev_init(struct vm *vm)
 	KERN_ASSERT(vm != NULL);
 
 	struct vdev *vdev = &vm->vdev;
+	pageinfo_t *pi;
 	int i;
 
 	spinlock_init(&vdev->dev_lk);
+
+	if ((pi = mem_page_alloc()) == NULL)
+		KERN_PANIC("Cannot allocate memory for message buffer.\n");
+	vdev->msg_buf = mem_pi2ptr(pi);
 
 	/*
 	 * Initialize the kernel virtual devices.
@@ -295,8 +300,6 @@ static int
 vdev_send_request(struct vm *vm, struct channel *ch, void *req, size_t size)
 {
 	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(vm->proc != NULL);
-	KERN_ASSERT(vm->proc == proc_cur());
 	KERN_ASSERT(ch != NULL);
 	KERN_ASSERT(req != NULL);
 	KERN_ASSERT(size > 0);
@@ -313,8 +316,6 @@ static int
 vdev_recv_result(struct vm *vm, struct channel *ch, void *result, size_t size)
 {
 	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(vm->proc != NULL);
-	KERN_ASSERT(vm->proc == proc_cur());
 	KERN_ASSERT(ch != NULL);
 	KERN_ASSERT(result != NULL);
 
@@ -400,7 +401,7 @@ vdev_read_guest_ioport(struct vm *vm,
 		goto ret;
 	}
 
-	recv_buf = vm->proc->sys_buf;
+	recv_buf = vm->vdev.msg_buf;
 	ch = vdev->dev_out[vid];
 
 	VDEV_DEBUG("Wait for data from virtual device %d.\n", vid);
@@ -710,7 +711,7 @@ vdev_wait_all_devices_ready(struct vm *vm)
 	size_t recv_size = sizeof(struct vdev_device_ready);
 	struct vdev_device_ready *rdy;
 
-	recv_buf = vm->proc->sys_buf;
+	recv_buf = vm->vdev.msg_buf;
 
 	for (vid = 0; vid < MAX_VID; vid++) {
 		p = vdev->dev[vid];
@@ -737,4 +738,28 @@ vdev_wait_all_devices_ready(struct vm *vm)
 	}
 
 	return 0;
+}
+
+struct channel *
+vdev_get_in_channel(struct vm *vm, struct proc *p)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(p != NULL);
+
+	if (p->vid == -1 || p->vid >= MAX_VID)
+		return NULL;
+
+	return vm->vdev.dev_in[p->vid];
+}
+
+struct channel *
+vdev_get_out_channel(struct vm *vm, struct proc *p)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(p != NULL);
+
+	if (p->vid == -1 || p->vid >= MAX_VID)
+		return NULL;
+
+	return vm->vdev.dev_out[p->vid];
 }

@@ -4,6 +4,7 @@
 #include <sys/mmu.h>
 #include <sys/pcpu.h>
 #include <sys/proc.h>
+#include <sys/sched.h>
 #include <sys/string.h>
 #include <sys/syscall.h>
 #include <sys/trap.h>
@@ -32,15 +33,10 @@ static char *syscall_name[MAX_SYSCALL_NR] =
 		[SYS_getppid]		= "sys_getppid",
 		[SYS_getchid]		= "sys_getchid",
 		[SYS_channel]		= "sys_channel",
-		[SYS_grant]		= "sys_grant",
 		[SYS_send]		= "sys_send",
 		[SYS_recv]		= "sys_recv",
 		[SYS_disk_op]		= "sys_disk_op",
 		[SYS_disk_cap]		= "sys_disk_cap",
-		[SYS_new_vm]		= "sys_new_vm",
-		[SYS_run_vm]		= "sys_run_vm",
-		[SYS_attach_vdev]	= "sys_attach_vdev",
-		[SYS_detach_vdev]	= "sys_detach_vdev",
 		[SYS_attach_port]	= "sys_attach_port",
 		[SYS_detach_port]	= "sys_detach_port",
 		[SYS_attach_irq]	= "sys_attach_irq",
@@ -51,6 +47,8 @@ static char *syscall_name[MAX_SYSCALL_NR] =
 		[SYS_guest_tsc]		= "sys_guest_tsc",
 		[SYS_guest_cpufreq]	= "sys_guest_cpufreq",
 		[SYS_guest_memsize]	= "sys_guest_memsize",
+		[SYS_get_inchan]	= "sys_get_inchan",
+		[SYS_get_outchan]	= "sys_get_outchan",
 	};
 
 static char *errno_name[MAX_ERROR_NR] =
@@ -205,16 +203,6 @@ sys_create_proc(uintptr_t pid_la, chid_t chid)
 	if (chid != -1) {
 		if ((ch = channel_getch(chid)) == NULL)
 			return E_INVAL_CHID;
-
-		channel_lock(ch);
-
-		if (channel_getperm(ch, cur_p) !=
-		    (CHANNEL_PERM_SEND | CHANNEL_PERM_RECV)) {
-			channel_unlock(ch);
-			return E_INVAL_CHID;
-		}
-
-		channel_unlock(ch);
 	} else {
 		ch = NULL;
 	}
@@ -340,101 +328,6 @@ sys_recv(int chid, uintptr_t msg_la, size_t size)
 	if (ipc_recv(ch, (uintptr_t) msg_la, size, FALSE, TRUE))
 		return E_RECV;
 
-	return E_SUCC;
-}
-
-static int
-sys_new_vm(uintptr_t vmid_la)
-{
-	struct proc *p = proc_cur();
-
-	if (p->vm != NULL)
-		return E_INVAL_PID;
-
-#ifndef _CCOMP_
-	if ((p->vm = vmm_create_vm(800 * 1000 * 1000,
-				   256 * 1024 *1024)) == NULL)
-#else
-	if ((p->vm = vmm_create_vm((800 * 1000 * 1000) & 0xffffffff ,
-				   ((800 * 1000 * 1000) >> 32) & 0xffffffff,
-				   256 * 1024 *1024)) == NULL)
-#endif
-		return E_INVAL_VMID;
-
-	if (copy_to_user(p->pmap, vmid_la,
-			 (uintptr_t) &p->vm->vmid, sizeof(vmid_t)) == 0)
-		return E_MEM;
-
-	p->vm->proc = p;
-
-	return E_SUCC;
-}
-
-static int
-sys_run_vm(void)
-{
-	struct proc *p = proc_cur();
-	struct pcpu *c = p->cpu;
-
-	if (c->vm != NULL || p->vm == NULL)
-		return E_INVAL_VMID;
-
-	vmm_run_vm(p->vm);
-
-	return E_SUCC;
-}
-
-static int
-sys_attach_vdev(pid_t pid, uintptr_t vid_la, uintptr_t user_vdev_la)
-{
-	struct proc *vm_p, *dev_p;
-	vid_t vid;
-	struct user_vdev user_vdev;
-	struct channel *in_ch, *out_ch;
-
-	if (!(VM_USERLO <= vid_la && vid_la + sizeof(vid_t) <= VM_USERHI))
-		return E_INVAL_ADDR;
-
-	if (!(VM_USERLO <= user_vdev_la &&
-	      user_vdev_la + sizeof(struct user_vdev) <= VM_USERHI))
-		return E_INVAL_ADDR;
-
-	if ((vm_p = proc_cur()) == NULL)
-		return E_INVAL_VMID;
-
-	if ((dev_p = proc_pid2proc(pid)) == NULL)
-		return E_INVAL_PID;
-
-	if (copy_from_user((uintptr_t) &user_vdev, proc_cur()->pmap,
-			   user_vdev_la, sizeof(struct user_vdev)) == 0)
-		return E_MEM;
-
-	if ((in_ch = channel_getch(user_vdev.in_chid)) == NULL ||
-	    (out_ch = channel_getch(user_vdev.out_chid)) == NULL)
-		return E_INVAL_CHID;
-
-	if ((vid = vdev_register_device(vm_p->vm, dev_p, in_ch, out_ch)) == -1)
-		return E_ATTACH;
-
-	if (copy_to_user(vm_p->pmap, vid_la,
-			 (uintptr_t) &vid, sizeof(vid_t)) == 0)
-		return E_MEM;
-
-	return E_SUCC;
-}
-
-static int
-sys_detach_vdev(vid_t vid)
-{
-	struct proc *p = proc_cur();
-
-	if (p->vm == NULL)
-		return E_INVAL_VMID;
-
-	if (vdev_get_dev(p->vm, vid) == NULL)
-		return E_INVAL_VID;
-
-	vdev_unregister_device(p->vm, vid);
 	return E_SUCC;
 }
 
@@ -789,9 +682,35 @@ sys_channel(uintptr_t chid_la, size_t msg_size)
 	if ((ch = channel_alloc(msg_size)) == NULL)
 		return E_CHANNEL;
 
-	channel_lock(ch);
-	channel_setperm(ch, proc_cur(), CHANNEL_PERM_SEND | CHANNEL_PERM_RECV);
-	channel_unlock(ch);
+	chid = channel_getid(ch);
+
+	if (copy_to_user(proc_cur()->pmap, chid_la,
+			 (uintptr_t) &chid, sizeof(chid_t)) == 0)
+		return E_MEM;
+
+	return E_SUCC;
+}
+
+static int
+sys_get_vdev_channel(uintptr_t chid_la, int in)
+{
+	struct proc *devp = sched_cur_proc(pcpu_cur());
+	struct channel *ch;
+	chid_t chid;
+
+	if (!(VM_USERLO <= chid_la && chid_la + sizeof(chid_t) <= VM_USERHI))
+		return E_INVAL_ADDR;
+
+	if (devp->master_vm == NULL)
+		return E_INVAL_VMID;
+
+	if (devp->vid == -1)
+		return E_INVAL_VID;
+
+	if ((ch = in ?
+	     vdev_get_in_channel(devp->master_vm, devp) :
+	     vdev_get_out_channel(devp->master_vm, devp)) == NULL)
+		return E_CHANNEL;
 
 	chid = channel_getid(ch);
 
@@ -802,51 +721,8 @@ sys_channel(uintptr_t chid_la, size_t msg_size)
 	return E_SUCC;
 }
 
-int
-sys_grant(chid_t chid, pid_t pid, uint8_t perm)
-{
-	struct channel *ch;
-	struct proc *cur_p, *p;
-	uint8_t granter_perm;
-
-	if ((ch = channel_getch(chid)) == NULL)
-		return E_INVAL_CHID;
-
-	if ((p = proc_pid2proc(pid)) == NULL)
-		return E_INVAL_PID;
-
-	cur_p = proc_cur();
-
-	channel_lock(ch);
-
-	granter_perm = channel_getperm(ch, cur_p);
-
-	/* Does the granter have the permission? */
-	if ((granter_perm & perm) == 0) {
-		/* KERN_DEBUG("Granter %d doesn't hold the permission %d of " */
-		/* 	   "channel %d.\n", cur_p->pid, perm, chid); */
-		goto err_noperm;
-	}
-
-	/* Remove the permission from the granter */
-	if (channel_setperm(ch, cur_p, granter_perm ^ perm)) {
-		/* KERN_DEBUG("Cannot remove permission from granter.\n"); */
-		goto err_noperm;
-	}
-
-	/* Grant permission to the grantee */
-	if (channel_setperm(ch, p, perm)) {
-		/* KERN_DEBUG("Cannot grant permission to grantee.\n"); */
-		goto err_noperm;
-	}
-
-	channel_unlock(ch);
-	return E_SUCC;
-
- err_noperm:
-	channel_unlock(ch);
-	return E_PERM;
-}
+#define sys_get_inchan(la)	sys_get_vdev_channel((la), 1)
+#define sys_get_outchan(la)	sys_get_vdev_channel((la), 0)
 
 /*
  * Syetem calls in CertiKOS follow the convention below.
@@ -958,41 +834,6 @@ syscall_handler(uint8_t trapno, struct context *ctx, int guest)
 		 * a[2]: the size of the message
 		 */
 		errno = sys_recv((int) a[0], (uintptr_t) a[1], (size_t) a[2]);
-		break;
-	case SYS_new_vm:
-		/*
-		 * Create a new virtual machine in the session of the caller.
-		 * a[0]: the linear address where the virtual machine id will be
-		 *       returned to
-		 */
-		errno = sys_new_vm((uintptr_t) a[0]);
-		break;
-	case SYS_run_vm:
-		/*
-		 * Run the virtual machine in the session of the caller.
-		 */
-		errno = sys_run_vm();
-		break;
-	case SYS_attach_vdev:
-		/*
-		 * Attach a process as a virtual device to the virtual machine
-		 * in the session of the caller. A virtual device id will be
-		 * be allocated for the virtual device.
-		 * a[0]: the process ID
-		 * a[1]: the linear address where the virtual device ID will be
-		 *       returned to
-		 * a[2]: the linear address of the user_vdev object
-		 */
-		errno = sys_attach_vdev((pid_t) a[0], (uintptr_t) a[1],
-					(uintptr_t) a[2]);
-		break;
-	case SYS_detach_vdev:
-		/*
-		 * Detach a virtual device from the virtual machine in the
-		 * session of the caller.
-		 * a[0]: the virtual device ID
-		 */
-		errno = sys_detach_vdev((vid_t) a[0]);
 		break;
 	case SYS_attach_port:
 		/*
@@ -1137,15 +978,21 @@ syscall_handler(uint8_t trapno, struct context *ctx, int guest)
 		 */
 		errno = sys_channel((uintptr_t) a[0], (size_t) a[1]);
 		break;
-	case SYS_grant:
+
+	case SYS_get_inchan:
 		/*
-		 * Grant the access permission of a channel to a process.
-		 * a[0]: the channel id
-		 * a[1]: the process id
-		 * a[2]: the permission: bit 0 - receiving permission,
-		 *                       bit 1 - sending permission
+		 * Get the identity of the in channel of a virtual device.
+		 * a[0]: the linear address where the channel id is returned to
 		 */
-		errno = sys_grant((chid_t) a[0], (pid_t) a[1], (uint8_t) a[2]);
+		errno = sys_get_inchan((uintptr_t) a[0]);
+		break;
+
+	case SYS_get_outchan:
+		/*
+		 * Get the identity of the out channel of a virtual device.
+		 * a[0]: the linear address where the channel id is returned to
+		 */
+		errno = sys_get_outchan((uintptr_t) a[0]);
 		break;
 
 	default:

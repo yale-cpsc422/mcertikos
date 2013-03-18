@@ -58,3 +58,9 @@ ccomp_enable_sse(void)
 	cr0 = rcr0() | CR0_MP;
 	cr0 &= ~ (CR0_EM | CR0_TS);
 }
+
+void
+ccomp_pause(void)
+{
+	pause();
+}

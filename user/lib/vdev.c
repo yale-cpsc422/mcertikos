@@ -12,33 +12,19 @@ vdev_init(struct vdev *vdev, void *opaque_dev, char *desc,
 	  int (*write_ioport)(void *, uint16_t, data_sz_t, uint32_t),
 	  int (*sync)(void *))
 {
-	pid_t ppid;
 	chid_t dev_in, dev_out;
 
 	if (vdev == NULL || opaque_dev == NULL)
 		return 1;
 
-	dev_out = sys_getchid();
+	if ((dev_in = sys_get_inchan()) == -1) {
+		DEBUG("Cannot get IN channel.\n");
+		return 1;
+	}
 
-	if ((dev_in = sys_channel(sizeof(vdev_req_t))) == -1) {
-		DEBUG("Cannot create IN channel.\n");
+	if ((dev_out = sys_get_outchan()) == -1) {
+		DEBUG("Cannot get OUT channel.\n");
 		return 2;
-	}
-
-	if ((ppid = getppid()) == -1) {
-		DEBUG("Cannot find parent.\n");
-		return 3;
-	}
-
-	if (sys_grant(dev_in, ppid, CHANNEL_PERM_SEND)) {
-		DEBUG("Cannot grant sending permission of channel %d "
-		      "to parent %d.\n", dev_in, ppid);
-		return 4;
-	}
-
-	if (sys_send(dev_out, &dev_in, sizeof(chid_t))) {
-		DEBUG("Cannot send IN channel to parent.\n");
-		return 5;
 	}
 
 	vdev->dev_in = dev_in;
@@ -69,9 +55,6 @@ vdev_start(struct vdev *vdev)
 
 	if ((opaque_dev = vdev->opaque_dev) == NULL)
 		return 2;
-
-	if (vdev_recv_ack(vdev->dev_in))
-		return 3;
 
 	if (vdev->init && vdev->init(opaque_dev))
 		return 4;
@@ -128,18 +111,6 @@ vdev_recv_ack(chid_t dev_in)
 	if (sys_recv(dev_in, &ack, sizeof(ack)) || ack != VM_TO_VDEV_ACK)
 		return 1;
 	return 0;
-}
-
-vid_t
-vdev_attach_proc(pid_t pid, chid_t dev_in, chid_t dev_out)
-{
-	return sys_attach_vdev(pid, dev_in, dev_out);
-}
-
-int
-vdev_detach_proc(vid_t vid)
-{
-	return sys_detach_vdev(vid);
 }
 
 int

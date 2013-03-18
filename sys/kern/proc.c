@@ -30,9 +30,9 @@
 
 #ifdef DEBUG_PROC
 
-#define PROC_DEBUG(fmt...)			\
-	do {					\
-		KERN_DEBUG(fmt);		\
+#define PROC_DEBUG(fmt, ...)				\
+	do {						\
+		KERN_DEBUG(fmt, ##__VA_ARGS__);		\
 	} while (0)
 #else
 
@@ -129,7 +129,6 @@ proc_new(struct proc *parent, struct channel *ch)
 
 	struct proc *p;
 	pageinfo_t *user_pi, *buf_pi;
-	uint8_t perm;
 
 	/* allocate a PCB */
 	if ((p = proc_alloc()) == NULL) {
@@ -146,33 +145,7 @@ proc_new(struct proc *parent, struct channel *ch)
 	/* create the channel to parent */
 	if (parent != NULL && ch != NULL) {
 		channel_lock(ch);
-
-		perm = channel_getperm(ch, parent);
-
-		if (perm != (CHANNEL_PERM_SEND | CHANNEL_PERM_RECV)) {
-			PROC_DEBUG("Parent doesn't own the channel.\n");
-			goto err_channel;
-		}
-
-		if (channel_setperm(ch, parent, CHANNEL_PERM_RECV)) {
-			PROC_DEBUG("Cannot remove sending permission.\n");
-			goto err_channel;
-		}
-
-		if (channel_setperm(ch, p, CHANNEL_PERM_SEND)) {
-			PROC_DEBUG("Cannot grant sending permission.\n");
-			goto err_channel;
-		}
-
 		p->parent_ch = ch;
-		goto succ_channel;
-
-	err_channel:
-		channel_unlock(ch);
-		proc_free(p);
-		return NULL;
-
-	succ_channel:
 		channel_unlock(ch);
 	}
 
@@ -214,7 +187,6 @@ proc_new(struct proc *parent, struct channel *ch)
 		    VM_STACKHI - PAGESIZE, PTE_P | PTE_U | PTE_W);
 
 	/* other fields */
-	p->vm = NULL;
 	p->vid = -1;
 	p->inv = NULL;
 	spinlock_init(&p->proc_lk);
