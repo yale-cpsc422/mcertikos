@@ -104,7 +104,7 @@ pmmap_alloc_slot(void)
 static void
 pmmap_insert(uintptr_t start, uintptr_t end, uint32_t type)
 {
-	struct pmmap *free_slot, *slot;
+	struct pmmap *free_slot, *slot, *last_slot;
 
 	if ((free_slot = pmmap_alloc_slot()) == NULL)
 		KERN_PANIC("More than 128 E820 entries.\n");
@@ -113,15 +113,18 @@ pmmap_insert(uintptr_t start, uintptr_t end, uint32_t type)
 	free_slot->end = end;
 	free_slot->type = type;
 
+	last_slot = NULL;
+
 	SLIST_FOREACH(slot, &pmmap_list, next) {
-		if (start >= slot->start)
+		if (start < slot->start)
 			break;
+		last_slot = slot;
 	}
 
-	if (slot != NULL)
-		SLIST_INSERT_AFTER(slot, free_slot, next);
-	else
+	if (last_slot == NULL)
 		SLIST_INSERT_HEAD(&pmmap_list, free_slot, next);
+	else
+		SLIST_INSERT_AFTER(last_slot, free_slot, next);
 }
 
 static void
@@ -138,12 +141,8 @@ pmmap_merge(void)
 		if ((next_slot = SLIST_NEXT(slot, next)) == NULL)
 			break;
 		if (slot->start <= next_slot->start &&
-		    slot->end >= next_slot->start) {
-			/*
-			 * XXX: CertiKOS assumes all overlaped E820 entries are
-			 *      of the same type.
-			 */
-			KERN_ASSERT(slot->type == next_slot->type);
+		    slot->end >= next_slot->start &&
+		    slot->type == next_slot->type) {
 			slot->end = MAX(slot->end, next_slot->end);
 			SLIST_REMOVE_AFTER(slot, next);
 		}
