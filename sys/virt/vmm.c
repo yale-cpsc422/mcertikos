@@ -120,7 +120,9 @@ vmm_handle_ioport(struct vm *vm)
 	width = exit_info->ioport.width;
 
 	/*
-	 * TODO: check CPL and IOPL
+	 * XXX: I/O permission check is not necessary when using HVM. If the
+	 *      check fails, the corresponding exception, instead of an I/O
+	 *      related VMEXIT, will happen in the guest.
 	 */
 
 	if (exit_info->ioport.write == TRUE) {
@@ -154,21 +156,17 @@ vmm_handle_rdmsr(struct vm *vm)
 
 	uint32_t msr, next_eip;
 	uint64_t val;
-	struct guest_seg_desc cs_desc;
-	uint8_t cpl;
-
-	vmm_ops->get_desc(vm, GUEST_CS, &cs_desc);
-	cpl = (cs_desc.ar >> 5) & 3;
 
 	vmm_ops->get_reg(vm, GUEST_ECX, &msr);
 
-	if (cpl != 0 || vmm_ops->get_msr(vm, msr, &val)) {
+	/*
+	 * XXX: I/O permission check is not necessary when using HVM.
+	 */
+	if (vmm_ops->get_msr(vm, msr, &val)) {
 #ifdef DEBUG_GUEST_MSR
-		KERN_DEBUG("Guest rdmsr 0x%08x: permission denied, "
-			   "CPL (%d) != 0.\n", msr, cpl);
+		KERN_DEBUG("Guest rdmsr failed: invalid MSR 0x%llx.\n", msr);
 #endif
-		vmm_ops->inject_event(vm, EVENT_EXCEPTION, T_GPFLT,
-				      (cs_desc.sel & 0x1fff) << 3, TRUE);
+		vmm_ops->inject_event(vm, EVENT_EXCEPTION, T_GPFLT, 0, TRUE);
 		return 0;
 	}
 
@@ -193,11 +191,6 @@ vmm_handle_wrmsr(struct vm *vm)
 
 	uint32_t msr, next_eip, eax, edx;
 	uint64_t val;
-	struct guest_seg_desc cs_desc;
-	uint8_t cpl;
-
-	vmm_ops->get_desc(vm, GUEST_CS, &cs_desc);
-	cpl = (cs_desc.ar >> 5) & 3;
 
 	vmm_ops->get_reg(vm, GUEST_ECX, &msr);
 
@@ -205,13 +198,14 @@ vmm_handle_wrmsr(struct vm *vm)
 	vmm_ops->get_reg(vm, GUEST_EDX, &edx);
 	val = ((uint64_t) edx << 32) | (uint64_t) eax;
 
-	if (cpl != 0 || vmm_ops->set_msr(vm, msr, val)) {
+	/*
+	 * XXX: I/O permission check is not necessary when using HVM.
+	 */
+	if (vmm_ops->set_msr(vm, msr, val)) {
 #ifdef DEBUG_GUEST_MSR
-		KERN_DEBUG("Guest wrmsr 0x%08x: permission denied, "
-			   "CPL (%d) != 0.\n", msr, cpl);
+		KERN_DEBUG("Guest wrmsr failed: invalid MSR 0x%llx.\n", msr);
 #endif
-		vmm_ops->inject_event(vm, EVENT_EXCEPTION, T_GPFLT,
-				      (cs_desc.sel & 0x1fff) << 3, TRUE);
+		vmm_ops->inject_event(vm, EVENT_EXCEPTION, T_GPFLT, 0, TRUE);
 		return 0;
 	}
 
