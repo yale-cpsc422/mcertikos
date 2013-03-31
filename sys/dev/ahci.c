@@ -231,6 +231,14 @@ ahci_init_port(int port, uint8_t irq)
 	if (serr)
 		ahci_writel(AHCI_P_SERR(port), serr);
 
+	/* spinup the device */
+	if (ahci_spinup_port(port)) {
+		KERN_INFO("AHCI: port %d link down.\n", port);
+		return 1;
+	} else {
+		KERN_INFO("AHCI: port %d link up.\n", port);
+	}
+
 	/* start the port */
 	cmd = ahci_readl(AHCI_P_CMD(port));
 	ahci_writel(AHCI_P_CMD(port),  cmd | AHCI_P_CMD_ST);
@@ -268,29 +276,19 @@ ahci_idle_port(int port)
 
 	cmd = ahci_readl(AHCI_P_CMD(port));
 
-	/* clear PxCMD.ST and PxCMD.CR */
-	if (cmd & (AHCI_P_CMD_ST | AHCI_P_CMD_CR)) {
-		ahci_writel(AHCI_P_CMD(port), cmd & ~AHCI_P_CMD_ST);
+	/* clear PxCMD.ST, PxCMD.CR, PxCMD.FR and PxCMD.FRE */
+	if (cmd & (AHCI_P_CMD_ST | AHCI_P_CMD_CR |
+		   AHCI_P_CMD_FR | AHCI_P_CMD_FRE)) {
+		ahci_writel(AHCI_P_CMD(port),
+			    cmd & ~(AHCI_P_CMD_ST | AHCI_P_CMD_FRE));
 		wait_until(500,
-			   (ahci_readl(AHCI_P_CMD(port)) & AHCI_P_CMD_CR) == 0);
+			   (ahci_readl(AHCI_P_CMD(port)) &
+			    (AHCI_P_CMD_CR | AHCI_P_CMD_FRE)) == 0);
 		cmd = ahci_readl(AHCI_P_CMD(port));
-		if (cmd & AHCI_P_CMD_CR) {
-			AHCI_DEBUG("Cannot clear PxCMD.ST and PxCMD.CR "
-				   "of port %d.\n", port);
+		if (cmd & (AHCI_P_CMD_CR | AHCI_P_CMD_FRE)) {
+			AHCI_DEBUG("Cannot clear PxCMD.ST, PxCMD.CR, PxCMD.FR "
+				   "and PxCMD.FRE of port %d.\n", port);
 			return 1;
-		}
-	}
-
-	/* clear PxCMD.FR and PxCMD.FRE */
-	if (cmd & (AHCI_P_CMD_FR | AHCI_P_CMD_FRE)) {
-		ahci_writel(AHCI_P_CMD(port), cmd & ~AHCI_P_CMD_FRE);
-		wait_until(500,
-			   (ahci_readl(AHCI_P_CMD(port)) & AHCI_P_CMD_FR) == 0);
-		cmd = ahci_readl(AHCI_P_CMD(port));
-		if (cmd & AHCI_P_CMD_FR) {
-			AHCI_DEBUG("Cannot clear PxCMD.FR and PxCMD.FRE "
-				   "of port %d.\n", port);
-			return 2;
 		}
 	}
 
@@ -360,24 +358,10 @@ ahci_spinup_port(int port)
 {
 	KERN_ASSERT(0 <= port && port < MIN(AHCI_MAX_PORTS, hba.nports));
 
-	uint32_t cmd, sctl, ssts, serr, tfd;
-
-	cmd = ahci_readl(AHCI_P_CMD(port));
-	if (cmd &
-	    (AHCI_P_CMD_ST | AHCI_P_CMD_CR | AHCI_P_CMD_FRE | AHCI_P_CMD_FR)) {
-		AHCI_DEBUG("PxCMD.ST, PxCMD.CR, PxCMD.FRE, or PxCMD.FR "
-			   "of port %d are not 0. (PxCMD = 0x%08x)\n",
-			   port, cmd);
-		return 1;
-	}
-
-	sctl = ahci_readl(AHCI_P_SCTL(port));
-	if (sctl & AHCI_P_SCTL_DET_MASK) {
-		AHCI_DEBUG("PxSCTL.DET of port %d is not 0.\n", port);
-		return 2;
-	}
+	uint32_t cmd, ssts, serr, tfd;
 
 	/* spin-up */
+	cmd = ahci_readl(AHCI_P_CMD(port));
 	ahci_writel(AHCI_P_CMD(port), cmd | AHCI_P_CMD_SUD);
 	wait_until(1000,
 		   (ahci_readl(AHCI_P_SSTS(port)) &
@@ -385,9 +369,8 @@ ahci_spinup_port(int port)
 		   (ahci_readl(AHCI_P_SSTS(port)) &
 		    AHCI_P_SSTS_DET_MASK) == AHCI_P_SSTS_DET_PARTIAL);
 	ssts = ahci_readl(AHCI_P_SSTS(port));
-	if ((ssts & AHCI_P_SSTS_DET_MASK) != AHCI_P_SSTS_DET_PRESENT ||
-	    (ssts & AHCI_P_SSTS_DET_MASK) != AHCI_P_SSTS_DET_PARTIAL) {
-		AHCI_DEBUG("PxSTSS.DET of port %d != 0x1 or 0x3\n", port);
+	if ((ssts & AHCI_P_SSTS_DET_MASK) != AHCI_P_SSTS_DET_PRESENT) {
+		AHCI_DEBUG("PxSTSS.DET of port %d != 0x3.\n", port);
 		return 3;
 	}
 
@@ -399,10 +382,10 @@ ahci_spinup_port(int port)
 	/* wait until the device is ready */
 	wait_until(31000, (ahci_readl(AHCI_P_TFD(port)) &
 			   (AHCI_P_TFD_ST_BSY | AHCI_P_TFD_ST_DRQ |
-			    AHCI_P_TFD_ERR_MASK)) == 0);
+			    AHCI_P_TFD_ST_ERR)) == 0);
 	tfd = ahci_readl(AHCI_P_TFD(port));
-	if (tfd & (AHCI_P_TFD_ST_BSY | AHCI_P_TFD_ST_DRQ | AHCI_P_TFD_ERR_MASK)) {
-		AHCI_DEBUG("PxTFD.STS.BSY, PxTFD.STS.DRQ or PxTFD.ERR of "
+	if (tfd & (AHCI_P_TFD_ST_BSY | AHCI_P_TFD_ST_DRQ | AHCI_P_TFD_ST_ERR)) {
+		AHCI_DEBUG("PxTFD.STS.BSY, PxTFD.STS.DRQ or PxTFD.STS.ERR of "
 			   "port %d are not 0.\n", port);
 		return 4;
 	}
