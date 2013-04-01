@@ -114,6 +114,7 @@ struct user_ioport {
 
 struct user_disk_op {
 	enum { DISK_READ, DISK_WRITE } type;
+	uint32_t	dev_nr;
 	uint64_t	lba;
 	uint64_t	n;
 	uintptr_t	buf;

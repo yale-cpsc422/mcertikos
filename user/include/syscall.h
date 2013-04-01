@@ -415,10 +415,11 @@ sys_guest_memsize(void)
 }
 
 static gcc_inline int
-sys_disk_read(uint64_t lba, uint64_t nsectors, void *buf)
+sys_disk_read(uint32_t nr, uint64_t lba, uint64_t nsectors, void *buf)
 {
 	int errno;
-	struct user_disk_op dop = { .type = DISK_READ, .lba = lba,
+	struct user_disk_op dop = { .type = DISK_READ,
+				    .dev_nr = nr, .lba = lba,
 				    .n = nsectors, .buf = (uintptr_t) buf };
 
 	asm volatile("int %1"
@@ -432,10 +433,11 @@ sys_disk_read(uint64_t lba, uint64_t nsectors, void *buf)
 }
 
 static gcc_inline int
-sys_disk_write(uint64_t lba, uint64_t nsectors, void *buf)
+sys_disk_write(uint32_t nr, uint64_t lba, uint64_t nsectors, void *buf)
 {
 	int errno;
-	struct user_disk_op dop = { .type = DISK_WRITE, .lba = lba,
+	struct user_disk_op dop = { .type = DISK_WRITE,
+				    .dev_nr = nr, .lba = lba,
 				    .n = nsectors, .buf = (uintptr_t) buf };
 
 	asm volatile("int %1"
@@ -449,7 +451,7 @@ sys_disk_write(uint64_t lba, uint64_t nsectors, void *buf)
 }
 
 static gcc_inline uint64_t
-sys_disk_capacity(void)
+sys_disk_capacity(uint32_t nr)
 {
 	int errno;
 	uint32_t size_lo, size_hi;
@@ -458,8 +460,9 @@ sys_disk_capacity(void)
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
 		       "a" (SYS_disk_cap),
-		       "b" (&size_lo),
-		       "c" (&size_hi)
+		       "b" (nr),
+		       "c" (&size_lo),
+		       "d" (&size_hi)
 		     : "cc", "memory");
 
 	return errno ? 0 : ((uint64_t) size_hi << 32 | size_lo);

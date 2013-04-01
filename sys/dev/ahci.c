@@ -442,9 +442,9 @@ ahci_identify_drive(int port)
 
 	ports[port].present = TRUE;
 
-	KERN_INFO("AHCI: ATA drive on port %d, size %lld MBytes, LBA48=%d.\n",
+	KERN_INFO("AHCI: ATA drive on port %d, size %lld MBytes%s.\n",
 		  port, (ports[port].nsects * ATA_SECTOR_SIZE) >> 20,
-		  ports[port].lba48 == TRUE);
+		  ports[port].lba48 == TRUE ? ", LBA48" : "");
 }
 
 static void
@@ -495,6 +495,7 @@ ahci_wait_command(int port)
 		is = ahci_readl(AHCI_P_IS(port));
 
 		if (is) {
+			AHCI_DEBUG("PxIS on port %d = 0x%08x.\n", port, is);
 			ahci_writel(AHCI_P_IS(port), is);
 
 			if (is & AHCI_P_IX_PSS) {
@@ -529,7 +530,8 @@ ahci_wait_command(int port)
 	}
 
 	if (i == 3100) {
-		AHCI_DEBUG("Command timeout on port %d.\n", port);
+		AHCI_DEBUG("Command timeout on port %d: PxIS = 0x%08x.\n",
+			   port, is);
 		return 1;
 	}
 

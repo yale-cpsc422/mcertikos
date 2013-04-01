@@ -642,16 +642,13 @@ sys_guest_memsize(uintptr_t size_la)
 }
 
 static int
-__sys_disk_read(uint64_t lba, uint64_t nsectors, uintptr_t buf)
+__sys_disk_read(struct disk_dev *drv,
+		uint64_t lba, uint64_t nsectors, uintptr_t buf)
 {
 	uint64_t cur_lba, remaining;
 	uintptr_t cur_la;
 
-	struct disk_dev *drv;
 	struct proc *p = proc_cur();
-
-	if ((drv = disk_get_dev(0)) == NULL)
-		return E_DISK_NODRV;
 
 	cur_lba = lba;
 	remaining = nsectors;
@@ -673,16 +670,13 @@ __sys_disk_read(uint64_t lba, uint64_t nsectors, uintptr_t buf)
 }
 
 static int
-__sys_disk_write(uint64_t lba, uint64_t nsectors, uintptr_t buf)
+__sys_disk_write(struct disk_dev *drv,
+		 uint64_t lba, uint64_t nsectors, uintptr_t buf)
 {
 	uint64_t cur_lba, remaining;
 	uintptr_t cur_la;
 
-	struct disk_dev *drv;
 	struct proc *p = proc_cur();
-
-	if ((drv = disk_get_dev(0)) == NULL)
-		return E_DISK_NODRV;
 
 	cur_lba = lba;
 	remaining = nsectors;
@@ -710,6 +704,7 @@ sys_disk_op(uintptr_t dop_la)
 	pmap_t *pmap;
 
 	struct user_disk_op dop;
+	struct disk_dev *drv;
 	int rc = 0;
 
 	if (dop_la < VM_USERLO || dop_la + sizeof(dop) > VM_USERHI)
@@ -721,16 +716,19 @@ sys_disk_op(uintptr_t dop_la)
 	if (copy_from_user((uintptr_t) &dop, pmap, dop_la, sizeof(dop)) == 0)
 		return E_MEM;
 
+	if ((drv = disk_get_dev(dop.dev_nr)) == NULL)
+		return E_DISK_NODRV;
+
 	if (!(VM_USERLO <= dop.buf &&
 	      dop.buf + dop.n * ATA_SECTOR_SIZE <= VM_USERHI))
 		return E_INVAL_ADDR;
 
 	switch (dop.type) {
 	case DISK_READ:
-		rc = __sys_disk_read(dop.lba, dop.n, dop.buf);
+		rc = __sys_disk_read(drv, dop.lba, dop.n, dop.buf);
 		break;
 	case DISK_WRITE:
-		rc = __sys_disk_write(dop.lba, dop.n, dop.buf);
+		rc = __sys_disk_write(drv, dop.lba, dop.n, dop.buf);
 		break;
 	default:
 		rc = 1;
@@ -743,7 +741,7 @@ sys_disk_op(uintptr_t dop_la)
 }
 
 static int
-sys_disk_cap(uintptr_t lo_la, uintptr_t hi_la)
+sys_disk_cap(uint32_t dev_nr, uintptr_t lo_la, uintptr_t hi_la)
 {
 	uint64_t cap;
 	uint32_t cap_lo, cap_hi;
@@ -754,7 +752,7 @@ sys_disk_cap(uintptr_t lo_la, uintptr_t hi_la)
 	if (!(VM_USERLO <= hi_la && hi_la + sizeof(uint32_t) <= VM_USERHI))
 		return E_INVAL_ADDR;
 
-	if ((drv = disk_get_dev(0)) == NULL)
+	if ((drv = disk_get_dev(dev_nr)) == NULL)
 		return E_DISK_NODRV;
 
 	cap = disk_capacity(drv);
@@ -1111,12 +1109,14 @@ syscall_handler(uint8_t trapno, struct context *ctx, int guest)
 	case SYS_disk_cap:
 		/*
 		 * Get the capability of the disk for the virtual machine.
-		 * a[0]: the linear address where the lowest 32 bits of the
+		 * a[0]: the disk device number
+		 * a[1]: the linear address where the lowest 32 bits of the
 		 *       capability are returned to
-		 * a[1]: the linear address where the highest 32 bits of the
+		 * a[2]: the linear address where the highest 32 bits of the
 		 *       capability are returned to
 		 */
-		errno = sys_disk_cap((uintptr_t) a[0], (uintptr_t) a[1]);
+		errno = sys_disk_cap((uint32_t) a[0],
+				     (uintptr_t) a[1], (uintptr_t) a[2]);
 #ifdef DEBUG_DISK
 		if (errno)
 			KERN_DEBUG("sys_disk_cap() failed. (errno %d)\n", errno);
