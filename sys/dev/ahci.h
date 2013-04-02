@@ -354,6 +354,12 @@ struct ahci_r_fis {
 #define ATA_READ_DMA			0xc8	/* read DMA */
 #define ATA_WRITE_DMA			0xca	/* write DMA */
 #define ATA_ATA_IDENTIFY		0xec	/* get ATA params */
+#define ATA_SET_FEATURES		0xef
+
+/* subcommands of ATA_SET_FEATURES */
+#define ATA_SET_TRANS_MODE		0x03
+# define ATA_SET_MDMA_MODE(m)		((1 << 5) | ((m) & 7))
+# define ATA_SET_UDMA_MODE(m)		((1 << 6) | ((m) & 7))
 
 /* ATA status */
 #define ATA_STATUS			10	/* (R) status */

@@ -400,6 +400,7 @@ ahci_identify_drive(int port)
 	KERN_ASSERT(0 <= port && port < MIN(AHCI_MAX_PORTS, hba.nports));
 
 	uint16_t buf[256];
+	uint16_t udma_mode, __udma_mode;
 	struct ahci_cmd_header *cmdh;
 	struct ahci_cmd_tbl *tbl;
 	struct sata_fis_reg *fis;
@@ -432,6 +433,13 @@ ahci_identify_drive(int port)
 		return;
 	}
 
+	AHCI_DEBUG("rev 0x%04x:0x%04x\n", buf[80], buf[81]);
+	AHCI_DEBUG("CAP: 0x%04x 0x%04x\n", buf[49], buf[50]);
+	AHCI_DEBUG("DMA: 0x%04x, PIO: 0x%04x\n", buf[63], buf[64]);
+	AHCI_DEBUG("CMD: 0x%04x 0x%04x 0x%04x 0x%04x 0x%04x 0x%04x\n",
+		   buf[82], buf[83], buf[84], buf[85], buf[86], buf[87]);
+	AHCI_DEBUG("UDMA: 0x%04x\n", buf[88]);
+
 	if (buf[83] & (1 << 10)) {
 		ports[port].lba48 = TRUE;
 		ports[port].nsects = *(uint64_t *) &buf[100];
@@ -440,6 +448,26 @@ ahci_identify_drive(int port)
 		ports[port].nsects = *(uint32_t *) &buf[60];
 	}
 
+	/* set the Ultra DMA mode to the highest one */
+	udma_mode = 0;
+	__udma_mode = buf[88] & 0xff;
+	if (__udma_mode == 0)
+		goto udma_set_done;
+	while (__udma_mode >>= 1)
+		udma_mode++;
+	memzero(fis, sizeof(struct sata_fis_reg));
+	fis->command = ATA_SET_FEATURES;
+	fis->featurel = ATA_SET_TRANS_MODE;
+	fis->countl = ATA_SET_UDMA_MODE(udma_mode);
+	ahci_issue_command(port, 0, buf, sizeof(buf));
+	if (ahci_wait_command(port)) {
+		AHCI_DEBUG("Cannot set Ultra DMA mode %d.\n", udma_mode);
+		return;
+	} else {
+		AHCI_DEBUG("Set Ultra DMA mode %d.\n", udma_mode);
+	}
+
+ udma_set_done:
 	ports[port].present = TRUE;
 
 	KERN_INFO("AHCI: ATA drive on port %d, size %lld MBytes%s.\n",
