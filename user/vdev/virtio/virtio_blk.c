@@ -25,7 +25,8 @@
 
 #endif
 
-static uint32_t drv_nr = 0;
+static uint32_t drv_nr = 1;
+static uint64_t part_off = 22528;
 
 static uint16_t unsupported_command =
 	0xf880 /* reserved bits */ | PCI_COMMAND_MEM_ENABLE |
@@ -328,7 +329,8 @@ virtio_blk_disk_read(uint64_t lba, uint64_t nsectors, uintptr_t gpa)
 	while (remaining > 0) {
 		uint64_t n = MIN(remaining, VIRTIO_BLK_MAX_SECTORS);
 
-		rc = sys_disk_read(drv_nr, cur_lba, n, virtio_blk_data_buf);
+		rc = sys_disk_read(drv_nr,
+				   cur_lba + part_off, n, virtio_blk_data_buf);
 		if (rc) {
 			virtio_blk_debug("Failed to read host disk. "
 					 "(lba %lld, %lld sectors)\n",
@@ -378,7 +380,8 @@ virtio_blk_disk_write(uint64_t lba, uint64_t nsectors, uintptr_t gpa)
 			return 2;
 		}
 
-		rc = sys_disk_write(drv_nr, cur_lba, n, virtio_blk_data_buf);
+		rc = sys_disk_write(drv_nr,
+				    cur_lba + part_off, n, virtio_blk_data_buf);
 		if (rc) {
 			virtio_blk_debug("Failed to write host disk. "
 					 "(lba %lld, %lld sectors)\n",
@@ -616,7 +619,7 @@ virtio_blk_init(struct virtio_blk *blk, struct vpci_host *vpci_host)
 		VIRTIO_BLK_F_SIZE_MAX |
 		VIRTIO_BLK_F_SEG_MAX |
 		VIRTIO_BLK_F_BLK_SIZE;
-	blk->blk_header.capacity = sys_disk_capacity(drv_nr);
+	blk->blk_header.capacity = sys_disk_capacity(drv_nr) - 512 * part_off;
 	blk->blk_header.size_max = 4096;
 	blk->blk_header.seg_max = 1;
 	blk->blk_header.blk_size = 512;
