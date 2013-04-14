@@ -1,3 +1,5 @@
+#ifdef ENABLE_BOOT_CF
+
 /*
  * void chainload(void *vbs);
  */
@@ -74,3 +76,5 @@ gdt:
 gdtdesc:
 	.word	0x27		/* limit */
 	.long	gdt		/* addr */
+
+#endif /* ENABLE_BOOT_CF*/

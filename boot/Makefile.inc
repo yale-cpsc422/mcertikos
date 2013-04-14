@@ -19,6 +19,10 @@ endif
 
 BOOT_CFLAGS	+= $(BOOT_COMPILE_DEF)
 
+ifdef ENABLE_BOOT_CF
+BOOT_CFLAGS	+= -DENABLE_BOOT_CF
+endif
+
 # Object files generated for the bootloader
 BOOT_BINFILES	+= $(OBJDIR)/boot/boot0
 BOOT_BINFILES	+= $(OBJDIR)/boot/boot1

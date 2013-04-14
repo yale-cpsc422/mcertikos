@@ -10,6 +10,8 @@
 #include <ext2.h>
 #include <gcc.h>
 
+#ifdef ENABLE_BOOT_CF
+
 struct mbr {
 	uint8_t bootloader[436];
 	uint8_t disk_sig[10];
@@ -32,8 +34,11 @@ struct mbr {
 static struct mbr MBR;
 static uint8_t vbs[SECTOR_SIZE];
 
-static void load_loader(uint32_t, uint32_t, bios_smap_t *);
 extern void chainload(void *vbs);
+
+#endif /* ENABLE_BOOT_CF */
+
+static void load_loader(uint32_t, uint32_t, bios_smap_t *);
 
 void boot1main(uint32_t dev, uint32_t start_sect_idx, bios_smap_t *smap)
 {
@@ -43,6 +48,7 @@ void boot1main(uint32_t dev, uint32_t start_sect_idx, bios_smap_t *smap)
 	/* debug("dev = %x, start_sect_idx = %x, smap = %x\n", */
 	/*       dev, start_sect_idx, smap); */
 
+#ifdef ENABLE_BOOT_CF
 	read_sector(dev, 0, &MBR);
 
 	if (MBR.partition[0].bootable != BOOTABLE_PARTITION) {
@@ -53,12 +59,15 @@ void boot1main(uint32_t dev, uint32_t start_sect_idx, bios_smap_t *smap)
 			lba + MBR.partition[0].first_lba);
 		chainload(vbs);
 	} else {
+#endif /* ENABLE_BOOT_CF */
 		ext2_fs_init(dev, start_sect_idx);
 		/* debug("Data structure for EXT2 filesystem is initialized.\n"); */
 
 		cprintf("Load /boot/loader ...\n");
 		load_loader(dev, start_sect_idx, smap);
+#ifdef ENABLE_BOOT_CF
 	}
+#endif /* ENABLE_BOOT_CF */
 }
 
 static void load_loader(uint32_t dev, uint32_t start_sect_idx, bios_smap_t *smap)

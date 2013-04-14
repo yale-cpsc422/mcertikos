@@ -26,10 +26,11 @@
 
 #endif
 
-static uint32_t drv_nr = 0;
+#ifdef ENABLE_BOOT_CF
+
+static uint32_t drv_nr = 1;
 static struct mbr MBR;
 static uint8_t empty_sector[512] = { 0 };
-extern uint8_t _binary_user_vdev_virtio_grub_mbr_start[];
 
 static void
 prep_mbr(void)
@@ -60,6 +61,12 @@ prep_mbr(void)
 	MBR.partition[0].bootable = INACTIVE_PARTITION;
 	MBR.partition[1].bootable = BOOTABLE_PARTITION;
 }
+
+#else /* !ENABLE_BOOT_CF */
+
+static uint32_t drv_nr = 0;
+
+#endif /* ENABLE_BOOT_CF */
 
 static uint16_t unsupported_command =
 	0xf880 /* reserved bits */ | PCI_COMMAND_MEM_ENABLE |
@@ -363,6 +370,7 @@ virtio_blk_disk_read(uint64_t lba, uint64_t nsectors, uintptr_t gpa)
 	while (remaining > 0) {
 		uint64_t n = MIN(remaining, VIRTIO_BLK_MAX_SECTORS);
 
+#ifdef ENABLE_BOOT_CF
 		if (cur_lba == 0)
 			buf = (uint8_t *) &MBR;
 		else if (cur_lba < MBR.partition[0].first_lba +
@@ -376,6 +384,9 @@ virtio_blk_disk_read(uint64_t lba, uint64_t nsectors, uintptr_t gpa)
 			n = 1;
 			goto read_done;
 		}
+#else /* !ENABLE_BOOT_CF */
+		buf = virtio_blk_data_buf;
+#endif /* ENABLE_BOOT_CF */
 
 		rc = sys_disk_read(drv_nr, cur_lba, n, virtio_blk_data_buf);
 		if (rc) {
@@ -385,7 +396,9 @@ virtio_blk_disk_read(uint64_t lba, uint64_t nsectors, uintptr_t gpa)
 			return 1;
 		}
 
+#ifdef ENABLE_BOOT_CF
 	read_done:
+#endif
 		rc = vdev_copy_to_guest(cur_gpa, buf, n * ATA_SECTOR_SIZE);
 		if (rc) {
 			virtio_blk_debug("Failed to copy to guest. "
@@ -418,11 +431,13 @@ virtio_blk_disk_write(uint64_t lba, uint64_t nsectors, uintptr_t gpa)
 	while (remaining > 0) {
 		uint64_t n = MIN(remaining, VIRTIO_BLK_MAX_SECTORS);
 
+#ifdef ENABLE_BOOT_CF
 		if (lba < MBR.partition[0].first_lba +
 		    MBR.partition[0].sectors_count) {
 			n = 1;
 			goto write_done;
 		}
+#endif
 
 		rc = vdev_copy_from_guest(virtio_blk_data_buf, cur_gpa,
 					  n * ATA_SECTOR_SIZE);
@@ -441,7 +456,9 @@ virtio_blk_disk_write(uint64_t lba, uint64_t nsectors, uintptr_t gpa)
 			return 1;
 		}
 
+#ifdef ENABLE_BOOT_CF
 	write_done:
+#endif
 		cur_lba += n;
 		remaining -= n;
 		cur_gpa += n * ATA_SECTOR_SIZE;
@@ -808,8 +825,9 @@ main(int argc, char **argv)
 	virtio_blk_init(&blk, &vpci_host);
 
 	device = &blk.common_header;
-
+#ifdef ENABLE_BOOT_CF
 	prep_mbr();
+#endif
 
 	vdev_ready(dev_out);
 

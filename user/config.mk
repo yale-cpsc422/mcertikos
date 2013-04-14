@@ -27,3 +27,8 @@ endif
 ifneq "$(strip $(DEBUG_VNVRAM) $(DEBUG_ALL) $(DEBUG_VIRT_ALL))" ""
 USER_CFLAGS	+= -DDEBUG_VNVRAM
 endif
+
+# If set, both CertiKOS and the guest Linux are on the same CF card
+ifdef ENABLE_BOOT_CF
+USER_CFLAGS	+= -DENABLE_BOOT_CF
+endif
