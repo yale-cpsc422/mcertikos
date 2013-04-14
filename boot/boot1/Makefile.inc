@@ -2,10 +2,11 @@
 
 BOOT1_OBJFILES += $(OBJDIR)/boot/boot1.o
 BOOT1_OBJFILES += $(OBJDIR)/boot/boot1main.o
+BOOT1_OBJFILES += $(OBJDIR)/boot/chainload.o
 
 $(OBJDIR)/boot/boot1: $(BOOT1_OBJFILES) $(BOOT_LIB_OBJFILES)
 	@echo + ld[BOOT] $@
-	$(V)$(LD) $(BOOT_LDFLAGS) -N -e start -Ttext 0x7c00 -o $@.elf $^ $(GCC_LIB32)
+	$(V)$(LD) $(BOOT_LDFLAGS) -N -e start -Ttext 0x7e00 -o $@.elf $^ $(GCC_LIB32)
 	$(V)$(OBJDUMP) -S $@.elf > $@.asm
 	$(V)$(OBJCOPY) -S -O binary $@.elf $@
 	$(V)$(PERL) $(UTILSDIR)/check_size.pl 31744 $@

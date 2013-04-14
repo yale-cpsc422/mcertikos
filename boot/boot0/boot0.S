@@ -23,6 +23,7 @@
  */
 
 	.set LOAD, 0x7c00		# load address
+	.set BOOT1, 0x7e00		# start address of boot1
 	.set RELOC, 0x600		# relocated address
 
 	.set PR_TABLE, RELOC+0x1be	# address of the partition table
@@ -118,27 +119,27 @@ no_bootable:
 	 */
 load_boot1:
 	/*
-	 * the first 8 bytes below LOAD are reserved to store the information
+	 * the first 8 bytes below BOOT1 are reserved to store the information
 	 * about the boot device, as described in following figure:
-	 *    +------------------------------+ <-- LOAD
+	 *    +------------------------------+ <-- BOOT1
 	 *    | lower 32 bits of LBA of the  |
 	 *    | first bootable partition     |
-	 *    |------------------------------| <-- LOAD - 4
+	 *    |------------------------------| <-- BOOT1 - 4
 	 *    | the booting device id
-	 *    |------------------------------| <-- LOAD - 8
+	 *    |------------------------------| <-- BOOT1 - 8
 	 *    :                              :     (stack starts from here)
 	 *    :                              :
 	 */
 	movl	0x8(%si), %eax
-	movl	%eax, (LOAD - 4)
+	movl	%eax, (BOOT1 - 4)
 	movl	(RELOC - 4), %eax
-	movl	%eax, (LOAD - 8)
+	movl	%eax, (BOOT1 - 8)
 
 	/* read disk */
 	pushl	$0x0			# set the start
 	pushl	$0x1			# LBA address
 	pushw	%es			# set the buffer address
-	pushw	$LOAD			# to 0x7c00
+	pushw	$BOOT1			# to 0x7e00
 	pushw	$62			# set the number of sectors to be read
 	pushw	$0x10			# set the size of DAP
 	movw	%sp, %si		# set the DAP address
@@ -146,7 +147,7 @@ load_boot1:
 	int	$0x13			# read sectors
 	jc	load_fail		# encouter errors
 
-	jmp	LOAD			# jump to boot1
+	jmp	BOOT1			# jump to boot1
 
 load_fail:
 	movw	$LOAD_FAIL_MSG, %si

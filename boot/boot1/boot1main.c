@@ -8,8 +8,32 @@
 #include <console.h>
 #include <fs.h>
 #include <ext2.h>
+#include <gcc.h>
+
+struct mbr {
+	uint8_t bootloader[436];
+	uint8_t disk_sig[10];
+	struct {
+		uint8_t bootable;
+#define INACTIVE_PARTITION	0x00
+#define BOOTABLE_PARTITION	0x80
+		uint8_t first_chs[3];
+		uint8_t id;
+#define EMPTY_PARTITION		0x00
+#define LINUX_PARTITION		0x83
+#define EXTENDED_PARTITION	0x5
+		uint8_t last_chs[3];
+		uint32_t first_lba;
+		uint32_t sectors_count;
+	} gcc_packed partition[4];
+	uint8_t signature[2];
+} gcc_packed;
+
+static struct mbr MBR;
+static uint8_t vbs[SECTOR_SIZE];
 
 static void load_loader(uint32_t, uint32_t, bios_smap_t *);
+extern void chainload(void *vbs);
 
 void boot1main(uint32_t dev, uint32_t start_sect_idx, bios_smap_t *smap)
 {
@@ -19,11 +43,22 @@ void boot1main(uint32_t dev, uint32_t start_sect_idx, bios_smap_t *smap)
 	/* debug("dev = %x, start_sect_idx = %x, smap = %x\n", */
 	/*       dev, start_sect_idx, smap); */
 
-	ext2_fs_init(dev, start_sect_idx);
-	/* debug("Data structure for EXT2 filesystem is initialized.\n"); */
+	read_sector(dev, 0, &MBR);
 
-	cprintf("Load /boot/loader ...\n");
-	load_loader(dev, start_sect_idx, smap);
+	if (MBR.partition[0].bootable != BOOTABLE_PARTITION) {
+		uint32_t lba = MBR.partition[1].first_lba;
+		read_sector(dev, MBR.partition[1].first_lba, &MBR);
+		read_sector(dev, MBR.partition[0].first_lba + lba, vbs);
+		cprintf("Chainloading from LBA %d ... \n",
+			lba + MBR.partition[0].first_lba);
+		chainload(vbs);
+	} else {
+		ext2_fs_init(dev, start_sect_idx);
+		/* debug("Data structure for EXT2 filesystem is initialized.\n"); */
+
+		cprintf("Load /boot/loader ...\n");
+		load_loader(dev, start_sect_idx, smap);
+	}
 }
 
 static void load_loader(uint32_t dev, uint32_t start_sect_idx, bios_smap_t *smap)
