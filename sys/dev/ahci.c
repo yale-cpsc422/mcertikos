@@ -629,7 +629,13 @@ ahci_error_recovery(int port)
 
 	/* enable PxCMD.ST */
 	cmd = ahci_readl(AHCI_P_CMD(port));
-	ahci_writel(AHCI_P_CMD(port), cmd & AHCI_P_CMD_ST);
+	ahci_writel(AHCI_P_CMD(port), cmd | AHCI_P_CMD_ST);
+
+	/* enable interrupts on this port */
+	/* XXX: only interrupt for errors and D2H FIS */
+	ahci_writel(AHCI_P_IE(port), AHCI_P_IX_TFES | AHCI_P_IX_HBFS |
+		    AHCI_P_IX_HBDS | AHCI_P_IX_IFS | AHCI_P_IX_DHRS);
+
 }
 
 static int
@@ -799,6 +805,9 @@ ahci_port_intr_handler(struct disk_dev *dev, int port)
 	if (tfd & (AHCI_P_TFD_ST_ERR | AHCI_P_TFD_ST_DF)) {
 		AHCI_DEBUG("Transfer errors on port %d: PxTFD = 0x%08x.\n",
 			   port, tfd);
+
+		ahci_error_recovery(port);
+
 		dev->status = XFER_FAIL;
 		ports[port].status = PORT_READY;
 		spinlock_release(&ports[port].lk);

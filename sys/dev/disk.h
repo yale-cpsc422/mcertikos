@@ -29,6 +29,14 @@ struct disk_dev {
 	 */
 	volatile enum {XFER_SUCC, XFER_FAIL, XFER_PROCESSING} status;
 
+	struct {
+		bool		write;
+		uint64_t	lba;
+		uintptr_t	buf_pa;
+		uint16_t	nsect;
+		int		retry;
+	} last_req;
+
 	/*
 	 * Following fields should only be used within the disk mamangement
 	 * module.

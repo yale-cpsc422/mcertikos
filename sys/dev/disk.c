@@ -6,6 +6,7 @@
 #include <sys/queue.h>
 #include <sys/sched.h>
 #include <sys/spinlock.h>
+#include <sys/string.h>
 #include <sys/trap.h>
 #include <sys/types.h>
 
@@ -75,6 +76,7 @@ disk_add_device(struct disk_dev *dev)
 
 	spinlock_acquire(&dev->lk);
 	dev->status = XFER_SUCC;
+	memzero(&dev->last_req, sizeof(dev->last_req));
 	TAILQ_INSERT_TAIL(&all_disk_devices, dev, entry);
 	DISK_DEBUG("Add a disk device 0x%08x.\n", dev);
 	spinlock_release(&dev->lk);
@@ -119,6 +121,36 @@ disk_remove_device(struct disk_dev *dev)
 	return E_DISK_NODEV;
 }
 
+static int
+disk_xfer_helper(struct disk_dev *dev,
+		 uint64_t lba, uintptr_t pa, uint16_t nsect, bool write)
+{
+	KERN_ASSERT(spinlock_holding(&dev->lk) == TRUE);
+	KERN_ASSERT(dev->status != XFER_PROCESSING);
+
+	int rc;
+
+	if (dev->last_req.retry > 1) {
+		DISK_DEBUG("Exceed maximum retries.\n");
+		return 1;
+	}
+
+	dev->last_req.write = write;
+	dev->last_req.lba = lba;
+	dev->last_req.buf_pa = pa;
+	dev->last_req.nsect = nsect;
+
+	rc = (write == TRUE) ? dev->dma_write(dev, lba, nsect, pa) :
+		dev->dma_read(dev, lba, nsect, pa);
+	if (rc)
+		return 1;
+
+	/* sleep to wait for the completion of the transfer */
+	dev->status = XFER_PROCESSING;
+
+	return 0;
+}
+
 int
 disk_xfer(struct disk_dev *dev, uint64_t lba, uintptr_t pa, uint16_t nsect,
 	  bool write)
@@ -138,19 +170,14 @@ disk_xfer(struct disk_dev *dev, uint64_t lba, uintptr_t pa, uint16_t nsect,
 	while (spinlock_try_acquire(&dev->lk))
 		proc_yield();
 
-	KERN_ASSERT(dev->status != XFER_PROCESSING);
-
-	rc = (write == TRUE) ? dev->dma_write(dev, lba, nsect, pa) :
-		dev->dma_read(dev, lba, nsect, pa);
-	if (rc) {
+	if ((rc = disk_xfer_helper(dev, lba, pa, nsect, write))) {
 		DISK_DEBUG("disk_xfer() error %d.\n", rc);
 		dev->status = XFER_FAIL;
+		memzero(&dev->last_req, sizeof(dev->last_req));
 		spinlock_release(&dev->lk);
 		return E_DISK_XFER;
 	}
 
-	/* sleep to wait for the completion of the transfer */
-	dev->status = XFER_PROCESSING;
 	/*
 	 * XXX: The process caller is sleeping with the spinlock dev->lk. It's
 	 *      risky to do so which may cause dead locks.
@@ -161,6 +188,8 @@ disk_xfer(struct disk_dev *dev, uint64_t lba, uintptr_t pa, uint16_t nsect,
 
 	KERN_ASSERT(dev->status != XFER_PROCESSING);
 	KERN_ASSERT(spinlock_holding(&dev->lk) == TRUE);
+
+	memzero(&dev->last_req, sizeof(dev->last_req));
 
 	/* transfer is accomplished */
 	if (dev->status == XFER_SUCC) {
@@ -191,7 +220,25 @@ disk_intr_handler(uint8_t trapno, struct context *ctx, int guest)
 		if (dev->irq == irq) {
 			if (dev->intr_handler)
 				dev->intr_handler(dev);
-			if (dev->status != XFER_PROCESSING) {
+
+			if (dev->status == XFER_FAIL) {
+				DISK_DEBUG("Retry request (%s, lba 0x%llx, "
+					   "nsect %d, buf 0x%08x) ... \n",
+					   dev->last_req.write == TRUE ? "write" : "read",
+					   dev->last_req.lba,
+					   dev->last_req.nsect,
+					   dev->last_req.buf_pa);
+				dev->last_req.retry++;
+				if (disk_xfer_helper(dev, dev->last_req.lba,
+						     dev->last_req.buf_pa,
+						     dev->last_req.nsect,
+						     dev->last_req.write)) {
+					dev->status = XFER_FAIL;
+					DISK_DEBUG("Wake process(s) waiting fo "
+						   "device 0x%08x.\n", dev);
+					proc_wake(dev);
+				}
+			} else if (dev->status != XFER_PROCESSING) {
 				DISK_DEBUG("Wake process(s) waiting fo "
 					   "device 0x%08x.\n", dev);
 				proc_wake(dev);
