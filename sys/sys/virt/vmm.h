@@ -607,32 +607,29 @@ int vmm_intercept_ioport(struct vm *vm, uint16_t port, bool enable);
 int vmm_handle_extint(struct vm *vm, uint8_t irq);
 
 /*
- * Transfer data from the host physical memory to the guest physical memory.
+ * Copy (when write == 0) the data from the guest physical memory to the host
+ * host linear address space.
  *
- * @param vm       the virtual machine
- * @param dest_gpa the destination guest physical address
- * @param src_hpa  the source host physical address
- * @param size     how many bytes will be transferred
+ * Copy (when write != 0) the data from the host linear address space to the
+ * guest physical memory.
  *
- * @return 0 if successful; otherwise, return a non-zero value and the guest
- *         physical memory maybe not in the state before the transfer.
+ * @param vm    the virtual machine
+ * @param gpa   the start guest physical address
+ * @param pmap  the pmap of the host linear address space
+ * @param la    the start host linear address
+ * @param size  how many bytes will be copied
+ * @param write non-zero: copy to the guest; 0: copy from the guest
+ *
+ * @return 0 if copy succeeds; otherwise, return a non-zero value
  */
-int vmm_memcpy_to_guest(struct vm *vm,
-			uintptr_t dest_gpa, uintptr_t src_hpa, size_t size);
+int vmm_rw_guest_memory(struct vm *vm, uintptr_t gpa,
+			pmap_t *pmap, uintptr_t la, size_t size, int write);
 
-/*
- * Transfer data from the guest physical memory to the host physical memory.
- *
- * @param vm       the virtual machine
- * @param dest_hpa the destination host physical address
- * @param src_gpa  the source guest physical address
- * @param size     how many bytes will be transferred
- *
- * @return 0 if successful; otherwise, return a non-zero value and the host
- *         physical memory maybe not in the state before the transfer.
- */
-int vmm_memcpy_to_host(struct vm *vm,
-		       uintptr_t dest_hpa, uintptr_t src_gpa, size_t size);
+#define vmm_read_guest_memory(vm, gpa, pmap, la, size)			\
+	vmm_rw_guest_memory((vm), (gpa), (pmap), (la), (size), 0)
+
+#define vmm_write_guest_memory(vm, gpa, pmap, la, size)			\
+	vmm_rw_guest_memory((vm), (gpa), (pmap), (la), (size), 1)
 
 /*
  * Translate a guest physical address to the host physical address.

@@ -685,6 +685,12 @@ vpic_read_irq(struct vpic *vpic)
 		}
 
 		i8259_intack(&vpic->master, irq);
+		
+		if (vpic->slave.int_out != 0) {
+                        i8259_set_irq(&vpic->master, 2, 0);
+                        i8259_set_irq(&vpic->master, 2, 1);
+                }
+
 	} else {
 		/* spurious IRQ on host controller */
 		irq = 7;

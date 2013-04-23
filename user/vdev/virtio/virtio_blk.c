@@ -6,6 +6,7 @@
 #include <vdev.h>
 #include <x86.h>
 
+#include "mbr.h"
 #include "pci.h"
 #include "virtio.h"
 #include "virtio_blk.h"
@@ -24,6 +25,48 @@
 	} while (0)
 
 #endif
+
+#ifdef ENABLE_BOOT_CF
+
+static uint32_t drv_nr = 1;
+static struct mbr MBR;
+static uint8_t empty_sector[512] = { 0 };
+
+static void
+prep_mbr(void)
+{
+	int rc, i;
+
+	if ((rc = sys_disk_read(drv_nr, 0, 1, &MBR)))
+		PANIC("Failed to read MBR (errno %d).\n", rc);
+
+	for (i = 0; i < 4; i++) {
+		if (MBR.partition[i].id == EMPTY_PARTITION)
+			continue;
+		printf("%s%d: %d ~ %d %s\n",
+		       MBR.partition[i].bootable ==
+		       BOOTABLE_PARTITION ? "*" : " ",
+		       i,
+		       MBR.partition[i].first_lba,
+		       MBR.partition[i].first_lba +
+		       MBR.partition[i].sectors_count - 1,
+		       MBR.partition[i].id == LINUX_PARTITION ? "Linux" :
+		       MBR.partition[i].id == EXTENDED_PARTITION ? "Extended" :
+		       "(Unknown)");
+	}
+
+	/*
+	 * Mark the 2nd partition as bootable
+	 */
+	MBR.partition[0].bootable = INACTIVE_PARTITION;
+	MBR.partition[1].bootable = BOOTABLE_PARTITION;
+}
+
+#else /* !ENABLE_BOOT_CF */
+
+static uint32_t drv_nr = 0;
+
+#endif /* ENABLE_BOOT_CF */
 
 static uint16_t unsupported_command =
 	0xf880 /* reserved bits */ | PCI_COMMAND_MEM_ENABLE |
@@ -318,6 +361,7 @@ virtio_blk_disk_read(uint64_t lba, uint64_t nsectors, uintptr_t gpa)
 	int rc;
 	uint64_t cur_lba, remaining;
 	uintptr_t cur_gpa;
+	uint8_t *buf;
 
 	cur_lba = lba;
 	remaining = nsectors;
@@ -326,7 +370,25 @@ virtio_blk_disk_read(uint64_t lba, uint64_t nsectors, uintptr_t gpa)
 	while (remaining > 0) {
 		uint64_t n = MIN(remaining, VIRTIO_BLK_MAX_SECTORS);
 
-		rc = sys_disk_read(cur_lba, n, virtio_blk_data_buf);
+#ifdef ENABLE_BOOT_CF
+		if (cur_lba == 0)
+			buf = (uint8_t *) &MBR;
+		else if (cur_lba < MBR.partition[0].first_lba +
+			 MBR.partition[0].sectors_count &&
+			 cur_lba >= MBR.partition[0].first_lba)
+			buf = empty_sector;
+		else
+			buf = virtio_blk_data_buf;
+
+		if (buf != virtio_blk_data_buf) {
+			n = 1;
+			goto read_done;
+		}
+#else /* !ENABLE_BOOT_CF */
+		buf = virtio_blk_data_buf;
+#endif /* ENABLE_BOOT_CF */
+
+		rc = sys_disk_read(drv_nr, cur_lba, n, virtio_blk_data_buf);
 		if (rc) {
 			virtio_blk_debug("Failed to read host disk. "
 					 "(lba %lld, %lld sectors)\n",
@@ -334,8 +396,10 @@ virtio_blk_disk_read(uint64_t lba, uint64_t nsectors, uintptr_t gpa)
 			return 1;
 		}
 
-		rc = vdev_copy_to_guest(cur_gpa, virtio_blk_data_buf,
-					n * ATA_SECTOR_SIZE);
+#ifdef ENABLE_BOOT_CF
+	read_done:
+#endif
+		rc = vdev_copy_to_guest(cur_gpa, buf, n * ATA_SECTOR_SIZE);
 		if (rc) {
 			virtio_blk_debug("Failed to copy to guest. "
 					 "(lba %lld, %lld sectors)\n",
@@ -367,6 +431,14 @@ virtio_blk_disk_write(uint64_t lba, uint64_t nsectors, uintptr_t gpa)
 	while (remaining > 0) {
 		uint64_t n = MIN(remaining, VIRTIO_BLK_MAX_SECTORS);
 
+#ifdef ENABLE_BOOT_CF
+		if (lba < MBR.partition[0].first_lba +
+		    MBR.partition[0].sectors_count) {
+			n = 1;
+			goto write_done;
+		}
+#endif
+
 		rc = vdev_copy_from_guest(virtio_blk_data_buf, cur_gpa,
 					  n * ATA_SECTOR_SIZE);
 		if (rc) {
@@ -376,7 +448,7 @@ virtio_blk_disk_write(uint64_t lba, uint64_t nsectors, uintptr_t gpa)
 			return 2;
 		}
 
-		rc = sys_disk_write(cur_lba, n, virtio_blk_data_buf);
+		rc = sys_disk_write(drv_nr, cur_lba, n, virtio_blk_data_buf);
 		if (rc) {
 			virtio_blk_debug("Failed to write host disk. "
 					 "(lba %lld, %lld sectors)\n",
@@ -384,6 +456,9 @@ virtio_blk_disk_write(uint64_t lba, uint64_t nsectors, uintptr_t gpa)
 			return 1;
 		}
 
+#ifdef ENABLE_BOOT_CF
+	write_done:
+#endif
 		cur_lba += n;
 		remaining -= n;
 		cur_gpa += n * ATA_SECTOR_SIZE;
@@ -614,7 +689,7 @@ virtio_blk_init(struct virtio_blk *blk, struct vpci_host *vpci_host)
 		VIRTIO_BLK_F_SIZE_MAX |
 		VIRTIO_BLK_F_SEG_MAX |
 		VIRTIO_BLK_F_BLK_SIZE;
-	blk->blk_header.capacity = sys_disk_capacity();
+	blk->blk_header.capacity = sys_disk_capacity(drv_nr);
 	blk->blk_header.size_max = 4096;
 	blk->blk_header.seg_max = 1;
 	blk->blk_header.blk_size = 512;
@@ -737,6 +812,9 @@ main(int argc, char **argv)
 	virtio_blk_init(&blk, &vpci_host);
 
 	device = &blk.common_header;
+#ifdef ENABLE_BOOT_CF
+	prep_mbr();
+#endif
 
 	vdev_ready(dev_out);
 

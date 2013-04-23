@@ -97,9 +97,6 @@ pcpu_identify(void)
 		while (i--)
 			cpuid(0x00000002, &eax, &ebx, &ecx, &edx);
 
-		KERN_DEBUG("eax 0x%08x, ebx 0x%08x, ecx 0x%08x, edx 0x%08x.\n",
-			   eax, ebx, ecx, edx);
-
 		for (i = 0; i < 4; i++) {
 			desc = (uint8_t *) regs[i];
 			for (j = 0; j < 4; j++) {

@@ -582,15 +582,18 @@ vmm_load_bios(struct vm *vm)
 
 	/* load BIOS ROM */
 	KERN_ASSERT((size_t) _binary___misc_bios_bin_size % 0x10000 == 0);
-	vmm_memcpy_to_guest(vm,
-			    0x100000 - (size_t) _binary___misc_bios_bin_size,
-			    (uintptr_t) _binary___misc_bios_bin_start,
-			    (size_t) _binary___misc_bios_bin_size);
+
+	vmm_write_guest_memory(vm,
+			       0x100000 - (size_t) _binary___misc_bios_bin_size,
+			       pmap_kern,
+			       (uintptr_t) _binary___misc_bios_bin_start,
+			       (size_t) _binary___misc_bios_bin_size);
 
 	/* load VGA BIOS ROM */
-	vmm_memcpy_to_guest(vm, 0xc0000,
-			    (uintptr_t) _binary___misc_vgabios_bin_start,
-			    (size_t) _binary___misc_vgabios_bin_size);
+	vmm_write_guest_memory(vm, 0xc0000,
+			       pmap_kern,
+			       (uintptr_t) _binary___misc_vgabios_bin_start,
+			       (size_t) _binary___misc_vgabios_bin_size);
 
 	return 0;
 }
@@ -1142,74 +1145,61 @@ vmm_handle_extint(struct vm *vm, uint8_t irq)
 }
 
 int
-vmm_memcpy_to_guest(struct vm *vm,
-		    uintptr_t dest_gpa, uintptr_t src_hpa, size_t size)
+vmm_rw_guest_memory(struct vm *vm, uintptr_t gpa,
+		    pmap_t *pmap, uintptr_t la, size_t size, int write)
 {
 	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(pmap != NULL);
 
-	uintptr_t dest_hpa, dest, src;
+	uintptr_t from, to, from_pa, to_pa;
 	size_t remaining, copied;
 
-	if (dest_gpa > vm->memsize || size > vm->memsize ||
-	    vm->memsize - size < dest_gpa)
+	if (gpa >= vm->memsize) {
+		VIRT_DEBUG("Guest physical address 0x%08x is out of range "
+			   "(0x00000000 ~ 0x%08x).\n", gpa, vm->memsize);
 		return 1;
+	}
 
-	vmm_ops->get_mmap(vm, dest_gpa, &dest_hpa);
-	dest_hpa += dest_gpa - ROUNDDOWN(dest_gpa, PAGESIZE);
-	dest = dest_gpa;
-	src = src_hpa;
+	if (vm->memsize - gpa < size) {
+		VIRT_DEBUG("Size (%d bytes) is out of range (%d bytes).\n",
+			   size, vm->memsize - gpa);
+		return 1;
+	}
+
+	VIRT_DEBUG("%s guest physical address 0x%08x %s "
+		   "host linear address 0x%08x, size %d bytes.\n",
+		   write ? "Write" : "Read", gpa, write ? "from" : "to",
+		   la, size);
+
 	remaining = size;
+	from = write ? la : gpa;
+	from_pa = write ? pmap_la2pa(pmap, from) : vmm_translate_gp2hp(vm, from);
+	to = write ? gpa : la;
+	to_pa = write ? vmm_translate_gp2hp(vm, to) : pmap_la2pa(pmap, to);
 
-	copied = PAGESIZE - (dest_gpa - ROUNDDOWN(dest_gpa, PAGESIZE));
-	copied = MIN(copied, remaining);
+	while (remaining) {
+		copied = MIN(PAGESIZE - (from_pa - ROUNDDOWN(from_pa, PAGESIZE)),
+			     PAGESIZE - (to_pa - ROUNDDOWN(to_pa, PAGESIZE)));
+		copied = MIN(copied, remaining);
 
-	do {
-		memcpy((void *) dest_hpa, (void *) src, copied);
+		memcpy((void *) to_pa, (void *) from_pa, copied);
+
+		from_pa += copied;
+		from += copied;
+		to_pa += copied;
+		to += copied;
 		remaining -= copied;
+
 		if (remaining == 0)
 			break;
-		dest += copied;
-		vmm_ops->get_mmap(vm, dest, &dest_hpa);
-		src += copied;
-		copied = MIN(PAGESIZE, remaining);
-	} while (remaining);
 
-	return 0;
-}
-
-int
-vmm_memcpy_to_host(struct vm *vm,
-		   uintptr_t dest_hpa, uintptr_t src_gpa, size_t size)
-{
-	KERN_ASSERT(vm != NULL);
-
-	uintptr_t src_hpa, dest, src;
-	size_t remaining, copied;
-
-	if (src_gpa > vm->memsize || size > vm->memsize ||
-	    vm->memsize - size < src_gpa)
-		return 1;
-
-	vmm_ops->get_mmap(vm, src_gpa, &src_hpa);
-	src_hpa += src_gpa - ROUNDDOWN(src_gpa, PAGESIZE);
-	src = src_gpa;
-	dest = dest_hpa;
-	remaining = size;
-
-	copied = PAGESIZE - (src_gpa - ROUNDDOWN(src_gpa, PAGE_SIZE));
-	copied = MIN(copied, remaining);
-
-	do {
-		memcpy((void *) dest, (void *) src_hpa, copied);
-		remaining -= copied;
-		if (remaining == 0)
-			break;
-		dest += copied;
-		src += copied;
-		vmm_ops->get_mmap(vm, src, &src_hpa);
-		copied = MIN(PAGESIZE, remaining);
-	} while (remaining);
-
+		if (ROUNDDOWN(from, PAGESIZE) == from)
+			from_pa = write ? pmap_la2pa(pmap, from) :
+				vmm_translate_gp2hp(vm, from);
+		if (ROUNDDOWN(to, PAGESIZE) == to)
+			to_pa = write ? vmm_translate_gp2hp(vm, to) :
+				pmap_la2pa(pmap, to);
+	}
 
 	return 0;
 }

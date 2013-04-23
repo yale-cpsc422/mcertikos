@@ -15,7 +15,7 @@
 	.set PROT_MODE_DSEG, 0x10	# kernel data segment selector
 	.set CR0_PE_ON, 0x1		# protected mode enable flag
 
-	.set LOAD, 0x7c00
+	.set LOAD, 0x7e00
 
 	.set SMAP_SIG, 0x0534D4150	# "SMAP"
 

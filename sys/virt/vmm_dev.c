@@ -597,60 +597,7 @@ int
 vdev_rw_guest_mem(struct vm *vm, uintptr_t gpa,
 		  pmap_t *pmap, uintptr_t la, size_t size, int write)
 {
-	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(pmap != NULL);
-
-	uintptr_t from, to, from_pa, to_pa;
-	size_t remaining, copied;
-
-	if (gpa >= vm->memsize) {
-		VDEV_DEBUG("Guest physical address 0x%08x is out of range "
-			   "(0x00000000 ~ 0x%08x).\n", gpa, vm->memsize);
-		return 1;
-	}
-
-	if (vm->memsize - gpa < size) {
-		VDEV_DEBUG("Size (%d bytes) is out of range (%d bytes).\n",
-			   size, vm->memsize - gpa);
-		return 1;
-	}
-
-	VDEV_DEBUG("%s guest physical address 0x%08x %s "
-		   "host linear address 0x%08x, size %d bytes.\n",
-		   write ? "Write" : "Read", gpa, write ? "from" : "to",
-		   la, size);
-
-	remaining = size;
-	from = write ? la : gpa;
-	from_pa = write ? pmap_la2pa(pmap, from) : vmm_translate_gp2hp(vm, from);
-	to = write ? gpa : la;
-	to_pa = write ? vmm_translate_gp2hp(vm, to) : pmap_la2pa(pmap, to);
-
-	while (remaining) {
-		copied = MIN(PAGESIZE - (from_pa - ROUNDDOWN(from_pa, PAGESIZE)),
-			     PAGESIZE - (to_pa - ROUNDDOWN(to_pa, PAGESIZE)));
-		copied = MIN(copied, remaining);
-
-		memcpy((void *) to_pa, (void *) from_pa, copied);
-
-		from_pa += copied;
-		from += copied;
-		to_pa += copied;
-		to += copied;
-		remaining -= copied;
-
-		if (remaining == 0)
-			break;
-
-		if (ROUNDDOWN(from, PAGESIZE) == from)
-			from_pa = write ? pmap_la2pa(pmap, from) :
-				vmm_translate_gp2hp(vm, from);
-		if (ROUNDDOWN(to, PAGESIZE) == to)
-			to_pa = write ? vmm_translate_gp2hp(vm, to) :
-				pmap_la2pa(pmap, to);
-	}
-
-	return 0;
+	return vmm_rw_guest_memory(vm, gpa, pmap, la, size, write);
 }
 
 int
