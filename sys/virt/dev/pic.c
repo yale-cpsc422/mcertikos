@@ -607,13 +607,6 @@ vpic_init(struct vpic *vpic, struct vm *vm)
 	vpic->master.master = TRUE;
 	i8259_reset(&vpic->slave);
 	vpic->master.vpic = vpic->slave.vpic = vpic;
-
-	vmm_intercept_ioport(vm, IO_PIC1, TRUE);
-	vmm_intercept_ioport(vm, IO_PIC2, TRUE);
-	vmm_intercept_ioport(vm, IO_PIC1+1, TRUE);
-	vmm_intercept_ioport(vm, IO_PIC2+1, TRUE);
-	vmm_intercept_ioport(vm, IO_ELCR1, TRUE);
-	vmm_intercept_ioport(vm, IO_ELCR2, TRUE);
 }
 
 int
@@ -685,7 +678,7 @@ vpic_read_irq(struct vpic *vpic)
 		}
 
 		i8259_intack(&vpic->master, irq);
-		
+
 		if (vpic->slave.int_out != 0) {
                         i8259_set_irq(&vpic->master, 2, 0);
                         i8259_set_irq(&vpic->master, 2, 1);

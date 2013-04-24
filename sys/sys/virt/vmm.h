@@ -586,17 +586,6 @@ int vmm_set_mmap(struct vm *vm, uintptr_t gpa, pageinfo_t *pi);
 int vmm_unset_mmap(struct vm *vm, uintptr_t gpa);
 
 /*
- * Enable/Disable intercepting a guest I/O port.
- *
- * @param vm     the virtual machine
- * @param port   the I/O port
- * @param enable TRUE - enable; FALSE - disable
- *
- * @return 0 if successful; otherwise, return a non-zero value
- */
-int vmm_intercept_ioport(struct vm *vm, uint16_t port, bool enable);
-
-/*
  * Handle the external interrupts which are happening in the virtual machine.
  *
  * @param vm  the virtual machine

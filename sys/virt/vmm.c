@@ -1114,13 +1114,6 @@ vmm_unset_mmap(struct vm *vm, uintptr_t gpa)
 }
 
 int
-vmm_intercept_ioport(struct vm *vm, uint16_t port, bool enable)
-{
-	KERN_ASSERT(vm != NULL);
-	return vmm_ops->intercept_ioport(vm, port, enable);
-}
-
-int
 vmm_handle_extint(struct vm *vm, uint8_t irq)
 {
 	KERN_ASSERT(vm != NULL);
