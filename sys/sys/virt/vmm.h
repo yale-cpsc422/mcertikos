@@ -542,6 +542,8 @@ int vmm_run_vm(struct vm *vm);
  */
 struct vm *vmm_cur_vm(void);
 
+#ifndef __COMPCERT__
+
 /*
  * Read the time stamp counter (TSC) of a virtual machine.
  *
@@ -585,6 +587,8 @@ int vmm_set_mmap(struct vm *vm, uintptr_t gpa, pageinfo_t *pi);
  */
 int vmm_unset_mmap(struct vm *vm, uintptr_t gpa);
 
+#endif /* !__COMPCERT__ */
+
 /*
  * Handle the external interrupts which are happening in the virtual machine.
  *
@@ -620,10 +624,14 @@ int vmm_rw_guest_memory(struct vm *vm, uintptr_t gpa,
 #define vmm_write_guest_memory(vm, gpa, pmap, la, size)			\
 	vmm_rw_guest_memory((vm), (gpa), (pmap), (la), (size), 1)
 
+#ifndef __COMPCERT__
+
 /*
  * Translate a guest physical address to the host physical address.
  */
 uintptr_t vmm_translate_gp2hp(struct vm *vm, uintptr_t gpa);
+
+#endif
 
 #ifdef __COMPCERT__
 

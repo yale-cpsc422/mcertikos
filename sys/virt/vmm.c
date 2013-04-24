@@ -33,8 +33,12 @@
 
 static bool vmm_inited = FALSE;
 
+#ifndef __COMPCERT__
 static struct vm vm_pool[MAX_VMID];
 static spinlock_t vm_pool_lock;
+#else
+static struct vm vm0;
+#endif
 
 static struct vmm_ops *vmm_ops = NULL;
 
@@ -105,6 +109,8 @@ ccomp_init_guest_seg_desc(void)
 #define is_amd()							\
 	(strncmp(pcpu_cur()->arch_info.vendor, "AuthenticAMD", 20) == 0)
 
+#ifndef __COMPCERT__
+
 static struct vm *
 vmm_alloc_vm(void)
 {
@@ -124,8 +130,6 @@ vmm_alloc_vm(void)
 	spinlock_release(&vm_pool_lock);
 	return new_vm;
 }
-
-#ifndef __COMPCERT__
 
 static void
 vmm_update_guest_tsc(struct vm *vm, uint64_t last_h_tsc, uint64_t cur_h_tsc)
@@ -154,6 +158,8 @@ ccomp_vmm_update_guest_tsc(struct vm *vm,
 	ccomp_u64_div(&delta, &tmp, &tmp);
 	ccomp_u64_add(&vm->tsc, &tmp, &vm->tsc);
 }
+
+static uintptr_t vmm_translate_gp2hp(struct vm *vm, uintptr_t gpa);
 
 #endif
 
@@ -825,6 +831,8 @@ vmm_init(void)
 	extern struct vmm_ops vmm_ops_amd;
 
 	int i;
+
+#ifndef __COMPCERT__
 	struct pcpu *c;
 
 	c = pcpu_cur();
@@ -834,16 +842,19 @@ vmm_init(void)
 		return 0;
 
 	if (vmm_inited == FALSE && pcpu_onboot() == TRUE) {
-#ifdef __COMPCERT__
+#else
+	if (vmm_inited == FALSE) {
 		ccomp_init_guest_seg_desc();
 #endif
 
+#ifndef __COMPCERT__
 		for (i = 0; i < MAX_VMID; i++) {
 			memzero(&vm_pool[i], sizeof(struct vm));
 			vm_pool[i].used = FALSE;
 			vm_pool[i].vmid = i;
 		}
 		spinlock_init(&vm_pool_lock);
+#endif
 
 		if (is_intel() == TRUE) {
 			vmm_ops = &vmm_ops_intel;
@@ -865,7 +876,9 @@ vmm_init(void)
 		return 3;
 	}
 
+#ifndef __COMPCERT__
 	c->vm_inited = TRUE;
+#endif
 
 	return 0;
 }
@@ -896,10 +909,14 @@ vmm_create_vm(uint32_t cpufreq_lo, uint32_t cpufreq_hi, size_t memsize)
 		return NULL;
 	}
 
+#ifndef __COMPCERT__
 	if ((vm = vmm_alloc_vm()) == NULL) {
 		VIRT_DEBUG("Cannot allocate a vm structure.\n");
 		return NULL;
 	}
+#else
+	vm = &vm0;
+#endif
 
 	vm->state = VM_STATE_STOP;
 
@@ -980,7 +997,9 @@ vmm_run_vm(struct vm *vm)
 	uint64_t start_tsc, exit_tsc;
 	int rc, injected;
 
+#ifndef __COMPCERT__
 	pcpu_cur()->vm = vm;
+#endif
 
 	if (vdev_wait_all_devices_ready(vm)) {
 		VIRT_DEBUG("Cannot start all virtual devices.\n");
@@ -1059,7 +1078,11 @@ vmm_run_vm(struct vm *vm)
 struct vm *
 vmm_cur_vm(void)
 {
+#ifndef __COMPCERT__
 	return pcpu_cur()->vm;
+#else
+	return &vm0;
+#endif
 }
 
 #ifndef __COMPCERT__
@@ -1070,8 +1093,6 @@ vmm_rdtsc(struct vm *vm)
 	KERN_ASSERT(vm != NULL);
 	return vm->tsc;
 }
-
-#endif
 
 int
 vmm_get_mmap(struct vm *vm, uintptr_t gpa, uintptr_t *hpa)
@@ -1114,6 +1135,8 @@ vmm_unset_mmap(struct vm *vm, uintptr_t gpa)
 
 	return vmm_ops->unset_mmap(vm, gpa);
 }
+
+#endif /* !__COMPCERT__ */
 
 int
 vmm_handle_extint(struct vm *vm, uint8_t irq)
@@ -1199,7 +1222,11 @@ vmm_rw_guest_memory(struct vm *vm, uintptr_t gpa,
 	return 0;
 }
 
+#ifndef __COMPCERT__
 uintptr_t
+#else
+static uintptr_t
+#endif
 vmm_translate_gp2hp(struct vm *vm, uintptr_t gpa)
 {
 	KERN_ASSERT(vm != NULL);

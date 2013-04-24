@@ -33,8 +33,10 @@ struct pcpu {
 	struct kstack	*kstack;	/* bootstrap kernel stack */
 	struct pcpuinfo	arch_info;	/* arch-dependent information */
 	trap_cb_t	**trap_handler;	/* arrays of trap handlers */
+#ifndef __COMPCERT__
 	struct vm	*vm;
 	bool		vm_inited;	/* is the virtualization initialzied? */
+#endif /* !__COMPCERT__ */
 };
 
 /*
