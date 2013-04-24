@@ -11,6 +11,8 @@
 #include <sys/virt/vmm_dev.h>
 #include <sys/virt/dev/pic.h>
 
+#include <machine/pmap.h>
+
 #include <dev/pic.h>
 #include <dev/tsc.h>
 
@@ -585,13 +587,13 @@ vmm_load_bios(struct vm *vm)
 
 	vmm_write_guest_memory(vm,
 			       0x100000 - (size_t) _binary___misc_bios_bin_size,
-			       pmap_kern,
+			       pmap_kern_map(),
 			       (uintptr_t) _binary___misc_bios_bin_start,
 			       (size_t) _binary___misc_bios_bin_size);
 
 	/* load VGA BIOS ROM */
 	vmm_write_guest_memory(vm, 0xc0000,
-			       pmap_kern,
+			       pmap_kern_map(),
 			       (uintptr_t) _binary___misc_vgabios_bin_start,
 			       (size_t) _binary___misc_vgabios_bin_size);
 
