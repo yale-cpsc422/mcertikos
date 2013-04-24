@@ -170,7 +170,6 @@ vdev_register_ioport(struct vm *vm, uint16_t port, data_sz_t width, vid_t vid)
 		}
 
 		vdev->ioport[port1].vid = vid;
-		vmm_intercept_ioport(vm, port1, TRUE);
 
 		VDEV_DEBUG("Attach virtual device %d to I/O port 0x%x.\n",
 			   vid, port1);
@@ -204,7 +203,6 @@ vdev_unregister_ioport(struct vm *vm, uint16_t port, data_sz_t width, vid_t vid)
 		}
 
 		vdev->ioport[port1].vid = -1;
-		vmm_intercept_ioport(vm, port1, FALSE);
 
 		VDEV_DEBUG("Detach virtual device %d from I/O port 0x%x.n",
 			   vid, port1);
