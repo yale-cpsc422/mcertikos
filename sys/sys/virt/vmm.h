@@ -385,13 +385,14 @@ typedef enum {
  *           otherwise, return a non-zero value and the value at hpa is
  *           undefined
  *
- * - int set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa)
+ * - int set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa, int type)
  *   Map a guest physical memory page to a host physical memory page.
  *   @param vm  the virtual machine
  *   @param gpa the guest physical address of the guest physical memory page,
  *              which should be aligned to the lower boundary of the memory page
  *   @param hpa the host physical address of the host physical memory page,
  *              which should be aligned to the lower boundary of the memory page
+ *   @param type the cache type
  *   @return 0 if successful; otherwise, return a non-zero value and the mapping
  *           of the guest physical memory page is in the state before the
  *           mapping
@@ -478,7 +479,7 @@ struct vmm_ops {
 			guest_seg_t seg, struct guest_seg_desc *desc);
 
 	int (*get_mmap)(struct vm *vm, uintptr_t gpa, uintptr_t *hpa);
-	int (*set_mmap)(struct vm *vm, uintptr_t gpa, uintptr_t hpa);
+	int (*set_mmap)(struct vm *vm, uintptr_t gpa, uintptr_t hpa, int type);
 	int (*unset_mmap)(struct vm *vm, uintptr_t gpa);
 
 	int (*inject_event)(struct vm *vm, guest_event_t type,
@@ -572,10 +573,11 @@ int vmm_get_mmap(struct vm *vm, uintptr_t gpa, uintptr_t *hpa);
  * @param vm  the virtual machine
  * @param gpa the guest physical address of the guest physical memory page
  * @param pi  the host physical memory page
+ * @param type the cache type
  *
  * @return 0 if successful; otherwise, return a non-zero value.
  */
-int vmm_set_mmap(struct vm *vm, uintptr_t gpa, pageinfo_t *pi);
+int vmm_set_mmap(struct vm *vm, uintptr_t gpa, pageinfo_t *pi, int type);
 
 /*
  * Unmap a guest memory page from the host physical memory page.
