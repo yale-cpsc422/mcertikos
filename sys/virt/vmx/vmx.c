@@ -763,12 +763,6 @@ vmx_init_vm(struct vm *vm)
 	}
 	VMX_DEBUG("EPT @ 0x%08x.\n", vmx->pml4ept);
 
-	if (ept_create_mappings(vmx->pml4ept, vm->memsize)) {
-		VMX_DEBUG("Cannot create EPT mappings.\n");
-		rc = 4;
-		goto ept_err;
-	}
-
 	/*
 	 * Clean up EPTP-tagged guest physical and combined mappings
 	 *
@@ -830,7 +824,6 @@ vmx_init_vm(struct vm *vm)
 	free_bitmap(vmx->msr_bitmap);
  msr_err:
 	/* TODO: free EPT */
- ept_err:
 	free_pml4(vmx->pml4ept);
  pml4_err:
 	free_vmcs(vmx->vmcs);
@@ -1019,17 +1012,12 @@ vmx_intercept_all_ioports(struct vm *vm, bool enable)
 #endif
 
 	struct vmx *vmx = (struct vmx *) vm->cookie;
-	uint32_t procbased_ctls;
-	uint32_t *bitmap;
+	uint32_t *bitmap = (uint32_t *) vmx->io_bitmap;
 
-	procbased_ctls = vmcs_read32(VMCS_PRI_PROC_BASED_CTLS);
-	if (enable == TRUE) {
-		procbased_ctls |= PROCBASED_IO_EXITING;
-	} else {
-		procbased_ctls &= ~(PROCBASED_IO_EXITING | PROCBASED_IO_BITMAPS);
-		bitmap = (uint32_t *) vmx->io_bitmap;
+	if (enable == TRUE)
+		memset(bitmap, 0xff, PAGESIZE * 2);
+	else
 		memzero(bitmap, PAGESIZE * 2);
-	}
 
 	return 0;
 }
@@ -1352,14 +1340,14 @@ vmx_get_mmap(struct vm *vm, uintptr_t gpa, uintptr_t *hpa)
 }
 
 static int
-vmx_set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa)
+vmx_set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa, int type)
 {
 	KERN_ASSERT(vm != NULL);
 
 	int rc = 0;
 	struct vmx *vmx = (struct vmx *) vm->cookie;
 
-	rc = ept_add_mapping(vmx->pml4ept, gpa, hpa, PAT_WRITE_BACK, FALSE);
+	rc = ept_add_mapping(vmx->pml4ept, gpa, hpa, type, FALSE);
 
 	if (rc)
 		return 1;

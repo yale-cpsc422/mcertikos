@@ -86,6 +86,52 @@ vmm_alloc_vm(void)
 	return new_vm;
 }
 
+static int
+vmm_init_mmap(struct vm *vm)
+{
+	KERN_ASSERT(vm != NULL);
+
+	uintptr_t max_gpa, cur_gpa;
+	struct page_info *pi;
+
+	max_gpa = vm->memsize;
+
+	/*
+	 * Map the first 1 MB guest physical address space where BIOS ROM and
+	 * VGA ROM are. The guest VGA RAM (0xa0000 ~ 0xbffff) is mapped to the
+	 * host VGA RAM (0xa0000 ~ 0xbffff).
+	 */
+
+	for (cur_gpa = 0; cur_gpa < MIN(0x100000, max_gpa); cur_gpa += PAGESIZE) {
+		if (0xa0000 <= cur_gpa && cur_gpa < 0xc0000) {
+			if (vmm_ops->set_mmap(vm, cur_gpa, cur_gpa,
+					      PAT_UNCACHEABLE))
+				return 1;
+		} else {
+			if ((pi = mem_page_alloc()) == NULL)
+				return 2;
+			if (vmm_ops->set_mmap(vm, cur_gpa, mem_pi2phys(pi),
+					      PAT_WRITE_BACK))
+				return 1;
+		}
+	}
+
+	/*
+	 * Map other guest physical address space besides the memory hole.
+	 */
+
+	for (cur_gpa = 0x100000; cur_gpa < MIN(0xf0000000, max_gpa);
+	     cur_gpa += PAGESIZE) {
+		if ((pi = mem_page_alloc()) == NULL)
+			return 2;
+		if (vmm_ops->set_mmap(vm, cur_gpa, mem_pi2phys(pi),
+				      PAT_WRITE_BACK))
+			return 1;
+	}
+
+	return 0;
+}
+
 static void
 vmm_update_guest_tsc(struct vm *vm, uint64_t last_h_tsc, uint64_t cur_h_tsc)
 {
@@ -244,7 +290,7 @@ vmm_handle_pgflt(struct vm *vm)
 	host_pa = mem_pi2phys(pi);
 	memzero((void *) host_pa, PAGESIZE);
 
-	if ((vmm_ops->set_mmap(vm, fault_pa, host_pa))) {
+	if ((vmm_ops->set_mmap(vm, fault_pa, host_pa, PAT_WRITE_BACK))) {
 		KERN_PANIC("EPT/NPT fault @ 0x%08x: cannot be mapped to "
 			   "HPA 0x%08x.\n", fault_pa, host_pa);
 		return 3;
@@ -823,6 +869,11 @@ vmm_create_vm(uint64_t cpufreq, size_t memsize)
 		return NULL;
 	}
 
+	if (vmm_init_mmap(vm)) {
+		VIRT_DEBUG("Cannot initialize EPT/NPT.\n");
+		return NULL;
+	}
+
 	vmm_ops->intercept_all_ioports(vm, TRUE);
 	vmm_ops->intercept_all_msrs(vm, 0);
 
@@ -969,7 +1020,7 @@ vmm_get_mmap(struct vm *vm, uintptr_t gpa, uintptr_t *hpa)
 }
 
 int
-vmm_set_mmap(struct vm *vm, uintptr_t gpa, pageinfo_t *pi)
+vmm_set_mmap(struct vm *vm, uintptr_t gpa, pageinfo_t *pi, int type)
 {
 	KERN_ASSERT(vm != NULL);
 
@@ -980,7 +1031,7 @@ vmm_set_mmap(struct vm *vm, uintptr_t gpa, pageinfo_t *pi)
 	if (pi == NULL)
 		return 2;
 
-	return vmm_ops->set_mmap(vm, gpa, mem_pi2phys(pi));
+	return vmm_ops->set_mmap(vm, gpa, mem_pi2phys(pi), type);
 }
 
 int
@@ -1083,7 +1134,14 @@ uintptr_t
 vmm_translate_gp2hp(struct vm *vm, uintptr_t gpa)
 {
 	KERN_ASSERT(vm != NULL);
+
 	uintptr_t hpa;
-	vmm_ops->get_mmap(vm, ROUNDDOWN(gpa, PAGESIZE), &hpa);
+	int rc;
+
+	rc = vmm_ops->get_mmap(vm, ROUNDDOWN(gpa, PAGESIZE), &hpa);
+
+	if (rc)
+		KERN_PANIC("GPA 0x%08x not mapped.\n", gpa);
+
 	return hpa + (gpa - ROUNDDOWN(gpa, PAGESIZE));
 }

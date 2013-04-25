@@ -177,50 +177,6 @@ ept_invalidate_mappings(uint64_t pml4ept)
 }
 
 /*
- * Create EPT page structures. 4KB EPT pages are used.
- */
-int
-ept_create_mappings(uint64_t *pml4ept, size_t mem_size)
-{
-	KERN_ASSERT(pml4ept != NULL);
-	KERN_ASSERT(mem_size != 0);
-
-	pageinfo_t *pi;
-	uintptr_t gpa;
-
-	/*
-	 * Guest VGA RAM 0xa0000 ~ 0xbffff is mapped to host VGA RAM 0xa0000
-	 * ~ 0xbffff.
-	 */
-	for (gpa = 0xa0000; gpa < 0xc0000 && gpa < mem_size; gpa += PAGESIZE)
-		if (ept_add_mapping(pml4ept, gpa, gpa, PAT_UNCACHEABLE, FALSE))
-			return 1;
-
-	for (gpa = 0; gpa < 0xa0000 && gpa < mem_size; gpa += PAGESIZE) {
-		if ((pi = mem_page_alloc()) == NULL)
-			return 2;
-		if (ept_add_mapping(pml4ept, gpa, mem_pi2phys(pi),
-				    PAT_WRITE_BACK, FALSE))
-			return 1;
-	}
-
-	for (gpa = 0xc0000; gpa < mem_size && gpa < 0xf0000000; gpa += PAGESIZE) {
-		if ((pi = mem_page_alloc()) == NULL)
-			return 2;
-		if (ept_add_mapping(pml4ept, gpa, mem_pi2phys(pi),
-				    PAT_WRITE_BACK, FALSE))
-			return 1;
-	}
-
-	/*
-	 * Memory from 0xf0000000 to 0xffffffff is mapped on demand by the EPT
-	 * fault handler.
-	 */
-
-	return 0;
-}
-
-/*
  * Add page structures which map the guest physical address gpa to the host
  * physical address hpa. If superpage is TRUE, 2MB EPT pages are used;
  * otherwise, 4KB pages are used.

@@ -171,7 +171,6 @@ free_vmcb(struct vmcb *vmcb)
 static pmap_t *
 alloc_nested_ptable(size_t memsize)
 {
-	uintptr_t addr;
 	pageinfo_t *pmap_pi;
 	pmap_t *pmap;
 
@@ -180,25 +179,6 @@ alloc_nested_ptable(size_t memsize)
 		return NULL;
 	}
 	pmap = mem_pi2ptr(pmap_pi);
-
-	for (addr = 0x0; addr < memsize; addr += PAGESIZE) {
-		if (addr >= 0xa0000 && addr <= 0xbffff) {
-			/* identically map VGA display memory to the host */
-			if (pmap_insert(pmap, mem_phys2pi(addr),
-					addr, PTE_G | PTE_W | PTE_U) == NULL)
-				KERN_PANIC("Cannot map guest physical address "
-					   "0x%08x.\n", addr);
-		} else if (pmap_reserve(pmap, addr,
-					PTE_G | PTE_W | PTE_U) == NULL) {
-			SVM_DEBUG("Failed to map guest memory page at %x.\n",
-				  addr);
-			pmap_free(pmap);
-			return NULL;
-		}
-
-		if (addr == 0xfffff000)
-			break;
-	}
 
 	return pmap;
 }
@@ -948,13 +928,25 @@ svm_get_mmap(struct vm *vm, uintptr_t gpa, uintptr_t *hpa)
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 
-	*hpa = glinear_2_gphysical(vmcb, gpa);
+	pmap_t *ncr3 = (pmap_t *) (uintptr_t) vmcb->control.nested_cr3;
+	uint32_t npt_dir_entry = ncr3[PDX(gpa)];
+
+	if (!(npt_dir_entry & PTE_P))
+		return 1;
+
+	pmap_t *npt_tab = (pmap_t *) PGADDR(npt_dir_entry);
+	uint32_t npt_table_entry = npt_tab[PTX(gpa)];
+
+	if (!(npt_table_entry & PTE_P))
+		return 1;
+
+	*hpa = PGADDR(npt_table_entry) + PGOFF(gpa);
 
 	return 0;
 }
 
 static int
-svm_set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa)
+svm_set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa, int type)
 {
 	KERN_ASSERT(vm != NULL);
 
