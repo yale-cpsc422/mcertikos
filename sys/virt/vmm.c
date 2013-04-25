@@ -131,6 +131,38 @@ vmm_alloc_vm(void)
 	return new_vm;
 }
 
+static void
+vmm_update_guest_tsc(struct vm *vm, uint64_t last_h_tsc, uint64_t cur_h_tsc)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(cur_h_tsc >= last_h_tsc);
+	uint64_t delta = cur_h_tsc - last_h_tsc;
+	vm->tsc += (delta * vm->cpufreq) / (tsc_per_ms * 1000);
+}
+
+#else
+
+static void
+ccomp_vmm_update_guest_tsc(struct vm *vm,
+			   uint64_t *last_h_tsc, uint64_t *cur_h_tsc)
+{
+	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(ccomp_u64_ge(cur_h_tsc, last_h_tsc));
+
+	uint64_t delta, tmp;
+
+	ccomp_u64_assign_val(1000, 0, &tmp);
+	ccomp_u64_sub(cur_h_tsc, last_h_tsc, &delta);
+	ccomp_u64_mul(&delta, &vm->cpufreq, &delta);
+	ccomp_u64_mul(ccomp_tsc_per_ms(), &tmp, &tmp);
+	ccomp_u64_div(&delta, &tmp, &tmp);
+	ccomp_u64_add(&vm->tsc, &tmp, &vm->tsc);
+}
+
+static uintptr_t vmm_translate_gp2hp(struct vm *vm, uintptr_t gpa);
+
+#endif
+
 static int
 vmm_init_mmap(struct vm *vm)
 {
@@ -176,38 +208,6 @@ vmm_init_mmap(struct vm *vm)
 
 	return 0;
 }
-
-static void
-vmm_update_guest_tsc(struct vm *vm, uint64_t last_h_tsc, uint64_t cur_h_tsc)
-{
-	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(cur_h_tsc >= last_h_tsc);
-	uint64_t delta = cur_h_tsc - last_h_tsc;
-	vm->tsc += (delta * vm->cpufreq) / (tsc_per_ms * 1000);
-}
-
-#else
-
-static void
-ccomp_vmm_update_guest_tsc(struct vm *vm,
-			   uint64_t *last_h_tsc, uint64_t *cur_h_tsc)
-{
-	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(ccomp_u64_ge(cur_h_tsc, last_h_tsc));
-
-	uint64_t delta, tmp;
-
-	ccomp_u64_assign_val(1000, 0, &tmp);
-	ccomp_u64_sub(cur_h_tsc, last_h_tsc, &delta);
-	ccomp_u64_mul(&delta, &vm->cpufreq, &delta);
-	ccomp_u64_mul(ccomp_tsc_per_ms(), &tmp, &tmp);
-	ccomp_u64_div(&delta, &tmp, &tmp);
-	ccomp_u64_add(&vm->tsc, &tmp, &vm->tsc);
-}
-
-static uintptr_t vmm_translate_gp2hp(struct vm *vm, uintptr_t gpa);
-
-#endif
 
 static int
 vmm_handle_ioport(struct vm *vm)
