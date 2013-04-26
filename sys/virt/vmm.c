@@ -206,6 +206,23 @@ vmm_init_mmap(struct vm *vm)
 			return 1;
 	}
 
+#ifdef __COMPCERT__
+	/*
+	 * Map the memory hole to empty memory pages.
+	 */
+
+	for (cur_gpa = 0xf0000000; cur_gpa <= 0xffffffff; cur_gpa += PAGESIZE) {
+		if ((pi = mem_page_alloc()) == NULL)
+			return 2;
+		memzero(mem_pi2ptr(pi), PAGESIZE);
+		if (vmm_ops->set_mmap(vm, cur_gpa, mem_pi2phys(pi),
+				      PAT_WRITE_BACK))
+			return 1;
+		if (cur_gpa == 0xfffff000)	/* avoid overflow */
+			break;
+	}
+#endif
+
 	return 0;
 }
 
@@ -354,12 +371,16 @@ vmm_handle_pgflt(struct vm *vm)
 
 	exit_info_t *exit_info = &vm->exit_info;
 	uint32_t fault_pa = exit_info->pgflt.addr;
+#ifndef __COMPCERT__
 	pageinfo_t *pi;
 	uintptr_t host_pa;
 
 	if (vm->memsize <= fault_pa && fault_pa < 0xf0000000) {
+#endif
+
 		KERN_PANIC("EPT/NPT fault @ 0x%08x: out of range.\n", fault_pa);
 		return 1;
+#ifndef __COMPCERT__
 	}
 
 	if ((pi = mem_page_alloc()) == NULL) {
@@ -382,6 +403,7 @@ vmm_handle_pgflt(struct vm *vm)
 		   fault_pa, host_pa);
 #endif
 	return 0;
+#endif /* !__COMPCERT__ */
 }
 
 static int
