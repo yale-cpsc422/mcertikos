@@ -440,9 +440,11 @@ mem_pages_alloc_align_region(size_t n, int p, bool high)
 	}
 
 	if (page == NULL) {
-		KERN_DEBUG("Cannot find free %s memory page, %u free pages.\n",
-			   (high == TRUE) ? "high" : "normal",
-			   *nr_free_pages_ptr);
+		if (high == FALSE)
+			KERN_DEBUG("Cannot find free %smemory page, "
+				   "%u free pages.\n",
+				   (high == TRUE) ? "high" : "normal",
+				   *nr_free_pages_ptr);
 		goto ret;
 	}
 
