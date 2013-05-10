@@ -108,70 +108,65 @@ pmap_walk(pde_t *pdir, uintptr_t la, bool write)
 
 /*
  * Initialize the bootstap page map. It identically maps the linear address
- * below VM_USERLO and the linear addres above VM_USERHI.
+ * below VM_USERLO and the linear addres above VM_USERHI. The bootstrap pmap
+ * will be used to initialize the kernel pmap and the process pmaps.
  */
 static pmap_t *
 pmap_init_boot(void)
 {
-	uintptr_t addr;
+	uint64_t addr;
 	size_t memsize = mem_max_phys();
 
 	memset(pmap_boot, 0, PAGESIZE);
 
-	KERN_DEBUG("Bootstrap pmap at 0x%08x.\n", pmap_boot);
+	KERN_DEBUG("pmap_boot @ 0x%08x.\n", pmap_boot);
 
 	for (addr = 0; addr < MIN(VM_USERLO, memsize); addr += PAGESIZE)
 		if (pmap_insert(pmap_boot,
 				mem_phys2pi(addr), addr, PTE_W | PTE_G) == NULL)
 			return NULL;
 
-	for (addr = VM_USERHI; addr < 0xffffffff; addr += PAGESIZE) {
+	for (addr = VM_DEVLO; addr <= VM_DEVHI; addr += PAGESIZE) {
 		if (pmap_insert(pmap_boot,
 				mem_phys2pi(addr), addr, PTE_W | PTE_G) == NULL)
 			return NULL;
-
-		if (addr == 0xfffff000)
-			break;
 	}
 
 	return pmap_boot;
 }
 
 /*
- * Initialize the kernel page map. It's a copy of the bootstrap page map in
- * addition of the identical mappings for liear address which satisfies the
- * condition "the physical address to which it's identically mappaed is in
- * the reserved memory pages".
+ * Intialize the kernel pmap. The virtual address below mem_max_phys(), the
+ * virtual address above VM_DEVLO, and the virtual address for IOAPICs are
+ * mapped to the identical physical address in the kernel pmap.
  */
 static pmap_t *
 pmap_init_kern(void)
 {
-	uintptr_t addr;
-	pageinfo_t *pi;
+	uint64_t addr;
 	int i;
 	ioapic_t *ioapic_addr;
+	pageinfo_t *pi;
+	size_t memsize = mem_max_phys();
+
+	KERN_DEBUG("pmap_kern @ 0x%08x.\n", pmap_kern);
 
 	memcpy(pmap_kern, pmap_boot, PAGESIZE);
 
-	for (addr = VM_USERLO; addr < mem_max_phys(); addr += PAGESIZE) {
-		pi = mem_phys2pi(addr);
-
-		if (pi->type != PG_RESERVED)
-			goto next;
-
-		pmap_insert(pmap_kern, pi, addr, PTE_W);
-
-	next:
-		if (addr == 0xfffff000)
-			break;
-	}
+	for (addr = VM_USERLO; addr < memsize; addr += PAGESIZE)
+		if (pmap_insert(pmap_kern,
+				mem_phys2pi(addr), addr, PTE_W) == NULL)
+			return NULL;
 
 	for (i = 0; i < ioapic_number(); i++) {
 		if ((ioapic_addr = ioapic_get(i)) == NULL ||
-		    (uintptr_t) ioapic_addr >= VM_USERHI)
+		    (uintptr_t) ioapic_addr >= VM_DEVLO ||
+		    (uintptr_t) ioapic_addr < memsize)
 			continue;
 		pi = mem_phys2pi((uintptr_t) ioapic_addr);
-		pmap_insert(pmap_kern, pi, (uintptr_t) ioapic_addr, PTE_W);
+		if (pmap_insert(pmap_kern,
+				pi, (uintptr_t) ioapic_addr, PTE_W) == NULL)
+			return NULL;
 	}
 
 	return pmap_kern;
@@ -192,7 +187,6 @@ pmap_init(void)
 			KERN_PANIC("Cannot initialize the kernel page map.");
 		pmap_boot_inited = TRUE;
 	}
-
 
 	/* enable global pages (Sec 4.10.2.4, Intel ASDM Vol3) */
 	uint32_t cr4 = rcr4();
@@ -279,7 +273,7 @@ pmap_reserve(pmap_t *pmap, uintptr_t la, int perm)
 {
 	KERN_ASSERT(pmap != NULL);
 
-	pageinfo_t *pi = (pageinfo_t *) mem_page_alloc();
+	pageinfo_t *pi = (pageinfo_t *) himem_page_alloc();
 	if (pi == NULL)
 		return NULL;
 	memset(mem_pi2ptr(pi), 0, PAGESIZE);
@@ -510,8 +504,6 @@ pmap_la2pa(pmap_t *pmap, uintptr_t la)
 			KERN_PANIC("Cannot map linear address 0x%08x to "
 				   "physical address 0x%08x.\n",
 				   ROUNDDOWN(la,PAGESIZE), mem_pi2phys(pi));
-
-		pmap_install(pmap);
 
 		return ROUNDDOWN(mem_pi2phys(pi), PAGESIZE) + PGOFF(la);
 	} else {

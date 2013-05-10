@@ -45,6 +45,9 @@ pmap_t *pmap_insert(pmap_t *pmap, pageinfo_t *pi, uintptr_t la, int perm);
  * Allocate a physical memory page and map a linear memory page to it in a page
  * map.
  *
+ * XXX: pmap_reserve() prefers to allocating high physical memory unless there
+ *      is not enough high physical memory.
+ *
  * @param pmap the page map to which the new mapping is inserted
  * @param la   the source linear memory page
  * @param perm the permission

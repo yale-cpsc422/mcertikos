@@ -10,7 +10,8 @@
 typedef enum {
 	PG_RESERVED,		/* reserved physical memory page */
 	PG_KERNEL,		/* occupoed by kernel code and data */
-	PG_NORMAL		/* normal physical memory page */
+	PG_NORMAL,		/* normal physical memory page */
+	PG_HIGH			/* high memory region */
 } pg_type;
 
 struct page_info {
@@ -18,7 +19,8 @@ struct page_info {
 	int	used;		/* is the memory page in use? */
 	int	refcount;	/* the amount of users of the physical
 				   memory page */
-	struct page_info *prev, *next;
+	struct page_info *prev, *next; /* previous and next pages on the
+					  free list */
 	void	*slab, *cache;	/* used by slab allocator */
 };
 
@@ -32,6 +34,16 @@ pageinfo_t *mem_ptr2pi(void *);
 void   mem_init(mboot_info_t *);
 size_t mem_max_phys(void);
 
+/*
+ * Allocate n consecutive physical memory pages in the normal memory region.
+ * The first page must be aligned to 2^p pages.
+ *
+ * @param n the number pages to allocate
+ * @param p the alignment is 2^p pages
+ *
+ * @return page_info structures of the first page; return NULL if there are not
+ *         enough physical memory in the normal memory region.
+ */
 pageinfo_t *mem_pages_alloc_align(size_t n, int p);
 
 #define mem_page_alloc()			\
@@ -40,7 +52,33 @@ pageinfo_t *mem_pages_alloc_align(size_t n, int p);
 #define mem_pages_alloc(size)						\
 	mem_pages_alloc_align(ROUNDUP((size), PAGESIZE)/PAGESIZE, 0)
 
-pageinfo_t *mem_pages_free(pageinfo_t *);
+/*
+ * Allocate n consecutive physical memory pages in the high memory region.
+ * The first page must be aligned to 2^p pages. If there are not enough high
+ * memory, himem_pages_alloc_align() will fallback to mem_pages_alloc_align().
+ *
+ * @param n the number pages to allocate
+ * @param p the alignment is 2^p pages
+ *
+ * @return page_info structures of the first page; return NULL if there are not
+ *         enough physical memory in both the high memory region and the normal
+ *         memory region.
+ */
+pageinfo_t *himem_pages_alloc_align(size_t n, int p);
+
+#define himem_page_alloc()			\
+	himem_pages_alloc_align(1, 0)
+
+#define himem_pages_alloc(size)						\
+	himem_pages_alloc_align(ROUNDUP((size), PAGESIZE)/PAGESIZE, 0)
+
+/*
+ * Free the physical memory pages in the same memory region (normal or high).
+ * mem_pages_free() can determine the end of the pages to free.
+ *
+ * @param page the first page of the physical memory pages to free
+ */
+void mem_pages_free(pageinfo_t *page);
 
 #define mem_page_free(page)			\
 	mem_pages_free((page))

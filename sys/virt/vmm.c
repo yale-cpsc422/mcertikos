@@ -185,8 +185,9 @@ vmm_init_mmap(struct vm *vm)
 					      PAT_UNCACHEABLE))
 				return 1;
 		} else {
-			if ((pi = mem_page_alloc()) == NULL)
+			if ((pi = himem_page_alloc()) == NULL)
 				return 2;
+			memzero(mem_pi2ptr(pi), PAGESIZE);
 			if (vmm_ops->set_mmap(vm, cur_gpa, mem_pi2phys(pi),
 					      PAT_WRITE_BACK))
 				return 1;
@@ -199,7 +200,7 @@ vmm_init_mmap(struct vm *vm)
 
 	for (cur_gpa = 0x100000; cur_gpa < MIN(0xf0000000, max_gpa);
 	     cur_gpa += PAGESIZE) {
-		if ((pi = mem_page_alloc()) == NULL)
+		if ((pi = himem_page_alloc()) == NULL)
 			return 2;
 		if (vmm_ops->set_mmap(vm, cur_gpa, mem_pi2phys(pi),
 				      PAT_WRITE_BACK))
@@ -383,14 +384,13 @@ vmm_handle_pgflt(struct vm *vm)
 #ifndef __COMPCERT__
 	}
 
-	if ((pi = mem_page_alloc()) == NULL) {
+	if ((pi = himem_page_alloc()) == NULL) {
 		KERN_PANIC("EPT/NPT fault @ 0x%08x: no host memory.\n",
 			   fault_pa);
 		return 2;
 	}
 
 	host_pa = mem_pi2phys(pi);
-	memzero((void *) host_pa, PAGESIZE);
 
 	if ((vmm_ops->set_mmap(vm, fault_pa, host_pa, PAT_WRITE_BACK))) {
 		KERN_PANIC("EPT/NPT fault @ 0x%08x: cannot be mapped to "
