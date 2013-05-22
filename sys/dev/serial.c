@@ -12,6 +12,7 @@
  */
 
 #include <sys/console.h>
+#include <sys/intr.h>
 #include <sys/x86.h>
 
 #include <machine/trap.h>
@@ -115,7 +116,15 @@ void
 serial_intenable(void)
 {
 	if (serial_exists) {
-		pic_enable(IRQ_KBD);
-		ioapic_enable(IRQ_KBD, 0);
+		outb(COM1+COM_IER, 1);
+		intr_enable(IRQ_SERIAL13, 0);
+		serial_intr();
 	}
+}
+
+int
+serial_intr_handler(uint8_t trapno, struct context *ctx)
+{
+	intr_eoi();
+	return 0;
 }

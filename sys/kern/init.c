@@ -17,7 +17,7 @@
 #include <sys/types.h>
 #include <sys/x86.h>
 
-#include <sys/virt/vmm.h>
+#include <sys/virt/hvm.h>
 
 #include <machine/kstack.h>
 #include <machine/pmap.h>
@@ -26,6 +26,7 @@
 #include <dev/kbd.h>
 #include <dev/lapic.h>
 #include <dev/pci.h>
+#include <dev/serial.h>
 #include <dev/tsc.h>
 #include <dev/timer.h>
 
@@ -36,7 +37,7 @@ uint8_t bsp_kstack[KSTACK_SIZE] gcc_aligned(KSTACK_SIZE);
 
 static volatile int all_ready = FALSE;
 
-extern uint8_t _binary___obj_user_guest_guest_start[];
+extern uint8_t _binary___obj_user_vmm_vmm_start[];
 extern uint8_t _binary___obj_user_idle_idle_start[];
 
 static void kern_main_ap(void);
@@ -97,6 +98,7 @@ kern_main(void)
 	trap_handler_register(T_IRQ0+IRQ_SPURIOUS, spurious_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_TIMER, timer_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_KBD, kbd_intr_handler);
+	trap_handler_register(T_IRQ0+IRQ_SERIAL13, serial_intr_handler);
 	trap_handler_register(T_IPI0+IPI_RESCHED, ipi_resched_handler);
 	disk_register_intr();
 	KERN_INFO("done.\n");
@@ -112,6 +114,10 @@ kern_main(void)
 
 	KERN_INFO("[BSP KERN] Enable disk interrupt ... ");
 	disk_intr_enable();
+	KERN_INFO("done.\n");
+
+	KERN_INFO("[BSP KERN] Enable serial interrupt ... ");
+	serial_intenable();
 	KERN_INFO("done.\n");
 
 	/* boot APs  */
@@ -141,7 +147,7 @@ kern_main(void)
 
 	if ((guest_proc = proc_new(idle_proc, NULL)) == NULL)
 		KERN_PANIC("Cannot create guest process on BSP.\n");
-	proc_exec(guest_proc, c, (uintptr_t) _binary___obj_user_guest_guest_start);
+	proc_exec(guest_proc, c, (uintptr_t) _binary___obj_user_vmm_vmm_start);
 
 	/* jump to userspace */
 	KERN_INFO("[BSP KERN] Go to userspace ... \n");
@@ -194,6 +200,7 @@ kern_main_ap(void)
 	trap_handler_register(T_IRQ0+IRQ_SPURIOUS, spurious_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_TIMER, timer_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_KBD, kbd_intr_handler);
+	trap_handler_register(T_IRQ0+IRQ_SERIAL13, serial_intr_handler);
 	trap_handler_register(T_IPI0+IPI_RESCHED, ipi_resched_handler);
 	disk_register_intr();
 	KERN_INFO("done.\n");
@@ -336,12 +343,12 @@ kern_init(mboot_info_t *mbi)
 	KERN_INFO("done.\n");
 
 	/*
-	 * Initialize virtual machine monitor module.
+	 * Initialize HVM..
 	 */
 	if (strncmp(pcpu_cur()->arch_info.vendor, "AuthenticAMD", 20) == 0 ||
 	    strncmp(pcpu_cur()->arch_info.vendor, "GenuineIntel", 20) == 0) {
-		KERN_INFO("Initialize VMM ... ");
-		if (vmm_init() != 0)
+		KERN_INFO("Initialize HVM ... ");
+		if (hvm_init() != 0)
 			KERN_INFO("failed.\n");
 		else
 			KERN_INFO("done.\n");

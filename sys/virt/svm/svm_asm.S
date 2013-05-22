@@ -1,5 +1,3 @@
-#include "svm.h"
-
 	.globl	svm_run
 /* void svm_run(struct svm *svm) */
 svm_run:
@@ -31,68 +29,32 @@ svm_run:
 	pushl	%edi
 	pushl	%ebp
 
-	/* get enter TSC and store it in svm->enter_tsc */
-	movl	%eax, %ebx
-	/*
-	 * XXX: it prefers to use rdtscp other than rdtsc, because the former is
-	 *      a serializing instruction while the latter is not. When rdtscp
-	 *      is not available on some processors, try to prefix rdtsc with
-	 *      lfence.
-	 * TODO: move rdtscp as close to vmrun as possible in order to get more
-	 *       precise time.
-	 */
-	rdtscp
-	movl	%eax, 48(%ebx)
-	movl	%edx, 52(%ebx)
-	movl	%ebx, %eax
-
 	/* restore guest registers */
 	movl	(%eax), %ebx
-	movl	8(%eax), %ecx
-	movl	16(%eax), %edx
-	movl	24(%eax), %esi
-	movl	32(%eax), %edi
-	movl	40(%eax), %ebp
+	movl	4(%eax), %ecx
+	movl	8(%eax), %edx
+	movl	12(%eax), %esi
+	movl	16(%eax), %edi
+	movl	20(%eax), %ebp
 
 	/* load VMCB */
-	movl	64(%eax), %eax
-	SVM_VMLOAD
+	movl	24(%eax), %eax
+	vmload
 
 	/* switch to the guest */
-	SVM_VMRUN
+	vmrun
 
 	/* when returning from the guest... */
-	SVM_VMSAVE
+	vmsave
 
 	/* save guest registers */
 	movl	28(%esp), %eax
 	movl	%ebx, (%eax)
-	movl	%ecx, 8(%eax)
-	movl	%edx, 16(%eax)
-	movl	%esi, 24(%eax)
-	movl	%edi, 32(%eax)
-	movl	%ebp, 40(%eax)
-
-	/* get exit TSC and store it in svm->exit_tsc */
-	movl	%eax, %ebx
-	/*
-	 * XXX: it prefers to use rdtscp other than rdtsc, because the former is
-	 *      a serializing instruction while the latter is not. When rdtscp
-	 *      is not available on some processors, try to prefix rdtsc with
-	 *      lfence.
-	 * XXX: since rdtsc is not a serializing instruction, thus rdtsc is
-	 *      possilbe to execute before previous instructions. In this case,
-	 *      it's possible to get more precise time. However, it's either
-	 *      possible to executre after subsequent instructions and
-	 *      consequently get less precise time. So it might be a crazy idea
-	 *      to use rdtsc here.
-	 * TODO: move rdtscp as close to vmrun as possible in order to get more
-	 *       precise time.
-	 */
-	rdtscp
-	movl	%eax, 56(%ebx)
-	movl	%edx, 60(%ebx)
-	movl	%ebx, %eax
+	movl	%ecx, 4(%eax)
+	movl	%edx, 8(%eax)
+	movl	%esi, 12(%eax)
+	movl	%edi, 16(%eax)
+	movl	%ebp, 20(%eax)
 
 	/* restore host registers */
 	popl	%ebp

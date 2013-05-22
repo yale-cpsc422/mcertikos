@@ -33,8 +33,9 @@ struct pcpu {
 	struct kstack	*kstack;	/* bootstrap kernel stack */
 	struct pcpuinfo	arch_info;	/* arch-dependent information */
 	trap_cb_t	**trap_handler;	/* arrays of trap handlers */
-	struct vm	*vm;
-	bool		vm_inited;	/* is the virtualization initialzied? */
+
+	bool		hvm_inited;	/* is HVM already initialized? */
+	uint8_t		*guest_irq;	/* interrupt causing VMEXIT */
 };
 
 struct pcpu pcpu[MAX_CPU];

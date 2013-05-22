@@ -3,6 +3,7 @@
 
 #include <sys/syscall.h>
 
+#include <debug.h>
 #include <gcc.h>
 #include <proc.h>
 #include <types.h>
@@ -155,265 +156,6 @@ sys_recv(int chid, void *buf, size_t size)
 	return errno;
 }
 
-static gcc_inline vmid_t
-sys_newvm(void)
-{
-	int errno;
-	vmid_t vmid;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_new_vm),
-		       "b" (&vmid)
-		     : "cc", "memory");
-
-	return errno ? -1 : vmid;
-}
-
-static gcc_inline int
-sys_runvm(void)
-{
-	int errno;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_run_vm)
-		     : "cc", "memory");
-
-	return errno;
-}
-
-static gcc_inline vid_t
-sys_attach_vdev(pid_t pid, chid_t in_chid, chid_t out_chid)
-{
-	int errno;
-	vid_t vid;
-	struct user_vdev user_vdev = { .in_chid = in_chid, .out_chid = out_chid };
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_attach_vdev),
-		       "b" (pid),
-		       "c" (&vid),
-		       "d" (&user_vdev)
-		     : "cc", "memory");
-
-	return errno ? -1 : vid;
-}
-
-static gcc_inline int
-sys_detach_vdev(vid_t vid)
-{
-	int errno;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_detach_vdev),
-		       "b" (vid)
-		     : "cc", "memory");
-
-	return errno;
-}
-
-static gcc_inline int
-sys_attach_port(uint16_t port, data_sz_t width)
-{
-	int errno;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_attach_port),
-		       "b" (port),
-		       "c" (width)
-		     : "cc", "memory");
-
-	return errno;
-}
-
-static gcc_inline int
-sys_detach_port(uint16_t port, data_sz_t width)
-{
-	int errno;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_detach_port),
-		       "b" (port),
-		       "c" (width)
-		     : "cc", "memory");
-
-	return errno;
-}
-
-static gcc_inline int
-sys_attach_irq(uint8_t irq)
-{
-	int errno;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_attach_irq),
-		       "b" (irq)
-		     : "cc", "memory");
-
-	return errno;
-}
-
-static gcc_inline int
-sys_detach_irq(uint8_t irq)
-{
-	int errno;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_detach_irq),
-		       "b" (irq)
-		     : "cc", "memory");
-
-	return errno;
-}
-
-static gcc_inline uint32_t
-sys_host_in(uint16_t port, data_sz_t width)
-{
-	int errno;
-	uint32_t val;
-	struct user_ioport portinfo = { .port = port, .width = width };
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_host_in),
-		       "b" (&portinfo),
-		       "c" (&val)
-		     : "cc", "memory");
-
-	return errno ? 0xffffffff : val;
-}
-
-static gcc_inline int
-sys_host_out(uint16_t port, data_sz_t width, uint32_t val)
-{
-	int errno;
-	struct user_ioport portinfo = { .port = port, .width = width };
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_host_out),
-		       "b" (&portinfo),
-		       "c" (val)
-		     : "cc", "memory");
-
-	return errno;
-}
-
-static gcc_inline int
-sys_set_irq(uint8_t irq, int mode)
-{
-	int errno;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_set_irq),
-		       "b" (irq),
-		       "c" (mode)
-		     : "cc", "memory");
-
-	return errno;
-}
-
-static gcc_inline int
-sys_copy_from_guest(void *dest, uintptr_t src_gpa, size_t sz)
-{
-	int errno;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_guest_read),
-		       "b" (src_gpa),
-		       "c" ((uintptr_t) dest),
-		       "d" (sz)
-		     : "cc", "memory");
-
-	return errno;
-}
-
-static gcc_inline int
-sys_copy_to_guest(uintptr_t dest_gpa, void *src, size_t sz)
-{
-	int errno;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_guest_write),
-		       "b" (dest_gpa),
-		       "c" ((uintptr_t) src),
-		       "d" (sz)
-		     : "cc", "memory");
-
-	return errno;
-}
-
-static gcc_inline uint64_t
-sys_guest_tsc(void)
-{
-	int errno;
-	uint64_t tsc;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_guest_tsc),
-		       "b" (&tsc)
-		     : "cc", "memory");
-
-	return errno ? 0 : tsc;
-}
-
-static gcc_inline uint64_t
-sys_guest_cpufreq(void)
-{
-	int errno;
-	uint64_t freq;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_guest_cpufreq),
-		       "b" (&freq)
-		     : "cc", "memory");
-
-	return errno ? 0 : freq;
-}
-
-static gcc_inline size_t
-sys_guest_memsize(void)
-{
-	int errno;
-	size_t size;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_guest_memsize),
-		       "b" (&size)
-		     : "cc", "memory");
-
-	return errno ? 0 : size;
-}
-
 static gcc_inline int
 sys_disk_read(uint32_t nr, uint64_t lba, uint64_t nsectors, void *buf)
 {
@@ -500,6 +242,324 @@ sys_grant(chid_t chid, pid_t pid, uint8_t perm)
 		       "b" (chid),
 		       "c" (pid),
 		       "d" (perm)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_sysinfo_lookup(sysinfo_name_t name, sysinfo_info_t *info)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_sysinfo_lookup),
+		       "b" (name),
+		       "c" (info)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_hvm_create_vm(void)
+{
+	int errno, vmid;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_create_vm),
+		       "b" (&vmid)
+		     : "cc", "memory");
+
+	return errno ? -1 : vmid;
+}
+
+static gcc_inline int
+sys_hvm_run_vm(int vmid, exit_reason_t *reason, exit_info_t *info)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_run_vm),
+		       "b" (vmid),
+		       "c" (reason),
+		       "d" (info)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_hvm_set_mmap(int vmid, uintptr_t gpa, uintptr_t hva, int type)
+{
+	int errno;
+	struct user_hvm_mmap hvm_mmap = { .gpa = gpa, .hva = hva, .type = type};
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_set_mmap),
+		       "b" (vmid),
+		       "c" (&hvm_mmap)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_hvm_set_reg(int vmid, guest_reg_t reg, uint32_t val)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_set_reg),
+		       "b" (vmid),
+		       "c" (reg),
+		       "d" (val)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_hvm_get_reg(int vmid, guest_reg_t reg, uint32_t *val)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_get_reg),
+		       "b" (vmid),
+		       "c" (reg),
+		       "d" (val)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_hvm_set_desc(int vmid, guest_seg_t seg, struct guest_seg_desc *desc)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_set_desc),
+		       "b" (vmid),
+		       "c" (seg),
+		       "d" (desc)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_hvm_get_desc(int vmid, guest_seg_t seg, struct guest_seg_desc *desc)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_get_desc),
+		       "b" (vmid),
+		       "c" (seg),
+		       "d" (desc)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_hvm_get_next_eip(int vmid, guest_instr_t instr, uint32_t *eip)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_get_next_eip),
+		       "b" (vmid),
+		       "c" (instr),
+		       "d" (eip)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_hvm_inject_event(int vmid, guest_event_t type,
+		     uint8_t vector, uint32_t errcode, bool ev)
+{
+	int errno;
+	struct user_hvm_event event = { .type = type, .vector = vector,
+					.errcode = errcode, .ev = ev };
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_inject_event),
+		       "b" (vmid),
+		       "c" (&event)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_hvm_pending_event(int vmid)
+{
+	int errno, result;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_pending_event),
+		       "b" (vmid),
+		       "c" (&result)
+		     : "cc", "memory");
+
+	return errno ? -1 : result;
+}
+
+static gcc_inline int
+sys_hvm_intr_shadow(int vmid)
+{
+	int errno, result;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_intr_shadow),
+		       "b" (vmid),
+		       "c" (&result)
+		     : "cc", "memory");
+
+	return errno ? -1 : result;
+}
+
+static gcc_inline int
+sys_hvm_intercept_ioport(int vmid, uint16_t port, bool enable)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_intercept_ioport),
+		       "b" (vmid),
+		       "c" (port),
+		       "d" (enable)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_hvm_intercept_msr(int vmid, uint32_t msr, bool enable)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_intercept_msr),
+		       "b" (vmid),
+		       "c" (msr),
+		       "d" (enable)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_hvm_intercept_intr_window(int vmid, bool enable)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_intercept_intr_window),
+		       "b" (vmid),
+		       "c" (enable)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_hvm_mmap_bios(int vmid, uintptr_t la)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_mmap_bios),
+		       "b" (vmid),
+		       "c" (la)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_hvm_get_irq(int vmid)
+{
+	int errno;
+	uint8_t irq;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_get_irq),
+		       "b" (vmid),
+		       "c" (&irq)
+		     : "cc", "memory");
+
+	return errno ? -1 : irq;
+}
+
+static gcc_inline int
+sys_read_ioport(uint16_t port, data_sz_t width, void *val)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_read_ioport),
+		       "b" (port),
+		       "c" (width),
+		       "d" (val)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_write_ioport(uint16_t port, data_sz_t width, uint32_t val)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_write_ioport),
+		       "b" (port),
+		       "c" (width),
+		       "d" (val)
 		     : "cc", "memory");
 
 	return errno;

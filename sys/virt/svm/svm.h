@@ -3,20 +3,8 @@
 
 #ifdef _KERN_
 
-#ifdef __ASSEMBLER__
-
-#define SVM_VMRUN		.byte 0x0F,0x01,0xD8
-#define SVM_VMLOAD		.byte 0x0F,0x01,0xDA
-#define SVM_VMSAVE		.byte 0x0F,0x01,0xDB
-#define SVM_STGI		.byte 0x0F,0x01,0xDC
-#define SVM_CLGI		.byte 0x0F,0x01,0xDD
-
-#else /* !__ASSEMBLER__ */
-
 #include <sys/gcc.h>
 #include <sys/types.h>
-
-#include <sys/virt/vmm.h>
 
 enum {
 	INTERCEPT_INTR,
@@ -392,35 +380,10 @@ struct svm {
 	 * VMCB does not store following registers for guest, so we have
 	 * to do that by ourself.
 	 */
-	uint64_t	g_rbx, g_rcx, g_rdx, g_rsi, g_rdi, g_rbp;
-	uint64_t	enter_tsc;
-	uint64_t	exit_tsc;
-
+	uint32_t	g_rbx, g_rcx, g_rdx, g_rsi, g_rdi, g_rbp;
 	struct vmcb	*vmcb;		/* VMCB */
-
-	bool		single_step;
-	int		skip_intercept;
-	int		pending_vintr;
-
-	uint16_t	h_fs, h_gs, h_ldt;
-};
-
-#ifdef DEBUG_SVM
-
-#define SVM_DEBUG(fmt, ...)				\
-	do {						\
-		KERN_DEBUG("SVM: "fmt, ##__VA_ARGS__);	\
-	} while (0)
-
-#else
-
-#define SVM_DEBUG(fmt, ...)			\
-	do {					\
-	} while (0)
-
-#endif
-
-#endif /* !__ASSEMBLER__ */
+	int		inuse;
+} gcc_packed;
 
 #endif /* _KERN_ */
 

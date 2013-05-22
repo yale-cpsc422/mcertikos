@@ -18,6 +18,7 @@
 #error "This is a kernel header file; do not include it in userspace programs."
 #endif
 
+#include <sys/context.h>
 #include <sys/types.h>
 
 #define COM1		0x3F8
@@ -51,5 +52,6 @@ void serial_init(void);
 void serial_putc(char c);
 void serial_intenable(void);
 void serial_intr(void); // irq 4
+int serial_intr_handler(uint8_t trapno, struct context *);
 
 #endif /* !_KERN_DEV_SERIAL_H_ */

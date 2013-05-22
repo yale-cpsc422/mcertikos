@@ -202,7 +202,7 @@ disk_xfer(struct disk_dev *dev, uint64_t lba, uintptr_t pa, uint16_t nsect,
 }
 
 static int
-disk_intr_handler(uint8_t trapno, struct context *ctx, int guest)
+disk_intr_handler(uint8_t trapno, struct context *ctx)
 {
 	KERN_ASSERT(disk_mgmt_inited == TRUE);
 
@@ -210,9 +210,6 @@ disk_intr_handler(uint8_t trapno, struct context *ctx, int guest)
 	struct disk_dev *dev;
 
 	intr_eoi();
-
-	if (guest)
-		vmm_cur_vm()->exit_handled = TRUE;
 
 	spinlock_acquire(&disk_mgmt_lock);
 

@@ -6,8 +6,6 @@
 #include <sys/types.h>
 #include <sys/x86.h>
 
-#include <sys/virt/vmm.h>
-
 static spinlock_t debug_lk;
 
 void
