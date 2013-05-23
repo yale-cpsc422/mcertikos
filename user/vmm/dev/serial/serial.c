@@ -48,7 +48,7 @@ vserial_write_ioport(void *dev, uint16_t port, data_sz_t width, uint32_t val)
 {
 	if (!(0x3f8 <= port && port <= 0x3ff))
 		return -1;
-	return sys_write_ioport(port, width, (uint8_t) val);
+	return sys_write_ioport(port, width, val);
 }
 
 static int
