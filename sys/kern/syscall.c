@@ -53,7 +53,6 @@ static char *syscall_name[MAX_SYSCALL_NR] =
 		[SYS_hvm_intercept_msr]	= "sys_hvm_intercept_msr",
 		[SYS_hvm_intercept_intr_window] = "sys_hvm_intercept_intr_window",
 		[SYS_hvm_mmap_bios]	= "sys_hvm_mmap_bios",
-		[SYS_hvm_get_irq]	= "sys_hvm_get_irq",
 		[SYS_read_ioport]	= "sys_read_ioport",
 		[SYS_write_ioport]	= "sys_write_ioport",
 	};
@@ -906,24 +905,6 @@ sys_hvm_mmap_bios(int vmid, uintptr_t bios_la)
 }
 
 static int
-sys_hvm_get_irq(int vmid, uintptr_t irq_la)
-{
-	struct vm *vm = hvm_get_vm(vmid);
-
-	if (vm == NULL)
-		return E_INVAL_VMID;
-
-	if (!(VM_USERLO <= irq_la && irq_la + sizeof(uint8_t) <= VM_USERHI))
-		return E_INVAL_ADDR;
-
-	if (copy_to_user(proc_cur()->pmap, irq_la, (uintptr_t) &vm->guest_irq,
-			 sizeof(uint8_t)) != sizeof(uint8_t))
-		return E_MEM;
-
-	return E_SUCC;
-}
-
-static int
 sys_read_ioport(uint16_t port, data_sz_t width, uintptr_t data_la)
 {
 	uint32_t data;
@@ -1263,16 +1244,6 @@ syscall_handler(uint8_t trapno, struct context *ctx)
 		break;
 	case SYS_hvm_mmap_bios:
 		errno = sys_hvm_mmap_bios((int) a[0], (uintptr_t) a[1]);
-		break;
-	case SYS_hvm_get_irq:
-		/*
-		 * Get the interrupt number of the last VMEXIT caused by
-		 * interrupts.
-		 * a[0]: the virtual machine descriptor
-		 * a[1]: the linear address where the interrupt number is
-		 *       returned to
-		 */
-		errno = sys_hvm_get_irq((int) a[0], (uintptr_t) a[1]);
 		break;
 	case SYS_read_ioport:
 		/*

@@ -134,11 +134,6 @@ hvm_run_vm(struct vm *vm)
 	/* restore TSS */
 	kstack_switch(proc_cur()->kstack);
 
-	if (vm->exit_reason == EXIT_REASON_EXTINT) {
-		KERN_ASSERT(pcpu_cur()->guest_irq == NULL);
-		pcpu_cur()->guest_irq = &vm->guest_irq;
-	}
-
 	return 0;
 }
 

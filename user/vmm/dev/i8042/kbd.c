@@ -470,13 +470,11 @@ vkbd_reset(struct vkbd *vkbd)
 }
 
 static int
-vkbd_sync_kbd(void *opaque, uint8_t irq)
+vkbd_update_kbd(void *opaque)
 {
 	struct vkbd *vkbd = (struct vkbd *) opaque;
 
 	uint8_t status, c;
-
-	DEBUG("vkbd_sync_kbd()\n");
 
 	/* synchronize the state of physical i8042 to virtualized i8042 */
 	while (1) {
@@ -511,7 +509,7 @@ vkbd_init(struct vdev *vdev, void *opaque)
 				 _vkbd_ioport_read, _vkbd_ioport_write) ||
 	    vdev_register_ioport(vdev, opaque, KBDATAP,
 				 _vkbd_ioport_read, _vkbd_ioport_write) ||
-	    vdev_register_irq(vdev, opaque, IRQ_KBD, vkbd_sync_kbd))
+	    vdev_register_update(vdev, opaque, vkbd_update_kbd))
 		return -2;
 
 	return 0;

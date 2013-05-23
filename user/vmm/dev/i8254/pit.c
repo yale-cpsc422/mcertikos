@@ -842,7 +842,7 @@ vpit_channel_update(struct vpit_channel *ch, uint64_t current_time)
 }
 
 static int
-vpit_update(void *opaque, uint8_t irq)
+vpit_update(void *opaque)
 {
 	struct vpit *vpit = (struct vpit *) opaque;
 	uint64_t tsc = vdev_guest_tsc(vpit->vdev);
@@ -904,7 +904,7 @@ vpit_init(struct vdev *vdev, void *opaque, uint64_t cpufreq)
 				 _vpit_ioport_read, _vpit_ioport_write) ||
 	    vdev_register_ioport(vdev, opaque, PIT_GATE_PORT,
 				 _vpit_ioport_read, _vpit_ioport_write) ||
-	    vdev_register_irq(vdev, opaque, IRQ_TIMER, vpit_update))
+	    vdev_register_update(vdev, opaque, vpit_update))
 		return -2;
 
 	return 0;

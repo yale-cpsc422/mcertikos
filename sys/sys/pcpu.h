@@ -35,7 +35,6 @@ struct pcpu {
 	trap_cb_t	**trap_handler;	/* arrays of trap handlers */
 
 	bool		hvm_inited;	/* is HVM already initialized? */
-	uint8_t		*guest_irq;	/* interrupt causing VMEXIT */
 };
 
 struct pcpu pcpu[MAX_CPU];

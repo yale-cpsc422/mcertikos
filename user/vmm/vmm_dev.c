@@ -50,31 +50,42 @@ vdev_unregister_ioport(struct vdev *vdev, void *dev, uint16_t port)
 }
 
 int
-vdev_register_irq(struct vdev *vdev, void *dev, uint8_t irq, sync_func_t f)
+vdev_register_update(struct vdev *vdev, void *dev, update_func_t f)
 {
-	if (vdev == NULL || dev == NULL)
+	int idx;
+
+	if (vdev == NULL || dev == NULL || f == NULL)
 		return -1;
 
-	if (vdev->irq[irq].dev != NULL)
+	for (idx = 0; idx < MAX_VDEV; idx++)
+		if (vdev->update[idx].dev == NULL)
+			break;
+
+	if (idx == MAX_VDEV)
 		return -2;
 
-	vdev->irq[irq].dev = dev;
-	vdev->irq[irq].sync = f;
+	vdev->update[idx].dev = dev;
+	vdev->update[idx].update = f;
 
 	return 0;
 }
 
 int
-vdev_unregister_irq(struct vdev *vdev, void *dev, uint8_t irq)
+vdev_unregister_update(struct vdev *vdev, void *dev)
 {
+	int idx;
+
 	if (vdev == NULL || dev == NULL)
 		return -1;
 
-	if (vdev->irq[irq].dev != dev)
+	for (idx = 0; idx < MAX_VDEV; idx++)
+		if (vdev->update[idx].dev == dev)
+			break;
+
+	if (idx == MAX_VDEV)
 		return -2;
 
-	vdev->irq[irq].dev = NULL;
-	vdev->irq[irq].sync = NULL;
+	vdev->update[idx].dev = NULL;
 
 	return 0;
 }
@@ -198,17 +209,15 @@ vdev_guest_tsc(struct vdev *vdev)
 	return vdev->vm->tsc;
 }
 
-int
-vdev_handle_intr(struct vdev *vdev, uint8_t irq)
+void
+vdev_update_devices(struct vdev *vdev)
 {
+	int idx;
+
 	if (vdev == NULL)
-		return -1;
+		return;
 
-	/* ignore all registered interrupts */
-	if (vdev->irq[irq].dev == NULL || vdev->irq[irq].sync == NULL) {
-		/* DEBUG("Ignore unregistered IRQ %d.\n", irq); */
-		return 0;
-	}
-
-	return vdev->irq[irq].sync(vdev->irq[irq].dev, irq);
+	for (idx = 0; idx < MAX_VDEV; idx++)
+		if (vdev->update[idx].dev && vdev->update[idx].update)
+			vdev->update[idx].update(vdev->update[idx].dev);
 }

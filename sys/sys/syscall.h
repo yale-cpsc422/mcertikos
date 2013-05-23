@@ -56,7 +56,6 @@ enum __syscall_nr {
 	SYS_hvm_intercept_msr,
 	SYS_hvm_intercept_intr_window,
 	SYS_hvm_mmap_bios,
-	SYS_hvm_get_irq,
 	/* XXX: should be removed in the future */
 	SYS_read_ioport,
 	SYS_write_ioport,

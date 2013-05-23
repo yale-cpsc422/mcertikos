@@ -515,23 +515,6 @@ sys_hvm_mmap_bios(int vmid, uintptr_t la)
 }
 
 static gcc_inline int
-sys_hvm_get_irq(int vmid)
-{
-	int errno;
-	uint8_t irq;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_hvm_get_irq),
-		       "b" (vmid),
-		       "c" (&irq)
-		     : "cc", "memory");
-
-	return errno ? -1 : irq;
-}
-
-static gcc_inline int
 sys_read_ioport(uint16_t port, data_sz_t width, void *val)
 {
 	int errno;

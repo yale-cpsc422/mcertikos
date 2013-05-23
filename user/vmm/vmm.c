@@ -83,13 +83,6 @@ vmm_update_guest_tsc(struct vm *vm, uint64_t last_h_tsc, uint64_t cur_h_tsc,
 }
 
 static int
-vmm_handle_extint(struct vm *vm)
-{
-	ASSERT(vm != NULL);
-	return vdev_handle_intr(&vm->vdev, sys_hvm_get_irq(vm->vmid));
-}
-
-static int
 vmm_handle_ioport(struct vm *vm)
 {
 	ASSERT(vm != NULL);
@@ -328,7 +321,7 @@ vmm_handle_exit(struct vm *vm)
 #if defined (DEBUG_VMEXIT) || defined (DEBUG_GUEST_INTR)
 		DEBUG("VMEXIT for external interrupt.\n");
 #endif
-		rc = vmm_handle_extint(vm);
+		rc = 0;
 		break;
 
 	case EXIT_REASON_INTWIN:
@@ -612,6 +605,8 @@ vmm_run_vm(struct vm *vm)
 		vmm_update_guest_tsc(vm, start_tsc, exit_tsc, host_cpu_freq);
 
 		injected = vmm_intr_assist(vm);
+
+		vdev_update_devices(&vm->vdev);
 
 		/* handle other types of the VM exits */
 		if (vmm_handle_exit(vm)) {

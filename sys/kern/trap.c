@@ -45,12 +45,6 @@ trap(tf_t *tf)
 	proc_save(cur_p, tf);
 	pmap_install(pmap_kern);
 
-	if (cur_c->guest_irq != NULL) {
-		KERN_ASSERT(tf->trapno >= T_IRQ0);
-		*cur_c->guest_irq = tf->trapno - T_IRQ0;
-		cur_c->guest_irq = NULL;
-	}
-
 	f = (*cur_c->trap_handler)[tf->trapno];
 
 	if (f)
@@ -195,7 +189,7 @@ int
 kbd_intr_handler(uint8_t trapno, struct context *ctx)
 {
 	intr_eoi();
-	kbd_intr();
+	/* kbd_intr(); */
 	return 0;
 }
 
