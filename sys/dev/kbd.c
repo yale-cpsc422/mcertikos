@@ -1,346 +1,163 @@
-#include <sys/console.h>
 #include <sys/debug.h>
-#include <sys/intr.h>
 #include <sys/types.h>
 #include <sys/x86.h>
 
-#include <machine/trap.h>
-
+#include <dev/cons_kbd.h>
 #include <dev/kbd.h>
-#include <dev/ioapic.h>
-#include <dev/lapic.h>
-#include <dev/pic.h>
 
-#define NO		0
+/* i8042 ports */
+#define KBSTATP		0x64
+# define KBS_DIB	0x01
+#define KBCMDP		0x64
+#define KBDATAP		0x60
+#define KBOUTP		0x60
 
-#define SHIFT		(1<<0)
-#define CTL		(1<<1)
-#define ALT		(1<<2)
-#define CAPSLOCK	(1<<3)
-#define NUMLOCK		(1<<4)
-#define SCROLLLOCK	(1<<5)
-#define E0ESC		(1<<6)
+/* shifts */
+#define E0ESC		(1 << 0)
+#define SHIFT		(1 << 1)
+#define ALT		(1 << 2)
+#define CTRL		(1 << 3)
+#define WIN		(1 << 4)
+#define CAPSLOCK	(1 << 5)
+#define SCROLLLOCK	(1 << 6)
+#define NUMLOCK		(1 << 7)
 
+static volatile int shift;
 
-static uint8_t shiftcode[256] =
-{
-	[0x1D] = CTL,
-	[0x2A] = SHIFT,
+static const uint8_t normalmap[256] = {
+	KEY_NOP,					/* 0x00 */
+	KEY_ESC,					/* 0x01 */
+	KEY_1, KEY_2, KEY_3, KEY_4, KEY_5,		/* 0x02 ~ 0x06 */
+	KEY_6, KEY_7, KEY_8, KEY_9, KEY_0,		/* 0x07 ~ 0x0b */
+	KEY_MINUS, KEY_PLUS, KEY_BACKSPACE,		/* 0x0c ~ 0x0e */
+	KEY_TAB,					/* 0x0f */
+	KEY_Q, KEY_W, KEY_E, KEY_R, KEY_T, KEY_Y,	/* 0x10 ~ 0x15 */
+	KEY_U, KEY_I, KEY_O, KEY_P,			/* 0x16 ~ 0x19 */
+	KEY_L_BRACK, KEY_R_BRACK,			/* 0x1a ~ 0x1b */
+	KEY_ENTER,					/* 0x1c */
+	KEY_L_CTRL,					/* 0x1d */
+	KEY_A, KEY_S, KEY_D, KEY_F, KEY_G, KEY_H,	/* 0x1e ~ 0x23 */
+	KEY_J, KEY_K, KEY_L,				/* 0x24 ~ 0x26 */
+	KEY_SEMICOLON, KEY_QUOTE,			/* 0x27 ~ 0x28 */
+	KEY_TIDE,					/* 0x29 */
+	KEY_L_SHIFT,					/* 0x2a */
+	KEY_BACKSLASH,					/* 0x2b */
+	KEY_Z, KEY_X, KEY_C, KEY_V, KEY_B, KEY_N, KEY_M,/* 0x2c ~ 0x32 */
+	KEY_COMMA, KEY_DOT, KEY_SLASH, KEY_R_SHIFT,	/* 0x33 ~ 0x36 */
+	KEY_KP_MULT,					/* 0x37 */
+	KEY_L_ALT, KEY_SPACE, KEY_CAPSLOCK,		/* 0x38 ~ 0x3a */
+	KEY_F1, KEY_F2, KEY_F3, KEY_F4, KEY_F5, KEY_F6,	/* 0x3b ~ 0x40 */
+	KEY_F7, KEY_F8, KEY_F9, KEY_F10,		/* 0x41 ~ 0x44 */
+	KEY_NUMLOCK, KEY_SCROLLLOCK,			/* 0x45 ~ 0x46 */
+	KEY_KP_7, KEY_KP_8, KEY_KP_9,			/* 0x47 ~ 0x49 */
+	KEY_KP_MINUS,					/* 0x4a */
+	KEY_KP_4, KEY_KP_5, KEY_KP_6, KEY_KP_PLUS,	/* 0x4b ~ 0x4e */
+	KEY_KP_1, KEY_KP_2, KEY_KP_3,			/* 0x4f ~ 0x51 */
+	KEY_KP_0, KEY_KP_DOT,				/* 0x52 ~ 0x53 */
+	[0x57] = KEY_F11, [0x58] = KEY_F12,
+};
+
+static const uint8_t escapedmap[256] = {
+	[0x1c] = KEY_KP_ENTER,
+	[0x1d] = KEY_R_CTRL,
+	[0x2a] = KEY_NOP,
+	[0x35] = KEY_KP_DIV,
+	[0x36] = KEY_NOP,
+	[0x37] = KEY_NOP,
+	[0x38] = KEY_R_ALT,
+	[0x46] = KEY_NOP,
+	[0x47] = KEY_HOME,
+	[0x48] = KEY_UP,
+	[0x49] = KEY_PAGEUP,
+	[0x4b] = KEY_LEFT,
+	[0x4d] = KEY_RIGHT,
+	[0x4f] = KEY_END,
+	[0x50] = KEY_DOWN,
+	[0x51] = KEY_PAGEDOWN,
+	[0x52] = KEY_INSERT,
+	[0x53] = KEY_DELETE,
+	[0x5b] = KEY_L_WIN,
+	[0x3c] = KEY_R_WIN,
+	[0x5d] = KEY_MENU,
+};
+
+static const uint8_t shiftcode[256] = {
+	[0x1d] = CTRL,
+	[0x2a] = SHIFT,
 	[0x36] = SHIFT,
 	[0x38] = ALT,
-	[0x9D] = CTL,
-	[0xB8] = ALT
 };
 
-static uint8_t togglecode[256] =
+static const uint8_t togglecode[256] =
 {
-	[0x3A] = CAPSLOCK,
+	[0x3a] = CAPSLOCK,
 	[0x45] = NUMLOCK,
-	[0x46] = SCROLLLOCK
+	[0x46] = SCROLLLOCK,
 };
-
-static uint8_t normalmap[256] =
-{
-	NO,   0x1B, '1',  '2',  '3',  '4',  '5',  '6',	// 0x00
-	'7',  '8',  '9',  '0',  '-',  '=',  '\b', '\t',
-	'q',  'w',  'e',  'r',  't',  'y',  'u',  'i',	// 0x10
-	'o',  'p',  '[',  ']',  '\n', NO,   'a',  's',
-	'd',  'f',  'g',  'h',  'j',  'k',  'l',  ';',	// 0x20
-	'\'', '`',  NO,   '\\', 'z',  'x',  'c',  'v',
-	'b',  'n',  'm',  ',',  '.',  '/',  NO,   '*',	// 0x30
-	NO,   ' ',  NO,   NO,   NO,   NO,   NO,   NO,
-	NO,   NO,   NO,   NO,   NO,   NO,   NO,   '7',	// 0x40
-	'8',  '9',  '-',  '4',  '5',  '6',  '+',  '1',
-	'2',  '3',  '0',  '.',  NO,   NO,   NO,   NO,	// 0x50
-	[0xC7] = KEY_HOME,	[0x9C] = '\n' /*KP_Enter*/,
-	[0xB5] = '/' /*KP_Div*/,[0xC8] = KEY_UP,
-	[0xC9] = KEY_PGUP,	[0xCB] = KEY_LF,
-	[0xCD] = KEY_RT,	[0xCF] = KEY_END,
-	[0xD0] = KEY_DN,	[0xD1] = KEY_PGDN,
-	[0xD2] = KEY_INS,	[0xD3] = KEY_DEL
-};
-
-static uint8_t shiftmap[256] =
-{
-	NO,   033,  '!',  '@',  '#',  '$',  '%',  '^',	// 0x00
-	'&',  '*',  '(',  ')',  '_',  '+',  '\b', '\t',
-	'Q',  'W',  'E',  'R',  'T',  'Y',  'U',  'I',	// 0x10
-	'O',  'P',  '{',  '}',  '\n', NO,   'A',  'S',
-	'D',  'F',  'G',  'H',  'J',  'K',  'L',  ':',	// 0x20
-	'"',  '~',  NO,   '|',  'Z',  'X',  'C',  'V',
-	'B',  'N',  'M',  '<',  '>',  '?',  NO,   '*',	// 0x30
-	NO,   ' ',  NO,   NO,   NO,   NO,   NO,   NO,
-	NO,   NO,   NO,   NO,   NO,   NO,   NO,   '7',	// 0x40
-	'8',  '9',  '-',  '4',  '5',  '6',  '+',  '1',
-	'2',  '3',  '0',  '.',  NO,   NO,   NO,   NO,	// 0x50
-	[0xC7] = KEY_HOME,	[0x9C] = '\n' /*KP_Enter*/,
-	[0xB5] = '/' /*KP_Div*/,[0xC8] = KEY_UP,
-	[0xC9] = KEY_PGUP,	[0xCB] = KEY_LF,
-	[0xCD] = KEY_RT,	[0xCF] = KEY_END,
-	[0xD0] = KEY_DN,	[0xD1] = KEY_PGDN,
-	[0xD2] = KEY_INS,	[0xD3] = KEY_DEL
-};
-
-#define C(x) (x - '@')
-
-static uint8_t ctlmap[256] =
-{
-	NO,      NO,      NO,      NO,      NO,      NO,      NO,      NO,
-	NO,      NO,      NO,      NO,      NO,      NO,      NO,      NO,
-	C('Q'),  C('W'),  C('E'),  C('R'),  C('T'),  C('Y'),  C('U'),  C('I'),
-	C('O'),  C('P'),  NO,      NO,      '\r',    NO,      C('A'),  C('S'),
-	C('D'),  C('F'),  C('G'),  C('H'),  C('J'),  C('K'),  C('L'),  NO,
-	NO,      NO,      NO,      C('\\'), C('Z'),  C('X'),  C('C'),  C('V'),
-	C('B'),  C('N'),  C('M'),  NO,      NO,      C('/'),  NO,      NO,
-	[0x97] = KEY_HOME,
-	[0xB5] = C('/'),	[0xC8] = KEY_UP,
-	[0xC9] = KEY_PGUP,	[0xCB] = KEY_LF,
-	[0xCD] = KEY_RT,	[0xCF] = KEY_END,
-	[0xD0] = KEY_DN,	[0xD1] = KEY_PGDN,
-	[0xD2] = KEY_INS,	[0xD3] = KEY_DEL
-};
-
-static uint8_t *charcode[4] = {
-	normalmap,
-	shiftmap,
-	ctlmap,
-	ctlmap
-};
-
-/*
- * Get data from the keyboard.  If we finish a character, return it.  Else 0.
- * Return -1 if no data.
- */
-static int
-kbd_proc_data(void)
-{
-	int c;
-	uint8_t data;
-	static uint32_t shift;
-
-	if ((inb(KBSTATP) & KBS_DIB) == 0)
-		return -1;
-
-	data = inb(KBDATAP);
-
-	if (data == 0xE0) {
-		// E0 escape character
-		shift |= E0ESC;
-		return 0;
-	} else if (data & 0x80) {
-		// Key released
-		data = (shift & E0ESC ? data : data & 0x7F);
-		shift &= ~(shiftcode[data] | E0ESC);
-		return 0;
-	} else if (shift & E0ESC) {
-		// Last character was an E0 escape; or with 0x80
-		data |= 0x80;
-		shift &= ~E0ESC;
-	}
-
-	shift |= shiftcode[data];
-	shift ^= togglecode[data];
-
-	c = charcode[shift & (CTL | SHIFT)][data];
-	if (shift & CAPSLOCK) {
-		if ('a' <= c && c <= 'z')
-			c += 'A' - 'a';
-		else if ('A' <= c && c <= 'Z')
-			c += 'a' - 'A';
-	}
-
-	// Process special keys
-#if LAB >= 99
-#if CRT_SAVEROWS > 0
-	// Shift-PageUp and Shift-PageDown: scroll console
-	if ((shift & SHIFT) && (c == KEY_PGUP || c == KEY_PGDN)) {
-		cga_scroll(c == KEY_PGUP ? -CRT_ROWS : CRT_ROWS);
-		return 0;
-	}
-#endif
-#endif
-	// Ctrl-Alt-Del: reboot
-	if (!(~shift & (CTL | ALT)) && c == KEY_DEL) {
-		cprintf("Rebooting!\n");
-		outb(0x92, 0x3); // courtesy of Chris Frost
-	}
-
-	return c;
-}
-
-void
-kbd_intr(void)
-{
-	cons_intr(kbd_proc_data);
-}
-
-static void
-kbd_wait4_input_empty(void)
-{
-	uint8_t status;
-
-	/* KERN_DEBUG("Waiting for ~IBF...\n"); */
-
-	while (1) {
-		status = inb(KBSTATP);
-		if (!(status & KBS_IBF))
-			break;
-	}
-}
-
-static void
-kbd_wait4_output_full(void)
-{
-	uint8_t status;
-
-	/* KERN_DEBUG("Waiting for OBF...\n"); */
-
-	while (1) {
-		status = inb(KBSTATP);
-		if (status & KBS_DIB)
-			break;
-	}
-}
-
-static void
-kbd_disable(void)
-{
-	kbd_wait4_input_empty();
-	outb(KBCMDP, KBC_KBDDISABLE);
-}
-
-static void
-kbd_send_cmd(uint8_t cmd)
-{
-	kbd_wait4_input_empty();
-	outb(KBCMDP, KBC_RAMWRITE);
-	kbd_wait4_input_empty();
-	/* KERN_DEBUG("Send command %x.\n", cmd); */
-	outb(KBDATAP, cmd);
-}
 
 void
 kbd_init(void)
 {
-/* 	uint8_t status; */
-
-/* 	/\* self-test *\/ */
-/* 	kbd_wait4_input_empty(); */
-/* 	outb(KBCMDP, KBC_SELFTEST); */
-/* 	kbd_wait4_output_full(); */
-/* 	status = inb(KBDATAP); */
-/* 	if (status != 0x55) { */
-/* 		KERN_DEBUG("i8042 self-test failed.\n"); */
-/* 		goto fail; */
-/* 	} */
-/* 	/\* KERN_DEBUG("i8042 self-test is ok.\n"); *\/ */
-
-/* 	/\* keyboard interface test *\/ */
-/* 	kbd_wait4_input_empty(); */
-/* 	outb(KBCMDP, KBC_KBDTEST); */
-/* 	kbd_wait4_output_full(); */
-/* 	status = inb(KBDATAP); */
-/* 	if (status != 0x00) { */
-/* 		KERN_DEBUG("Keyboard interface test failed, code=%x.\n", status); */
-/* 		goto fail; */
-/* 	} */
-/* 	/\* KERN_DEBUG("Keyboard interface test is ok.\n"); *\/ */
-
-/* 	kbd_send_cmd(0x30); */
-/* 	kbd_send_cmd(0x20); */
-
-/* 	/\* reset *\/ */
-/* 	kbd_wait4_input_empty(); */
-/* 	outb(KBDATAP, KBC_RESET); */
-/* 	kbd_wait4_output_full(); */
-/* 	status = inb(KBDATAP); */
-/* 	if (status != KBR_ACK) { */
-/* 		KERN_DEBUG("Keyborad reset failed.\n"); */
-/* 		goto fail; */
-/* 	} */
-/* 	kbd_wait4_output_full(); */
-/* 	status = inb(KBDATAP); */
-/* 	if (status != KBR_RSTDONE) { */
-/* 		KERN_DEBUG("Keyborad reset failed.\n"); */
-/* 		goto fail; */
-/* 	} */
-/* 	/\* KERN_DEBUG("Keyboard reset is ok.\n"); *\/ */
-
-/* 	/\* */
-/* 	 * FIXME: This piece of code does work in Simnow, but works well in QEMU */
-/* 	 *        and BOCHS. */
-/* 	 *\/ */
-/* #if 0 */
-/* 	kbd_send_cmd(0x30); */
-/* 	kbd_send_cmd(0x20); */
-
-/* 	/\* reset keyboard to power-on condition *\/ */
-/* 	kbd_wait4_input_empty(); */
-/* 	outb(KBDATAP, KBC_DISABLE); */
-/* 	kbd_wait4_output_full(); */
-/* 	status = inb(KBDATAP); */
-/* 	if (status != KBR_ACK) { */
-/* 		KERN_DEBUG("Reset keyboard failed.\n"); */
-/* 		goto fail; */
-/* 	} */
-/* 	/\* KERN_DEBUG("Reset keyboard is ok.\n"); *\/ */
-/* #endif */
-
-/* 	kbd_send_cmd(0x30); */
-/* 	kbd_send_cmd(0x20); */
-
-/* 	/\* select to scancode set 2 *\/ */
-/* 	kbd_wait4_input_empty(); */
-/* 	outb(KBDATAP, KBC_SETTABLE); */
-/* 	kbd_wait4_output_full(); */
-/* 	status = inb(KBDATAP); */
-/* 	if (status != KBR_ACK) { */
-/* 		KERN_DEBUG("Select scancode set failed.\n"); */
-/* 		goto fail; */
-/* 	} */
-/* 	kbd_wait4_input_empty(); */
-/* 	outb(KBDATAP, 0x2); */
-/* 	kbd_wait4_output_full(); */
-/* 	status = inb(KBDATAP); */
-/* 	if (status != KBR_ACK) { */
-/* 		KERN_DEBUG("Select scancode set failed.\n"); */
-/* 		goto fail; */
-/* 	} */
-/* 	/\* KERN_DEBUG("Select scanmode is ok.\n"); *\/ */
-
-/* 	/\* set to PC/XT mode *\/ */
-/* 	kbd_send_cmd(0x30); */
-/* 	kbd_send_cmd(0x70); */
-/* 	kbd_send_cmd(0x60); */
-
-/* 	/\* enable KBD *\/ */
-/* 	kbd_wait4_input_empty(); */
-/* 	outb(KBDATAP, KBC_ENABLE); */
-/* 	kbd_wait4_output_full(); */
-/* 	status = inb(KBDATAP); */
-/* 	if (status != KBR_ACK) { */
-/* 		KERN_DEBUG("Enable keyboard failed.\n"); */
-/* 		goto fail; */
-/* 	} */
-/* 	/\* KERN_DEBUG("Enable keyboard is ok.\n"); *\/ */
-
-/* 	kbd_send_cmd(0x61); */
-
-/* 	return; */
-
-/*  fail: */
-/* 	KERN_DEBUG("status=%x.\n", status); */
-/* 	KERN_DEBUG("Disable keyboard.\n"); */
-/* 	kbd_disable(); */
-/* 	return; */
+	shift = 0;
 }
 
-void
-kbd_intenable(void)
+static int
+kbd_read_scancode(uint8_t *scancode)
 {
-	// Enable interrupt delivery via the PIC/APIC
-	intr_enable(IRQ_KBD, 0);
+	if ((inb(KBSTATP) & KBS_DIB) == 0)
+		return -1;
 
-	// Drain the kbd buffer so that the hardware generates interrupts.
-	kbd_intr();
+	*scancode = inb(KBDATAP);
+
+	return 0;
+}
+
+int
+kbd_fill_inbuf(int (*fill)(void *, uint16_t), void *param)
+{
+	uint8_t scancode, data, keycode, kbs;
+
+	while (kbd_read_scancode(&scancode) != -1) {
+		/* KERN_DEBUG("Scancode %02xh\n", scancode); */
+
+		if (scancode == 0xE0) {
+			shift |= E0ESC;
+			continue;
+		}
+
+		if (scancode & 0x80) { /* key released */
+			data = scancode & 0x7f;
+			/* ignore fake shift */
+			if ((shift & E0ESC) && shiftcode[data] == SHIFT) {
+				shift &= ~E0ESC;
+				continue;
+			}
+		} else if (shift & E0ESC) { /* key pressed and after escape */
+			data = scancode;
+			/* ignore fake shift */
+			if (shiftcode[data] == SHIFT) {
+				shift &= ~E0ESC;
+				continue;
+			}
+		} else {
+			data = scancode;
+		}
+
+		if (scancode & 0x80) {
+			shift &= ~shiftcode[data];
+		} else {
+			shift |= shiftcode[data];
+			shift ^= togglecode[data];
+		}
+
+		keycode = (shift & E0ESC) ? escapedmap[data] : normalmap[data];
+		kbs = (shift & 0xfe) | ((scancode & 0x80) ? KBS_RELEASE : 0x0);
+		fill(param, CONS_MAKE_KBDINPUT(kbs, keycode));
+
+		/* KERN_DEBUG("Fill (%02xh, %02xh)\n", kbs, keycode); */
+
+		shift &= ~E0ESC;
+	}
+
+	return 0;
 }

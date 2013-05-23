@@ -1,5 +1,4 @@
 #include <sys/channel.h>
-#include <sys/console.h>
 #include <sys/context.h>
 #include <sys/debug.h>
 #include <sys/intr.h>
@@ -22,6 +21,7 @@
 #include <machine/kstack.h>
 #include <machine/pmap.h>
 
+#include <dev/cons.h>
 #include <dev/disk.h>
 #include <dev/kbd.h>
 #include <dev/lapic.h>
@@ -97,7 +97,7 @@ kern_main(void)
 	KERN_INFO("[BSP KERN] Register interrupt handlers ... ");
 	trap_handler_register(T_IRQ0+IRQ_SPURIOUS, spurious_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_TIMER, timer_intr_handler);
-	trap_handler_register(T_IRQ0+IRQ_KBD, kbd_intr_handler);
+	trap_handler_register(T_IRQ0+IRQ_KBD, cons_kbd_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_SERIAL13, serial_intr_handler);
 	trap_handler_register(T_IPI0+IPI_RESCHED, ipi_resched_handler);
 	disk_register_intr();
@@ -109,7 +109,7 @@ kern_main(void)
 	KERN_INFO("done.\n");
 
 	KERN_INFO("[BSP KERN] Enable KBD interrupt ... ");
-	kbd_intenable();
+	intr_enable(IRQ_KBD, 0);
 	KERN_INFO("done.\n");
 
 	KERN_INFO("[BSP KERN] Enable disk interrupt ... ");

@@ -14,6 +14,7 @@
 #include <sys/virt/hvm.h>
 
 #include <dev/ahci.h>
+#include <dev/cons.h>
 #include <dev/disk.h>
 #include <dev/tsc.h>
 
@@ -183,10 +184,12 @@ static int
 sys_getc(uintptr_t buf_la)
 {
 	struct proc *p = proc_cur();
-	char c;
+	int c;
 
-	c = getchar();
-	if (copy_to_user(p->pmap, buf_la, (uintptr_t) &c, sizeof(char)) == 0)
+	if (cons_getchar(0, &c))
+		c = -1;
+
+	if (copy_to_user(p->pmap, buf_la, (uintptr_t) &c, sizeof(int)) == 0)
 		return E_MEM;
 	else
 		return E_SUCC;

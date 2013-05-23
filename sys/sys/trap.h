@@ -4,7 +4,6 @@
 #ifdef _KERN_
 
 #include <sys/context.h>
-#include <sys/pcpu.h>
 
 #include <machine/trap.h>
 
