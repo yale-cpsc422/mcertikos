@@ -11,6 +11,7 @@
 #include "dev/i8259/pic.h"
 #include "dev/nvram/nvram.h"
 #include "dev/serial/serial.h"
+#include "dev/video/video.h"
 #include "dev/virtio/pci.h"
 #include "dev/virtio/virtio_blk.h"
 
@@ -31,6 +32,7 @@ main(int argc, char **argv)
 	struct virtio_blk blk;
 	struct vpic pic;
 	struct vserial com1;
+	struct vvideo video;
 
 	vm.memory = vm_memory;
 	vm.memory_dev = vm_dev_memory;
@@ -62,6 +64,11 @@ main(int argc, char **argv)
 
 	if (vserial_init(&vm.vdev, &com1)) {
 		printf("Cannot intiailize virtual COM1.\n");
+		return -2;
+	}
+
+	if (vvideo_init(&vm.vdev, &video)) {
+		printf("Cannot intiailize virtual video.\n");
 		return -2;
 	}
 
