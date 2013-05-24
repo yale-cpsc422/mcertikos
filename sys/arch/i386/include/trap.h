@@ -112,6 +112,7 @@ void trap_return(tf_t *) gcc_noreturn;
 static void gcc_inline
 trap_dump(tf_t *tf)
 {
+#ifdef DEBUG_MSG
 	if (tf == NULL)
 		return;
 
@@ -139,6 +140,7 @@ trap_dump(tf_t *tf)
 	dprintf("\t%08x:\tesp:   \t\t%08x\n", &tf->esp, tf->esp);
 	dprintf("\t%08x:\tss:    \t\t%08x\n", &tf->ss, tf->ss);
 	debug_unlock();
+#endif
 }
 
 #endif /* !_ASSEMBLER__ */
