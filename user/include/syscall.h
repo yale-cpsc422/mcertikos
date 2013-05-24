@@ -479,22 +479,6 @@ sys_hvm_intercept_intr_window(int vmid, bool enable)
 }
 
 static gcc_inline int
-sys_hvm_mmap_bios(int vmid, uintptr_t la)
-{
-	int errno;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_hvm_mmap_bios),
-		       "b" (vmid),
-		       "c" (la)
-		     : "cc", "memory");
-
-	return errno;
-}
-
-static gcc_inline int
 sys_read_ioport(uint16_t port, data_sz_t width, void *val)
 {
 	int errno;

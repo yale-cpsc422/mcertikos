@@ -55,11 +55,6 @@ vmm_init_mmap(struct vm *vm)
 
 	uint64_t addr;
 
-	if (sys_hvm_mmap_bios(vm->vmid, (uintptr_t) &vm->memory[0xa0000])) {
-		PANIC("Cannot map BIOS ROM.\n");
-		return -1;
-	}
-
 	for (addr = 0; addr < vm->memsize; addr += PAGESIZE)
 		if (sys_hvm_set_mmap(vm->vmid, addr,
 				     (uintptr_t) &vm->memory[addr],

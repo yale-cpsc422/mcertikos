@@ -53,7 +53,6 @@ static char *syscall_name[MAX_SYSCALL_NR] =
 		[SYS_hvm_intercept_ioport] = "sys_hvm_intercept_ioport",
 		[SYS_hvm_intercept_msr]	= "sys_hvm_intercept_msr",
 		[SYS_hvm_intercept_intr_window] = "sys_hvm_intercept_intr_window",
-		[SYS_hvm_mmap_bios]	= "sys_hvm_mmap_bios",
 		[SYS_read_ioport]	= "sys_read_ioport",
 		[SYS_write_ioport]	= "sys_write_ioport",
 	};
@@ -821,33 +820,6 @@ sys_hvm_intercept_intr_window(int vmid, bool enable)
 }
 
 static int
-sys_hvm_mmap_bios(int vmid, uintptr_t bios_la)
-{
-	struct vm *vm = hvm_get_vm(vmid);
-	struct proc *p = proc_cur();
-	uintptr_t addr;
-
-	if (vm == NULL)
-		return E_INVAL_VMID;
-
-	if (!(VM_USERLO <= bios_la && bios_la + 0x100000 <= VM_USERHI))
-		return E_INVAL_ADDR;
-
-	pmap_remove(p->pmap, bios_la, 0xc0000 - 0xa0000);
-
-	for (addr = 0xa0000; addr < 0xc0000; addr += PAGESIZE) {
-		if (pmap_insert(p->pmap, mem_phys2pi(addr), bios_la+addr-0xa0000,
-				PTE_U | PTE_W) == NULL) {
-			KERN_DEBUG("Cannot map VA 0x%08x to PA 0x%08x.\n",
-				   bios_la+addr-0xa0000, addr);
-			return E_MEM;
-		}
-	}
-
-	return 0;
-}
-
-static int
 sys_read_ioport(uint16_t port, data_sz_t width, uintptr_t data_la)
 {
 	uint32_t data;
@@ -1165,9 +1137,6 @@ syscall_handler(uint8_t trapno, struct context *ctx)
 		 * a[1]: enable/disable
 		 */
 		errno = sys_hvm_intercept_intr_window((int) a[0], (bool) a[1]);
-		break;
-	case SYS_hvm_mmap_bios:
-		errno = sys_hvm_mmap_bios((int) a[0], (uintptr_t) a[1]);
 		break;
 	case SYS_read_ioport:
 		/*
