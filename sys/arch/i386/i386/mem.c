@@ -4,7 +4,6 @@
 #include <sys/spinlock.h>
 #include <sys/string.h>
 #include <sys/types.h>
-#include <sys/vm.h>
 #include <sys/x86.h>
 
 #include <machine/mem.h>
@@ -42,24 +41,11 @@ static uintptr_t max_usable_memory = 0;
  */
 
 static bool mem_inited = FALSE;	/* is the memory allocator initialized? */
+static spinlock_t mem_lock;	/* lock of the memory allocator */
 static struct page_info mem_all_pages[1<<20];/* all memory pages (all types) */
 static size_t mem_npages;	/* the amount of all memory pages */
-
-/*
- * The physical memory are separated to the normal memory region and the high
- * memory region. The normal memory region is below VM_HIMEM and is
- * identically mapped in the kernel page tables. The high memory region is above
- * VM_HIMEM and is mapped to the virtual address space between VM_DYNAMICLO and
- * VM_DYNMAICHI on demand.
- */
-
-static struct page_info *mem_free_normal_pages;
-static spinlock_t mem_normal_pages_lk;
-static size_t mem_nr_free_normal_pages;
-
-static struct page_info *mem_free_himem_pages;
-static spinlock_t mem_himem_pages_lk;
-static size_t mem_nr_free_himem_pages;
+static size_t mem_nfreepages;
+static struct page_info *mem_free_pages;
 
 /*
  * Converters between page indices and physical address/pointers.
@@ -242,6 +228,14 @@ pmmap_init(mboot_info_t *mbi)
 	pmmap_dump();
 }
 
+static gcc_inline int
+mem_in_reserved_page(uintptr_t addr)
+{
+	return (addr < (uintptr_t)
+		ROUNDUP((uintptr_t) (mem_all_pages + mem_npages), PAGESIZE)) ||
+		addr >= 0xf0000000;
+}
+
 static void
 mem_test(void)
 {
@@ -289,7 +283,7 @@ mem_init(mboot_info_t *mbi)
 	extern uint8_t end[];
 
 	struct pmmap *slot;
-	struct page_info *last_free_normal = NULL, *last_free_himem = NULL;
+	struct page_info *last_free = NULL;
 
 	if (mem_inited == TRUE)
 		return;
@@ -297,9 +291,14 @@ mem_init(mboot_info_t *mbi)
 	/* get a usable physical memory map */
 	pmmap_init(mbi);
 
+	/* reserve memory for mem_npage pageinfo_t structures */
 	mem_npages = ROUNDDOWN(max_usable_memory, PAGESIZE) / PAGESIZE;
-	mem_free_normal_pages = mem_free_himem_pages = NULL;
-	mem_nr_free_normal_pages = mem_nr_free_himem_pages = 0;
+	memzero(mem_all_pages, sizeof(struct page_info) * mem_npages);
+
+	mem_free_pages = NULL;
+	last_free = NULL;
+
+	mem_nfreepages = 0;
 
 	/*
 	 * Initialize page info structures.
@@ -321,59 +320,32 @@ mem_init(mboot_info_t *mbi)
 		for (addr = lo, pi = mem_phys2pi(lo); addr < hi;
 		     addr += PAGESIZE, pi++) {
 			pi->type = (type != MEM_RAM) ? PG_RESERVED :
-				(addr < (uintptr_t) end) ? PG_KERNEL :
-				(addr < VM_HIGHMEMLO) ? PG_NORMAL : PG_HIGH;
+				(addr < (uintptr_t) end) ? PG_KERNEL : PG_NORMAL;
 
 			if (pi->type == PG_NORMAL) {
-				if (unlikely(mem_free_normal_pages == NULL))
-					mem_free_normal_pages = pi;
-				if (last_free_normal != NULL) {
-					last_free_normal->next = pi;
-					pi->prev = last_free_normal;
+				if (unlikely(mem_free_pages == NULL))
+					mem_free_pages = pi;
+				if (last_free != NULL) {
+					last_free->next = pi;
+					pi->prev = last_free;
 				}
-				last_free_normal = pi;
-				mem_nr_free_normal_pages++;
-			} else if (pi->type == PG_HIGH) {
-				if (unlikely(mem_free_himem_pages == NULL))
-					mem_free_himem_pages = pi;
-				if (last_free_himem != NULL) {
-					last_free_himem->next = pi;
-					pi->prev = last_free_himem;
-				}
-				last_free_himem = pi;
-				mem_nr_free_himem_pages++;
+				last_free = pi;
+				mem_nfreepages++;
 			}
 		}
 	}
 
-	spinlock_init(&mem_normal_pages_lk);
-	spinlock_init(&mem_himem_pages_lk);
-
+	spinlock_init(&mem_lock);
 	mem_inited = TRUE;
 
-	KERN_INFO("Total physical memory %u bytes (%u pages of normal memory, "
-		  "%u pages of high memory, %u pages in total).\n",
-		  max_usable_memory, mem_nr_free_normal_pages,
-		  mem_nr_free_himem_pages, mem_npages);
+	KERN_INFO("Total physical memory %u bytes, %u/%u pages.\n",
+		  mem_npages * PAGESIZE, mem_nfreepages, mem_npages);
 
 	mem_test();
 }
 
-/*
- * Check whether there are a number consecutively free physcal memory pages
- * starting from a specific page in the same memory region (normal or high).
- *
- * @param page   the start page
- * @param npages the number or the consecutively free pages
- * @param high   TRUE - search in the high memory region,
- *               FALSE - search in the normal memory region
- *
- * @return npages if there are npages pages of consecutively free pages from
- *         page; otherwise, return the number of consecutively free pages
- *         starting from page.
- */
 static gcc_inline int
-mem_next_npages_free(struct page_info *page, size_t npages)
+mem_next_npages_free(struct page_info *page, int npages)
 {
 	KERN_ASSERT(page != NULL && page->used == 0);
 	KERN_ASSERT(mem_all_pages <= page && page < mem_all_pages + mem_npages);
@@ -400,31 +372,23 @@ mem_next_npages_free(struct page_info *page, size_t npages)
 	return n;
 }
 
-static struct page_info *
-mem_pages_alloc_align_region(size_t n, int p, bool high)
+/*
+ * Allocate n pages of which the lowest address is aligned to 2^p pages.
+ */
+struct page_info *
+mem_pages_alloc_align(size_t n, int p)
 {
-	struct page_info **free_pages_ptr;
-	spinlock_t *lock;
-	size_t *nr_free_pages_ptr;
+	KERN_ASSERT(0 < n && n < (1 << 20));
+	KERN_ASSERT(0 <= p && p < 20);
 
 	struct page_info *page;
 	int aligned_to, offset, i;
 
-	if (high == TRUE) {
-		free_pages_ptr = &mem_free_himem_pages;
-		lock = &mem_himem_pages_lk;
-		nr_free_pages_ptr = &mem_nr_free_himem_pages;
-	} else {
-		free_pages_ptr = &mem_free_normal_pages;
-		lock = &mem_normal_pages_lk;
-		nr_free_pages_ptr = &mem_nr_free_normal_pages;
-	}
-
 	aligned_to = (1 << p);
 
-	spinlock_acquire(lock);
+	spinlock_acquire(&mem_lock);
 
-	page = *free_pages_ptr;
+	page = mem_free_pages;
 
 	while (page) {
 		if (mem_page_index(page) % aligned_to != 0) {
@@ -440,22 +404,19 @@ mem_pages_alloc_align_region(size_t n, int p, bool high)
 	}
 
 	if (page == NULL) {
-		if (high == FALSE)
-			KERN_DEBUG("Cannot find free %smemory page, "
-				   "%u free pages.\n",
-				   (high == TRUE) ? "high" : "normal",
-				   *nr_free_pages_ptr);
+		KERN_DEBUG("Cannot find free memory page, %u free pages.\n",
+			   mem_nfreepages);
 		goto ret;
 	}
 
-	if ((*free_pages_ptr)->prev)
-		(*free_pages_ptr)->prev->next = page[n-1].next;
+	if (mem_free_pages->prev)
+		mem_free_pages->prev->next = page[n-1].next;
 	if (page[n-1].next)
 		page[n-1].next->prev = page->prev;
-	if (*free_pages_ptr == page) {
+	if (mem_free_pages == page) {
 		/* KERN_DEBUG("Move mem_free_pages from 0x%08x to 0x%08x.\n", */
 		/* 	   page, page[n-1].next); */
-		*free_pages_ptr = page[n-1].next;
+		mem_free_pages = page[n-1].next;
 	}
 	page->prev = page[n-1].next = NULL;
 
@@ -466,74 +427,36 @@ mem_pages_alloc_align_region(size_t n, int p, bool high)
 
  ret:
 	if (page != NULL) {
-		KERN_ASSERT(*nr_free_pages_ptr >= n);
-		*nr_free_pages_ptr -= n;
+		KERN_ASSERT(mem_nfreepages >= n);
+		mem_nfreepages -= n;
 		/* KERN_DEBUG("%d pages allocated.\n", n); */
 	}
 
-	spinlock_release(lock);
+	spinlock_release(&mem_lock);
 
 	return page;
 }
 
 /*
- * Allocate n pages of which the lowest address is aligned to 2^p pages.
- */
-struct page_info *
-mem_pages_alloc_align(size_t n, int p)
-{
-	return mem_pages_alloc_align_region(n, p, FALSE);
-}
-
-struct page_info *
-himem_pages_alloc_align(size_t n, int p)
-{
-	struct page_info *page = mem_pages_alloc_align_region(n, p, TRUE);
-	return (page == NULL) ?
-		mem_pages_alloc_align_region(n, p, FALSE) : page;
-}
-
-/*
  * Free memory pages.
  */
-void
+struct page_info *
 mem_pages_free(struct page_info *page)
 {
 	KERN_ASSERT(page != NULL);
 	KERN_ASSERT(mem_all_pages <= page && page < mem_all_pages + mem_npages);
 
-	struct page_info **free_pages_ptr;
-	pg_type type;
-	size_t *nr_free_pages_ptr;
-	spinlock_t *lock;
-
 	struct page_info *pi, *prev_free_pi, *next_free_pi;
 	int i, n;
 
-	if (page->type == PG_NORMAL) {
-		free_pages_ptr = &mem_free_normal_pages;
-		type = PG_NORMAL;
-		nr_free_pages_ptr = &mem_nr_free_normal_pages;
-		lock = &mem_normal_pages_lk;
-	} else if (page->type == PG_HIGH) {
-		free_pages_ptr = &mem_free_himem_pages;
-		type = PG_HIGH;
-		nr_free_pages_ptr = &mem_nr_free_himem_pages;
-		lock = &mem_himem_pages_lk;
-	} else {
-		KERN_PANIC("Page %u is neither a normal memory page nor "
-			   "a high memory page.\n", mem_page_index(page));
-		return;
-	}
-
-	spinlock_acquire(lock);
+	spinlock_acquire(&mem_lock);
 
 	prev_free_pi = NULL;
-	next_free_pi = *free_pages_ptr;
+	next_free_pi = mem_free_pages;
 
 	/* search the previous and next free pages */
 	for (i = mem_page_index(page); i > 0; i--)
-		if (mem_all_pages[i-1].type == type &&
+		if (mem_all_pages[i-1].type == PG_NORMAL &&
 		    mem_all_pages[i-1].used == 0) {
 			prev_free_pi = &mem_all_pages[i-1];
 			break;
@@ -565,43 +488,39 @@ mem_pages_free(struct page_info *page)
 		next_free_pi->prev = pi;
 	pi->next = next_free_pi;
 
-	if (*free_pages_ptr == next_free_pi) {
+	if (mem_free_pages == next_free_pi) {
 		/* KERN_DEBUG("Move mem_free_pages from 0x%08x to 0x%08x.\n", */
 		/* 	   mem_free_pages, page); */
-		*free_pages_ptr = page;
+		mem_free_pages = page;
 	}
 
-	*nr_free_pages_ptr += n;
+	mem_nfreepages += n;
 	/* KERN_DEBUG("%d pages freed.\n", n); */
 
-	spinlock_release(lock);
+	spinlock_release(&mem_lock);
+
+	return page;
 }
 
 void
 mem_incref(struct page_info *page)
 {
 	KERN_ASSERT(mem_all_pages <= page && page < mem_all_pages + mem_npages);
-	KERN_ASSERT(page->type == PG_NORMAL || page->type == PG_HIGH);
-	spinlock_t *lock = (page->type == PG_NORMAL) ?
-		&mem_normal_pages_lk : &mem_himem_pages_lk;
-	spinlock_acquire(lock);
+	spinlock_acquire(&mem_lock);
 	page->refcount++;
-	spinlock_release(lock);
+	spinlock_release(&mem_lock);
 }
 
 void
 mem_decref(struct page_info *page)
 {
 	KERN_ASSERT(mem_all_pages <= page && page < mem_all_pages + mem_npages);
-	KERN_ASSERT(page->type == PG_NORMAL || page->type == PG_HIGH);
-	spinlock_t *lock = (page->type == PG_NORMAL) ?
-		&mem_normal_pages_lk : &mem_himem_pages_lk;
-	spinlock_acquire(lock);
+	spinlock_acquire(&mem_lock);
 	if (page->refcount)
 		page->refcount--;
 	if (page->refcount == 0)
 		mem_page_free(page);
-	spinlock_release(lock);
+	spinlock_release(&mem_lock);
 }
 
 size_t
