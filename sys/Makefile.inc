@@ -27,6 +27,11 @@ include		$(KERN_DIR)/kern/Makefile.inc
 include		$(KERN_DIR)/lib/Makefile.inc
 include		$(KERN_DIR)/virt/Makefile.inc
 
+KERN_CFLAGS	+= $(KERN_DEBUG_FLAGS)
+ifdef ENABLE_CCOMP
+CCOMP_KERN_CFLAGS += $(KERN_DEBUG_FLAGS)
+endif
+
 # Object files of kernel
 KERN_SRCFILES	:= $(wildcard $(KERN_SRCFILES))
 KERN_OBJFILES	:= $(patsubst %.c, $(OBJDIR)/%.o, $(KERN_SRCFILES))
