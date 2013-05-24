@@ -317,7 +317,9 @@ sched_switch(struct sched *sched, struct proc *from, struct proc *to)
 	KERN_ASSERT(from == NULL || from->cpu == pcpu_cur());
 	KERN_ASSERT(to != NULL);
 	KERN_ASSERT(to->cpu == pcpu_cur());
+#ifndef __COMPCERT__
 	KERN_ASSERT((read_eflags() & FL_IF) == 0);
+#endif
 
 	struct kern_ctx *kctx; /* used when switching to the first process */
 
