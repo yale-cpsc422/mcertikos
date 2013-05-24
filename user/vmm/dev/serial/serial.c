@@ -17,7 +17,16 @@
 #define COM_DLM		1	// Out: Divisor Latch High (DLAB=1)
 #define COM_IER		1	// Out: Interrupt Enable Register
 #define COM_IER_RDI	0x01	//   Enable receiver data interrupt
+#define COM_IER_THRI	0x02	//   Enable transmitter holding register empty interrupt
+#define COM_IER_RLSI	0x04	//   Enable receiver line status interrupt
+#define COM_IER_MSI	0x08	//   Enable modem status interrupt
 #define COM_IIR		2	// In:	Interrupt ID Register
+#define COM_IIR_NOINT	0x01	//   No pending interrupts
+#define COM_IIR_MASK	0x06	//   Mask of interrupt state
+#define COM_IIR_MSI	0x00	//   Modem status interrupt
+#define COM_IIR_THRI	0x02	//   Transmitter holding register empty interrupt
+#define COM_IIR_RDI	0x04	//   Received data available interrupt
+#define COM_IIR_RLSI	0x06	//   Receiver line status interrupt
 #define COM_FCR		2	// Out: FIFO Control Register
 #define COM_LCR		3	// Out: Line Control Register
 #define	COM_LCR_DLAB	0x80	//   Divisor latch access bit
@@ -40,6 +49,15 @@ vserial_read_ioport(void *dev, uint16_t port, data_sz_t width, void *val)
 {
 	if (!(0x3f8 <= port && port <= 0x3ff))
 		return -1;
+
+	struct vserial *com = dev;
+
+	if (port == COM1+COM_IIR && com->iir_valid == 1) {
+		*(uint8_t *) val = com->iir;
+		com->iir_valid = 0;
+		return 0;
+	}
+
 	return sys_read_ioport(port, width, val);
 }
 
@@ -57,14 +75,36 @@ vserial_update(void *dev)
 	if (dev == NULL)
 		return -1;
 
-	uint8_t status;
+	uint8_t iir, ier, intr;
 	struct vserial *com = dev;
 
-	if (sys_read_ioport(COM1+COM_LSR, SZ8, &status))
+	/* if (sys_read_ioport(COM1+COM_LSR, SZ8, &lsr)) */
+	/* 	return -2; */
+
+	/* if (lsr & COM_LSR_DATA) { */
+	/* 	vdev_set_irq(com->vdev, IRQ_SERIAL13, 2); */
+	/* 	return 0; */
+	/* } */
+
+	if (sys_read_ioport(COM1+COM_IIR, SZ8, &iir))
 		return -2;
 
-	if (status & COM_LSR_DATA)
+	if (iir & COM_IIR_NOINT)
+		return 0;
+
+	if (sys_read_ioport(COM1+COM_IER, SZ8, &ier))
+		return -2;
+
+	intr = iir & COM_IIR_MASK;
+
+	if (((intr & COM_IIR_MSI) && (ier & COM_IER_MSI)) ||
+	    ((intr & COM_IIR_THRI) && (ier & COM_IER_THRI)) ||
+	    ((intr & COM_IIR_RDI) && (ier & COM_IER_RDI)) ||
+	    ((intr & COM_IIR_RLSI) && (ier & COM_IER_RLSI))) {
+		com->iir = iir;
+		com->iir_valid = 1;
 		vdev_set_irq(com->vdev, IRQ_SERIAL13, 2);
+	}
 
 	return 0;
 }
@@ -75,6 +115,7 @@ vserial_init(struct vdev *vdev, struct vserial *dev)
 	uint32_t port;
 
 	dev->vdev = vdev;
+	dev->iir_valid = 0;
 
 	for (port = 0x3f8; port <= 0x3ff; port++)
 		vdev_register_ioport(vdev, dev, port,

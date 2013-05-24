@@ -4,6 +4,8 @@
 #include "../../vmm_dev.h"
 
 struct vserial {
+	uint8_t iir;
+	int iir_valid;
 	struct vdev *vdev;
 };
 
