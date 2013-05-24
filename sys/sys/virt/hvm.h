@@ -362,9 +362,6 @@ int hvm_set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa, int type);
 int hvm_set_reg(struct vm *vm, guest_reg_t reg, uint32_t val);
 int hvm_get_reg(struct vm *vm, guest_reg_t reg, uint32_t *val);
 
-int hvm_set_msr(struct vm *vm, uint32_t msr, uint64_t val);
-int hvm_get_msr(struct vm *vm, uint32_t msr, uint64_t *val);
-
 int hvm_set_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc);
 int hvm_get_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc);
 
