@@ -55,16 +55,33 @@ enum {
 	INTERCEPT_XSETBV,
 };
 
+#ifdef __COMPCERT__
+#pragma pack(1)
+#endif
 struct vmcb_control_area {
 	uint32_t	intercept_cr;
 	uint32_t	intercept_dr;
 	uint32_t	intercept_exceptions;
+#ifndef __COMPCERT__
 	uint64_t	intercept;
+#else
+	uint32_t	intercept_lo;
+	uint32_t	intercept_hi;
+#endif
 	uint8_t 	reserved_1[42];
 	uint16_t 	pause_filter_count;
+#ifndef __COMPCERT__
 	uint64_t 	iopm_base_pa;
 	uint64_t 	msrpm_base_pa;
 	uint64_t 	tsc_offset;
+#else
+	uint32_t	iopm_base_pa_lo;
+	uint32_t	iopm_base_pa_hi;
+	uint32_t	msrpm_base_pa_lo;
+	uint32_t	msrpm_base_pa_hi;
+	uint32_t	tsc_offset_lo;
+	uint32_t	tsc_offset_hi;
+#endif
 	uint32_t 	asid;
 	uint8_t 	tlb_ctl;
 	uint8_t 	reserved_2[3];
@@ -74,19 +91,43 @@ struct vmcb_control_area {
 	uint8_t 	reserved_3[4];
 	uint32_t 	exit_code;
 	uint32_t 	exit_code_hi;
+#ifndef __COMPCERT__
 	uint64_t 	exit_info_1;
 	uint64_t 	exit_info_2;
+#else
+	uint32_t	exit_info_1_lo;
+	uint32_t	exit_info_1_hi;
+	uint32_t	exit_info_2_lo;
+	uint32_t	exit_info_2_hi;
+#endif
 	uint32_t 	exit_int_info;
 	uint32_t 	exit_int_info_err;
+#ifndef __COMPCERT__
 	uint64_t 	nested_ctl;
+#else
+	uint32_t	nested_ctl_lo;
+	uint32_t	nested_ctl_hi;
+#endif
 	uint8_t 	reserved_4[16];
 	uint32_t 	event_inj;
 	uint32_t 	event_inj_err;
+#ifndef __COMPCERT__
 	uint64_t 	nested_cr3;
 	uint64_t 	lbr_ctl;
+#else
+	uint32_t	nested_cr3_lo;
+	uint32_t	nested_cr3_hi;
+	uint32_t	lbr_ctl_lo;
+	uint32_t	lbr_ctl_hi;
+#endif
 	uint32_t 	clean;
 	uint32_t 	reserved_5;
+#ifndef __COMPCERT__
 	uint64_t 	next_rip;
+#else
+	uint32_t	next_rip_lo;
+	uint32_t	next_rip_hi;
+#endif
 	uint8_t 	insn_len;
 	uint8_t 	insn_bytes[15];
 	uint8_t 	reserved_6[800];
@@ -96,9 +137,17 @@ struct vmcb_seg {
 	uint16_t 	selector;
 	uint16_t 	attrib;
 	uint32_t 	limit;
+#ifndef __COMPCERT__
 	uint64_t 	base;
+#else
+	uint32_t	base_lo;
+	uint32_t	base_hi;
+#endif
 };
 
+#ifdef __COMPCERT__
+#pragma pack(1)
+#endif
 struct vmcb_save_area {
 	struct vmcb_seg	es;
 	struct vmcb_seg	cs;
@@ -113,8 +162,14 @@ struct vmcb_save_area {
 	uint8_t 	reserved_1[43];
 	uint8_t 	cpl;
 	uint8_t 	reserved_2[4];
+#ifndef __COMPCERT__
 	uint64_t 	efer;
+#else
+	uint32_t	efer_lo;
+	uint32_t	efer_hi;
+#endif
 	uint8_t 	reserved_3[112];
+#ifndef __COMPCERT__
 	uint64_t	cr4;
 	uint64_t 	cr3;
 	uint64_t 	cr0;
@@ -122,9 +177,31 @@ struct vmcb_save_area {
 	uint64_t 	dr6;
 	uint64_t 	rflags;
 	uint64_t 	rip;
+#else
+	uint32_t	cr4_lo;
+	uint32_t	cr4_hi;
+	uint32_t	cr3_lo;
+	uint32_t	cr3_hi;
+	uint32_t	cr0_lo;
+	uint32_t	cr0_hi;
+	uint32_t	dr7_lo;
+	uint32_t	dr7_hi;
+	uint32_t	dr6_lo;
+	uint32_t	dr6_hi;
+	uint32_t	rflags_lo;
+	uint32_t	rflags_hi;
+	uint32_t	rip_lo;
+	uint32_t	rip_hi;
+#endif
 	uint8_t 	reserved_4[88];
+#ifndef __COMPCERT__
 	uint64_t 	rsp;
+#else
+	uint32_t	rsp_lo;
+	uint32_t	rsp_hi;
+#endif
 	uint8_t 	reserved_5[24];
+#ifndef __COMPCERT__
 	uint64_t 	rax;
 	uint64_t 	star;
 	uint64_t 	lstar;
@@ -135,15 +212,55 @@ struct vmcb_save_area {
 	uint64_t 	sysenter_esp;
 	uint64_t 	sysenter_eip;
 	uint64_t 	cr2;
+#else
+	uint32_t 	rax_lo;
+	uint32_t	rax_hi;
+	uint32_t	star_lo;
+	uint32_t 	star_hi;
+	uint32_t 	lstar_lo;
+	uint32_t 	lstar_hi;
+	uint32_t 	cstar_lo;
+	uint32_t 	cstar_hi;
+	uint32_t 	sfmask_lo;
+	uint32_t 	sfmask_hi;
+	uint32_t 	kernel_gs_base_lo;
+	uint32_t 	kernel_gs_base_hi;
+	uint32_t 	sysenter_cs_lo;
+	uint32_t 	sysenter_cs_hi;
+	uint32_t 	sysenter_esp_lo;
+	uint32_t 	sysenter_esp_hi;
+	uint32_t 	sysenter_eip_lo;
+	uint32_t 	sysenter_eip_hi;
+	uint32_t 	cr2_lo;
+	uint32_t 	cr2_hi;
+#endif
 	uint8_t 	reserved_6[32];
+#ifndef __COMPCERT__
 	uint64_t 	g_pat;
 	uint64_t 	dbgctl;
 	uint64_t 	br_from;
 	uint64_t 	br_to;
 	uint64_t 	last_excp_from;
 	uint64_t 	last_excp_to;
+#else
+	uint32_t 	g_pat_lo;
+	uint32_t 	g_pat_hi;
+	uint32_t 	dbgctl_lo;
+	uint32_t 	dbgctl_hi;
+	uint32_t 	br_from_lo;
+	uint32_t 	br_from_hi;
+	uint32_t 	br_to_lo;
+	uint32_t 	br_to_hi;
+	uint32_t 	last_excp_from_lo;
+	uint32_t 	last_excp_from_hi;
+	uint32_t 	last_excp_to_lo;
+	uint32_t 	last_excp_to_hi;
+#endif
 } gcc_packed;
 
+#ifdef __COMPCERT__
+#pragma pack(1)
+#endif
 struct vmcb {
 	struct vmcb_control_area control;
 	struct vmcb_save_area	 save;
@@ -375,6 +492,9 @@ struct vmcb {
 		__asm __volatile("clgi");	\
 	} while (0)
 
+#ifdef __COMPCERT__
+#pragma pack(1)
+#endif
 struct svm {
 	/*
 	 * VMCB does not store following registers for guest, so we have
@@ -384,6 +504,27 @@ struct svm {
 	struct vmcb	*vmcb;		/* VMCB */
 	int		inuse;
 } gcc_packed;
+
+#ifdef DEBUG_SVM
+
+#define SVM_DEBUG(fmt, ...)				\
+	do {						\
+		KERN_DEBUG("SVM: "fmt, ##__VA_ARGS__);	\
+	} while (0)
+
+#else
+
+#define SVM_DEBUG(fmt, ...)			\
+	do {					\
+	} while (0)
+
+#endif
+
+#ifdef __COMPCERT__
+
+void init_hvm_ops_amd(void);
+
+#endif
 
 #endif /* _KERN_ */
 

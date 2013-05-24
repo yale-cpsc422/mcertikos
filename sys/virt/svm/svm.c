@@ -9,25 +9,16 @@
 #include <sys/virt/hvm.h>
 
 #include "svm.h"
-
-#ifdef DEBUG_SVM
-
-#define SVM_DEBUG(fmt, ...)				\
-	do {						\
-		KERN_DEBUG("SVM: "fmt, ##__VA_ARGS__);	\
-	} while (0)
-
-#else
-
-#define SVM_DEBUG(fmt, ...)			\
-	do {					\
-	} while (0)
-
-#endif
+#include "svm_drv.h"
 
 static struct svm	svm_pool[MAX_VMID];
 static spinlock_t	svm_pool_lk;
 volatile static bool	svm_pool_inited = FALSE;
+
+#ifdef __COMPCERT__
+static void init_seg_offset(void);
+static void init_svm_event_type(void);
+#endif
 
 struct svm *
 alloc_svm(void)
@@ -67,58 +58,6 @@ free_svm(struct svm *svm)
 }
 
 /*
- * Check whether the machine supports SVM. (Sec 15.4, APM Vol2 r3.19)
- *
- * @return TRUE if SVM is supported; otherwise FALSE
- */
-static bool
-svm_check(void)
-{
-	/* check CPUID 0x80000001 */
-	uint32_t feature, dummy;
-	cpuid(CPUID_FEATURE_FUNC, &dummy, &dummy, &feature, &dummy);
-	if ((feature & CPUID_X_FEATURE_SVM) == 0) {
-		SVM_DEBUG("The processor does not support SVM.\n");
-		return FALSE;
-	}
-
-	/* check MSR VM_CR */
-	if ((rdmsr(MSR_VM_CR) & MSR_VM_CR_SVMDIS) == 0) {
-		return TRUE;
-	}
-
-	/* check CPUID 0x8000000a */
-	cpuid(CPUID_SVM_FEATURE_FUNC, &dummy, &dummy, &dummy, &feature);
-	if ((feature & CPUID_SVM_LOCKED) == 0) {
-		SVM_DEBUG("SVM maybe disabled by BIOS.\n");
-		return FALSE;
-	} else {
-		SVM_DEBUG("SVM maybe disabled with key.\n");
-		return FALSE;
-	}
-
-	SVM_DEBUG("SVM is available.\n");
-
-	return TRUE;
-}
-
-/*
- * Enable SVM. (Sec 15.4, APM Vol2 r3.19)
- */
-static void
-svm_enable(void)
-{
-	/* set MSR_EFER.SVME */
-	uint64_t efer;
-
-	efer = rdmsr(MSR_EFER);
-	efer |= MSR_EFER_SVME;
-	wrmsr(MSR_EFER, efer);
-
-	SVM_DEBUG("SVM is enabled.\n");
-}
-
-/*
  * Allocate one memory page for the host state-save area.
  */
 static uintptr_t
@@ -147,10 +86,24 @@ set_intercept(struct vmcb *vmcb, int bit, bool enable)
 	KERN_ASSERT(vmcb != NULL);
 	KERN_ASSERT(INTERCEPT_INTR <= bit && bit <= INTERCEPT_XSETBV);
 
+#ifndef __COMPCERT__
 	if (enable == TRUE)
 		vmcb->control.intercept |= (1ULL << bit);
 	else
 		vmcb->control.intercept &= ~(1ULL << bit);
+#else
+	if (enable == TRUE) {
+		if (bit < 32)
+			vmcb->control.intercept_lo |= (1UL << bit);
+		else
+			vmcb->control.intercept_hi |= (1UL << (bit - 32));
+	} else {
+		if (bit < 32)
+			vmcb->control.intercept_lo &= ~(1UL << bit);
+		else
+			vmcb->control.intercept_hi &= ~(1UL << (bit - 32));
+	}
+#endif
 }
 
 static int
@@ -161,11 +114,21 @@ svm_handle_exit(struct vm *vm)
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_control_area *ctrl = &vmcb->control;
+#ifndef __COMPCERT__
 	uint32_t exitinfo1 = ctrl->exit_info_1;
+#else
+	uint32_t exitinfo1 = ctrl->exit_info_1_lo;
+	uint32_t exitinfo2 = ctrl->exit_info_2_lo;
+#endif
 
 #ifdef DEBUG_VMEXIT
+#ifndef __COMPCERT__
 	SVM_DEBUG("VMEXIT exit_code 0x%x, guest EIP 0x%08x.\n",
 		  ctrl->exit_code, (uintptr_t) vmcb->save.rip);
+#else
+	SVM_DEBUG("VMEXIT exit_code 0x%x, guest EIP 0x%08x.\n",
+		  ctrl->exit_code, vmcb->save.rip_lo);
+#endif
 #endif
 
 	switch (ctrl->exit_code) {
@@ -196,7 +159,11 @@ svm_handle_exit(struct vm *vm)
 
 	case SVM_EXIT_NPF:
 		vm->exit_reason = EXIT_REASON_PGFLT;
+#ifndef __COMPCERT__
 		vm->exit_info.pgflt.addr = (uintptr_t) PGADDR(ctrl->exit_info_2);
+#else
+		vm->exit_info.pgflt.addr = (uintptr_t) PGADDR(exitinfo2);
+#endif
 		KERN_DEBUG("NPT fault @ 0x%08x.\n", vm->exit_info.pgflt.addr);
 		break;
 
@@ -248,24 +215,19 @@ svm_init(void)
 		svm_pool_inited = TRUE;
 	}
 
-	uintptr_t hsave_addr;
+#ifdef __COMPCERT__
+	init_seg_offset();
+	init_svm_event_type();
+#endif
 
-	/* check whether the processor supports SVM */
-	if (svm_check() == FALSE)
-		return 1;
+	uintptr_t hsave_addr = alloc_hsave_area();
 
-	/* enable SVM */
-	svm_enable();
-
-	/* setup host state-save area */
-	if ((hsave_addr = alloc_hsave_area()) == 0x0)
+	if (hsave_addr == 0x0)
 		return 1;
 	else
-		wrmsr(MSR_VM_HSAVE_PA, hsave_addr);
+		SVM_DEBUG("Host state-save area is at %x.\n", hsave_addr);
 
-	SVM_DEBUG("Host state-save area is at %x.\n", hsave_addr);
-
-	return 0;
+	return svm_drv_init(hsave_addr);
 }
 
 static int
@@ -298,31 +260,56 @@ svm_init_vm(struct vm *vm)
 		rc = -3;
 		goto err2;
 	}
+
+#ifndef __COMPCERT__
 	svm->vmcb->control.iopm_base_pa = mem_pi2phys(iopm_pi);
+#else
+	svm->vmcb->control.iopm_base_pa_lo = mem_pi2phys(iopm_pi);
+	svm->vmcb->control.iopm_base_pa_hi = 0;
+#endif
 
 	if ((msrpm_pi = mem_pages_alloc(SVM_MSRPM_SIZE)) == NULL) {
 		rc = -4;
 		goto err3;
 	}
+#ifndef __COMPCERT__
 	svm->vmcb->control.msrpm_base_pa = mem_pi2phys(msrpm_pi);
+#else
+	svm->vmcb->control.msrpm_base_pa_lo = mem_pi2phys(msrpm_pi);
+	svm->vmcb->control.msrpm_base_pa_hi = 0;
+#endif
 
 	if ((ncr3_pi = mem_page_alloc()) == NULL) {
 		rc = -5;
 		goto err4;
 	}
+#ifndef __COMPCERT__
 	svm->vmcb->control.nested_cr3 = mem_pi2phys(ncr3_pi);
 	memzero((void *)(uint32_t) svm->vmcb->control.nested_cr3, PAGESIZE);
+#else
+	svm->vmcb->control.nested_cr3_lo = mem_pi2phys(ncr3_pi);
+	svm->vmcb->control.nested_cr3_hi = 0;
+	memzero((void *) svm->vmcb->control.nested_cr3_lo, PAGESIZE);
+#endif
 
 	/*
 	 * Setup default interception.
 	 */
 
 	/* intercept all I/O ports */
+#ifndef __COMPCERT__
 	memset((void *)(uint32_t) svm->vmcb->control.iopm_base_pa,
 	       0xf, SVM_IOPM_SIZE);
 	/* do not intercept any MSR */
 	memzero((void *)(uint32_t) svm->vmcb->control.msrpm_base_pa,
 		SVM_MSRPM_SIZE);
+#else
+	memset((void *) svm->vmcb->control.iopm_base_pa_lo,
+	       0xf, SVM_IOPM_SIZE);
+	/* do not intercept any MSR */
+	memzero((void *) svm->vmcb->control.msrpm_base_pa_lo,
+		SVM_MSRPM_SIZE);
+#endif
 
 	/* intercept instructions */
 	set_intercept(svm->vmcb, INTERCEPT_VMRUN, TRUE);	/* vmrun */
@@ -341,17 +328,42 @@ svm_init_vm(struct vm *vm)
 	 * Setup initial state.
 	 */
 
+#ifndef __COMPCERT__
 	svm->vmcb->save.cr0 = 0x60000010;
 	svm->vmcb->save.cr2 = svm->vmcb->save.cr3 = svm->vmcb->save.cr4 = 0;
 	svm->vmcb->save.dr6 = 0xffff0ff0;
 	svm->vmcb->save.dr7 = 0x00000400;
 	svm->vmcb->save.efer = MSR_EFER_SVME;
 	svm->vmcb->save.g_pat = 0x7040600070406ULL;
+#else
+	svm->vmcb->save.cr0_lo = 0x60000010;
+	svm->vmcb->save.cr0_hi = 0;
+	svm->vmcb->save.cr2_lo = svm->vmcb->save.cr3_lo = svm->vmcb->save.cr4_lo = 0;
+	svm->vmcb->save.cr2_hi = svm->vmcb->save.cr3_hi = svm->vmcb->save.cr4_hi = 0;
+	svm->vmcb->save.dr6_lo = 0xffff0ff0;
+	svm->vmcb->save.dr6_hi = 0;
+	svm->vmcb->save.dr7_lo = 0x00000400;
+	svm->vmcb->save.dr7_hi = 0;
+	svm->vmcb->save.efer_lo = MSR_EFER_SVME;
+	svm->vmcb->save.efer_hi = 0;
+	svm->vmcb->save.g_pat_lo = 0x00070406;
+	svm->vmcb->save.g_pat_hi = 0x00070406;
+#endif
 
 	svm->vmcb->control.asid = 1;
+#ifndef __COMPCERT__
 	svm->vmcb->control.nested_ctl = 1;
+#else
+	svm->vmcb->control.nested_ctl_lo = 1;
+	svm->vmcb->control.nested_ctl_hi = 0;
+#endif
 	svm->vmcb->control.tlb_ctl = 0;
+#ifndef __COMPCERT__
 	svm->vmcb->control.tsc_offset = 0;
+#else
+	svm->vmcb->control.tsc_offset_lo = 0;
+	svm->vmcb->control.tsc_offset_hi = 0;
+#endif
 	/* Sec 15.21.1, APM Vol2 r3.19 */
 	svm->vmcb->control.int_ctl =
 		(SVM_INTR_CTRL_VINTR_MASK | (0x0 & SVM_INTR_CTRL_VTPR));
@@ -370,19 +382,6 @@ svm_init_vm(struct vm *vm)
 	return rc;
 }
 
-/* defined in svm_asm.S */
-extern void svm_run(struct svm *);
-
-#define save_host_segment(seg, val)					\
-	__asm __volatile("mov %%" #seg ", %0" : "=r" (val) :: "memory")
-
-#define load_host_segment(seg, val)				\
-	do {							\
-		uint16_t _val = (uint16_t) val;			\
-		__asm __volatile("movl %k0, %%" #seg		\
-				 : "+r" (_val) :: "memory");	\
-	} while (0)
-
 static int
 svm_run_vm(struct vm *vm)
 {
@@ -391,23 +390,8 @@ svm_run_vm(struct vm *vm)
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_control_area *ctrl = &vmcb->control;
-	volatile uint16_t h_fs, h_gs, h_ldt;
 
-	SVM_CLGI();
-
-	save_host_segment(fs, h_fs);
-	save_host_segment(gs, h_gs);
-	h_ldt = rldt();
-
-	intr_local_enable();
-	svm_run(svm);
-	intr_local_disable();
-
-	load_host_segment(fs, h_fs);
-	load_host_segment(gs, h_gs);
-	lldt(h_ldt);
-
-	SVM_STGI();
+	svm_drv_run_vm(svm);
 
 	if (ctrl->exit_int_info & SVM_EXITINTINFO_VALID) {
 		uint32_t exit_int_info = ctrl->exit_int_info;
@@ -437,6 +421,11 @@ svm_run_vm(struct vm *vm)
 		}
 	}
 
+	if (ctrl->exit_code == SVM_EXIT_ERR) {
+		svm_handle_err(vmcb);
+		KERN_PANIC("SVM_EXIT_ERR");
+	}
+
 	return svm_handle_exit(vm);
 }
 
@@ -451,7 +440,12 @@ svm_intercept_ioport(struct vm *vm, uint16_t port, bool enable)
 #endif
 
 	struct svm *svm = (struct svm *) vm->cookie;
+#ifndef __COMPCERT__
 	uint32_t *iopm = (uint32_t *)(uintptr_t) svm->vmcb->control.iopm_base_pa;
+#else
+	uint32_t *iopm = (uint32_t *)(uintptr_t)
+		svm->vmcb->control.iopm_base_pa_lo;
+#endif
 
 	int entry = port / 32;
 	int bit = port - entry * 32;
@@ -513,7 +507,11 @@ svm_get_reg(struct vm *vm, guest_reg_t reg, uint32_t *val)
 
 	switch (reg) {
 	case GUEST_EAX:
+#ifndef __COMPCERT__
 		*val = (uint32_t) save->rax;
+#else
+		*val = save->rax_lo;
+#endif
 		break;
 	case GUEST_EBX:
 		*val = (uint32_t) svm->g_rbx;
@@ -534,25 +532,53 @@ svm_get_reg(struct vm *vm, guest_reg_t reg, uint32_t *val)
 		*val = (uint32_t) svm->g_rbp;
 		break;
 	case GUEST_ESP:
+#ifndef __COMPCERT__
 		*val = (uint32_t) save->rsp;
+#else
+		*val = save->rsp_lo;
+#endif
 		break;
 	case GUEST_EIP:
+#ifndef __COMPCERT__
 		*val = (uint32_t) save->rip;
+#else
+		*val = save->rip_lo;
+#endif
 		break;
 	case GUEST_EFLAGS:
+#ifndef __COMPCERT__
 		*val = (uint32_t) save->rflags;
+#else
+		*val = save->rflags_lo;
+#endif
 		break;
 	case GUEST_CR0:
+#ifndef __COMPCERT__
 		*val = (uint32_t) save->cr0;
+#else
+		*val = save->cr0_lo;
+#endif
 		break;
 	case GUEST_CR2:
+#ifndef __COMPCERT__
 		*val = (uint32_t) save->cr2;
+#else
+		*val = save->cr2_lo;
+#endif
 		break;
 	case GUEST_CR3:
+#ifndef __COMPCERT__
 		*val = (uint32_t) save->cr3;
+#else
+		*val = save->cr3_lo;
+#endif
 		break;
 	case GUEST_CR4:
+#ifndef __COMPCERT__
 		*val = (uint32_t) save->cr4;
+#else
+		*val = save->cr4_lo;
+#endif
 		break;
 	default:
 		return 1;
@@ -571,7 +597,12 @@ svm_set_reg(struct vm *vm, guest_reg_t reg, uint32_t val)
 
 	switch (reg) {
 	case GUEST_EAX:
+#ifndef __COMPCERT__
 		save->rax = val;
+#else
+		save->rax_lo = val;
+		save->rax_hi = 0;
+#endif
 		break;
 	case GUEST_EBX:
 		svm->g_rbx = val;
@@ -592,25 +623,60 @@ svm_set_reg(struct vm *vm, guest_reg_t reg, uint32_t val)
 		svm->g_rbp = val;
 		break;
 	case GUEST_ESP:
+#ifndef __COMPCERT__
 		save->rsp = val;
+#else
+		save->rsp_lo = val;
+		save->rsp_hi = 0;
+#endif
 		break;
 	case GUEST_EIP:
+#ifndef __COMPCERT__
 		save->rip = val;
+#else
+		save->rip_lo = val;
+		save->rip_hi = 0;
+#endif
 		break;
 	case GUEST_EFLAGS:
+#ifndef __COMPCERT__
 		save->rflags = val;
+#else
+		save->rflags_lo = val;
+		save->rflags_hi = 0;
+#endif
 		break;
 	case GUEST_CR0:
+#ifndef __COMPCERT__
 		save->cr0 = val;
+#else
+		save->cr0_lo = val;
+		save->cr0_hi = 0;
+#endif
 		break;
 	case GUEST_CR2:
+#ifndef __COMPCERT__
 		save->cr2 = val;
+#else
+		save->cr2_lo = val;
+		save->cr2_hi = 0;
+#endif
 		break;
 	case GUEST_CR3:
+#ifndef __COMPCERT__
 		save->cr3 = val;
+#else
+		save->cr3_lo = val;
+		save->cr3_hi = 0;
+#endif
 		break;
 	case GUEST_CR4:
+#ifndef __COMPCERT__
 		save->cr4 = val;
+#else
+		save->cr4_lo = val;
+		save->cr4_hi = 0;
+#endif
 		break;
 	default:
 		return 1;
@@ -618,6 +684,8 @@ svm_set_reg(struct vm *vm, guest_reg_t reg, uint32_t val)
 
 	return 0;
 }
+
+#ifndef __COMPCERT__
 
 static uintptr_t seg_offset[10] = {
 	[GUEST_CS]	= offsetof(struct vmcb_save_area, cs),
@@ -632,6 +700,27 @@ static uintptr_t seg_offset[10] = {
 	[GUEST_IDTR]	= offsetof(struct vmcb_save_area, idtr),
 };
 
+#else
+
+static uintptr_t seg_offset[10];
+
+static void
+init_seg_offset(void)
+{
+	seg_offset[GUEST_CS]	= offsetof(struct vmcb_save_area, cs);
+	seg_offset[GUEST_DS]	= offsetof(struct vmcb_save_area, ds);
+	seg_offset[GUEST_ES]	= offsetof(struct vmcb_save_area, es);
+	seg_offset[GUEST_FS]	= offsetof(struct vmcb_save_area, fs);
+	seg_offset[GUEST_GS]	= offsetof(struct vmcb_save_area, gs);
+	seg_offset[GUEST_SS]	= offsetof(struct vmcb_save_area, ss);
+	seg_offset[GUEST_LDTR]	= offsetof(struct vmcb_save_area, ldtr);
+	seg_offset[GUEST_TR]	= offsetof(struct vmcb_save_area, tr);
+	seg_offset[GUEST_GDTR]	= offsetof(struct vmcb_save_area, gdtr);
+	seg_offset[GUEST_IDTR]	= offsetof(struct vmcb_save_area, idtr);
+}
+
+#endif
+
 static int
 svm_get_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc)
 {
@@ -644,7 +733,12 @@ svm_get_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc)
 		(struct vmcb_seg *) ((uintptr_t) save + seg_offset[seg]);
 
 	desc->sel = vmcb_seg->selector;
+#ifndef __COMPCERT__
 	desc->base = vmcb_seg->base;
+#else
+	desc->base_lo = vmcb_seg->base_lo;
+	desc->base_hi = vmcb_seg->base_hi;
+#endif
 	desc->lim = vmcb_seg->limit;
 	desc->ar =
 		(vmcb_seg->attrib & 0xff) | ((vmcb_seg->attrib & 0xf00) << 4);
@@ -664,7 +758,12 @@ svm_set_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc)
 		(struct vmcb_seg *) ((uintptr_t) save + seg_offset[seg]);
 
 	vmcb_seg->selector = desc->sel;
+#ifndef __COMPCERT__
 	vmcb_seg->base = desc->base;
+#else
+	vmcb_seg->base_lo = desc->base_lo;
+	vmcb_seg->base_hi = desc->base_hi;
+#endif
 	vmcb_seg->limit = desc->lim;
 	vmcb_seg->attrib = (desc->ar & 0xff) | ((desc->ar & 0xf000) >> 4);
 
@@ -681,12 +780,18 @@ svm_set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa, int type)
 
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb_control_area *ctrl = &svm->vmcb->control;
+#ifndef __COMPCERT__
 	pmap_t *npt = (pmap_t *)(uintptr_t) ctrl->nested_cr3;
+#else
+	pmap_t *npt = (pmap_t *)(uintptr_t) ctrl->nested_cr3_lo;
+#endif
 
 	npt = pmap_insert(npt, mem_phys2pi(hpa), gpa, PTE_W | PTE_G | PTE_U);
 
 	return (npt == NULL) ? 2 : 0;
 }
+
+#ifndef __COMPCERT__
 
 static int svm_event_type[4] = {
 	[EVENT_EXTINT]		= SVM_EVTINJ_TYPE_INTR,
@@ -694,6 +799,21 @@ static int svm_event_type[4] = {
 	[EVENT_EXCEPTION]	= SVM_EVTINJ_TYPE_EXEPT,
 	[EVENT_SWINT]		= SVM_EVTINJ_TYPE_SOFT
 };
+
+#else
+
+static int svm_event_type[4];
+
+static void
+init_svm_event_type(void)
+{
+	svm_event_type[EVENT_EXTINT]	= SVM_EVTINJ_TYPE_INTR;
+	svm_event_type[EVENT_NMI]	= SVM_EVTINJ_TYPE_NMI;
+	svm_event_type[EVENT_EXCEPTION]	= SVM_EVTINJ_TYPE_EXEPT;
+	svm_event_type[EVENT_SWINT]	= SVM_EVTINJ_TYPE_SOFT;
+}
+
+#endif
 
 static int
 svm_inject_event(struct vm *vm,
@@ -731,16 +851,28 @@ svm_get_next_eip(struct vm *vm, guest_instr_t instr, uint32_t *val)
 	switch (instr) {
 	case INSTR_IN:
 	case INSTR_OUT:
+#ifndef __COMPCERT__
 		*val = (uint32_t) ctrl->exit_info_2;
+#else
+		*val = ctrl->exit_info_2_lo;
+#endif
 		break;
 	case INSTR_RDMSR:
 	case INSTR_WRMSR:
 	case INSTR_CPUID:
 	case INSTR_RDTSC:
+#ifndef __COMPCERT__
 		*val = (uint32_t) save->rip + 2;
+#else
+		*val = save->rip_lo + 2;
+#endif
 		break;
 	case INSTR_HYPERCALL:
+#ifndef __COMPCERT__
 		*val = (uint32_t) save->rip + 3;
+#else
+		*val = save->rip_lo + 3;
+#endif
 		break;
 	default:
 		return 1;
@@ -771,6 +903,8 @@ svm_intr_shadow(struct vm *vm)
 	return (ctrl->int_state & 0x1) ? TRUE : FALSE;
 }
 
+#ifndef __COMPCERT__
+
 struct hvm_ops hvm_ops_amd = {
 	.signature		= AMD_SVM,
 	.hw_init		= svm_init,
@@ -789,3 +923,30 @@ struct hvm_ops hvm_ops_amd = {
 	.pending_event		= svm_pending_event,
 	.intr_shadow		= svm_intr_shadow,
 };
+
+#else
+
+struct hvm_ops hvm_ops_amd;
+
+void
+init_hvm_ops_amd(void)
+{
+	hvm_ops_amd.signature		= AMD_SVM;
+	hvm_ops_amd.hw_init		= svm_init;
+	hvm_ops_amd.intercept_ioport	= svm_intercept_ioport;
+	hvm_ops_amd.intercept_msr	= svm_intercept_msr;
+	hvm_ops_amd.intercept_intr_window = svm_intercept_vintr;
+	hvm_ops_amd.vm_init		= svm_init_vm;
+	hvm_ops_amd.vm_run		= svm_run_vm;
+	hvm_ops_amd.get_reg		= svm_get_reg;
+	hvm_ops_amd.set_reg		= svm_set_reg;
+	hvm_ops_amd.get_desc		= svm_get_desc;
+	hvm_ops_amd.set_desc		= svm_set_desc;
+	hvm_ops_amd.set_mmap		= svm_set_mmap;
+	hvm_ops_amd.inject_event	= svm_inject_event;
+	hvm_ops_amd.get_next_eip	= svm_get_next_eip;
+	hvm_ops_amd.pending_event	= svm_pending_event;
+	hvm_ops_amd.intr_shadow		= svm_intr_shadow;
+}
+
+#endif

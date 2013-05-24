@@ -81,7 +81,12 @@ typedef enum {
 
 struct guest_seg_desc {
 	uint16_t	sel;
+#ifndef __COMPCERT__
 	uint64_t	base;
+#else
+	uint32_t	base_lo;
+	uint32_t	base_hi;
+#endif
 	uint32_t	lim;
 	uint32_t	ar;
 };

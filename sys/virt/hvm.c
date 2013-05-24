@@ -6,6 +6,10 @@
 
 #include <sys/virt/hvm.h>
 
+#ifdef __COMPCERT__
+#include "svm/svm.h"
+#endif
+
 #ifdef DEBUG_HVM
 
 #define HVM_DEBUG(fmt, ...)				\
@@ -80,6 +84,11 @@ hvm_init(void)
 	if (hvm_ops == NULL)
 		hvm_ops =
 			(c->arch_info.cpu_vendor == AMD) ? &hvm_ops_amd : NULL;
+
+#ifdef __COMPCERT__
+	if (c->arch_info.cpu_vendor == AMD)
+		init_hvm_ops_amd();
+#endif
 
 	if (hvm_ops == NULL) {
 		HVM_DEBUG("Cannot detect HVM support.\n");
