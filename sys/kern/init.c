@@ -1,5 +1,4 @@
 #include <sys/channel.h>
-#include <sys/console.h>
 #include <sys/context.h>
 #include <sys/debug.h>
 #include <sys/intr.h>
@@ -17,15 +16,17 @@
 #include <sys/types.h>
 #include <sys/x86.h>
 
-#include <sys/virt/vmm.h>
+#include <sys/virt/hvm.h>
 
 #include <machine/kstack.h>
 #include <machine/pmap.h>
 
+#include <dev/cons.h>
 #include <dev/disk.h>
 #include <dev/kbd.h>
 #include <dev/lapic.h>
 #include <dev/pci.h>
+#include <dev/serial.h>
 #include <dev/tsc.h>
 #include <dev/timer.h>
 
@@ -34,25 +35,10 @@
  */
 uint8_t bsp_kstack[KSTACK_SIZE] gcc_aligned(KSTACK_SIZE);
 
-static volatile bool all_cpus_ready = FALSE;
-static volatile bool vm_ready = FALSE;
-static volatile bool all_vdevs_ready = FALSE;
+static volatile int all_ready = FALSE;
 
-extern uint8_t _binary___obj_user_idle_idle_start[],
-	_binary___obj_user_vdev_i8042_i8042_start[],
-	_binary___obj_user_vdev_i8254_i8254_start[],
-	_binary___obj_user_vdev_nvram_nvram_start[],
-	_binary___obj_user_vdev_virtio_virtio_start[];
-
-static uint8_t *vdev_binary[4] =
-	{
-		_binary___obj_user_vdev_nvram_nvram_start,
-		_binary___obj_user_vdev_i8042_i8042_start,
-		_binary___obj_user_vdev_i8254_i8254_start,
-		_binary___obj_user_vdev_virtio_virtio_start
-	};
-
-volatile struct vm *vm = NULL;
+extern uint8_t _binary___obj_user_vmm_vmm_start[];
+extern uint8_t _binary___obj_user_idle_idle_start[];
 
 static void kern_main_ap(void);
 
@@ -73,6 +59,7 @@ static void
 kern_main(void)
 {
 	struct pcpu *c;
+	struct proc *idle_proc, *guest_proc;
 	struct kstack *ap_kstack;
 	int i;
 
@@ -110,7 +97,8 @@ kern_main(void)
 	KERN_INFO("[BSP KERN] Register interrupt handlers ... ");
 	trap_handler_register(T_IRQ0+IRQ_SPURIOUS, spurious_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_TIMER, timer_intr_handler);
-	trap_handler_register(T_IRQ0+IRQ_KBD, kbd_intr_handler);
+	trap_handler_register(T_IRQ0+IRQ_KBD, cons_kbd_intr_handler);
+	trap_handler_register(T_IRQ0+IRQ_SERIAL13, serial_intr_handler);
 	trap_handler_register(T_IPI0+IPI_RESCHED, ipi_resched_handler);
 	disk_register_intr();
 	KERN_INFO("done.\n");
@@ -121,15 +109,19 @@ kern_main(void)
 	KERN_INFO("done.\n");
 
 	KERN_INFO("[BSP KERN] Enable KBD interrupt ... ");
-	kbd_intenable();
+	intr_enable(IRQ_KBD, 0);
 	KERN_INFO("done.\n");
 
 	KERN_INFO("[BSP KERN] Enable disk interrupt ... ");
 	disk_intr_enable();
 	KERN_INFO("done.\n");
 
+	KERN_INFO("[BSP KERN] Enable serial interrupt ... ");
+	serial_intenable();
+	KERN_INFO("done.\n");
+
 	/* boot APs  */
-	all_cpus_ready = FALSE;
+	all_ready = FALSE;
 	for (i = 1; i < pcpu_ncpu(); i++) {
 		KERN_INFO("Boot CPU%d ... ", i);
 
@@ -146,22 +138,21 @@ kern_main(void)
 
 		KERN_INFO("done.\n");
 	}
-	all_cpus_ready = TRUE;
+	all_ready = TRUE;
 
-	/* create VM */
-#ifndef __COMPCERT__
-	vm = vmm_create_vm(800 * 1000 * 1000, 256 * 1024 * 1024);
-#else
-	vm = vmm_create_vm(800 * 1000 * 1000, 0, 256 * 1024 * 1024);
-#endif
-	KERN_ASSERT(vm != NULL);
-	vm_ready = TRUE;
+	/* create the first user process */
+	if ((idle_proc = proc_new(NULL, NULL)) == NULL)
+		KERN_PANIC("Cannot create idle process on BSP.\n");
+	proc_exec(idle_proc, c, (uintptr_t) _binary___obj_user_idle_idle_start);
 
-	/* launch VM */
-	while (all_vdevs_ready != TRUE)
-		pause();
-	KERN_INFO("Start VM ...\n");
-	vmm_run_vm((struct vm *) vm);
+	if ((guest_proc = proc_new(idle_proc, NULL)) == NULL)
+		KERN_PANIC("Cannot create guest process on BSP.\n");
+	proc_exec(guest_proc, c, (uintptr_t) _binary___obj_user_vmm_vmm_start);
+
+	/* jump to userspace */
+	KERN_INFO("[BSP KERN] Go to userspace ... \n");
+	sched_lock(c);
+	sched_resched(FALSE);
 
 	KERN_PANIC("[BSP KERN] CertiKOS should not be here!\n");
 }
@@ -172,10 +163,7 @@ kern_main_ap(void)
 	struct pcpu *c;
 	int cpu_idx;
 
-	struct proc *idle_proc, *vdev_proc;
-	struct channel *in, *out;
-	vid_t vid;
-	int i;
+	struct proc *idle_proc;
 
 	c = pcpu_cur();
 	KERN_ASSERT(c != NULL && c->booted == FALSE);
@@ -213,6 +201,7 @@ kern_main_ap(void)
 	trap_handler_register(T_IRQ0+IRQ_SPURIOUS, spurious_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_TIMER, timer_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_KBD, kbd_intr_handler);
+	trap_handler_register(T_IRQ0+IRQ_SERIAL13, serial_intr_handler);
 	trap_handler_register(T_IPI0+IPI_RESCHED, ipi_resched_handler);
 	disk_register_intr();
 	KERN_INFO("done.\n");
@@ -220,7 +209,7 @@ kern_main_ap(void)
 	/* enable interrupts */
 
 	c->booted = TRUE;
-	while (all_cpus_ready == FALSE)
+	while (all_ready == FALSE)
 		pause();
 
 	/* create idle process */
@@ -228,27 +217,6 @@ kern_main_ap(void)
 		KERN_PANIC("Cannot create idle process on AP%d.\n", cpu_idx);
 	proc_exec(idle_proc, c, (uintptr_t) _binary___obj_user_idle_idle_start);
 
-	if (pcpu_cpu_idx(pcpu_cur()) != 1)
-		goto enter_user;
-
-	/* create virtual devices  */
-	while (vm_ready != TRUE)
-		pause();
-	for (i = 0; i < 4; i++) {
-		out = channel_alloc(sizeof(vdev_ack_t));
-		KERN_ASSERT(out != NULL);
-		in = channel_alloc(sizeof(vdev_req_t));
-		KERN_ASSERT(in != NULL);
-		vdev_proc = proc_new(NULL, NULL);
-		vid = vdev_register_device((struct vm *) vm, vdev_proc, in, out);
-		proc_exec(vdev_proc, pcpu_cur(), (uintptr_t) vdev_binary[i]);
-		KERN_DEBUG("Attach process %d to vdev %d, in %d, out %d.\n",
-			   vdev_proc->pid, vid,
-			   channel_getid(in), channel_getid(out));
-	}
-	all_vdevs_ready = TRUE;
-
- enter_user:
 	/* jump to userspace */
 	KERN_INFO("[AP%d KERN] Go to userspace ... \n", cpu_idx);
 	sched_lock(c);
@@ -384,12 +352,12 @@ kern_init(mboot_info_t *mbi)
 	KERN_INFO("done.\n");
 
 	/*
-	 * Initialize virtual machine monitor module.
+	 * Initialize HVM..
 	 */
 	if (strncmp(pcpu_cur()->arch_info.vendor, "AuthenticAMD", 20) == 0 ||
 	    strncmp(pcpu_cur()->arch_info.vendor, "GenuineIntel", 20) == 0) {
-		KERN_INFO("Initialize VMM ... ");
-		if (vmm_init() != 0)
+		KERN_INFO("Initialize HVM ... ");
+		if (hvm_init() != 0)
 			KERN_INFO("failed.\n");
 		else
 			KERN_INFO("done.\n");

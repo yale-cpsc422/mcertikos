@@ -7,36 +7,30 @@
  * debugging file descriptor code!
  */
 
-#include <sys/console.h>
 #include <sys/debug.h>
 #include <sys/stdarg.h>
 #include <sys/types.h>
 
-/*
- * Collect up to CONSBUFSIZE-1 characters into a buffer
- * and perform ONE system call to print all of them,
- * in order to make the lines output to the console atomic
- * and prevent interrupts from causing context switches
- * in the middle of a console output line and such.
- */
+#include <dev/cons.h>
+
 struct printbuf {
 	int idx;	/* current buffer index */
 	int cnt;	/* total bytes printed so far */
-	char buf[CONSOLE_BUFFER_SIZE];
+	char buf[1024];
 };
 
 static void
 cputs(const char *str)
 {
 	while (*str)
-		cons_putc(*str++);
+		cons_putc(0, *str++);
 }
 
 static void
 putch(int ch, struct printbuf *b)
 {
 	b->buf[b->idx++] = ch;
-	if (b->idx == CONSOLE_BUFFER_SIZE - 1 ) {
+	if (b->idx == 1024 - 1) {
 		b->buf[b->idx] = 0;
 		cputs(b->buf);
 		b->idx = 0;

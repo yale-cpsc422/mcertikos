@@ -8,12 +8,12 @@
 
 #include <machine/trap.h>
 
-int syscall_handler(uint8_t trapno, struct context *, int guest);
+int syscall_handler(uint8_t trapno, struct context *);
 
 #endif /* _KERN_ */
 
 #include <sys/types.h>
-#include <sys/virt/vmm_dev.h>
+#include <sys/virt/hvm.h>
 
 #define T_SYSCALL	48
 
@@ -36,28 +36,28 @@ enum __syscall_nr {
 	SYS_recv,	/* recv a message */
 	SYS_disk_op,	/* perform a disk operation */
 	SYS_disk_cap,	/* get the capacity of a disk in bytes */
+	SYS_sysinfo_lookup,
 	/*
-	 * system calls to setup the virtual machines
+	 * HVM system calls
 	 */
-	SYS_attach_port,/* attach an I/O port to a virtual device */
-	SYS_detach_port,/* detach an I/O port from a virtual device */
-	SYS_attach_irq,	/* attach an IRQ to a virtual device */
-	SYS_detach_irq,	/* detach an IRQ from a virtual device */
-	/*
-	 * system calls for virtual devices to commnicate with virtual machines
-	 */
-	SYS_get_inchan,	/* get the in channel */
-	SYS_get_outchan,/* get the out channel */
-	SYS_ret_in,	/* return the value on an guest I/O port */
-	SYS_host_in,	/* read from a host I/O port */
-	SYS_host_out,	/* write to a host I/O port */
-	SYS_set_irq,	/* set an IRQ line of the guest interrupt controller */
-	SYS_guest_read,	/* transfer data from the guest physical address space */
-	SYS_guest_write,/* transfer data to the guest physical address space */
-	SYS_guest_tsc,	/* read the guest TSC */
-	SYS_guest_cpufreq, /* get the guest TSC frequency */
-	SYS_guest_memsize, /* get the size in bytes of the guest physical
-			      memory */
+	SYS_hvm_create_vm,
+	SYS_hvm_run_vm,
+	SYS_hvm_set_mmap,
+	SYS_hvm_set_reg,
+	SYS_hvm_get_reg,
+	SYS_hvm_set_desc,
+	SYS_hvm_get_desc,
+	SYS_hvm_get_next_eip,
+	SYS_hvm_inject_event,
+	SYS_hvm_pending_event,
+	SYS_hvm_intr_shadow,
+	SYS_hvm_intercept_ioport,
+	SYS_hvm_intercept_msr,
+	SYS_hvm_intercept_intr_window,
+	SYS_hvm_mmap_bios,
+	/* XXX: should be removed in the future */
+	SYS_read_ioport,
+	SYS_write_ioport,
 	MAX_SYSCALL_NR	/* XXX: always put it at the end of __syscall_nr */
 };
 
@@ -74,39 +74,28 @@ enum __error_nr {
 	E_INVAL_PID,	/* invalid process ID */
 	E_INVAL_CHID,	/* invalid channel ID */
 	E_INVAL_VMID,	/* invalid virtual machine */
-	E_INVAL_VID,	/* invalid virtual device ID */
-	E_INVAL_IRQ,	/* invalid IRQ */
-	E_INVAL_MODE,	/* invalid mode */
-	E_ATTACH,	/* fail to attach a virtual device/IO port/IRQ/PIC */
-	E_DETACH,	/* fail to detach a virtual device/IO port/IRQ/PIC */
-	E_IOPORT,	/* fail to access an I/O port */
-	E_PIC,		/* errors related to the virtual PIC */
-	E_DEV_SYNC,	/* fail to send DEV_SYNC_COMPLETE */
-	E_DEV_RDY,	/* fail to send DEVIDE_READY */
+	E_INVAL_CACHE_TYPE,
+	E_INVAL_REG,
+	E_INVAL_SEG,
+	E_INVAL_EVENT,
+	E_INVAL_SYSINFO_NAME,
+	E_INVAL_PORT,
 	E_SEND,		/* fail to send */
 	E_RECV,		/* fail to receive */
 	E_CHANNEL,	/* fail to create a channel */
 	E_PERM,		/* no permission */
 	E_DISK_OP,	/* disk operation failure */
 	E_DISK_NODRV,	/* disk drive does not exist */
-	MAX_ERROR_NR	/* XXX: always pu it at the end of __error_nr */
-};
-
-enum __dev {
-	VDEV_8042,
-	VDEV_8254,
-	VDEV_NVRAM,
-	VDEV_VIRTIO,
-	MAX_VDEV
-};
-
-struct user_vdev {
-	chid_t		in_chid, out_chid;
-};
-
-struct user_ioport {
-	uint16_t	port;
-	data_sz_t	width;
+	E_HVM_VMRUN,
+	E_HVM_MMAP,
+	E_HVM_REG,
+	E_HVM_SEG,
+	E_HVM_NEIP,
+	E_HVM_INJECT,
+	E_HVM_IOPORT,
+	E_HVM_MSR,
+	E_HVM_INTRWIN,
+	MAX_ERROR_NR	/* XXX: always put it at the end of __error_nr */
 };
 
 struct user_disk_op {
@@ -116,5 +105,30 @@ struct user_disk_op {
 	uint64_t	n;
 	uintptr_t	buf;
 };
+
+struct user_hvm_mmap {
+	uintptr_t	gpa;	/* guest physical address */
+	uintptr_t	hva;	/* host virtual address */
+	int		type;	/* cache type */
+};
+
+struct user_hvm_event {
+	guest_event_t	type;	/* type of the event */
+	uint8_t		vector;	/* vector number */
+	uint32_t	errcode;/* error code */
+	bool		ev;	/* is ev valid? */
+};
+
+typedef enum {
+	SYSINFO_CPU_VENDOR,
+	SYSINFO_CPU_FREQ,
+	SYSINFO_CPU_INFO,	/* family, model and step */
+	MAX_SYSINFO_NAME	/* XXX: always put at the end */
+} sysinfo_name_t;
+
+typedef union {
+	uint32_t	info32;
+	uint64_t	info64;
+} sysinfo_info_t;
 
 #endif /* !_SYS_SYSCALL_H_ */

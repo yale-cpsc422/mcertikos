@@ -5,12 +5,12 @@
 #include <sys/proc.h>
 #include <sys/sched.h>
 #include <sys/string.h>
+#include <sys/syscall.h>
 #include <sys/trap.h>
 #include <sys/types.h>
 #include <sys/x86.h>
 
-#include <sys/virt/vmm.h>
-#include <sys/virt/vmm_dev.h>
+#include <sys/virt/hvm.h>
 
 #include <machine/pmap.h>
 #include <machine/vm.h>
@@ -19,63 +19,13 @@
 #include <dev/lapic.h>
 #include <dev/tsc.h>
 
-static gcc_inline int
-trap_from_guest(tf_t *tf)
-{
-	struct vm *vm = vmm_cur_vm();
-	return tf && tf->eip < VM_USERLO &&
-		vm && vm->state == VM_STATE_RUNNING &&
-		vm->exit_reason == EXIT_FOR_EXTINT && vm->exit_handled == FALSE;
-}
-
-static gcc_inline void
-pre_handle_guest(tf_t *tf)
-{
-	KERN_ASSERT(tf->trapno >= T_IRQ0);
-#ifdef DEBUG_GUEST_INTR
-	KERN_DEBUG("External interrupt 0x%x from guest on CPU%d.\n",
-		   tf->trapno - T_IRQ0, pcpu_cpu_idx(pcpu_cur()));
-#endif
-}
-
-static gcc_inline  void
-pre_handle_user(tf_t *tf)
-{
-	if (!(tf->eip >= VM_USERLO && tf->eip < VM_USERHI))
-		KERN_PANIC("trapno %d, eip 0x%08x.\n", tf->trapno, tf->eip);
-	KERN_ASSERT(tf->eip >= VM_USERLO && tf->eip < VM_USERHI);
-	struct proc *cur_p = proc_cur();
-	KERN_ASSERT(cur_p);
-	proc_save(cur_p, tf);		/* save the user context */
-	pmap_install(pmap_kern_map());	/* switch to kernel pmap */
-}
-
-static gcc_inline void
-default_handler_guest(tf_t *tf)
-{
-	vmm_handle_extint(vmm_cur_vm(), tf->trapno - T_IRQ0);
-}
-
 static gcc_inline void
 default_handler_user(tf_t *tf)
 {
 	KERN_WARN("No handler for user trap 0x%x, process %d, eip 0x%08x.\n",
 		  tf->trapno, proc_cur()->pid, tf->eip);
-}
-
-static gcc_inline gcc_noreturn void
-post_handle_guest(tf_t *tf)
-{
-	tf->eflags &= ~(uint32_t) FL_IF;
-	trap_return(tf);
-}
-
-static gcc_inline gcc_noreturn void
-post_handle_user(tf_t *tf)
-{
-	struct proc *cur_p = proc_cur();
-	KERN_ASSERT(cur_p);
-	ctx_start(&cur_p->uctx);
+	if (tf->trapno >= T_IRQ0)
+		intr_eoi();
 }
 
 gcc_noreturn void
@@ -84,30 +34,25 @@ trap(tf_t *tf)
 	asm volatile("cld" ::: "cc");
 
 	KERN_ASSERT(tf != NULL);
+	KERN_ASSERT(VM_USERLO <= tf->eip && tf->eip < VM_USERHI);
 
 	trap_cb_t f;
-	int guest = trap_from_guest(tf);
+	struct proc *cur_p = proc_cur();
+	struct pcpu *cur_c = pcpu_cur();
 
-	if (guest)
-		pre_handle_guest(tf);
+	KERN_ASSERT(cur_p);
+
+	proc_save(cur_p, tf);
+	pmap_install(pmap_kern_map());
+
+	f = (*cur_c->trap_handler)[tf->trapno];
+
+	if (f)
+		f(tf->trapno, &cur_p->uctx);
 	else
-		pre_handle_user(tf);
+		default_handler_user(tf);
 
-	f = (*pcpu_cur()->trap_handler)[tf->trapno];
-
-	if (f) {
-		f(tf->trapno, &proc_cur()->uctx, guest);
-	} else {
-		if (guest)
-			default_handler_guest(tf);
-		else
-			default_handler_user(tf);
-	}
-
-	if (guest)
-		post_handle_guest(tf);
-	else
-		post_handle_user(tf);
+	ctx_start(&cur_p->uctx);
 }
 
 void
@@ -139,11 +84,10 @@ trap_handler_register(int trapno, trap_cb_t cb)
 }
 
 int
-default_exception_handler(uint8_t trapno, struct context *ctx, int guest)
+default_exception_handler(uint8_t trapno, struct context *ctx)
 {
 	KERN_ASSERT(ctx != NULL);
 	KERN_ASSERT(proc_cur() != NULL);
-	KERN_ASSERT(!guest);
 
 	KERN_DEBUG("Exception %d caused by process %d on CPU %d.\n",
 		   ctx->tf.trapno, proc_cur()->pid, pcpu_cpu_idx(pcpu_cur()));
@@ -155,11 +99,10 @@ default_exception_handler(uint8_t trapno, struct context *ctx, int guest)
 }
 
 int
-gpf_handler(uint8_t trapno, struct context *ctx, int guest)
+gpf_handler(uint8_t trapno, struct context *ctx)
 {
 	KERN_ASSERT(ctx != NULL);
 	KERN_ASSERT(proc_cur() != NULL);
-	KERN_ASSERT(!guest);
 
 	KERN_DEBUG("General protection fault caused by process %d on CPU %d.\n",
 		   proc_cur()->pid, pcpu_cpu_idx(pcpu_cur()));
@@ -174,10 +117,9 @@ gpf_handler(uint8_t trapno, struct context *ctx, int guest)
 }
 
 int
-pgf_handler(uint8_t trapno, struct context *ctx, int guest)
+pgf_handler(uint8_t trapno, struct context *ctx)
 {
 	KERN_ASSERT(ctx != NULL);
-	KERN_ASSERT(!guest);
 
 	struct proc *p = proc_cur();
 	KERN_ASSERT(p != NULL);
@@ -193,7 +135,9 @@ pgf_handler(uint8_t trapno, struct context *ctx, int guest)
 		/*
 		 * TODO: kill the process instead of kernel panic
 		 */
-		KERN_PANIC("Page fault caused for permission violation.\n");
+		trap_dump(&ctx->tf);
+		KERN_PANIC("Page fault caused for permission violation "
+			   "(va 0x%08x).\n", fault_va);
 		return 1;
 	}
 
@@ -218,7 +162,7 @@ pgf_handler(uint8_t trapno, struct context *ctx, int guest)
 }
 
 int
-spurious_intr_handler(uint8_t trapno, struct context *ctx, int guest)
+spurious_intr_handler(uint8_t trapno, struct context *ctx)
 {
 	KERN_DEBUG("Ignore spurious interrupt.\n");
 	/* XXX: do not send EOI for spurious interrupts */
@@ -229,46 +173,23 @@ spurious_intr_handler(uint8_t trapno, struct context *ctx, int guest)
  * CertiKOS uses LAPIC timers as the sources of the timer interrupts. This
  * function only handles the timer interrupts from the processor on which
  * it's running.
- *
- * If there is a virtual machine running on the processor when timer interrupts
- * come, this function will use the interrupt handler provided by VMM to handle
- * them (which may result in injecting the timer interrupts to the virtual
- * machine).
- *
- * Otherwise, handle the interrupts as normal.
  */
 int
-timer_intr_handler(uint8_t trapno, struct context *ctx, int guest)
+timer_intr_handler(uint8_t trapno, struct context *ctx)
 {
 	intr_eoi();
-
-	if (guest)
-		vmm_handle_extint(vmm_cur_vm(), IRQ_TIMER);
-	else
-		sched_update();
-
+	sched_update();
 	return 0;
 }
 
 /*
  * CertiKOS redirects the keyboard interrupts to BSP.
- *
- * If there's a virtual machine running when the keyboard interrupts come, this
- * function will use the interrupt handler provided by VMM to handle them (which
- * may result in injecting the keyboard interrupts to the virtual machine).
- *
- * Otherwise, handle the interrupts as normal.
  */
 int
-kbd_intr_handler(uint8_t trapno, struct context *ctx, int guest)
+kbd_intr_handler(uint8_t trapno, struct context *ctx)
 {
 	intr_eoi();
-
-	if (guest)
-		vmm_handle_extint(vmm_cur_vm(), IRQ_KBD);
-	else
-		kbd_intr();
-
+	/* kbd_intr(); */
 	return 0;
 }
 
@@ -277,18 +198,11 @@ kbd_intr_handler(uint8_t trapno, struct context *ctx, int guest)
  * reschedule.
  */
 int
-ipi_resched_handler(uint8_t trapno, struct context *ctx, int guest)
+ipi_resched_handler(uint8_t trapno, struct context *ctx)
 {
 	intr_eoi();
-
-	if (guest) {
-		/* vmm_handle_extint(vmm_cur_vm(), IRQ_IPI_RESCHED); */
-		vmm_cur_vm()->exit_handled = TRUE;
-	} else {
-		sched_lock(pcpu_cur());
-		sched_resched(TRUE);
-		sched_unlock(pcpu_cur());
-	}
-
+	sched_lock(pcpu_cur());
+	sched_resched(TRUE);
+	sched_unlock(pcpu_cur());
 	return 0;
 }

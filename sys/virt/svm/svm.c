@@ -6,24 +6,65 @@
 #include <sys/types.h>
 #include <sys/x86.h>
 
-#include <sys/virt/vmm.h>
-#include <sys/virt/vmm_dev.h>
-
-#include <machine/pmap.h>
-
-#include <dev/kbd.h>
-#include <dev/lapic.h>
-#include <dev/pic.h>
+#include <sys/virt/hvm.h>
 
 #include "svm.h"
-#include "svm_utils.h"
 
-static struct {
-	struct svm 	svm[MAX_VMID];
-	bool		used[MAX_VMID];
-} svm_pool;
+#ifdef DEBUG_SVM
 
-static spinlock_t svm_pool_lk;
+#define SVM_DEBUG(fmt, ...)				\
+	do {						\
+		KERN_DEBUG("SVM: "fmt, ##__VA_ARGS__);	\
+	} while (0)
+
+#else
+
+#define SVM_DEBUG(fmt, ...)			\
+	do {					\
+	} while (0)
+
+#endif
+
+static struct svm	svm_pool[MAX_VMID];
+static spinlock_t	svm_pool_lk;
+volatile static bool	svm_pool_inited = FALSE;
+
+struct svm *
+alloc_svm(void)
+{
+	struct svm *svm;
+	int i;
+
+	spinlock_acquire(&svm_pool_lk);
+
+	for (i = 0; i < MAX_VMID; i++)
+		if (svm_pool[i].inuse == 0)
+			break;
+
+	if (i == MAX_VMID) {
+		SVM_DEBUG("No unused SVM descriptor.\n");
+		spinlock_release(&svm_pool_lk);
+		return NULL;
+	}
+
+	svm = &svm_pool[i];
+	svm->inuse = 1;
+
+	spinlock_release(&svm_pool_lk);
+
+	return svm;
+}
+
+void
+free_svm(struct svm *svm)
+{
+	if (svm == NULL)
+		return;
+
+	spinlock_acquire(&svm_pool_lk);
+	svm->inuse = 0;
+	spinlock_release(&svm_pool_lk);
+}
 
 /*
  * Check whether the machine supports SVM. (Sec 15.4, APM Vol2 r3.19)
@@ -94,131 +135,6 @@ alloc_hsave_area(void)
 	return mem_pi2phys(pi);
 }
 
-static struct svm *
-alloc_svm(void)
-{
-	int i;
-	struct svm *svm = NULL;
-
-	spinlock_acquire(&svm_pool_lk);
-
-	for (i = 0; i < MAX_VMID; i++)
-		if (svm_pool.used[i] == FALSE)
-			break;
-
-	if (i < MAX_VMID) {
-		svm_pool.used[i] = TRUE;
-		svm = &svm_pool.svm[i];
-		memzero(svm, sizeof(struct svm));
-	}
-
-	spinlock_release(&svm_pool_lk);
-
-	return svm;
-}
-
-static void
-free_svm(struct svm *svm)
-{
-	uintptr_t offset;
-
-	if (svm < svm_pool.svm)
-		return;
-
-	offset = (uintptr_t) svm - (uintptr_t) svm_pool.svm;
-	if (offset % sizeof(struct svm) ||
-	    offset / sizeof(struct svm) >= MAX_VMID)
-		return;
-
-	spinlock_acquire(&svm_pool_lk);
-	svm_pool.used[svm - svm_pool.svm] = FALSE;
-	spinlock_release(&svm_pool_lk);
-}
-
-/*
- * Allocate one memory page for VMCB.
- *
- * @return the pointer to VMCB if succeed; otherwise NULL.
- */
-static struct vmcb *
-alloc_vmcb(void)
-{
-	pageinfo_t *pi = mem_page_alloc();
-
-	if (pi == NULL) {
-		SVM_DEBUG("Failed to allocate memory for VMCB.\n");
-		return NULL;
-	}
-
-	memset((struct vmcb *) mem_pi2phys(pi), 0x0, sizeof(struct vmcb));
-
-	return (struct vmcb *) mem_pi2phys(pi);
-}
-
-static void
-free_vmcb(struct vmcb *vmcb)
-{
-	KERN_ASSERT(vmcb != NULL);
-	mem_page_free(mem_ptr2pi(vmcb));
-}
-
-/*
- * Create the nestd page table.
- * - identically maps the lowest 1MB guest physical memory
- *
- * @return the pointer to the page table if succeed; otherwise NULL.
- */
-static pmap_t *
-alloc_nested_ptable(size_t memsize)
-{
-	pageinfo_t *pmap_pi;
-	pmap_t *pmap;
-
-	if ((pmap_pi = mem_page_alloc()) == NULL) {
-		SVM_DEBUG("Cannot allocate memory for nested page table.\n");
-		return NULL;
-	}
-	pmap = mem_pi2ptr(pmap_pi);
-
-	return pmap;
-}
-
-static void
-free_nested_ptable(pmap_t *pmap)
-{
-	KERN_PANIC("Not implemented yet.\n");
-}
-
-/*
- * Create an permission map. The permission map is aligned to the
- * boundary of the physical memory page and occupies continuous
- * ROUNDUP(size, PAGESIZE) bytes of physical memory.
- *
- * @param size the least size of the permission map in bytes
- *
- * @return the 64-bit address of the permission map if succeed;
- *         otherwise, 0x0.
- */
-static uint64_t
-alloc_perm_map(size_t size)
-{
-	pageinfo_t *pi = mem_pages_alloc(size);
-
-	if (pi == NULL)
-		return 0;
-
-	uintptr_t addr = mem_pi2phys(pi);
-	memzero((uint8_t *) addr, size);
-
-	return (uint64_t) addr;
-}
-
-static void
-free_perm_map(uint64_t map_addr)
-{
-	mem_pages_free(mem_phys2pi((uintptr_t) map_addr));
-}
-
 /*
  * Set an interception bit in VMCB.
  *
@@ -238,94 +154,6 @@ set_intercept(struct vmcb *vmcb, int bit, bool enable)
 }
 
 static int
-svm_handle_err(struct vm *vm)
-{
-	KERN_ASSERT(vm != NULL);
-
-	struct svm *svm = (struct svm *) vm->cookie;
-	struct vmcb *vmcb = svm->vmcb;
-	struct vmcb_save_area *save = &vmcb->save;
-	struct vmcb_control_area *ctrl = &vmcb->control;
-
-	/* Sec 3.1.7, APM Vol2 r3.19 */
-	uint64_t efer = save->efer;
-	if ((efer & MSR_EFER_SVME) == 0)
-		KERN_WARN("EFER.SVME != 0\n");
-	if ((efer >> 32) != 0ULL)
-		KERN_WARN("EFER[63..32] != 0\n");
-	if ((efer >> 15) != 0ULL)
-		KERN_WARN("EFER[31..15] != 0\n");
-	if ((efer & 0xfe) != 0ULL)
-		KERN_WARN("EFER[7..1] != 0\n");
-
-	uint64_t cr0 = save->cr0;
-	if ((cr0 & CR0_CD) == 0 && (cr0 & CR0_NW))
-		KERN_WARN("CR0.CD = 0 && CR0.NW = 1\n");
-	if ((cr0 >> 32) != 0ULL)
-		KERN_WARN("CR0[63..32] != 0\n");
-
-	/*
-	 * TODO: check the MBZ bits of CR3 according to the actual mode
-	 *       CertiKOS and/or VM is running in. Current version CertiKOS
-	 *       and VM are using the legacy-mode non-PAE paging, so there
-	 *       is no MBZ bits in CR3. (Sec 3.1.2, APM Vol2 r3.19)
-	 */
-
-	/* Sec 3.1.3, APM Vol2 r3.19 */
-	uint64_t cr4 = save->cr4;
-	if ((cr4 >> 32) != 0ULL)
-		KERN_WARN("CR4[63..32] != 0\n");
-	if ((cr4 >> 19) != 0ULL)
-		KERN_WARN("CR4[31..19] != 0\n");
-	if (((cr4 >> 11) & 0x7fULL) != 0ULL)
-		KERN_WARN("CR4[17..11] != 0\n");
-
-	if ((save->dr6 >> 32) != 0ULL)
-		KERN_WARN("DR6[63..32] != 0\n");
-
-	if ((save->dr7 >> 32) != 0ULL)
-		KERN_WARN("DR7[63..32] != 0\n");
-
-	if (((efer & MSR_EFER_LMA) || (efer & MSR_EFER_LME)) &&
-	    (pcpu_cur()->arch_info.feature2 & CPUID_X_FEATURE_LM) == 0)
-		KERN_WARN("EFER.LMA =1 or EFER.LME = 1, "
-			  "while long mode is not supported.\n");
-	if ((efer & MSR_EFER_LME) && (cr0 & CR0_PG) && (cr4 & CR4_PAE) == 0)
-		KERN_WARN("EFER.LME = 1 and CR0.PG =1, while CR4.PAE = 0.\n");
-
-	if ((efer & MSR_EFER_LME) && (cr0 & CR0_PG) && (cr0 & CR0_PE) == 0)
-		KERN_WARN("EFER.LME = 1 and CR0.PG =1, while CR0.PE = 0.\n");
-
-	uint16_t cs_attrib = save->cs.attrib;
-
-	if ((efer & MSR_EFER_LME) && (cr0 & CR0_PG) && (cr4 & CR4_PAE) &&
-	    (cs_attrib & SEG_ATTR_L) && (cs_attrib & SEG_ATTR_D))
-		KERN_WARN("EFER.LME, CR0.PG, CR4.PAE, CS.L and CS.D "
-			  "are non-zero.\n");
-
-	if ((ctrl->intercept & (1ULL << INTERCEPT_VMRUN)) == 0)
-		KERN_WARN("VMRUN is not intercepted.\n");
-
-	if (ctrl->iopm_base_pa > mem_max_phys())
-		KERN_WARN("The address of IOPM (%x) is out of range of "
-			  "the physical memory.\n",
-			  ctrl->iopm_base_pa);
-
-	if (ctrl->msrpm_base_pa > mem_max_phys())
-		KERN_WARN("The address of MSRPM (%x) is out of range of "
-			  "the physical memory.\n",
-			  ctrl->msrpm_base_pa);
-
-	if (ctrl->event_inj & SVM_EVTINJ_VALID)
-		KERN_WARN("Illegal event injection.\n");
-
-	if (ctrl->asid == 0)
-		KERN_WARN("ASID = 0\n");
-
-	return 0;
-}
-
-static int
 svm_handle_exit(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
@@ -335,8 +163,6 @@ svm_handle_exit(struct vm *vm)
 	struct vmcb_control_area *ctrl = &vmcb->control;
 	uint32_t exitinfo1 = ctrl->exit_info_1;
 
-	vm->exit_handled = FALSE;
-
 #ifdef DEBUG_VMEXIT
 	SVM_DEBUG("VMEXIT exit_code 0x%x, guest EIP 0x%08x.\n",
 		  ctrl->exit_code, (uintptr_t) vmcb->save.rip);
@@ -344,16 +170,16 @@ svm_handle_exit(struct vm *vm)
 
 	switch (ctrl->exit_code) {
 	case SVM_EXIT_INTR:
-		vm->exit_reason = EXIT_FOR_EXTINT;
+		vm->exit_reason = EXIT_REASON_EXTINT;
 		break;
 
 	case SVM_EXIT_VINTR:
-		vm->exit_reason = EXIT_FOR_INTWIN;
+		vm->exit_reason = EXIT_REASON_INTWIN;
 		ctrl->int_ctl &= ~SVM_INTR_CTRL_VIRQ;
 		break;
 
 	case SVM_EXIT_IOIO:
-		vm->exit_reason = EXIT_FOR_IOPORT;
+		vm->exit_reason = EXIT_REASON_IOPORT;
 		vm->exit_info.ioport.port =
 			(exitinfo1 & SVM_EXITINFO1_PORT_MASK) >>
 			SVM_EXITINFO1_PORT_SHIFT;
@@ -369,22 +195,20 @@ svm_handle_exit(struct vm *vm)
 		break;
 
 	case SVM_EXIT_NPF:
-		vm->exit_reason = EXIT_FOR_PGFLT;
+		vm->exit_reason = EXIT_REASON_PGFLT;
 		vm->exit_info.pgflt.addr = (uintptr_t) PGADDR(ctrl->exit_info_2);
+		KERN_DEBUG("NPT fault @ 0x%08x.\n", vm->exit_info.pgflt.addr);
 		break;
 
 	case SVM_EXIT_CPUID:
-		vm->exit_reason = EXIT_FOR_CPUID;
+		vm->exit_reason = EXIT_REASON_CPUID;
 		break;
 
 	case SVM_EXIT_RDTSC:
-		vm->exit_reason = EXIT_FOR_RDTSC;
+		vm->exit_reason = EXIT_REASON_RDTSC;
 		break;
 
 	case SVM_EXIT_VMMCALL:
-		vm->exit_reason = EXIT_FOR_HYPERCALL;
-		break;
-
 	case SVM_EXIT_HLT:
 	case SVM_EXIT_MSR:
 	case SVM_EXIT_VMRUN:
@@ -397,11 +221,11 @@ svm_handle_exit(struct vm *vm)
 	case SVM_EXIT_MONITOR:
 	case SVM_EXIT_MWAIT:
 	case SVM_EXIT_MWAIT_COND:
-		vm->exit_reason = EXIT_FOR_INVAL_INSTR;
+		vm->exit_reason = EXIT_REASON_INVAL_INSTR;
 		break;
 
 	default:
-		vm->exit_reason = EXIT_INVAL;
+		vm->exit_reason = EXIT_REASON_INVAL;
 	}
 
 	return 0;
@@ -418,6 +242,12 @@ svm_handle_exit(struct vm *vm)
 static int
 svm_init(void)
 {
+	if (svm_pool_inited == FALSE) {
+		memzero(svm_pool, sizeof(struct svm) * MAX_VMID);
+		spinlock_init(&svm_pool_lk);
+		svm_pool_inited = TRUE;
+	}
+
 	uintptr_t hsave_addr;
 
 	/* check whether the processor supports SVM */
@@ -445,92 +275,98 @@ svm_init_vm(struct vm *vm)
 
 	int rc;
 	struct svm *svm;
-	struct vmcb *vmcb;
-	struct vmcb_save_area *save;
-	struct vmcb_control_area *control;
-	pmap_t *ncr3;
+	pageinfo_t *vmcb_pi, *iopm_pi, *msrpm_pi, *ncr3_pi;
+
+	/*
+	 * Allocate memory.
+	 */
 
 	if ((svm = alloc_svm()) == NULL) {
-		rc = 1;
-		goto err_ret;
+		rc = -1;
+		goto err0;
 	}
-
 	vm->cookie = svm;
 
-	/* allocate memory for VMCB */
-	if ((svm->vmcb = alloc_vmcb()) == NULL) {
-		rc = 2;
-		goto vmcb_err;
+	if ((vmcb_pi = mem_page_alloc()) == NULL) {
+		rc = -2;
+		goto err1;
 	}
-	SVM_DEBUG("VMCB is at 0x%08x.\n", svm->vmcb);
+	svm->vmcb = mem_pi2ptr(vmcb_pi);
+	memzero(svm->vmcb, PAGESIZE);
 
-	vmcb = svm->vmcb;
-	save = &vmcb->save;
-	control = &vmcb->control;
-
-	/* setup CRs, DRs, and MSRs */
-	save->cr0 = 0x60000010;
-	save->cr2 = save->cr3 = save->cr4 = 0;
-	save->dr6 = 0xffff0ff0;
-	save->dr7 = 0x00000400;
-	save->efer = MSR_EFER_SVME;
-	save->g_pat = 0x7040600070406ULL;
-
-	/* setup the nested page table */
-	if ((ncr3 = alloc_nested_ptable(vm->memsize)) == NULL) {
-		rc = 3;
-		goto npt_err;
+	if ((iopm_pi = mem_pages_alloc(SVM_IOPM_SIZE)) == NULL) {
+		rc = -3;
+		goto err2;
 	}
-	control->nested_cr3 = (uintptr_t) ncr3;
-	SVM_DEBUG("Nested page table is at 0x%08x.\n", ncr3);
+	svm->vmcb->control.iopm_base_pa = mem_pi2phys(iopm_pi);
 
-	/* create IOPM */
-	if (!(control->iopm_base_pa = alloc_perm_map(SVM_IOPM_SIZE))) {
-		rc = 4;
-		goto iopm_err;
+	if ((msrpm_pi = mem_pages_alloc(SVM_MSRPM_SIZE)) == NULL) {
+		rc = -4;
+		goto err3;
 	}
+	svm->vmcb->control.msrpm_base_pa = mem_pi2phys(msrpm_pi);
 
-	/* create MSRPM */
-	if (!(control->msrpm_base_pa = alloc_perm_map(SVM_MSRPM_SIZE))) {
-		rc = 5;
-		goto msrpm_err;
+	if ((ncr3_pi = mem_page_alloc()) == NULL) {
+		rc = -5;
+		goto err4;
 	}
+	svm->vmcb->control.nested_cr3 = mem_pi2phys(ncr3_pi);
+	memzero((void *)(uint32_t) svm->vmcb->control.nested_cr3, PAGESIZE);
 
-	/* enable intercepting a selected set of instructions */
-	set_intercept(vmcb, INTERCEPT_VMRUN, TRUE);
-	set_intercept(vmcb, INTERCEPT_VMMCALL, TRUE);
-	set_intercept(vmcb, INTERCEPT_STGI, TRUE);
-	set_intercept(vmcb, INTERCEPT_CLGI, TRUE);
-	set_intercept(vmcb, INTERCEPT_IOIO_PROT, TRUE);
-	set_intercept(vmcb, INTERCEPT_CPUID, TRUE);
-	set_intercept(vmcb, INTERCEPT_RDTSC, TRUE);
-	set_intercept(vmcb, INTERCEPT_RDTSCP, TRUE);
+	/*
+	 * Setup default interception.
+	 */
 
-	/* enable intercepting interrupts */
-	set_intercept(vmcb, INTERCEPT_INTR, TRUE);
+	/* intercept all I/O ports */
+	memset((void *)(uint32_t) svm->vmcb->control.iopm_base_pa,
+	       0xf, SVM_IOPM_SIZE);
+	/* do not intercept any MSR */
+	memzero((void *)(uint32_t) svm->vmcb->control.msrpm_base_pa,
+		SVM_MSRPM_SIZE);
 
-	/* miscellenea initialization */
-	control->asid = 1;
-	control->nested_ctl = 1;
-	control->tlb_ctl = 0;
-	control->tsc_offset = 0;
+	/* intercept instructions */
+	set_intercept(svm->vmcb, INTERCEPT_VMRUN, TRUE);	/* vmrun */
+	set_intercept(svm->vmcb, INTERCEPT_VMMCALL, TRUE);	/* vmmcall */
+	set_intercept(svm->vmcb, INTERCEPT_STGI, TRUE);		/* stgi */
+	set_intercept(svm->vmcb, INTERCEPT_CLGI, TRUE);		/* clgi */
+	set_intercept(svm->vmcb, INTERCEPT_IOIO_PROT, TRUE);	/* in/out */
+	set_intercept(svm->vmcb, INTERCEPT_CPUID, TRUE);	/* cpuid */
+	set_intercept(svm->vmcb, INTERCEPT_RDTSC, TRUE);	/* rdtsc */
+	set_intercept(svm->vmcb, INTERCEPT_RDTSCP, TRUE);	/* rdtscp */
+
+	/* intercept interrupts */
+	set_intercept(svm->vmcb, INTERCEPT_INTR, TRUE);
+
+	/*
+	 * Setup initial state.
+	 */
+
+	svm->vmcb->save.cr0 = 0x60000010;
+	svm->vmcb->save.cr2 = svm->vmcb->save.cr3 = svm->vmcb->save.cr4 = 0;
+	svm->vmcb->save.dr6 = 0xffff0ff0;
+	svm->vmcb->save.dr7 = 0x00000400;
+	svm->vmcb->save.efer = MSR_EFER_SVME;
+	svm->vmcb->save.g_pat = 0x7040600070406ULL;
+
+	svm->vmcb->control.asid = 1;
+	svm->vmcb->control.nested_ctl = 1;
+	svm->vmcb->control.tlb_ctl = 0;
+	svm->vmcb->control.tsc_offset = 0;
 	/* Sec 15.21.1, APM Vol2 r3.19 */
-	control->int_ctl =
+	svm->vmcb->control.int_ctl =
 		(SVM_INTR_CTRL_VINTR_MASK | (0x0 & SVM_INTR_CTRL_VTPR));
 
 	return 0;
 
-	/* err: */
-	/* 	free_perm_map(control->msrpm_base_pa); */
- msrpm_err:
-	free_perm_map(control->iopm_base_pa);
- iopm_err:
-	free_nested_ptable((pmap_t *)(uintptr_t) control->nested_cr3);
- npt_err:
-	free_vmcb(svm->vmcb);
- vmcb_err:
+ err4:
+	mem_pages_free(msrpm_pi);
+ err3:
+	mem_pages_free(iopm_pi);
+ err2:
+	mem_pages_free(vmcb_pi);
+ err1:
 	free_svm(svm);
- err_ret:
+ err0:
 	return rc;
 }
 
@@ -555,21 +391,23 @@ svm_run_vm(struct vm *vm)
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_control_area *ctrl = &vmcb->control;
-	int rc = 0;
+	volatile uint16_t h_fs, h_gs, h_ldt;
 
 	SVM_CLGI();
 
-	save_host_segment(fs, svm->h_fs);
-	save_host_segment(gs, svm->h_gs);
-	svm->h_ldt = rldt();
+	save_host_segment(fs, h_fs);
+	save_host_segment(gs, h_gs);
+	h_ldt = rldt();
 
 	intr_local_enable();
 	svm_run(svm);
 	intr_local_disable();
 
-	load_host_segment(fs, svm->h_fs);
-	load_host_segment(gs, svm->h_gs);
-	lldt(svm->h_ldt);
+	load_host_segment(fs, h_fs);
+	load_host_segment(gs, h_gs);
+	lldt(h_ldt);
+
+	SVM_STGI();
 
 	if (ctrl->exit_int_info & SVM_EXITINTINFO_VALID) {
 		uint32_t exit_int_info = ctrl->exit_int_info;
@@ -594,37 +432,12 @@ svm_run_vm(struct vm *vm)
 			ctrl->event_inj_err = errcode;
 			break;
 
-		case SVM_EXITINTINFO_TYPE_EXEPT:
-#ifdef DEBUG_GUEST_INTR
-			SVM_DEBUG("Pending exception: vec=%x, errcode=%x.\n",
-				  exit_int_info & SVM_EXITINTINFO_VEC_MASK,
-				  errcode);
-#endif
-			break;
-
-		case SVM_EXITINTINFO_TYPE_SOFT:
-#ifdef DEBUG_GUEST_INTR
-			SVM_DEBUG("Pending soft INTR.\n");
-#endif
-			break;
-
 		default:
-			KERN_PANIC("Invalid event type: %x.\n", int_type);
+			break;
 		}
 	}
 
-	if (ctrl->exit_code == SVM_EXIT_ERR) {
-		vm->exit_reason = EXIT_INVAL;
-		svm_handle_err(vm);
-		rc = 1;
-		goto ret;
-	}
-
-	rc = svm_handle_exit(vm);
-
- ret:
-	SVM_STGI();
-	return rc;
+	return svm_handle_exit(vm);
 }
 
 static int
@@ -652,54 +465,10 @@ svm_intercept_ioport(struct vm *vm, uint16_t port, bool enable)
 }
 
 static int
-svm_intercept_all_ioports(struct vm *vm, bool enable)
-{
-	KERN_ASSERT(vm != NULL);
-
-#ifdef DEBUG_GUEST_IOPORT
-	SVM_DEBUG("%s intercepting all guest I/O ports.\n",
-		  (enable == TRUE) ? "Enable" : "Disable");
-#endif
-
-	struct svm *svm = (struct svm *) vm->cookie;
-	uint32_t *iopm = (uint32_t *)(uintptr_t) svm->vmcb->control.iopm_base_pa;
-
-	if (enable == TRUE)
-		memset(iopm, 0xf, SVM_IOPM_SIZE);
-	else
-		memset(iopm, 0x0, SVM_IOPM_SIZE);
-
-	return 0;
-}
-
-static int
 svm_intercept_msr(struct vm *vm, uint32_t msr, int rw)
 {
 	KERN_PANIC("svm_intercept_msr() not implemented yet.\n");
 	return 1;
-}
-
-static int
-svm_intercept_all_msrs(struct vm *vm, int rw)
-{
-	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(rw == 0 || rw == 1 || rw == 2 || rw == 3);
-
-#ifdef DEBUG_GUEST_MSR
-	SVM_DEBUG("%s intercepting reading all guest MSRs, "
-		  "%s intercepting writing all guest MSRs.\n",
-		  (rw & 0x1) ? "Enable" : "Disable",
-		  (rw & 0x2) ? "Enable" : "Disable");
-#endif
-
-	struct svm *svm = (struct svm *) vm->cookie;
-	uint8_t *msrpm = (uint8_t *)(uintptr_t) svm->vmcb->control.msrpm_base_pa;
-	uint8_t val = rw;
-	val = (rw << 6) | (rw << 4) | (rw << 2) | rw;
-
-	memset(msrpm, val, SVM_MSRPM_SIZE);
-
-	return 0;
 }
 
 static void
@@ -850,20 +619,6 @@ svm_set_reg(struct vm *vm, guest_reg_t reg, uint32_t val)
 	return 0;
 }
 
-static int
-svm_get_msr(struct vm *vm, uint32_t msr, uint64_t *val)
-{
-	KERN_PANIC("svm_get_msr() not implemented yet.\n");
-	return 1;
-}
-
-static int
-svm_set_msr(struct vm *vm, uint32_t msr, uint64_t val)
-{
-	KERN_PANIC("svm_set_msr() not implemented yet.\n");
-	return 1;
-}
-
 static uintptr_t seg_offset[10] = {
 	[GUEST_CS]	= offsetof(struct vmcb_save_area, cs),
 	[GUEST_DS]	= offsetof(struct vmcb_save_area, ds),
@@ -917,35 +672,6 @@ svm_set_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc)
 }
 
 static int
-svm_get_mmap(struct vm *vm, uintptr_t gpa, uintptr_t *hpa)
-{
-	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(hpa != NULL);
-
-	if (ROUNDDOWN(gpa, PAGESIZE) != gpa)
-		return 1;
-
-	struct svm *svm = (struct svm *) vm->cookie;
-	struct vmcb *vmcb = svm->vmcb;
-
-	pmap_t *ncr3 = (pmap_t *) (uintptr_t) vmcb->control.nested_cr3;
-	uint32_t npt_dir_entry = ncr3[PDX(gpa)];
-
-	if (!(npt_dir_entry & PTE_P))
-		return 1;
-
-	pmap_t *npt_tab = (pmap_t *) PGADDR(npt_dir_entry);
-	uint32_t npt_table_entry = npt_tab[PTX(gpa)];
-
-	if (!(npt_table_entry & PTE_P))
-		return 1;
-
-	*hpa = PGADDR(npt_table_entry) + PGOFF(gpa);
-
-	return 0;
-}
-
-static int
 svm_set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa, int type)
 {
 	KERN_ASSERT(vm != NULL);
@@ -960,13 +686,6 @@ svm_set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa, int type)
 	npt = pmap_insert(npt, mem_phys2pi(hpa), gpa, PTE_W | PTE_G | PTE_U);
 
 	return (npt == NULL) ? 2 : 0;
-}
-
-static int
-svm_unset_mmap(struct vm *vm, uintptr_t gpa)
-{
-	KERN_PANIC("svm_unset_mmap() not implemented yet.\n");
-	return 1;
 }
 
 static int svm_event_type[4] = {
@@ -1000,7 +719,7 @@ svm_inject_event(struct vm *vm,
 }
 
 static int
-svm_get_next_eip(struct vm *vm, instr_t instr, uint32_t *val)
+svm_get_next_eip(struct vm *vm, guest_instr_t instr, uint32_t *val)
 {
 	KERN_ASSERT(vm != NULL);
 	KERN_ASSERT(val != NULL);
@@ -1030,56 +749,6 @@ svm_get_next_eip(struct vm *vm, instr_t instr, uint32_t *val)
 	return 0;
 }
 
-static int
-svm_get_cpuid(struct vm *vm, uint32_t in_eax, uint32_t in_ecx,
-	      uint32_t *eax, uint32_t *ebx, uint32_t *ecx, uint32_t *edx)
-{
-	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(eax != NULL && ebx != NULL && ecx != NULL && edx != NULL);
-
-	switch (in_eax) {
-	case 0x40000000:
-		/* 0x40000000 ~ 0x400000ff are reserved for the hypervisor. */
-		*ebx = 0x74726543;	/* "treC" */
-		*ecx = 0x534f4b69;	/* "SOKi" */
-		break;
-
-	case 0x00000001:
-		cpuid(in_eax, eax, ebx, ecx, edx);
-		*eax = (6 << 8) | (2 << 4) | (3);
-		*ebx = /* only 1 processor/core */
-			(*ebx & ~(uint32_t) (0xf << 16)) | (uint32_t) (1 << 16);
-		*ecx = *ecx & ~(uint32_t)
-			(CPUID_FEATURE_AVX | CPUID_FEATURE_AES |
-			 CPUID_FEATURE_MONITOR);
-		*edx = *edx & ~(uint32_t)
-			(CPUID_FEATURE_HTT | CPUID_FEATURE_MCA |
-			 CPUID_FEATURE_MTRR | CPUID_FEATURE_APIC |
-			 CPUID_FEATURE_MCE | CPUID_FEATURE_MSR |
-			 CPUID_FEATURE_DE);
-		break;
-
-	case 0x80000001:
-		cpuid(in_eax, eax, ebx, ecx, edx);
-		*eax = (6 << 8) | (2 << 4) | (3);
-		*ecx = *ecx & ~(uint32_t)
-			(CPUID_X_FEATURE_WDT | CPUID_X_FEATURE_SKINIT |
-			 CPUID_X_FEATURE_XAPIC | CPUID_X_FEATURE_SVM);
-		*edx = *edx & ~(uint32_t)
-			(CPUID_X_FEATURE_RDTSCP | CPUID_X_FEATURE_NX |
-			 CPUID_X_FEATURE_MCA | CPUID_X_FEATURE_MTRR |
-			 CPUID_X_FEATURE_APIC | CPUID_X_FEATURE_MCE |
-			 CPUID_X_FEATURE_MSR | CPUID_X_FEATURE_DE);
-		break;
-
-	default:
-		cpuid(in_eax, eax, ebx, ecx, edx);
-		break;
-	}
-
-	return 0;
-}
-
 static bool
 svm_pending_event(struct vm *vm)
 {
@@ -1102,28 +771,21 @@ svm_intr_shadow(struct vm *vm)
 	return (ctrl->int_state & 0x1) ? TRUE : FALSE;
 }
 
-struct vmm_ops vmm_ops_amd = {
+struct hvm_ops hvm_ops_amd = {
 	.signature		= AMD_SVM,
 	.hw_init		= svm_init,
 	.intercept_ioport	= svm_intercept_ioport,
-	.intercept_all_ioports	= svm_intercept_all_ioports,
 	.intercept_msr		= svm_intercept_msr,
-	.intercept_all_msrs	= svm_intercept_all_msrs,
 	.intercept_intr_window	= svm_intercept_vintr,
 	.vm_init		= svm_init_vm,
 	.vm_run			= svm_run_vm,
 	.get_reg		= svm_get_reg,
 	.set_reg		= svm_set_reg,
-	.get_msr		= svm_get_msr,
-	.set_msr		= svm_set_msr,
 	.get_desc		= svm_get_desc,
 	.set_desc		= svm_set_desc,
-	.get_mmap		= svm_get_mmap,
 	.set_mmap		= svm_set_mmap,
-	.unset_mmap		= svm_unset_mmap,
 	.inject_event		= svm_inject_event,
 	.get_next_eip		= svm_get_next_eip,
-	.get_cpuid		= svm_get_cpuid,
 	.pending_event		= svm_pending_event,
 	.intr_shadow		= svm_intr_shadow,
 };

@@ -24,7 +24,7 @@
 #        DEBUG_MSG=1 DEBUG_ALL=1 make
 #
 # 4. Enable debug messages relevant to the virtualization module,
-#        DEBUG_MSG=1 DEBUG_VIRT=1 make
+#        DEBUG_MSG=1 DEBUG_HVM=1 make
 #
 # 5. Enable debug messages relevant to the guest CPUID instructions,
 #        DEBUG_MSG=1 DEBUG_GUEST_CPUID=1 make
@@ -116,78 +116,78 @@ endif
 #
 
 # If set, enable the basic debugging messages for the virtualization
-ifneq "$(strip $(DEBUG_VIRT) $(DEBUG_VIRT_ALL) $(DEBUG_ALL))" ""
-KERN_CFLAGS	+= -DDEBUG_VIRT -DDEBUG_MSG
+ifneq "$(strip $(DEBUG_HVM) $(DEBUG_HVM_ALL) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the basic debugging messages for VMX module
-ifneq "$(strip $(DEBUG_VMX) $(DEBUG_VIRT_ALL) $(DEBUG_ALL))" ""
-KERN_CFLAGS	+= -DDEBUG_VMX -DDEBUG_VIRT -DDEBUG_MSG
+ifneq "$(strip $(DEBUG_VMX) $(DEBUG_HVM_ALL) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_VMX -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the basic debugging messages for the extended page table
-ifneq "$(strip $(DEBUG_EPT) $(DEBUG_VIRT_ALL) $(DEBUG_ALL))" ""
-KERN_CFLAGS	+= -DDEBUG_EPT -DDEBUG_VMX -DDEBUG_VIRT -DDEBUG_MSG
+ifneq "$(strip $(DEBUG_EPT) $(DEBUG_HVM_ALL) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_EPT -DDEBUG_VMX -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the basic debugging messages for SVM module
-ifneq "$(strip $(DEBUG_SVM) $(DEBUG_VIRT_ALL) $(DEBUG_ALL))" ""
-KERN_CFLAGS	+= -DDEBUG_SVM -DDEBUG_VIRT -DDEBUG_MSG
+ifneq "$(strip $(DEBUG_SVM) $(DEBUG_HVM_ALL) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_SVM -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the basic debugging messages for VMEXITs
-ifneq "$(strip $(DEBUG_VMEXIT) $(DEBUG_VIRT_ALL) $(DEBUG_ALL))" ""
-KERN_CFLAGS	+= -DDEBUG_VMEXIT -DDEBUG_VIRT -DDEBUG_MSG
+ifneq "$(strip $(DEBUG_VMEXIT) $(DEBUG_HVM_ALL) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_VMEXIT -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the basic debugging messages for guest interrupts
-ifneq "$(strip $(DEBUG_GUEST_INTR) $(DEBUG_VIRT_ALL) $(DEBUG_ALL))" ""
-KERN_CFLAGS	+= -DDEBUG_GUEST_INTR -DDEBUG_VIRT -DDEBUG_MSG
+ifneq "$(strip $(DEBUG_GUEST_INTR) $(DEBUG_HVM_ALL) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_GUEST_INTR -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the basic debugging messages for guest event injections
-ifneq "$(strip $(DEBUG_GUEST_INJECT) $(DEBUG_VIRT_ALL) $(DEBUG_ALL))" ""
-KERN_CFLAGS	+= -DDEBUG_GUEST_INJECT -DDEBUG_VIRT -DDEBUG_MSG
+ifneq "$(strip $(DEBUG_GUEST_INJECT) $(DEBUG_HVM_ALL) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_GUEST_INJECT -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the basic debugging messages for guest I/O ports
-ifneq "$(strip $(DEBUG_GUEST_IOPORT) $(DEBUG_VIRT_ALL) $(DEBUG_ALL))" ""
-KERN_CFLAGS	+= -DDEBUG_GUEST_IOPORT -DDEBUG_VIRT -DDEBUG_MSG
+ifneq "$(strip $(DEBUG_GUEST_IOPORT) $(DEBUG_HVM_ALL) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_GUEST_IOPORT -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the basic debugging messages for guest MSRs
-ifneq "$(strip $(DEBUG_GUEST_MSR) $(DEBUG_VIRT_ALL) $(DEBUG_ALL))" ""
-KERN_CFLAGS	+= -DDEBUG_GUEST_MSR -DDEBUG_VIRT -DDEBUG_MSG
+ifneq "$(strip $(DEBUG_GUEST_MSR) $(DEBUG_HVM_ALL) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_GUEST_MSR -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the basic debugging messages for guest page faults
-ifneq "$(strip $(DEBUG_GUEST_PGFLT) $(DEBUG_VIRT_ALL) $(DEBUG_ALL))" ""
-KERN_CFLAGS	+= -DDEBUG_GUEST_PGFLT -DDEBUG_VIRT -DDEBUG_MSG
+ifneq "$(strip $(DEBUG_GUEST_PGFLT) $(DEBUG_HVM_ALL) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_GUEST_PGFLT -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the basic debugging messages for guest cpuid
-ifneq "$(strip $(DEBUG_GUEST_CPUID) $(DEBUG_VIRT_ALL) $(DEBUG_ALL))" ""
-KERN_CFLAGS	+= -DDEBUG_GUEST_CPUID -DDEBUG_VIRT -DDEBUG_MSG
+ifneq "$(strip $(DEBUG_GUEST_CPUID) $(DEBUG_HVM_ALL) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_GUEST_CPUID -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the basic debugging messages for guest TSC
-ifneq "$(strip $(DEBUG_GUEST_TSC) $(DEBUG_VIRT_ALL) $(DEBUG_ALL))" ""
-KERN_CFLAGS	+= -DDEBUG_GUEST_TSC -DDEBUG_VIRT -DDEBUG_MSG
+ifneq "$(strip $(DEBUG_GUEST_TSC) $(DEBUG_HVM_ALL) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_GUEST_TSC -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the basic debugging messages for hypercalls
-ifneq "$(strip $(DEBUG_HYPERCALL) $(DEBUG_VIRT_ALL) $(DEBUG_ALL))" ""
-KERN_CFLAGS	+= -DDEBUG_HYPERCALL -DDEBUG_VIRT -DDEBUG_MSG
+ifneq "$(strip $(DEBUG_HYPERCALL) $(DEBUG_HVM_ALL) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_HYPERCALL -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable debugging virtual devices
-ifneq "$(strip $(DEBUG_VDEV) $(DEBUG_VIRT_ALL) $(DEBUG_ALL))" ""
-KERN_CFLAGS	+= -DDEBUG_VDEV -DDEBUG_VIRT -DDEBUG_MSG
+ifneq "$(strip $(DEBUG_VDEV) $(DEBUG_HVM_ALL) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_VDEV -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable debugging virtualized PIC
-ifneq "$(strip $(DEBUG_VPIC) $(DEBUG_VDEV) $(DEBUG_VIRT_ALL) $(DEBUG_ALL))" ""
-KERN_CFLAGS	+= -DDEBUG_VPIC -DDEBUG_VIRT -DDEBUG_MSG
+ifneq "$(strip $(DEBUG_VPIC) $(DEBUG_VDEV) $(DEBUG_HVM_ALL) $(DEBUG_ALL))" ""
+KERN_CFLAGS	+= -DDEBUG_VPIC -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 #
@@ -196,45 +196,45 @@ endif
 
 # If set, enable the basic trace of the virtualization module.
 ifneq "$(strip $(TRACE_VIRT) $(TRACE_VIRT_ALL))" ""
-KERN_CFLAGS	+= -DTRACE_VIRT -DDEBUG_VIRT -DDEBUG_MSG
+KERN_CFLAGS	+= -DTRACE_VIRT -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the basic trace of VMEXITs.
 ifneq "$(strip $(TRACE_VMEXIT) $(TRACE_VIRT_ALL))" ""
-KERN_CFLAGS	+= -DTRACE_VMEXIT -DTRACE_VIRT -DDEBUG_VIRT -DDEBUG_MSG
+KERN_CFLAGS	+= -DTRACE_VMEXIT -DTRACE_VIRT -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the trace of handling guest interrupts.
 ifneq "$(strip $(TRACE_GUEST_INTR) $(TRACE_VIRT_ALL))" ""
-KERN_CFLAGS	+= -DTRACE_GUEST_INTR -DTRACE_VIRT -DDEBUG_VIRT -DDEBUG_MSG
+KERN_CFLAGS	+= -DTRACE_GUEST_INTR -DTRACE_VIRT -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the trace of handling guest I/O ports.
 ifneq "$(strip $(TRACE_GUEST_IOPORT) $(TRACE_VIRT_ALL))" ""
-KERN_CFLAGS	+= -DTRACE_GUEST_IOPORT -DTRACE_VIRT -DDEBUG_VIRT -DDEBUG_MSG
+KERN_CFLAGS	+= -DTRACE_GUEST_IOPORT -DTRACE_VIRT -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the trace of handling guest MSRs.
 ifneq "$(strip $(TRACE_GUEST_MSR) $(TRACE_VIRT_ALL))" ""
-KERN_CFLAGS	+= -DTRACE_GUEST_MSR -DTRACE_VIRT -DDEBUG_VIRT -DDEBUG_MSG
+KERN_CFLAGS	+= -DTRACE_GUEST_MSR -DTRACE_VIRT -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the trace of handling guest cpuid.
 ifneq "$(strip $(TRACE_GUEST_CPUID) $(TRACE_VIRT_ALL))" ""
-KERN_CFLAGS	+= -DTRACE_GUEST_CPUID -DTRACE_VIRT -DDEBUG_VIRT -DDEBUG_MSG
+KERN_CFLAGS	+= -DTRACE_GUEST_CPUID -DTRACE_VIRT -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the trace of handling guest page fault.
 ifneq "$(strip $(TRACE_GUEST_PGFLT) $(TRACE_VIRT_ALL))" ""
-KERN_CFLAGS	+= -DTRACE_GUEST_PGFLT -DTRACE_VIRT -DDEBUG_VIRT -DDEBUG_MSG
+KERN_CFLAGS	+= -DTRACE_GUEST_PGFLT -DTRACE_VIRT -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the trace of handling guest TSC.
 ifneq "$(strip $(TRACE_GUEST_TSC) $(TRACE_VIRT_ALL))" ""
-KERN_CFLAGS	+= -DTRACE_GUEST_TSC -DTRACE_VIRT -DDEBUG_VIRT -DDEBUG_MSG
+KERN_CFLAGS	+= -DTRACE_GUEST_TSC -DTRACE_VIRT -DDEBUG_HVM -DDEBUG_MSG
 endif
 
 # If set, enable the trace of handling hypercalls.
 ifneq "$(strip $(TRACE_HYPERCALL) $(TRACE_VIRT_ALL))" ""
-KERN_CFLAGS	+= -DTRACE_HYPERCALL -DTRACE_VIRT -DDEBUG_VIRT -DDEBUG_MSG
+KERN_CFLAGS	+= -DTRACE_HYPERCALL -DTRACE_VIRT -DDEBUG_HVM -DDEBUG_MSG
 endif

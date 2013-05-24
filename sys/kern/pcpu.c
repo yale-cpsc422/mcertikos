@@ -29,11 +29,8 @@ pcpu_init(void)
 
 	for (i = 0; i < MAX_CPU; i++) {
 		spinlock_init(&pcpu[i].lk);
+		pcpu[i].hvm_inited = FALSE;
 		pcpu[i].inited = TRUE;
-#ifndef __COMPCERT__
-		pcpu[i].vm = NULL;
-		pcpu[i].vm_inited = FALSE;
-#endif /* !__COMPCERT__ */
 	}
 
 	pcpu_inited = TRUE;

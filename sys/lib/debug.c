@@ -6,8 +6,6 @@
 #include <sys/types.h>
 #include <sys/x86.h>
 
-#include <sys/virt/vmm.h>
-
 static spinlock_t debug_lk;
 
 void
@@ -31,30 +29,23 @@ debug_unlock(void)
 void
 debug_info(const char *fmt, ...)
 {
-	spinlock_acquire(&debug_lk);
-
 	va_list ap;
 	va_start(ap, fmt);
 	vcprintf(fmt, ap);
 	va_end(ap);
-
-	spinlock_release(&debug_lk);
 }
+
+#ifdef DEBUG_MSG
 
 void
 debug_normal(const char *file, int line, const char *fmt, ...)
 {
-	spinlock_acquire(&debug_lk);
+	dprintf("[D] %s:%d: ", file, line);
 
-#ifdef DEBUG_MSG
 	va_list ap;
 	va_start(ap, fmt);
-	dprintf("[D] %s:%d: ", file, line);
 	vdprintf(fmt, ap);
 	va_end(ap);
-#endif
-
-	spinlock_release(&debug_lk);
 }
 
 #define DEBUG_TRACEFRAMES	10
@@ -80,36 +71,31 @@ debug_panic(const char *file, int line, const char *fmt,...)
 	uintptr_t eips[DEBUG_TRACEFRAMES];
 	va_list ap;
 
-	spinlock_acquire(&debug_lk);
+	dprintf("[P] %s:%d: ", file, line);
 
 	va_start(ap, fmt);
-	cprintf("[P] %s:%d: ", file, line);
-	vcprintf(fmt, ap);
+	vdprintf(fmt, ap);
 	va_end(ap);
 
 	debug_trace(read_ebp(), eips);
 	for (i = 0; i < DEBUG_TRACEFRAMES && eips[i] != 0; i++)
-		cprintf("\tfrom 0x%08x\n", eips[i]);
+		dprintf("\tfrom 0x%08x\n", eips[i]);
 
-	cprintf("Kernel Panic on CPU%d !!!\n", pcpu_cpu_idx(pcpu_cur()));
+	dprintf("Kernel Panic on CPU%d !!!\n", pcpu_cpu_idx(pcpu_cur()));
 
 	intr_local_disable();
-	spinlock_release(&debug_lk);
 	halt();
 }
 
 void
 debug_warn(const char *file, int line, const char *fmt,...)
 {
-	spinlock_acquire(&debug_lk);
+	cprintf("[W] %s:%d: ", file, line);
 
-#ifdef DEBUG_MSG
 	va_list ap;
 	va_start(ap, fmt);
-	cprintf("[W] %s:%d: ", file, line);
 	vcprintf(fmt, ap);
 	va_end(ap);
-#endif
-
-	spinlock_release(&debug_lk);
 }
+
+#endif /* DEBUG_MSG */

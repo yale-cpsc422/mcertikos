@@ -22,8 +22,6 @@
 #include <sys/types.h>
 #include <sys/vm.h>
 
-#include <sys/virt/vmm.h>
-
 #include <machine/pmap.h>
 
 #include <dev/tsc.h>
@@ -187,7 +185,6 @@ proc_new(struct proc *parent, struct channel *ch)
 		    VM_STACKHI - PAGESIZE, PTE_P | PTE_U | PTE_W);
 
 	/* other fields */
-	p->vid = -1;
 	p->inv = NULL;
 	spinlock_init(&p->proc_lk);
 	p->state = PROC_INITED;

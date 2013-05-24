@@ -12,8 +12,6 @@
 #include <sys/trap.h>
 #include <sys/types.h>
 
-#include <sys/virt/vmm.h>
-
 #include <machine/pmap.h>
 
 #define MAX_PID		64
@@ -72,9 +70,6 @@ struct proc {
 	pmap_t		*pmap;		/* (p) user page structions */
 	struct context	uctx;		/* (p) user context */
 	uint8_t		*sys_buf;	/* (p) buffer for handling system calls */
-
-	vid_t		vid;		/* (p) hosted virtual device */
-	struct vm	*master_vm;	/* (p) virtual machine connected to */
 
 	proc_state_t	state;		/* (s) current state */
 
