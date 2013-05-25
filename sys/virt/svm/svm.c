@@ -11,51 +11,12 @@
 #include "svm.h"
 #include "svm_drv.h"
 
-static struct svm	svm_pool[MAX_VMID];
-static spinlock_t	svm_pool_lk;
-volatile static bool	svm_pool_inited = FALSE;
+static struct svm svm0;
 
 #ifdef __COMPCERT__
 static void init_seg_offset(void);
 static void init_svm_event_type(void);
 #endif
-
-struct svm *
-alloc_svm(void)
-{
-	struct svm *svm;
-	int i;
-
-	spinlock_acquire(&svm_pool_lk);
-
-	for (i = 0; i < MAX_VMID; i++)
-		if (svm_pool[i].inuse == 0)
-			break;
-
-	if (i == MAX_VMID) {
-		SVM_DEBUG("No unused SVM descriptor.\n");
-		spinlock_release(&svm_pool_lk);
-		return NULL;
-	}
-
-	svm = &svm_pool[i];
-	svm->inuse = 1;
-
-	spinlock_release(&svm_pool_lk);
-
-	return svm;
-}
-
-void
-free_svm(struct svm *svm)
-{
-	if (svm == NULL)
-		return;
-
-	spinlock_acquire(&svm_pool_lk);
-	svm->inuse = 0;
-	spinlock_release(&svm_pool_lk);
-}
 
 /*
  * Allocate one memory page for the host state-save area.
@@ -209,11 +170,8 @@ svm_handle_exit(struct vm *vm)
 static int
 svm_init(void)
 {
-	if (svm_pool_inited == FALSE) {
-		memzero(svm_pool, sizeof(struct svm) * MAX_VMID);
-		spinlock_init(&svm_pool_lk);
-		svm_pool_inited = TRUE;
-	}
+	memzero(&svm0, sizeof(svm0));
+	svm0.inuse = 0;
 
 #ifdef __COMPCERT__
 	init_seg_offset();
@@ -236,17 +194,19 @@ svm_init_vm(struct vm *vm)
 	KERN_ASSERT(vm != NULL);
 
 	int rc;
-	struct svm *svm;
+	struct svm *svm = &svm0;
 	pageinfo_t *vmcb_pi, *iopm_pi, *msrpm_pi, *ncr3_pi;
 
 	/*
 	 * Allocate memory.
 	 */
 
-	if ((svm = alloc_svm()) == NULL) {
+	if (svm->inuse == 1) {
 		rc = -1;
 		goto err0;
 	}
+	memzero(svm, sizeof(struct svm));
+	svm->inuse = 1;
 	vm->cookie = svm;
 
 	if ((vmcb_pi = mem_page_alloc()) == NULL) {
@@ -377,7 +337,7 @@ svm_init_vm(struct vm *vm)
  err2:
 	mem_pages_free(vmcb_pi);
  err1:
-	free_svm(svm);
+	svm->inuse = 0;
  err0:
 	return rc;
 }
