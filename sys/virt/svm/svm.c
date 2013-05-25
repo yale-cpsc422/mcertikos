@@ -389,42 +389,6 @@ svm_run_vm(struct vm *vm)
 	return svm_handle_exit(vm);
 }
 
-static int
-svm_intercept_ioport(struct vm *vm, uint16_t port, bool enable)
-{
-	KERN_ASSERT(vm != NULL);
-
-#ifdef DEBUG_GUEST_IOPORT
-	SVM_DEBUG("%s intercepting guest I/O port 0x%x.\n",
-		  (enable == TRUE) ? "Enable" : "Disable", port);
-#endif
-
-	struct svm *svm = (struct svm *) vm->cookie;
-#ifndef __COMPCERT__
-	uint32_t *iopm = (uint32_t *)(uintptr_t) svm->vmcb->control.iopm_base_pa;
-#else
-	uint32_t *iopm = (uint32_t *)(uintptr_t)
-		svm->vmcb->control.iopm_base_pa_lo;
-#endif
-
-	int entry = port / 32;
-	int bit = port - entry * 32;
-
-	if (enable == TRUE)
-		iopm[entry] |= (1 << bit);
-	else
-		iopm[entry] &= ~(uint32_t) (1 << bit);
-
-	return 0;
-}
-
-static int
-svm_intercept_msr(struct vm *vm, uint32_t msr, int rw)
-{
-	KERN_PANIC("svm_intercept_msr() not implemented yet.\n");
-	return 1;
-}
-
 static void
 svm_inject_vintr(struct vmcb *vmcb, uint8_t vector, uint8_t priority)
 {
@@ -868,8 +832,6 @@ svm_intr_shadow(struct vm *vm)
 struct hvm_ops hvm_ops_amd = {
 	.signature		= AMD_SVM,
 	.hw_init		= svm_init,
-	.intercept_ioport	= svm_intercept_ioport,
-	.intercept_msr		= svm_intercept_msr,
 	.intercept_intr_window	= svm_intercept_vintr,
 	.vm_init		= svm_init_vm,
 	.vm_run			= svm_run_vm,
@@ -893,8 +855,6 @@ init_hvm_ops_amd(void)
 {
 	hvm_ops_amd.signature		= AMD_SVM;
 	hvm_ops_amd.hw_init		= svm_init;
-	hvm_ops_amd.intercept_ioport	= svm_intercept_ioport;
-	hvm_ops_amd.intercept_msr	= svm_intercept_msr;
 	hvm_ops_amd.intercept_intr_window = svm_intercept_vintr;
 	hvm_ops_amd.vm_init		= svm_init_vm;
 	hvm_ops_amd.vm_run		= svm_run_vm;

@@ -50,8 +50,6 @@ static char *syscall_name[MAX_SYSCALL_NR] =
 		[SYS_hvm_inject_event]	= "sys_hvm_inject_event",
 		[SYS_hvm_pending_event]	= "sys_hvm_pending_event",
 		[SYS_hvm_intr_shadow]	= "sys_hvm_intr_shadow",
-		[SYS_hvm_intercept_ioport] = "sys_hvm_intercept_ioport",
-		[SYS_hvm_intercept_msr]	= "sys_hvm_intercept_msr",
 		[SYS_hvm_intercept_intr_window] = "sys_hvm_intercept_intr_window",
 		[SYS_read_ioport]	= "sys_read_ioport",
 		[SYS_write_ioport]	= "sys_write_ioport",
@@ -778,34 +776,6 @@ sys_hvm_intr_shadow(int vmid, uintptr_t result_la)
 }
 
 static int
-sys_hvm_intercept_ioport(int vmid, uint16_t ioport, bool enable)
-{
-	struct vm *vm = hvm_get_vm(vmid);
-
-	if (vm == NULL)
-		return E_INVAL_VMID;
-
-	if (hvm_intercept_ioport(vm, ioport, enable))
-		return E_HVM_IOPORT;
-	else
-		return E_SUCC;
-}
-
-static int
-sys_hvm_intercept_msr(int vmid, uint32_t msr, bool enable)
-{
-	struct vm *vm = hvm_get_vm(vmid);
-
-	if (vm == NULL)
-		return E_INVAL_VMID;
-
-	if (hvm_intercept_msr(vm, msr, enable))
-		return E_HVM_MSR;
-	else
-		return E_SUCC;
-}
-
-static int
 sys_hvm_intercept_intr_window(int vmid, bool enable)
 {
 	struct vm *vm = hvm_get_vm(vmid);
@@ -1107,27 +1077,6 @@ syscall_handler(uint8_t trapno, struct context *ctx)
 		 * a[1]: the linear address where the result is returned to
 		 */
 		errno = sys_hvm_intr_shadow((int) a[0], (uintptr_t) a[1]);
-		break;
-	case SYS_hvm_intercept_ioport:
-		/*
-		 * Enable/Disable intercepting an I/O port of the virtual
-		 * machine.
-		 * a[0]: the virtual machine descriptor
-		 * a[1]: the I/O port
-		 * a[2]: enable/disable
-		 */
-		errno = sys_hvm_intercept_ioport((int) a[0],
-						 (uint16_t) a[1], (bool) a[2]);
-		break;
-	case SYS_hvm_intercept_msr:
-		/*
-		 * Enable/Disable intercepting a MSR of the virtual machine.
-		 * a[0]: the virtual machine descriptor
-		 * a[1]: MSR
-		 * a[2]: enable/disable
-		 */
-		errno = sys_hvm_intercept_msr((int) a[0],
-					      (uint32_t) a[1], (bool) a[2]);
 		break;
 	case SYS_hvm_intercept_intr_window:
 		/*

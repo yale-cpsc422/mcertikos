@@ -135,24 +135,6 @@ typedef enum {
  *   Enable the hardware virtualization on the current CPU core.
  *   @return 0 if successful; otherwise, return a non-zero value
  *
- * - int intercept_ioport(struct vm *vm, uint16_t port, bool enable)
- *   Enable/Disable intercepting an I/O port in a virtual machine.
- *   @param vm     the virtual machine
- *   @param port   the I/O port number
- *   @param enable TRUE - enable the interception;
- *                 FALSE - disable the interception
- *   @return 0 if successful; otherwise, return a non-zero value
- *
- * - int intercept_msr(struct vm *vm, uint32_t msr, int rw)
- *   Enable/Disable intercepting a MSR in a virtual machine.
- *   @param vm     the virtual machine
- *   @param msr    the address of the MSR
- *   @param rw     00 - disable intercepting both rdmsr and wrmsr;
- *                 01 - enable intercepting rdmsr, and disable wrmsr;
- *                 10 - enable intercepting wrmsr, and disable rdmsr;
- *                 11 - enable intercepting both rdmsr and wrmsr
- *   @return 0 if successful; otherwise, return a non-zero value
- *
  * - int intercept_intr_window(struct vm *vm, bool enable)
  *   Enable/Disable intercepting the interrupt windows in a virtual machine. The
  *   interrupt window is the period during which CPU is able to respond to the
@@ -190,23 +172,6 @@ typedef enum {
  *   @param val the value of the guest register
  *   @return 0 if successful; otherwise, return a non-zero value and the guest
  *           register is in the state before the setting
- *
- * - int get_msr(struct vm *vm, uint32_t msr, uint64_t *val)
- *   Get the vaule of a guest MSR.
- *   @param vm  the virtual machine
- *   @param msr the encode of the guest MSR
- *   @param val where the value of the guest MSR is returned
- *   @return 0 if successful and the value of the guest MSR is put at val;
- *           otherwise, return a non-zero value and the value at val is
- *           undefined
- *
- * - int set_msr(struct vm *vm, uint32_t msr, uint64_t val)
- *   Set the guest MSR.
- *   @param vm  the virtual machine
- *   @param msr the encode of the guest MSR
- *   @param val the value of the guest MSR
- *   @return 0 if successful ; otherwise, return a non-zero value and the guest
- *           MSR is in the state before the setting
  *
  * - int get_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc)
  *   Get the descriptor of a guest segment.
@@ -297,8 +262,6 @@ struct hvm_ops {
 
 	int (*hw_init)(void);
 
-	int (*intercept_ioport)(struct vm *vm, uint16_t port, bool enable);
-	int (*intercept_msr)(struct vm *vm, uint32_t msr, int rw);
 	int (*intercept_intr_window)(struct vm *vm, bool enable);
 
 	int (*vm_init)(struct vm *vm);

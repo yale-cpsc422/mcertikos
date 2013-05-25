@@ -429,40 +429,6 @@ sys_hvm_intr_shadow(int vmid)
 }
 
 static gcc_inline int
-sys_hvm_intercept_ioport(int vmid, uint16_t port, bool enable)
-{
-	int errno;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_hvm_intercept_ioport),
-		       "b" (vmid),
-		       "c" (port),
-		       "d" (enable)
-		     : "cc", "memory");
-
-	return errno;
-}
-
-static gcc_inline int
-sys_hvm_intercept_msr(int vmid, uint32_t msr, bool enable)
-{
-	int errno;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_hvm_intercept_msr),
-		       "b" (vmid),
-		       "c" (msr),
-		       "d" (enable)
-		     : "cc", "memory");
-
-	return errno;
-}
-
-static gcc_inline int
 sys_hvm_intercept_intr_window(int vmid, bool enable)
 {
 	int errno;

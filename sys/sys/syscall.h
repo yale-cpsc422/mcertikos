@@ -51,8 +51,6 @@ enum __syscall_nr {
 	SYS_hvm_inject_event,
 	SYS_hvm_pending_event,
 	SYS_hvm_intr_shadow,
-	SYS_hvm_intercept_ioport,
-	SYS_hvm_intercept_msr,
 	SYS_hvm_intercept_intr_window,
 	/* XXX: should be removed in the future */
 	SYS_read_ioport,

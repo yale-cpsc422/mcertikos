@@ -236,24 +236,6 @@ hvm_intr_shadow(struct vm *vm)
 }
 
 int
-hvm_intercept_ioport(struct vm *vm, uint16_t port, bool enabled)
-{
-	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(hvm_ops != NULL);
-
-	return hvm_ops->intercept_ioport(vm, port, enabled);
-}
-
-int
-hvm_intercept_msr(struct vm *vm, uint32_t msr, bool enabled)
-{
-	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(hvm_ops != NULL);
-
-	return hvm_ops->intercept_msr(vm, msr, enabled);
-}
-
-int
 hvm_intercept_intr_window(struct vm *vm, bool enabled)
 {
 	KERN_ASSERT(vm != NULL);
