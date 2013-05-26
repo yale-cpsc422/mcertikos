@@ -22,10 +22,9 @@
 #include <machine/pmap.h>
 
 #include <dev/cons.h>
-#include <dev/disk.h>
+#include <dev/ide.h>
 #include <dev/kbd.h>
 #include <dev/lapic.h>
-#include <dev/pci.h>
 #include <dev/serial.h>
 #include <dev/tsc.h>
 #include <dev/timer.h>
@@ -100,7 +99,6 @@ kern_main(void)
 	trap_handler_register(T_IRQ0+IRQ_KBD, cons_kbd_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_SERIAL13, serial_intr_handler);
 	trap_handler_register(T_IPI0+IPI_RESCHED, ipi_resched_handler);
-	disk_register_intr();
 	KERN_INFO("done.\n");
 
 	/* enable interrupts */
@@ -110,10 +108,6 @@ kern_main(void)
 
 	KERN_INFO("[BSP KERN] Enable KBD interrupt ... ");
 	intr_enable(IRQ_KBD, 0);
-	KERN_INFO("done.\n");
-
-	KERN_INFO("[BSP KERN] Enable disk interrupt ... ");
-	disk_intr_enable();
 	KERN_INFO("done.\n");
 
 	KERN_INFO("[BSP KERN] Enable serial interrupt ... ");
@@ -203,7 +197,6 @@ kern_main_ap(void)
 	trap_handler_register(T_IRQ0+IRQ_KBD, kbd_intr_handler);
 	trap_handler_register(T_IRQ0+IRQ_SERIAL13, serial_intr_handler);
 	trap_handler_register(T_IPI0+IPI_RESCHED, ipi_resched_handler);
-	disk_register_intr();
 	KERN_INFO("done.\n");
 
 	/* enable interrupts */
@@ -364,20 +357,13 @@ kern_init(mboot_info_t *mbi)
 	}
 
 	/*
-	 * Initialize disk management module.
+	 * Initialize IDE driver.
 	 */
-	KERN_INFO("Initialize disk management module ... ");
-	if (disk_init()) {
+	KERN_INFO("Initialize IDE driver ... ");
+	if (ide_init()) {
 		KERN_INFO("failed.\n");
 		KERN_PANIC("Stop here.\n");
 	}
-	KERN_INFO("done.\n");
-
-	/*
-	 * Initialize PCI bus.
-	 **/
-	KERN_INFO("Initialize PCI ... \n");
-	pci_init();
 	KERN_INFO("done.\n");
 
 	/* Start master kernel on BSP */

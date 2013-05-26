@@ -65,7 +65,7 @@ prep_mbr(void)
 
 #else /* !ENABLE_BOOT_CF */
 
-static uint32_t drv_nr = 0;
+/* static uint32_t drv_nr = 0; */
 
 #endif /* ENABLE_BOOT_CF */
 
@@ -383,7 +383,7 @@ virtio_blk_disk_read(struct vm *vm,
 		buf = virtio_blk_data_buf;
 #endif /* ENABLE_BOOT_CF */
 
-		rc = sys_disk_read(drv_nr, cur_lba, n, virtio_blk_data_buf);
+		rc = sys_disk_read(cur_lba, n, virtio_blk_data_buf);
 		if (rc) {
 			virtio_blk_debug("Failed to read host disk. "
 					 "(lba %lld, %lld sectors)\n",
@@ -446,7 +446,7 @@ virtio_blk_disk_write(struct vm *vm,
 			return 2;
 		}
 
-		rc = sys_disk_write(drv_nr, cur_lba, n, virtio_blk_data_buf);
+		rc = sys_disk_write(cur_lba, n, virtio_blk_data_buf);
 		if (rc) {
 			virtio_blk_debug("Failed to write host disk. "
 					 "(lba %lld, %lld sectors)\n",
@@ -807,7 +807,7 @@ virtio_blk_init(struct vdev *vdev, void *opaque1, void *opaque2)
 		VIRTIO_BLK_F_SIZE_MAX |
 		VIRTIO_BLK_F_SEG_MAX |
 		VIRTIO_BLK_F_BLK_SIZE;
-	blk->blk_header.capacity = sys_disk_capacity(drv_nr);
+	blk->blk_header.capacity = sys_disk_capacity();
 	blk->blk_header.size_max = 4096;
 	blk->blk_header.seg_max = 1;
 	blk->blk_header.blk_size = 512;
