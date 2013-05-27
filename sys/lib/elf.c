@@ -28,17 +28,17 @@ elf_load(uintptr_t exe, pmap_t *pmap)
 
 	KERN_ASSERT(eh->e_magic == ELF_MAGIC);
 
-	ph = (proghdr *) ((void *) eh + eh->e_phoff);
+	ph = (proghdr *) ((uintptr_t) eh + eh->e_phoff);
 	eph = ph + eh->e_phnum;
 
 	for (; ph < eph; ph++) {
-		void *fa;
+		uintptr_t fa;
 		uint32_t va, zva, eva, perm;
 
 		if (ph->p_type != ELF_PROG_LOAD)
 			continue;
 
-		fa = (void *) eh + ROUNDDOWN(ph->p_offset, PAGESIZE);
+		fa = (uintptr_t) eh + ROUNDDOWN(ph->p_offset, PAGESIZE);
 		va = ROUNDDOWN(ph->p_va, PAGESIZE);
 		zva = ph->p_va + ph->p_filesz;
 		eva = ROUNDUP(ph->p_va + ph->p_memsz, PAGESIZE);
