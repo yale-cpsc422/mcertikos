@@ -13,7 +13,7 @@ struct pcpu;
 
 typedef int (*trap_cb_t) (uint8_t trapno, struct context *);
 
-void trap(tf_t *) gcc_noreturn;
+void trap(tf_t *);
 void trap_init_array(struct pcpu *c);
 void trap_handler_register(int trapno, trap_cb_t);
 

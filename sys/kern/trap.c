@@ -28,7 +28,7 @@ default_handler_user(tf_t *tf)
 		intr_eoi();
 }
 
-gcc_noreturn void
+void
 trap(tf_t *tf)
 {
 	cld();

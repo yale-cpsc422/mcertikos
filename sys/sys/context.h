@@ -21,7 +21,7 @@ typedef uint32_t (*ctx_cb_t) (struct context *);
 
 void ctx_init(struct proc *, void (*entry)(void), uintptr_t stack);
 
-void ctx_start(struct context *) gcc_noreturn;
+void ctx_start(struct context *);
 
 uint32_t ctx_errno(struct context *);
 uint32_t ctx_arg1(struct context *);

@@ -42,7 +42,7 @@ ctx_init(struct proc *p, void (*entry)(void), uintptr_t stack)
 /*
  * Resume/Start executing the context.
  */
-void gcc_noreturn
+void
 ctx_start(struct context *ctx)
 {
 	KERN_ASSERT(ctx != NULL);
@@ -63,42 +63,42 @@ ctx_start(struct context *ctx)
 	trap_return(tf);
 }
 
-gcc_inline uint32_t
+uint32_t
 ctx_errno(struct context *ctx)
 {
 	KERN_ASSERT(ctx != NULL);
 	return ctx->tf.err;
 }
 
-gcc_inline uint32_t
+uint32_t
 ctx_arg1(struct context *ctx)
 {
 	KERN_ASSERT(ctx != NULL);
 	return ctx->tf.regs.eax;
 }
 
-gcc_inline uint32_t
+uint32_t
 ctx_arg2(struct context *ctx)
 {
 	KERN_ASSERT(ctx != NULL);
 	return ctx->tf.regs.ebx;
 }
 
-gcc_inline uint32_t
+uint32_t
 ctx_arg3(struct context *ctx)
 {
 	KERN_ASSERT(ctx != NULL);
 	return ctx->tf.regs.ecx;
 }
 
-gcc_inline uint32_t
+uint32_t
 ctx_arg4(struct context *ctx)
 {
 	KERN_ASSERT(ctx != NULL);
 	return ctx->tf.regs.edx;
 }
 
-gcc_inline void
+void
 ctx_set_retval(struct context *ctx, uint32_t rc)
 {
 	KERN_ASSERT(ctx != NULL);

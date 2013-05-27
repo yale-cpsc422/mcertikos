@@ -198,6 +198,8 @@ struct gatedesc {
 /* Segment Descriptors */
 typedef uint64_t segdesc_t;
 
+#define CPU_GDT_UCODE	0x18	    /* user text */
+#define CPU_GDT_UDATA	0x20	    /* user data */
 #define CPU_GDT_NDESC	6	    /* number of GDT entries used */
 
 typedef

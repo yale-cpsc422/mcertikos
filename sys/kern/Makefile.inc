@@ -51,6 +51,11 @@ $(KERN_OBJDIR)/kern/syscall.o: $(KERN_DIR)/kern/syscall.c
 	@echo + ccomp[KERN/kern] $<
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
+
+$(KERN_OBJDIR)/kern/context.o: $(KERN_DIR)/kern/context.c
+	@echo + ccomp[KERN/kern] $<
+	@mkdir -p $(@D)
+	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
 endif
 
 $(KERN_OBJDIR)/kern/%.o: $(KERN_DIR)/kern/%.c
