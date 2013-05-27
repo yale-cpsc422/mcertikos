@@ -10,6 +10,12 @@
 
 #ifndef __COMPCERT__
 
+static gcc_inline void
+cld(void)
+{
+	__asm __volatile("cld" ::: "cc");
+}
+
 static gcc_inline uint8_t
 inb(int port)
 {
@@ -172,8 +178,10 @@ smp_rmb(void)
 void ccomp_rdtscp(uint64_t *tsc);
 void ccomp_enable_sse(void);
 void ccomp_pause(void);
+void ccomp_cld(void);
 
 #define pause()		ccomp_pause()
+#define cld()		ccomp_cld()
 
 #endif /* __COMPCERT__ */
 

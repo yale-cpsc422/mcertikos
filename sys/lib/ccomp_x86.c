@@ -64,3 +64,15 @@ ccomp_pause(void)
 {
 	pause();
 }
+
+void
+ccomp_cld(void)
+{
+	cld();
+}
+
+uint32_t
+ccomp_rcr2(void)
+{
+	return rcr2();
+}

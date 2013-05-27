@@ -4,6 +4,7 @@
 #ifdef _KERN_
 
 #include <sys/context.h>
+#include <sys/gcc.h>
 
 #include <machine/trap.h>
 
@@ -12,7 +13,7 @@ struct pcpu;
 
 typedef int (*trap_cb_t) (uint8_t trapno, struct context *);
 
-void trap(tf_t *);
+void trap(tf_t *) gcc_noreturn;
 void trap_init_array(struct pcpu *c);
 void trap_handler_register(int trapno, trap_cb_t);
 

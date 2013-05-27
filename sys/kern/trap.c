@@ -31,7 +31,7 @@ default_handler_user(tf_t *tf)
 gcc_noreturn void
 trap(tf_t *tf)
 {
-	asm volatile("cld" ::: "cc");
+	cld();
 
 	KERN_ASSERT(tf != NULL);
 	KERN_ASSERT(VM_USERLO <= tf->eip && tf->eip < VM_USERHI);
