@@ -21,6 +21,11 @@ $(KERN_OBJDIR)/lib/elf.o: $(KERN_DIR)/lib/elf.c
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
 
+$(KERN_OBJDIR)/lib/string.o: $(KERN_DIR)/lib/string.c
+	@echo + ccomp[KERN/lib] $<
+	@mkdir -p $(@D)
+	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
+
 endif
 
 # Targets
