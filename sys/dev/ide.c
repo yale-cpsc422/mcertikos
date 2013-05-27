@@ -122,6 +122,8 @@ ide_disk_read(uint32_t lba_lo, uint32_t lba_hi, void *buf, uint16_t nsectors)
 	uint32_t *__buf = buf;
 	int rc;
 
+	ide_wait_ready();
+
 	outb(IDE_MASTER + IDE_PORT_DRV, IDE_DRV_MASTER_EXT);
 	outb(IDE_MASTER + IDE_PORT_NSECT, (nsectors >> 8) & 0xff);
 	outb(IDE_MASTER + IDE_PORT_LBA_LO, (lba >> 24) & 0xff);
@@ -160,6 +162,8 @@ ide_disk_write(uint32_t lba_lo, uint32_t lba_hi, void *buf, uint16_t nsectors)
 	uint32_t offset = 0;
 	uint16_t *__buf = buf;
 	int rc;
+
+	ide_wait_ready();
 
 	outb(IDE_MASTER + IDE_PORT_DRV, IDE_DRV_MASTER_EXT);
 	outb(IDE_MASTER + IDE_PORT_NSECT, (nsectors >> 8) & 0xff);
