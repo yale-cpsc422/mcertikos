@@ -97,8 +97,8 @@ enum __error_nr {
 
 struct user_disk_op {
 	enum { DISK_READ, DISK_WRITE } type;
-	uint64_t	lba;
-	uint64_t	n;
+	uint32_t	lba_lo, lba_hi;
+	uint32_t	n;
 	uintptr_t	buf;
 };
 
@@ -124,7 +124,9 @@ typedef enum {
 
 typedef union {
 	uint32_t	info32;
-	uint64_t	info64;
+	struct {
+		uint32_t lo, hi;
+	} info64;
 } sysinfo_info_t;
 
 #endif /* !_SYS_SYSCALL_H_ */

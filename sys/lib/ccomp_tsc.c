@@ -2,8 +2,14 @@
 
 #include <dev/tsc.h>
 
-uint64_t *
-ccomp_tsc_per_ms(void)
+uint32_t
+ccomp_tsc_freq_lo(void)
 {
-	return (uint64_t *) &tsc_per_ms;
+	return (tsc_per_ms * 1000) & 0xffffffff;
+}
+
+uint32_t
+ccomp_tsc_freq_hi(void)
+{
+	return ((tsc_per_ms * 1000) >> 32) & 0xffffffff;
 }

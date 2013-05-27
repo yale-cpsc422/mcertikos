@@ -76,3 +76,39 @@ ccomp_rcr2(void)
 {
 	return rcr2();
 }
+
+uint8_t
+ccomp_inb(int port)
+{
+	return inb(port);
+}
+
+uint16_t
+ccomp_inw(int port)
+{
+	return inw(port);
+}
+
+uint32_t
+ccomp_inl(int port)
+{
+	return inl(port);
+}
+
+void
+ccomp_outb(int port, uint8_t data)
+{
+	outb(port, data);
+}
+
+void
+ccomp_outw(int port, uint16_t data)
+{
+	outw(port, data);
+}
+
+void
+ccomp_outl(int port, uint32_t data)
+{
+	outl(port, data);
+}

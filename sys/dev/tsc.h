@@ -15,7 +15,8 @@ void delay(uint32_t);
 uint64_t time_ms(void);
 
 #ifdef __COMPCERT__
-uint64_t *ccomp_tsc_per_ms(void);
+uint32_t ccomp_tsc_freq_lo(void);
+uint32_t ccomp_tsc_freq_hi(void);
 #endif
 
 #endif /* _KERN_ */

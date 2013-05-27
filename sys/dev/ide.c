@@ -104,17 +104,20 @@ ide_init(void)
 
 	ide_inited = TRUE;
 
-	KERN_DEBUG("Disk size %lld bytes.\n", ide_disk_size() * DISK_SECT_SIZE);
+	KERN_DEBUG("Disk size %lld bytes.\n",
+		   (((uint64_t) ide_disk_size_hi() << 32) | ide_disk_size_lo())
+		   * DISK_SECT_SIZE);
 
 	return 0;
 }
 
 int
-ide_disk_read(uint64_t lba, void *buf, uint16_t nsectors)
+ide_disk_read(uint32_t lba_lo, uint32_t lba_hi, void *buf, uint16_t nsectors)
 {
 	if (ide_inited == FALSE)
 		return -1;
 
+	uint64_t lba = ((uint64_t) lba_hi << 32) | lba_lo;
 	uint32_t offset = 0;
 	uint32_t *__buf = buf;
 	int rc;
@@ -148,11 +151,12 @@ ide_disk_read(uint64_t lba, void *buf, uint16_t nsectors)
 }
 
 int
-ide_disk_write(uint64_t lba, void *buf, uint16_t nsectors)
+ide_disk_write(uint32_t lba_lo, uint32_t lba_hi, void *buf, uint16_t nsectors)
 {
 	if (ide_inited == FALSE)
 		return -1;
 
+	uint64_t lba = ((uint64_t) lba_hi << 32) | lba_lo;
 	uint32_t offset = 0;
 	uint16_t *__buf = buf;
 	int rc;
@@ -186,14 +190,18 @@ ide_disk_write(uint64_t lba, void *buf, uint16_t nsectors)
 	return rc;
 }
 
-uint64_t
-ide_disk_size(void)
+uint32_t
+ide_disk_size_lo(void)
 {
 	if (ide_inited == FALSE)
 		return 0;
+	return ((uint32_t) ide_info[101] << 16) | (uint32_t) ide_info[100] ;
+}
 
-	return (((uint64_t) ide_info[100]) |
-		((uint64_t) ide_info[101] << 16) |
-		((uint64_t) ide_info[102] << 32) |
-		((uint64_t) ide_info[103] << 48));
+uint32_t
+ide_disk_size_hi(void)
+{
+	if (ide_inited == FALSE)
+		return 0;
+	return ((uint32_t) ide_info[103] << 16) | (uint32_t) ide_info[102];
 }

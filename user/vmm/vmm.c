@@ -493,13 +493,16 @@ int
 vmm_init_vm(struct vm *vm, uint64_t cpufreq, size_t memsize)
 {
 	sysinfo_info_t sysinfo;
+	uint64_t host_cpu_freq;
 
 	if (vm == NULL)
 		return -1;
 
 	sys_sysinfo_lookup(SYSINFO_CPU_FREQ, &sysinfo);
+	host_cpu_freq =
+		((uint64_t) sysinfo.info64.hi << 32) | sysinfo.info64.lo;
 
-	if (cpufreq >= sysinfo.info64) {
+	if (cpufreq >= host_cpu_freq) {
 		VMM_DEBUG("Guest CPU frequency cannot be higher than the host "
 			   "CPU frequency.\n");
 		return -2;
@@ -581,7 +584,8 @@ vmm_run_vm(struct vm *vm)
 	int rc, injected;
 
 	sys_sysinfo_lookup(SYSINFO_CPU_FREQ, &sysinfo);
-	host_cpu_freq = sysinfo.info64;
+	host_cpu_freq =
+		((uint64_t) sysinfo.info64.hi << 32) | sysinfo.info64.lo;
 
 	VMM_DEBUG("Start running VM ... \n");
 

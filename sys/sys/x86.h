@@ -179,9 +179,21 @@ void ccomp_rdtscp(uint64_t *tsc);
 void ccomp_enable_sse(void);
 void ccomp_pause(void);
 void ccomp_cld(void);
+uint8_t ccomp_inb(int port);
+uint16_t ccomp_inw(int port);
+uint32_t ccomp_inl(int poer);
+void ccomp_outb(int port, uint8_t data);
+void ccomp_outw(int port, uint16_t data);
+void ccomp_outl(int port, uint32_t data);
 
 #define pause()		ccomp_pause()
 #define cld()		ccomp_cld()
+#define inb(port)	ccomp_inb((port))
+#define inw(port)	ccomp_inw((port))
+#define inl(port)	ccomp_inl((port))
+#define outb(port, val)	ccomp_outb((port), (val))
+#define outw(port, val)	ccomp_outw((port), (val))
+#define outl(port, val)	ccomp_outl((port), (val))
 
 #endif /* __COMPCERT__ */
 

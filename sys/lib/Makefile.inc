@@ -14,7 +14,6 @@ ifdef ENABLE_CCOMP
 KERN_SRCFILES	+= $(KERN_DIR)/lib/ccomp_spinlock.c
 KERN_SRCFILES	+= $(KERN_DIR)/lib/ccomp_tsc.c
 KERN_SRCFILES	+= $(KERN_DIR)/lib/ccomp_types.c
-KERN_SRCFILES	+= $(KERN_DIR)/lib/ccomp_u64.c
 KERN_SRCFILES	+= $(KERN_DIR)/lib/ccomp_x86.c
 endif
 

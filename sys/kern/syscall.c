@@ -335,25 +335,30 @@ sys_recv(int chid, uintptr_t msg_la, size_t size)
 }
 
 static int
-__sys_disk_read(uint64_t lba, uint64_t nsectors, uintptr_t buf)
+__sys_disk_read(uint32_t lba_lo, uint32_t lba_hi,
+		uint32_t nsectors, uintptr_t buf)
 {
-	uint64_t cur_lba, remaining;
+	uint32_t cur_lba_lo, cur_lba_hi;
+	uint32_t remaining;
 	uintptr_t cur_la;
 
 	struct proc *p = proc_cur();
 
-	cur_lba = lba;
+	cur_lba_lo = lba_lo;
+	cur_lba_hi = lba_hi;
 	remaining = nsectors;
 	cur_la = buf;
 
 	while (remaining > 0) {
-		uint64_t n = MIN(remaining, PAGESIZE / ATA_SECTOR_SIZE);
-		if (ide_disk_read(cur_lba, p->sys_buf, n))
+		uint32_t n = MIN(remaining, PAGESIZE / ATA_SECTOR_SIZE);
+
+		if (ide_disk_read(cur_lba_lo, cur_lba_hi, p->sys_buf, n))
 			return E_DISK_OP;
 		if (copy_to_user(p->pmap, cur_la, (uintptr_t) p->sys_buf,
 				 n * ATA_SECTOR_SIZE) == 0)
 			return E_MEM;
-		cur_lba += n;
+
+		u64_add_u32(cur_lba_lo, cur_lba_hi, n, cur_lba_lo, cur_lba_hi);
 		remaining -= n;
 		cur_la += n * ATA_SECTOR_SIZE;
 	}
@@ -362,25 +367,30 @@ __sys_disk_read(uint64_t lba, uint64_t nsectors, uintptr_t buf)
 }
 
 static int
-__sys_disk_write(uint64_t lba, uint64_t nsectors, uintptr_t buf)
+__sys_disk_write(uint32_t lba_lo, uint32_t lba_hi,
+		 uint32_t nsectors, uintptr_t buf)
 {
-	uint64_t cur_lba, remaining;
+	uint32_t cur_lba_lo, cur_lba_hi;
+	uint32_t remaining;
 	uintptr_t cur_la;
 
 	struct proc *p = proc_cur();
 
-	cur_lba = lba;
+	cur_lba_lo = lba_lo;
+	cur_lba_hi = lba_hi;
 	remaining = nsectors;
 	cur_la = buf;
 
 	while (remaining > 0) {
-		uint64_t n = MIN(remaining, PAGESIZE / ATA_SECTOR_SIZE);
+		uint32_t n = MIN(remaining, PAGESIZE / ATA_SECTOR_SIZE);
+
 		if (copy_from_user((uintptr_t) p->sys_buf, p->pmap, cur_la,
 				   n * ATA_SECTOR_SIZE) == 0)
 			return E_MEM;
-		if (ide_disk_write(cur_lba, p->sys_buf, n))
+		if (ide_disk_write(cur_lba_lo, cur_lba_hi, p->sys_buf, n))
 			return E_DISK_OP;
-		cur_lba += n;
+
+		u64_add_u32(cur_lba_lo, cur_lba_hi, n, cur_lba_lo, cur_lba_hi);
 		remaining -= n;
 		cur_la += n * ATA_SECTOR_SIZE;
 	}
@@ -412,10 +422,10 @@ sys_disk_op(uintptr_t dop_la)
 
 	switch (dop.type) {
 	case DISK_READ:
-		rc = __sys_disk_read(dop.lba, dop.n, dop.buf);
+		rc = __sys_disk_read(dop.lba_lo, dop.lba_hi, dop.n, dop.buf);
 		break;
 	case DISK_WRITE:
-		rc = __sys_disk_write(dop.lba, dop.n, dop.buf);
+		rc = __sys_disk_write(dop.lba_lo, dop.lba_hi, dop.n, dop.buf);
 		break;
 	default:
 		rc = 1;
@@ -430,7 +440,6 @@ sys_disk_op(uintptr_t dop_la)
 static int
 sys_disk_cap(uintptr_t lo_la, uintptr_t hi_la)
 {
-	uint64_t cap;
 	uint32_t cap_lo, cap_hi;
 
 	if (!(VM_USERLO <= lo_la && lo_la + sizeof(uint32_t) <= VM_USERHI))
@@ -438,9 +447,8 @@ sys_disk_cap(uintptr_t lo_la, uintptr_t hi_la)
 	if (!(VM_USERLO <= hi_la && hi_la + sizeof(uint32_t) <= VM_USERHI))
 		return E_INVAL_ADDR;
 
-	cap = ide_disk_size();
-	cap_lo = cap & 0xffffffff;
-	cap_hi = (cap >> 32) & 0xffffffff;
+	cap_lo = ide_disk_size_lo();
+	cap_hi = ide_disk_size_hi();
 
 	if ((copy_to_user(proc_cur()->pmap, lo_la,
 			  (uintptr_t) &cap_lo, sizeof(uint32_t))) == 0)
@@ -487,7 +495,13 @@ sys_sysinfo_lookup(sysinfo_name_t name, uintptr_t info_la)
 		info.info32 = pcpu_cur()->arch_info.cpu_vendor;
 		break;
 	case SYSINFO_CPU_FREQ:
-		info.info64 = tsc_per_ms * 1000;
+#ifndef __COMPCERT__
+		info.info64.lo = (tsc_per_ms * 1000) & 0xffffffff;
+		info.info64.hi = ((tsc_per_ms * 1000) >> 32) & 0xffffffff;
+#else
+		info.info64.lo = ccomp_tsc_freq_lo();
+		info.info64.hi = ccomp_tsc_freq_hi();
+#endif
 		break;
 	default:
 		return E_INVAL_SYSINFO_NAME;

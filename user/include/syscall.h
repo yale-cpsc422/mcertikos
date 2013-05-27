@@ -160,7 +160,9 @@ static gcc_inline int
 sys_disk_read(uint64_t lba, uint64_t nsectors, void *buf)
 {
 	int errno;
-	struct user_disk_op dop = { .type = DISK_READ, .lba = lba,
+	struct user_disk_op dop = { .type = DISK_READ,
+				    .lba_lo = lba & 0xffffffff,
+				    .lba_hi = (lba >> 32) & 0xffffffff,
 				    .n = nsectors, .buf = (uintptr_t) buf };
 
 	asm volatile("int %1"
@@ -177,7 +179,9 @@ static gcc_inline int
 sys_disk_write(uint64_t lba, uint64_t nsectors, void *buf)
 {
 	int errno;
-	struct user_disk_op dop = { .type = DISK_WRITE, .lba = lba,
+	struct user_disk_op dop = { .type = DISK_WRITE,
+				    .lba_lo = lba & 0xffffffff,
+				    .lba_hi = (lba >> 32) & 0xffffffff,
 				    .n = nsectors, .buf = (uintptr_t) buf };
 
 	asm volatile("int %1"
