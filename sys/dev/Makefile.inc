@@ -29,6 +29,11 @@ $(KERN_OBJDIR)/dev/serial.o: $(KERN_DIR)/dev/serial.c
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
 
+$(KERN_OBJDIR)/dev/acpi.o: $(KERN_DIR)/dev/acpi.c
+	@echo + ccomp[KERN/dev] $<
+	@mkdir -p $(@D)
+	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
+
 endif
 
 $(KERN_OBJDIR)/dev/%.o: $(KERN_DIR)/dev/%.c

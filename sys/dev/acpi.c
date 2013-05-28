@@ -101,7 +101,7 @@ acpi_probe_xsdt(acpi_rsdp_t *rsdp)
 {
 	KERN_ASSERT(rsdp != NULL);
 
-	acpi_xsdt_t *xsdt  = (acpi_xsdt_t *)(uintptr_t) rsdp->xsdt_addr;
+	acpi_xsdt_t *xsdt  = (acpi_xsdt_t *) rsdp->xsdt_addr_lo;
 	/* debug("rsdp->xsdt_addr = %08x\n", xsdt); */
 	if (xsdt == NULL)
 		return NULL;
@@ -125,7 +125,7 @@ acpi_probe_xsdt_ent(acpi_xsdt_t *xsdt, const uint32_t sig)
 	int i;
 	for (i = 0; p < e; i++) {
 		acpi_sdt_hdr_t *hdr =
-			(acpi_sdt_hdr_t *)(uintptr_t) (xsdt->ent[i]);
+			(acpi_sdt_hdr_t *) (xsdt->ent[i].lo);
 		/* debug("probe XSDT entry %d at %08x\n", i, hdr); */
 		if (hdr->sig == sig &&
 		    sum((uint8_t *)hdr, hdr->length) == 0) {

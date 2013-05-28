@@ -16,7 +16,8 @@ struct acpi_rsdp {
 	uint8_t revision;
 	uint32_t rsdt_addr;	/* 32 bit physical address of RSDT */
 	uint32_t length;	/* the length in bytes of the entire table */
-	uint64_t xsdt_addr;	/* 64 bit physical address of XSDT */
+	uint32_t xsdt_addr_lo;	/* 64 bit physical address of XSDT (low) */
+	uint32_t xsdt_addr_hi;	/* 64 bit physical address of XSDT (high) */
 	uint8_t xchecksum;	/* checksum of the entire table */
 	uint8_t reserved[3];	/* reserved fields */
 } acpi_rsdp_t;
@@ -29,7 +30,8 @@ struct acpi_sdt_hdr {
 	uint8_t revision;	/* revision */
 	uint8_t checksum;	/* checksum of the entire table */
 	uint8_t oemid[6];
-	uint64_t oemtid;
+	uint32_t oemtid_lo;
+	uint32_t oemtid_hi;
 	uint32_t oemrev;
 	uint8_t creator[4];	/* vendor ID of utility that created the table*/
 	uint32_t creator_rev;	/* revision of the vendor */
@@ -51,7 +53,8 @@ struct acpi_rsdt {
 	uint8_t revision;	/* revision */
 	uint8_t checksum;	/* checksum of the entire table */
 	uint8_t oemid[6];
-	uint64_t oemtid;
+	uint32_t oemtid_lo;
+	uint32_t oemtid_hi;
 	uint32_t oemrev;
 	uint8_t creator[4];	/* vendor ID of utility that created the table*/
 	uint32_t creator_rev;	/* revision of the vendor */
@@ -66,11 +69,15 @@ struct acpi_xsdt {
 	uint8_t revision;	/* revision */
 	uint8_t checksum;	/* checksum of the entire table */
 	uint8_t oemid[6];
-	uint64_t oemtid;
+	uint32_t oemtid_lo;
+	uint32_t oemtid_hi;
 	uint32_t oemrev;
 	uint8_t creator[4];	/* vendor ID of utility that created the table*/
 	uint32_t creator_rev;	/* revision of the vendor */
-	uint64_t ent[1];	/* entries to other description table */
+	struct {
+		uint32_t lo;
+		uint32_t hi;
+	} ent[1];		/* entries to other description table */
 } acpi_xsdt_t;
 
 /* data structure for ACPI Fixed ACPI Description Table */
@@ -81,7 +88,8 @@ struct acpi_fadt {
 	uint8_t revision;	/* revision */
 	uint8_t checksum;	/* checksum of the entire table */
 	uint8_t oemid[6];
-	uint64_t oemtid;
+	uint32_t oemtid_lo;
+	uint32_t oemtid_hi;
 	uint32_t oemrev;
 	uint8_t creator[4];	/* vendor ID of utility that created the table*/
 	uint32_t creator_rev;	/* revision of the vendor */
@@ -98,7 +106,8 @@ struct acpi_madt {
 	uint8_t revision;	/* revision */
 	uint8_t checksum;	/* checksum of the entire table */
 	uint8_t oemid[6];
-	uint64_t oemtid;
+	uint32_t oemtid_lo;
+	uint32_t oemtid_hi;
 	uint32_t oemrev;
 	uint8_t creator[4];	/* vendor ID of utility that created the table*/
 	uint32_t creator_rev;	/* revision of the vendor */
