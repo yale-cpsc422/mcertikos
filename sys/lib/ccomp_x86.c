@@ -112,3 +112,10 @@ ccomp_outl(int port, uint32_t data)
 {
 	outl(port, data);
 }
+
+void
+ccomp_cpuid(uint32_t info,
+	    uint32_t *eaxp, uint32_t *ebxp, uint32_t *ecxp, uint32_t *edxp)
+{
+	cpuid(info, eaxp, ebxp, ecxp, edxp);
+}

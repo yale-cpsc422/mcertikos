@@ -465,6 +465,8 @@ void     ccomp_lcr0(uint32_t cr0);
 void     ccomp_lcr3(uint32_t cr3);
 uint32_t ccomp_rcr0(void);
 uint32_t ccomp_rcr2(void);
+void     ccomp_cpuid(uint32_t info, uint32_t *eaxp, uint32_t *ebxp,
+		     uint32_t *ecxp, uint32_t *edxp);
 
 #define rcr4()		ccomp_rcr4()
 #define lcr4(cr4)	ccomp_lcr4((cr4))
@@ -472,6 +474,8 @@ uint32_t ccomp_rcr2(void);
 #define lcr3(cr3)	ccomp_lcr3((cr3))
 #define rcr0()		ccomp_rcr0()
 #define rcr2()		ccomp_rcr2()
+#define cpuid(leaf, eaxp, ebxp, ecxp, edxp)			\
+	ccomp_cpuid((leaf), (eaxp), (ebxp), (ecxp), (edxp))
 
 #endif /* !__COMPCERT__ */
 
