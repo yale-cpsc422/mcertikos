@@ -17,23 +17,6 @@ static void init_seg_offset(void);
 static void init_svm_event_type(void);
 
 /*
- * Allocate one memory page for the host state-save area.
- */
-static uintptr_t
-alloc_hsave_area(void)
-{
-	pageinfo_t *pi = mem_page_alloc();
-
-	if (pi == NULL) {
-		SVM_DEBUG("Failed to allocate memory for "
-			  "the host state-save area failed.\n");
-		return 0x0;
-	}
-
-	return mem_pi2phys(pi);
-}
-
-/*
  * Set an interception bit in VMCB.
  *
  * @param vmcb the pointer to a VMCB
@@ -154,12 +137,15 @@ svm_init(void)
 	init_seg_offset();
 	init_svm_event_type();
 
-	uintptr_t hsave_addr = alloc_hsave_area();
+	pageinfo_t *hsave_pi = mem_page_alloc();
 
-	if (hsave_addr == 0x0)
-		return 1;
-	else
-		SVM_DEBUG("Host state-save area is at %x.\n", hsave_addr);
+	if (hsave_pi == NULL) {
+		SVM_DEBUG("Cannot allocate memory for host state-save area.\n");
+		return -1;
+	}
+
+	uintptr_t hsave_addr = mem_pi2phys(hsave_pi);
+	SVM_DEBUG("Host state-save area is at %x.\n", hsave_addr);
 
 	return svm_drv_init(hsave_addr);
 }
@@ -196,7 +182,6 @@ svm_init_vm(struct vm *vm)
 		rc = -3;
 		goto err2;
 	}
-
 	svm->vmcb->control.iopm_base_pa_lo = mem_pi2phys(iopm_pi);
 	svm->vmcb->control.iopm_base_pa_hi = 0;
 
@@ -243,10 +228,6 @@ svm_init_vm(struct vm *vm)
 	 * Setup initial state.
 	 */
 
-	svm->vmcb->save.cr0_lo = 0x60000010;
-	svm->vmcb->save.cr0_hi = 0;
-	svm->vmcb->save.cr2_lo = svm->vmcb->save.cr3_lo = svm->vmcb->save.cr4_lo = 0;
-	svm->vmcb->save.cr2_hi = svm->vmcb->save.cr3_hi = svm->vmcb->save.cr4_hi = 0;
 	svm->vmcb->save.dr6_lo = 0xffff0ff0;
 	svm->vmcb->save.dr6_hi = 0;
 	svm->vmcb->save.dr7_lo = 0x00000400;
