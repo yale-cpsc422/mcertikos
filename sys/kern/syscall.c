@@ -221,19 +221,12 @@ sys_create_proc(uintptr_t pid_la, chid_t chid)
 }
 
 static int
-sys_run_proc(pid_t pid, uint32_t cpu_idx, uintptr_t binary_la)
+sys_run_proc(pid_t pid, uintptr_t binary_la)
 {
-	struct pcpu *c;
 	struct proc *p;
-
-	if (cpu_idx >= pcpu_ncpu())
-		return E_INVAL_CPU;
-	c = pcpu_get_cpu(cpu_idx);
-
 	if ((p = proc_pid2proc(pid)) == NULL || p->state != PROC_INITED)
 		return E_INVAL_PID;
-
-	proc_exec(p, c, binary_la);
+	proc_exec(p, binary_la);
 	return E_SUCC;
 }
 
@@ -887,11 +880,9 @@ syscall_handler(uint8_t trapno, struct context *ctx)
 		/*
 		 * Run a process.
 		 * a[0]: the process ID
-		 * a[1]: the CPU index on which the process is going to run
-		 * a[2]: the linear address where the binary code is
+		 * a[1]: the linear address where the binary code is
 		 */
-		errno = sys_run_proc((uint32_t) a[0], (pid_t) a[1],
-				     elf_addr[a[2]]);
+		errno = sys_run_proc((uint32_t) a[0], elf_addr[a[1]]);
 		break;
 	case SYS_yield:
 		/*

@@ -40,7 +40,7 @@ channel_init(void)
 {
 	int i;
 
-	if (pcpu_onboot() == FALSE || channel_inited == TRUE)
+	if (channel_inited == TRUE)
 		return;
 
 	spinlock_init(&channel_pool_lk);

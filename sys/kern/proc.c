@@ -90,7 +90,7 @@ proc_free(struct proc *p)
 static void
 proc_spawn_return(void)
 {
-	sched_unlock(pcpu_cur());
+	sched_unlock();
 	/* return to ctx_start() (see kstack_init_proc()) */
 }
 
@@ -99,7 +99,7 @@ proc_init(void)
 {
 	pid_t pid;
 
-	if (pcpu_onboot() == FALSE || proc_inited == TRUE)
+	if (proc_inited == TRUE)
 		return 0;
 
 	spinlock_init(&proc_pool_lk);
@@ -112,8 +112,7 @@ proc_init(void)
 		TAILQ_INSERT_TAIL(&proc_pool, &process[pid], entry);
 	}
 
-	if (pcpu_onboot() == TRUE)
-		sched_init();
+	sched_init();
 
 	proc_inited = TRUE;
 
@@ -193,10 +192,9 @@ proc_new(struct proc *parent, struct channel *ch)
 }
 
 int
-proc_exec(struct proc *p, struct pcpu *c, uintptr_t u_elf)
+proc_exec(struct proc *p, uintptr_t u_elf)
 {
 	KERN_ASSERT(proc_inited == TRUE);
-	KERN_ASSERT(c != NULL);
 	KERN_ASSERT(p != NULL && p->state == PROC_INITED);
 
 	proc_lock(p);
@@ -207,11 +205,11 @@ proc_exec(struct proc *p, struct pcpu *c, uintptr_t u_elf)
 	/* initialize user context */
 	ctx_init(p, (void (*)(void)) elf_entry(u_elf), VM_STACKHI - PAGESIZE);
 
-	kstack_init_proc(p, c, proc_spawn_return);
+	kstack_init_proc(p, proc_spawn_return);
 
-	sched_lock(c);
-	sched_add(p, c);
-	sched_unlock(c);
+	sched_lock();
+	sched_add(p);
+	sched_unlock();
 
 	proc_unlock(p);
 
@@ -226,9 +224,9 @@ proc_sleep(struct proc *p, void *wchan, spinlock_t *inv)
 	KERN_ASSERT(wchan != NULL);
 	KERN_ASSERT(inv == NULL || spinlock_holding(inv) == TRUE);
 
-	sched_lock(p->cpu);
+	sched_lock();
 	sched_sleep(p, wchan, inv);
-	sched_unlock(p->cpu);
+	sched_unlock();
 
 	KERN_ASSERT(inv == NULL || spinlock_holding(inv) == TRUE);
 }
@@ -245,17 +243,16 @@ void
 proc_yield(void)
 {
 	KERN_ASSERT(proc_inited == TRUE);
-	sched_lock(pcpu_cur());
+	sched_lock();
 	sched_yield();
-	sched_unlock(pcpu_cur());
+	sched_unlock();
 }
 
 struct proc *
 proc_cur(void)
 {
 	KERN_ASSERT(proc_inited == TRUE);
-	KERN_ASSERT(pcpu_cur() != NULL);
-	return sched_cur_proc(pcpu_cur());
+	return sched_cur_proc();
 }
 
 struct proc *

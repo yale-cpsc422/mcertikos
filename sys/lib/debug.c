@@ -81,7 +81,7 @@ debug_panic(const char *file, int line, const char *fmt,...)
 	for (i = 0; i < DEBUG_TRACEFRAMES && eips[i] != 0; i++)
 		dprintf("\tfrom 0x%08x\n", eips[i]);
 
-	dprintf("Kernel Panic on CPU%d !!!\n", pcpu_cpu_idx(pcpu_cur()));
+	dprintf("Kernel Panic !!!\n");
 
 	intr_local_disable();
 	halt();

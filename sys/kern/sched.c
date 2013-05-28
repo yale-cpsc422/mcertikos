@@ -84,13 +84,13 @@ struct sched {
 };
 
 static volatile bool sched_inited = FALSE;
-static struct sched scheduler[MAX_CPU];
+static struct sched scheduler0;
 
 #define SCHED_SLICE		20
 #define SCHED_LOCKED(sched)	spinlock_holding(&(sched)->sched_lk)
-#define CURRENT_SCHEDULER()	(&scheduler[pcpu_cpu_idx(pcpu_cur())])
-#define PROCESS_SCHEDULER(p)	(&scheduler[pcpu_cpu_idx((p)->cpu)])
-#define CPU_SCHEDULER(c)	(&scheduler[pcpu_cpu_idx((c))])
+#define CURRENT_SCHEDULER()	(&scheduler0)
+#define PROCESS_SCHEDULER(p)	(&scheduler0)
+#define CPU_SCHEDULER(c)	(&scheduler0)
 
 static void slpq_init(void);
 static void slpq_init_obj(void *slpq, struct kmem_cache *cache);
@@ -290,7 +290,7 @@ sched_ready(struct sched *sched, struct proc *p, bool head)
 	KERN_ASSERT(SCHED_LOCKED(sched) == TRUE);
 	KERN_ASSERT(p != NULL);
 	KERN_ASSERT(p->state == PROC_INITED ||
-		    (p->state == PROC_RUNNING && p->cpu == pcpu_cur()) ||
+		    p->state == PROC_RUNNING ||
 		    p->state == PROC_SLEEPING);
 
 	p->state = PROC_READY;
@@ -314,9 +314,7 @@ sched_switch(struct sched *sched, struct proc *from, struct proc *to)
 {
 	KERN_ASSERT(sched != NULL);
 	KERN_ASSERT(SCHED_LOCKED(sched) == TRUE);
-	KERN_ASSERT(from == NULL || from->cpu == pcpu_cur());
 	KERN_ASSERT(to != NULL);
-	KERN_ASSERT(to->cpu == pcpu_cur());
 #ifndef __COMPCERT__
 	KERN_ASSERT((read_eflags() & FL_IF) == 0);
 #endif
@@ -346,19 +344,17 @@ sched_init(void)
 {
 	int cpu_idx;
 
-	if (pcpu_onboot() == FALSE || sched_inited == TRUE)
+	if (sched_inited == TRUE)
 		return 0;
 
 	/*
 	 * Initialize all per-CPU schedulers.
 	 */
-	for (cpu_idx = 0; cpu_idx < MAX_CPU; cpu_idx++) {
-		spinlock_init(&scheduler[cpu_idx].sched_lk);
-		scheduler[cpu_idx].cur_proc = NULL;
-		scheduler[cpu_idx].run_ticks = 0;
-		TAILQ_INIT(&scheduler[cpu_idx].rdyq);
-		TAILQ_INIT(&scheduler[cpu_idx].deadq);
-	}
+	spinlock_init(&scheduler0.sched_lk);
+	scheduler0.cur_proc = NULL;
+	scheduler0.run_ticks = 0;
+	TAILQ_INIT(&scheduler0.rdyq);
+	TAILQ_INIT(&scheduler0.deadq);
 
 	/*
 	 * Initialize the global sleep queue chaine.
@@ -407,18 +403,17 @@ sched_resched(bool force_choose)
  *      locked before entering sched_add().
  */
 void
-sched_add(struct proc *p, struct pcpu *c)
+sched_add(struct proc *p)
 {
 	KERN_ASSERT(sched_inited == TRUE);
 	KERN_ASSERT(p != NULL);
 	KERN_ASSERT(p->state == PROC_INITED);
 
-	struct sched *sched = CPU_SCHEDULER(c);
+	struct sched *sched = &scheduler0;
 
 	KERN_ASSERT(sched != NULL);
 	KERN_ASSERT(SCHED_LOCKED(sched) == TRUE);
 
-	p->cpu = c;
 	sched_ready(sched, p, FALSE);
 }
 
@@ -428,7 +423,6 @@ sched_wake(void *wchan)
 	KERN_ASSERT(sched_inited == TRUE);
 
 	struct sched *sched;
-	struct pcpu *cur_cpu = pcpu_cur();
 	struct proc *p;
 	struct sleepqueue_chain *sc;
 	struct sleepqueue *slpq;
@@ -468,18 +462,6 @@ sched_wake(void *wchan)
 
 		spinlock_release(&sched->sched_lk);
 
-		/*
-		 * If the process is on another processor, send an IPI to
-		 * trigger the scheduler on the processor.
-		 *
-		 * XXX: DON'T reschedule if the waken process is on the current
-		 *      processor.
-		 */
-		if (p->cpu != cur_cpu)
-			lapic_send_ipi(p->cpu->arch_info.lapicid,
-				       T_IPI0 + IPI_RESCHED,
-				       LAPIC_ICRLO_FIXED, LAPIC_ICRLO_NOBCAST);
-
 		spinlock_acquire(&slpq->lk);
 	}
 
@@ -496,7 +478,6 @@ sched_sleep(struct proc *p, void *wchan, spinlock_t *inv)
 	KERN_ASSERT(sched_inited == TRUE);
 	KERN_ASSERT(p != NULL);
 	KERN_ASSERT(p->state == PROC_RUNNING);
-	KERN_ASSERT(p->cpu == pcpu_cur());
 	KERN_ASSERT(wchan != NULL);
 	KERN_ASSERT(inv == NULL || spinlock_holding(inv) == TRUE);
 
@@ -539,7 +520,7 @@ sched_yield(void)
 {
 	KERN_ASSERT(sched_inited == TRUE);
 
-	struct sched *sched = CPU_SCHEDULER(pcpu_cur());
+	struct sched *sched = &scheduler0;
 
 	KERN_ASSERT(sched != NULL);
 	KERN_ASSERT(SCHED_LOCKED(sched) == TRUE);
@@ -551,19 +532,17 @@ sched_yield(void)
 }
 
 void
-sched_lock(struct pcpu *c)
+sched_lock(void)
 {
 	KERN_ASSERT(sched_inited == TRUE);
-	KERN_ASSERT(c != NULL);
-	spinlock_acquire(&CPU_SCHEDULER(c)->sched_lk);
+	spinlock_acquire(&scheduler0.sched_lk);
 }
 
 void
-sched_unlock(struct pcpu *c)
+sched_unlock(void)
 {
 	KERN_ASSERT(sched_inited == TRUE);
-	KERN_ASSERT(c != NULL);
-	spinlock_release(&CPU_SCHEDULER(c)->sched_lk);
+	spinlock_release(&scheduler0.sched_lk);
 }
 
 void
@@ -571,17 +550,16 @@ sched_update(void)
 {
 	KERN_ASSERT(sched_inited == TRUE);
 	struct sched *sched = CURRENT_SCHEDULER();
-	sched_lock(pcpu_cur());
+	sched_lock();
 	sched->run_ticks += (1000 / LAPIC_TIMER_INTR_FREQ);
 	if (sched->run_ticks > SCHED_SLICE)
 		sched_resched(TRUE);
-	sched_unlock(pcpu_cur());
+	sched_unlock();
 }
 
 struct proc *
-sched_cur_proc(struct pcpu *c)
+sched_cur_proc(void)
 {
 	KERN_ASSERT(sched_inited == TRUE);
-	KERN_ASSERT(c != NULL);
-	return scheduler[pcpu_cpu_idx(c)].cur_proc;
+	return scheduler0.cur_proc;
 }

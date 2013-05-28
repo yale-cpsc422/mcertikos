@@ -44,7 +44,7 @@ struct pcpuinfo {
 					   Function CPUID Information */
 };
 
-bool pcpu_mp_init(struct pcpu *c);
+bool pcpu_arch_init(struct pcpu *c);
 
 #endif /* _KERN_ */
 

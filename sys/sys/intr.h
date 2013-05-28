@@ -29,7 +29,7 @@ extern void ccomp_intr_local_disable(void);
 #endif
 
 void intr_init(void);
-void intr_enable(uint8_t irq, int cpunum);
+void intr_enable(uint8_t irq);
 
 #define intr_enable_all(irq)			\
 	do {					\

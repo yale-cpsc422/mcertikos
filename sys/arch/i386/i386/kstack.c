@@ -85,7 +85,7 @@ kstack_init(struct kstack *ks)
  * XXX: kstack_init_proc() must be called after pcpu_init() and proc_init().
  */
 void
-kstack_init_proc(struct proc *p, struct pcpu *c, void (*kern_entry)(void))
+kstack_init_proc(struct proc *p, void (*kern_entry)(void))
 {
 	/*
 	 * Layout of the initial kernel stack for a process:
@@ -120,8 +120,6 @@ kstack_init_proc(struct proc *p, struct pcpu *c, void (*kern_entry)(void))
 	uintptr_t sp = (uintptr_t) ks->kstack_hi;
 
 	kstack_init_common(ks);
-
-	ks->cpu_idx = pcpu_cpu_idx(c);
 
 	/*
 	 * Setup the user context.

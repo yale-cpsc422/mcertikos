@@ -6,11 +6,10 @@
 #include <sys/spinlock.h>
 #include <sys/string.h>
 
-#include <machine/pcpu_mp.h>
+#include <machine/pcpu.h>
 
 static bool pcpu_inited = FALSE;
-
-static struct pcpu pcpu[MAX_CPU];
+static struct pcpu cpu0;
 
 void
 pcpu_init(void)
@@ -20,18 +19,13 @@ pcpu_init(void)
 	if (pcpu_inited == TRUE)
 		return;
 
-	memzero(pcpu, sizeof(struct pcpu) * MAX_CPU);
+	memzero(&cpu0, sizeof(cpu0));
 
-	/*
-	 * Probe SMP.
-	 */
-	pcpu_mp_init(pcpu);
+	pcpu_arch_init(&cpu0);
 
-	for (i = 0; i < MAX_CPU; i++) {
-		spinlock_init(&pcpu[i].lk);
-		pcpu[i].hvm_inited = FALSE;
-		pcpu[i].inited = TRUE;
-	}
+	spinlock_init(&cpu0.lk);
+	cpu0.hvm_inited = FALSE;
+	cpu0.inited = TRUE;
 
 	pcpu_inited = TRUE;
 }
@@ -39,29 +33,11 @@ pcpu_init(void)
 struct pcpu *
 pcpu_cur(void)
 {
-	struct kstack *kstack = kstack_get_stack();
-	KERN_ASSERT(kstack->magic == KSTACK_MAGIC);
-	return &pcpu[kstack->cpu_idx];
+	return &cpu0;
 }
 
-int
-pcpu_cpu_idx(struct pcpu *c)
+lapicid_t
+pcpu_cpu_lapicid(void)
 {
-	uintptr_t addr = (uintptr_t) c;
-
-	if (addr < (uintptr_t) pcpu || addr > (uintptr_t) &pcpu[MAX_CPU-1])
-		return -1;
-
-	if ((addr - (uintptr_t) pcpu) % sizeof(struct pcpu))
-		return -1;
-
-	return (c - pcpu);
-}
-
-struct pcpu *
-pcpu_get_cpu(int pcpu_idx)
-{
-	if (pcpu_idx < 0 || pcpu_idx >= MAX_CPU)
-		return NULL;
-	return &pcpu[pcpu_idx];
+	return cpu0.arch_info.lapicid;
 }

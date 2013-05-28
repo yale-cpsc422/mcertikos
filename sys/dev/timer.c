@@ -20,9 +20,6 @@ static uint16_t last;		// Last timer count read
 void
 timer_hw_init(void)
 {
-	if (pcpu_onboot() == FALSE)
-		return;
-
 	spinlock_init(&lock);
 
 	base = 0;

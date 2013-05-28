@@ -78,12 +78,6 @@ TRAPHANDLER_NOEC(Xsyscall,	T_SYSCALL)
 /* local APIC interrupts */
 TRAPHANDLER_NOEC(Xlerror,	T_LERROR)
 
-/* IPIs */
-TRAPHANDLER_NOEC(Xipi_resched,	T_IPI0 + IPI_RESCHED)
-
-/* MSIs */
-TRAPHANDLER_NOEC(Xmsi_ahci,	T_MSI0 + MSI_AHCI)
-
 /* default ? */
 TRAPHANDLER     (Xdefault,	T_DEFAULT)
 

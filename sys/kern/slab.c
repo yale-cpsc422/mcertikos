@@ -351,7 +351,7 @@ kmem_cache_init(void)
 		   "sizeof(struct kmem_slab) = %d.\n",
 		   sizeof(struct kmem_cache), sizeof(struct kmem_slab));
 
-	if (kmem_cache_inited == TRUE || pcpu_onboot() == FALSE)
+	if (kmem_cache_inited == TRUE)
 		return -1;
 
 	/*

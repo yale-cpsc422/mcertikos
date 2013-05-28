@@ -124,7 +124,7 @@ serial_intenable(void)
 {
 	if (serial_exists) {
 		outb(COM1+COM_IER, 1);
-		intr_enable(IRQ_SERIAL13, 0);
+		intr_enable(IRQ_SERIAL13);
 	}
 }
 

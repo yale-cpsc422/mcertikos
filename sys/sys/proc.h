@@ -57,8 +57,6 @@ volatile enum {
 struct proc {
 	spinlock_t	proc_lk;	/* (?) process lock */
 
-	struct pcpu	*cpu;		/* (?) which processor I'm currently on */
-
 	pid_t		pid;		/* (p) process identity */
 
 	struct proc	*parent;	/* (p) parent process */
@@ -118,12 +116,11 @@ struct proc *proc_new(struct proc *parent, struct channel *ch);
  *      user ELF files.
  *
  * @param p     the process
- * @param c     which processor the process will execute on
  * @param u_elf where ELF image of the user code is
  *
  * @return 0 if successful; otherwise, return a non-zero value.
  */
-int proc_exec(struct proc *p, struct pcpu *c, uintptr_t u_elf);
+int proc_exec(struct proc *p, uintptr_t u_elf);
 
 /*
  * Make a process to sleep. If an invariant lock is acquired when calling

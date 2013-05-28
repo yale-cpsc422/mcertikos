@@ -36,7 +36,6 @@ struct kstack {
 	 */
 	tss_t		tss;
 
-	uint32_t	cpu_idx;
 	uint32_t	magic;
 
 	uint8_t		kstack_lo[1];
@@ -51,7 +50,7 @@ void kstack_init(struct kstack *ks);
 /*
  * Initialize the kernel stack of a process.
  */
-void kstack_init_proc(struct proc *p, struct pcpu *c, void (*kern_entry)(void));
+void kstack_init_proc(struct proc *p, void (*kern_entry)(void));
 
 /*
  * Allocate a new kstack structure.

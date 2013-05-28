@@ -59,11 +59,9 @@
 
 /* (55 ~ 63) reserved for IPI */
 #define T_IPI0		55
-#define IPI_RESCHED	0
 
 /* (64 ~ 253) reserved for others */
 #define T_MSI0		64
-#define MSI_AHCI	0
 
 /* (254) Default ? */
 #define T_DEFAULT	254

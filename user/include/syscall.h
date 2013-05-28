@@ -50,7 +50,7 @@ sys_create_proc(chid_t chid)
 }
 
 static gcc_inline int
-sys_run_proc(pid_t pid, uint32_t cpu_idx, uintptr_t exec)
+sys_run_proc(pid_t pid, uintptr_t exec)
 {
 	int errno;
 
@@ -59,8 +59,7 @@ sys_run_proc(pid_t pid, uint32_t cpu_idx, uintptr_t exec)
 		     : "i" (T_SYSCALL),
 		       "a" (SYS_run_proc),
 		       "b" (pid),
-		       "c" (cpu_idx),
-		       "d" (exec)
+		       "c" (exec)
 		     : "cc", "memory");
 
 	return errno;

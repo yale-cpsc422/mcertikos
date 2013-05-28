@@ -3,12 +3,12 @@
 #include <types.h>
 
 pid_t
-spawn(uint32_t cpu_idx, uintptr_t exec, chid_t chid)
+spawn(uintptr_t exec, chid_t chid)
 {
 	pid_t new_p = sys_create_proc(chid);
 	if (new_p == -1)
 		return -1;
-	if (sys_run_proc(new_p, cpu_idx, exec))
+	if (sys_run_proc(new_p, exec))
 		return -1;
 	return new_p;
 }

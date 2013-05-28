@@ -89,8 +89,8 @@ default_exception_handler(uint8_t trapno, struct context *ctx)
 	KERN_ASSERT(ctx != NULL);
 	KERN_ASSERT(proc_cur() != NULL);
 
-	KERN_DEBUG("Exception %d caused by process %d on CPU %d.\n",
-		   ctx->tf.trapno, proc_cur()->pid, pcpu_cpu_idx(pcpu_cur()));
+	KERN_DEBUG("Exception %d caused by process %d.\n",
+		   ctx->tf.trapno, proc_cur()->pid);
 	ctx_dump(ctx);
 
 	KERN_PANIC("Stop here.\n");
@@ -104,8 +104,8 @@ gpf_handler(uint8_t trapno, struct context *ctx)
 	KERN_ASSERT(ctx != NULL);
 	KERN_ASSERT(proc_cur() != NULL);
 
-	KERN_DEBUG("General protection fault caused by process %d on CPU %d.\n",
-		   proc_cur()->pid, pcpu_cpu_idx(pcpu_cur()));
+	KERN_DEBUG("General protection fault caused by process %d.\n",
+		   proc_cur()->pid);
 	ctx_dump(ctx);
 
 	/*
@@ -155,8 +155,8 @@ pgf_handler(uint8_t trapno, struct context *ctx)
 
 	proc_unlock(p);
 
-	KERN_DEBUG("Page fault at 0x%08x, process %d on CPU %d is handled.\n",
-		   fault_va, p->pid, pcpu_cpu_idx(pcpu_cur()));
+	KERN_DEBUG("Page fault at 0x%08x, process %d is handled.\n",
+		   fault_va, p->pid);
 
 	return 0;
 }
@@ -190,19 +190,5 @@ kbd_intr_handler(uint8_t trapno, struct context *ctx)
 {
 	intr_eoi();
 	/* kbd_intr(); */
-	return 0;
-}
-
-/*
- * CertiKOS uses IRQ_IPI_RESCHED to force the scheduler on another processor to
- * reschedule.
- */
-int
-ipi_resched_handler(uint8_t trapno, struct context *ctx)
-{
-	intr_eoi();
-	sched_lock(pcpu_cur());
-	sched_resched(TRUE);
-	sched_unlock(pcpu_cur());
 	return 0;
 }

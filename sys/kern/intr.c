@@ -85,12 +85,6 @@ intr_init_idt(void)
 	/* interrupt gates for local APIC interrupts */
 	SETGATE(idt[T_LERROR],            0, CPU_GDT_KCODE, &Xlerror,       0);
 
-	/* interrupt gates for inter-processor interrupts  */
-	SETGATE(idt[T_IPI0+IPI_RESCHED],  0, CPU_GDT_KCODE, &Xipi_resched,  0);
-
-	/* interrupt gates for MSI */
-	SETGATE(idt[T_MSI0+MSI_AHCI],     0, CPU_GDT_KCODE, &Xmsi_ahci,     0);
-
 	/* default */
 	SETGATE(idt[T_DEFAULT],           0, CPU_GDT_KCODE, &Xdefault,      0);
 
@@ -108,9 +102,7 @@ intr_init(void)
 	using_apic = (edx & CPUID_FEATURE_APIC) ? TRUE : FALSE;
 
 	if (using_apic == TRUE) {
-		if (pcpu_onboot()){
-			ioapic_init();
-		}
+		ioapic_init();
 		lapic_init();
 	}
 
@@ -120,16 +112,13 @@ intr_init(void)
 }
 
 void
-intr_enable(uint8_t irq, int cpunum)
+intr_enable(uint8_t irq)
 {
-	KERN_ASSERT(cpunum == 0xff || (0 <= cpunum && cpunum < pcpu_ncpu()));
-
 	if (irq >= 16)
 		return;
 
 	if (using_apic == TRUE) {
-		ioapic_enable(irq, (cpunum == 0xff) ?
-			      0xff : pcpu_cpu_lapicid(cpunum));
+		ioapic_enable(irq, pcpu_cpu_lapicid());
 	} else {
 		KERN_ASSERT(irq < 16);
 		pic_enable(irq);

@@ -33,13 +33,10 @@ void sched_resched(bool select_new);
  *      locked before entering sched_add().
  *
  * @param p the fresh process
- * @param c if not NULL, the process is pinned on that processor.
- *          XXX: the current implementation always pins a process on one
- *               processor and therefore requires c != NULL
  *
  * @return 0 if successful; otherwise, return a non-zero value.
  */
-void sched_add(struct proc *p, struct pcpu *c);
+void sched_add(struct proc *p);
 
 /*
  * Wake the processes being sleeping on the specified resource.
@@ -67,12 +64,10 @@ void sched_sleep(struct proc *p, void *wchan, spinlock_t *inv);
 void sched_yield(void);
 
 /*
- * Lock/Unlock the scheduler on the specified processor.
- *
- * @param c the processor
+ * Lock/Unlock the scheduler.
  */
-void sched_lock(struct pcpu *c);
-void sched_unlock(struct pcpu *c);
+void sched_lock(void);
+void sched_unlock(void);
 
 /*
  * Update scheduling information.
@@ -82,11 +77,9 @@ void sched_update(void);
 /*
  * Get the current process on a specified processor.
  *
- * @param c the processor
- *
  * @return the current process if there's any; otherwise, return NULL.
  */
-struct proc *sched_cur_proc(struct pcpu *c);
+struct proc *sched_cur_proc(void);
 
 /*
  * Add a sleep queue for the specified resource.
