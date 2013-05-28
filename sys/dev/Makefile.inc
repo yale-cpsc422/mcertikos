@@ -16,6 +16,15 @@ KERN_SRCFILES	+= $(KERN_DIR)/dev/ide.c
 
 # Targets
 
+ifdef ENABLE_CCOMP
+
+$(KERN_OBJDIR)/dev/serial.o: $(KERN_DIR)/dev/serial.c
+	@echo + ccomp[KERN/dev] $<
+	@mkdir -p $(@D)
+	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
+
+endif
+
 $(KERN_OBJDIR)/dev/%.o: $(KERN_DIR)/dev/%.c
 	@echo + cc[KERN/dev] $<
 	@mkdir -p $(@D)
