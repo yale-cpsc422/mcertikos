@@ -18,6 +18,12 @@ KERN_SRCFILES	+= $(KERN_DIR)/dev/ide.c
 
 ifdef ENABLE_CCOMP
 
+$(KERN_OBJDIR)/dev/video.o: $(KERN_DIR)/dev/video.c
+	@echo + ccomp[KERN/dev] $<
+	@mkdir -p $(@D)
+	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
+
+
 $(KERN_OBJDIR)/dev/serial.o: $(KERN_DIR)/dev/serial.c
 	@echo + ccomp[KERN/dev] $<
 	@mkdir -p $(@D)
