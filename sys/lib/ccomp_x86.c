@@ -119,3 +119,15 @@ ccomp_cpuid(uint32_t info,
 {
 	cpuid(info, eaxp, ebxp, ecxp, edxp);
 }
+
+void
+ccomp_insl(int port, void *addr, int cnt)
+{
+	insl(port, addr, cnt);
+}
+
+void
+ccomp_outsw(int port, const void *addr, int cnt)
+{
+	outsw(port, addr, cnt);
+}

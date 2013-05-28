@@ -104,9 +104,8 @@ ide_init(void)
 
 	ide_inited = TRUE;
 
-	KERN_DEBUG("Disk size %lld bytes.\n",
-		   (((uint64_t) ide_disk_size_hi() << 32) | ide_disk_size_lo())
-		   * DISK_SECT_SIZE);
+	KERN_DEBUG("Disk size 0x%08x%08x sectors.\n",
+		   ide_disk_size_hi(), ide_disk_size_lo());
 
 	return 0;
 }
@@ -117,7 +116,6 @@ ide_disk_read(uint32_t lba_lo, uint32_t lba_hi, void *buf, uint16_t nsectors)
 	if (ide_inited == FALSE)
 		return -1;
 
-	uint64_t lba = ((uint64_t) lba_hi << 32) | lba_lo;
 	uint32_t offset = 0;
 	uint32_t *__buf = buf;
 	int rc;
@@ -126,13 +124,13 @@ ide_disk_read(uint32_t lba_lo, uint32_t lba_hi, void *buf, uint16_t nsectors)
 
 	outb(IDE_MASTER + IDE_PORT_DRV, IDE_DRV_MASTER_EXT);
 	outb(IDE_MASTER + IDE_PORT_NSECT, (nsectors >> 8) & 0xff);
-	outb(IDE_MASTER + IDE_PORT_LBA_LO, (lba >> 24) & 0xff);
-	outb(IDE_MASTER + IDE_PORT_LBA_MI, (lba >> 32) & 0xff);
-	outb(IDE_MASTER + IDE_PORT_LBA_HI, (lba >> 40) & 0xff);
+	outb(IDE_MASTER + IDE_PORT_LBA_LO, (lba_lo >> 24) & 0xff);
+	outb(IDE_MASTER + IDE_PORT_LBA_MI, lba_hi & 0xff);
+	outb(IDE_MASTER + IDE_PORT_LBA_HI, (lba_hi >> 8) & 0xff);
 	outb(IDE_MASTER + IDE_PORT_NSECT, nsectors & 0xff);
-	outb(IDE_MASTER + IDE_PORT_LBA_LO, lba & 0xff);
-	outb(IDE_MASTER + IDE_PORT_LBA_MI, (lba >> 8) & 0xff);
-	outb(IDE_MASTER + IDE_PORT_LBA_HI, (lba >> 16) & 0xff);
+	outb(IDE_MASTER + IDE_PORT_LBA_LO, lba_lo & 0xff);
+	outb(IDE_MASTER + IDE_PORT_LBA_MI, (lba_lo >> 8) & 0xff);
+	outb(IDE_MASTER + IDE_PORT_LBA_HI, (lba_lo >> 16) & 0xff);
 	outb(IDE_MASTER + IDE_PORT_CMD, IDE_CMD_READ_PIO_EXT);
 
 	while (offset < nsectors * DISK_SECT_SIZE / 4) {
@@ -145,9 +143,10 @@ ide_disk_read(uint32_t lba_lo, uint32_t lba_hi, void *buf, uint16_t nsectors)
 	}
 
 	if (rc)
-		DISK_DEBUG("ide_disk_read() failed: LBA %lld, buf 0x%08x, "
+		DISK_DEBUG("ide_disk_read() failed: LBA 0x%08x%08x, buf 0x%08x, "
 			   "%d sectors, failed sector %lld.\n",
-			   lba, buf, nsectors, offset * 4 / DISK_SECT_SIZE);
+			   lba_hi, lba_lo, buf, nsectors,
+			   offset * 4 / DISK_SECT_SIZE);
 
 	return rc;
 }
@@ -158,7 +157,6 @@ ide_disk_write(uint32_t lba_lo, uint32_t lba_hi, void *buf, uint16_t nsectors)
 	if (ide_inited == FALSE)
 		return -1;
 
-	uint64_t lba = ((uint64_t) lba_hi << 32) | lba_lo;
 	uint32_t offset = 0;
 	uint16_t *__buf = buf;
 	int rc;
@@ -167,13 +165,13 @@ ide_disk_write(uint32_t lba_lo, uint32_t lba_hi, void *buf, uint16_t nsectors)
 
 	outb(IDE_MASTER + IDE_PORT_DRV, IDE_DRV_MASTER_EXT);
 	outb(IDE_MASTER + IDE_PORT_NSECT, (nsectors >> 8) & 0xff);
-	outb(IDE_MASTER + IDE_PORT_LBA_LO, (lba >> 24) & 0xff);
-	outb(IDE_MASTER + IDE_PORT_LBA_MI, (lba >> 32) & 0xff);
-	outb(IDE_MASTER + IDE_PORT_LBA_HI, (lba >> 40) & 0xff);
+	outb(IDE_MASTER + IDE_PORT_LBA_LO, (lba_lo >> 24) & 0xff);
+	outb(IDE_MASTER + IDE_PORT_LBA_MI, lba_hi & 0xff);
+	outb(IDE_MASTER + IDE_PORT_LBA_HI, (lba_hi >> 8) & 0xff);
 	outb(IDE_MASTER + IDE_PORT_NSECT, nsectors & 0xff);
-	outb(IDE_MASTER + IDE_PORT_LBA_LO, lba & 0xff);
-	outb(IDE_MASTER + IDE_PORT_LBA_MI, (lba >> 8) & 0xff);
-	outb(IDE_MASTER + IDE_PORT_LBA_HI, (lba >> 16) & 0xff);
+	outb(IDE_MASTER + IDE_PORT_LBA_LO, lba_lo & 0xff);
+	outb(IDE_MASTER + IDE_PORT_LBA_MI, (lba_lo >> 8) & 0xff);
+	outb(IDE_MASTER + IDE_PORT_LBA_HI, (lba_lo >> 16) & 0xff);
 	outb(IDE_MASTER + IDE_PORT_CMD, IDE_CMD_WRITE_PIO_EXT);
 
 	while (offset < nsectors * DISK_SECT_SIZE / 2) {
@@ -185,9 +183,10 @@ ide_disk_write(uint32_t lba_lo, uint32_t lba_hi, void *buf, uint16_t nsectors)
 	}
 
 	if (rc)
-		DISK_DEBUG("ide_disk_write() failed: LBA %lld, buf 0x%08x, "
+		DISK_DEBUG("ide_disk_write() failed: LBA 0x%08x%08x, buf 0x%08x, "
 			   "%d sectors, failed sector %lld.\n",
-			   lba, buf, nsectors, offset * 2 / DISK_SECT_SIZE);
+			   lba_hi, lba_lo, buf, nsectors,
+			   offset * 2 / DISK_SECT_SIZE);
 	else
 		outb(IDE_MASTER + IDE_PORT_CMD, IDE_CMD_CACHE_FLUSH);
 
