@@ -39,6 +39,11 @@ $(KERN_OBJDIR)/dev/pic.o: $(KERN_DIR)/dev/pic.c
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
 
+$(KERN_OBJDIR)/dev/ioapic.o: $(KERN_DIR)/dev/ioapic.c
+	@echo + ccomp[KERN/dev] $<
+	@mkdir -p $(@D)
+	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
+
 endif
 
 $(KERN_OBJDIR)/dev/%.o: $(KERN_DIR)/dev/%.c
