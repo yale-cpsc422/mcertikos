@@ -22,28 +22,6 @@ struct printbuf {
 	char buf[MAX_BUF];
 };
 
-
-void
-gets(char* buf, int size) {
-	int num = 0;
-	char c=0;
-	char echo[2];
-	echo[1]=0;
-	while(num < (size-1)) {
-		c=0;
-		while ((c = getc()) == 0);
-		echo[0] = c;
-		puts(echo);
-		if (c == '\n' || c == '\r') {
-			buf[num] = 0;
-			return;
-		}
-		buf [num++] = c;
-	}
-	buf[size-1]=0;
-	return;
-}
-
 static void
 putch(int ch, struct printbuf *b)
 {

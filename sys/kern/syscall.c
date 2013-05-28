@@ -1,4 +1,5 @@
 #include <sys/channel.h>
+#include <sys/console.h>
 #include <sys/debug.h>
 #include <sys/ipc.h>
 #include <sys/mmu.h>
@@ -14,7 +15,6 @@
 
 #include <sys/virt/hvm.h>
 
-#include <dev/cons.h>
 #include <dev/ide.h>
 #include <dev/tsc.h>
 
@@ -25,7 +25,6 @@
 static char *syscall_name[MAX_SYSCALL_NR] =
 	{
 		[SYS_puts]		= "sys_puts",
-		[SYS_getc]		= "sys_getc",
 		[SYS_create_proc]	= "sys_create_proc",
 		[SYS_run_proc]		= "sys_run_proc",
 		[SYS_yield]		= "sys_yield",
@@ -174,21 +173,6 @@ sys_puts(uintptr_t str_la)
 	KERN_INFO("%s", (char *) p->sys_buf);
 
 	return E_SUCC;
-}
-
-static int
-sys_getc(uintptr_t buf_la)
-{
-	struct proc *p = proc_cur();
-	int c;
-
-	if (cons_getchar(0, &c))
-		c = -1;
-
-	if (copy_to_user(p->pmap, buf_la, (uintptr_t) &c, sizeof(int)) == 0)
-		return E_MEM;
-	else
-		return E_SUCC;
 }
 
 static int
@@ -860,13 +844,6 @@ syscall_handler(uint8_t trapno, struct context *ctx)
 		 * a[0]: the linear address where the string is
 		 */
 		errno = sys_puts((uintptr_t) a[0]);
-		break;
-	case SYS_getc:
-		/*
-		 * Input a character from the keyboard.
-		 * a[0]: the linear address where the input will be returned to
-		 */
-		errno = sys_getc((uintptr_t) a[0]);
 		break;
 	case SYS_create_proc:
 		/*

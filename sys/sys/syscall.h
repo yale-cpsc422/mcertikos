@@ -22,7 +22,6 @@ enum __syscall_nr {
 	 * common system calls
 	 */
 	SYS_puts = 0,	/* output a string to the screen */
-	SYS_getc,	/* input a character */
 	SYS_create_proc,/* create a new process */
 	SYS_run_proc,	/* run a process */
 	SYS_yield,	/* yield to another process */

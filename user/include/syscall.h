@@ -18,20 +18,6 @@ sys_puts(const char *s)
 		     : "cc", "memory");
 }
 
-static gcc_inline int
-sys_getc(void)
-{
-	int c;
-
-	asm volatile("int %0" :
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_getc),
-		       "b" (&c)
-		     : "cc", "memory");
-
-	return c;
-}
-
 static gcc_inline pid_t
 sys_create_proc(chid_t chid)
 {

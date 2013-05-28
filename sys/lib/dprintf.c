@@ -1,29 +1,28 @@
-#ifdef DEBUG_MSG
-
+#include <sys/console.h>
 #include <sys/debug.h>
 #include <sys/stdarg.h>
 #include <sys/types.h>
 
-#include <dev/cons.h>
+#include <dev/serial.h>
 
 struct dprintbuf {
 	int idx;	/* current buffer index */
 	int cnt;	/* total bytes printed so far */
-	char buf[1024];
+	char buf[CONSOLE_BUFFER_SIZE];
 };
 
 static void
 cputs(const char *str)
 {
 	while (*str)
-		cons_putc_serial(*str++);
+		serial_putc(*str++);
 }
 
 static void
 putch(int ch, struct dprintbuf *b)
 {
 	b->buf[b->idx++] = ch;
-	if (b->idx == 1024 - 1 ) {
+	if (b->idx == CONSOLE_BUFFER_SIZE - 1 ) {
 		b->buf[b->idx] = 0;
 		cputs(b->buf);
 		b->idx = 0;
@@ -34,6 +33,7 @@ putch(int ch, struct dprintbuf *b)
 int
 vdprintf(const char *fmt, va_list ap)
 {
+#ifdef SERIAL_DEBUG
 	struct dprintbuf b;
 
 	b.idx = 0;
@@ -44,11 +44,15 @@ vdprintf(const char *fmt, va_list ap)
 	cputs(b.buf);
 
 	return b.cnt;
+#else /* !SERIAL_DEBUG */
+	return vcprintf(fmt, ap);
+#endif /* SERIAL_DEBUG */
 }
 
 int
 dprintf(const char *fmt, ...)
 {
+#ifdef DEBUG_MSG
 	va_list ap;
 	int cnt;
 
@@ -57,6 +61,7 @@ dprintf(const char *fmt, ...)
 	va_end(ap);
 
 	return cnt;
+#else
+	return 0;
+#endif
 }
-
-#endif /* DEBUG_MSG */
