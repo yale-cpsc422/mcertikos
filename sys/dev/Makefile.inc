@@ -40,6 +40,7 @@ $(KERN_OBJDIR)/dev/%.o: $(KERN_DIR)/dev/%.c
 	@echo + ccomp[KERN/dev] $<
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
+	$(V)$(CLIGHTGEN) $(CLIGHTGEN_FLAGS) $<
 
 else
 

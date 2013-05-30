@@ -10,6 +10,7 @@ KERN_CFLAGS	+= -I$(OBJDIR)/headers
 
 ifdef ENABLE_CCOMP
 CCOMP_KERN_CFLAGS += -I$(OBJDIR)/headers
+CLIGHTGEN_FLAGS   += -I$(OBJDIR)/headers
 endif
 
 include		$(ARCH_DIR)/Makefile.inc

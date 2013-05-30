@@ -41,6 +41,9 @@ ifdef ENABLE_CCOMP
 CCOMP		:= ccomp
 CCOMP_CFLAGS	:= -finline-asm -fpacked-structs -flonglong -fno-sse
 
+CLIGHTGEN	:= clightgen
+CLIGHTGEN_FLAGS	:= -fall
+
 ifeq ($(V),)
 CCOMP_CFLAGS	+= -v
 endif
@@ -139,3 +142,4 @@ $(OBJDIR)/.deps: $(foreach dir, $(OBJDIRS), $(wildcard $(dir)/*.d))
 
 clean:
 	$(V)rm -rf $(OBJDIR)
+	$(V)find . -name "*.[v]" -delete

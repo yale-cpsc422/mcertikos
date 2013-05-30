@@ -33,6 +33,7 @@ $(KERN_OBJDIR)/kern/%.o: $(KERN_DIR)/kern/%.c
 	@echo + ccomp[KERN/kern] $<
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
+	$(V)$(CLIGHTGEN) $(CLIGHTGEN_FLAGS) $<
 
 else
 
