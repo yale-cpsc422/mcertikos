@@ -5,6 +5,7 @@
 
 #include <sys/gcc.h>
 #include <sys/types.h>
+#include <sys/virt/hvm.h>
 
 enum {
 	INTERCEPT_INTR,

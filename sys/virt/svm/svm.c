@@ -302,7 +302,7 @@ svm_run_vm(struct vm *vm)
 
 	if (ctrl->exit_code == SVM_EXIT_ERR) {
 		svm_handle_err(vmcb);
-		KERN_PANIC("SVM_EXIT_ERR");
+		return -1;
 	}
 
 	return svm_handle_exit(vm);
