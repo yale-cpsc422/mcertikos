@@ -16,17 +16,18 @@ KERN_SRCFILES	+= $(KERN_DIR)/lib/ccomp_tsc.c
 KERN_SRCFILES	+= $(KERN_DIR)/lib/ccomp_types.c
 KERN_SRCFILES	+= $(KERN_DIR)/lib/ccomp_x86.c
 
+KERN_CCOMP_SRC	+= $(KERN_DIR)/lib/elf.c
+KERN_CCOMP_SRC	+= $(KERN_DIR)/lib/string.c
+
 $(KERN_OBJDIR)/lib/elf.o: $(KERN_DIR)/lib/elf.c
 	@echo + ccomp[KERN/lib] $<
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
-	$(V)$(CLIGHTGEN) $(CLIGHTGEN_FLAGS) $<
 
 $(KERN_OBJDIR)/lib/string.o: $(KERN_DIR)/lib/string.c
 	@echo + ccomp[KERN/lib] $<
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
-	$(V)$(CLIGHTGEN) $(CLIGHTGEN_FLAGS) $<
 
 endif
 

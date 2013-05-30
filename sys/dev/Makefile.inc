@@ -16,6 +16,14 @@ KERN_SRCFILES	+= $(KERN_DIR)/dev/ide.c
 # Targets
 
 ifdef ENABLE_CCOMP
+
+KERN_CCOMP_SRC	+= $(KERN_DIR)/dev/video.c
+KERN_CCOMP_SRC	+= $(KERN_DIR)/dev/serial.c
+KERN_CCOMP_SRC	+= $(KERN_DIR)/dev/acpi.c
+KERN_CCOMP_SRC	+= $(KERN_DIR)/dev/pic.c
+KERN_CCOMP_SRC	+= $(KERN_DIR)/dev/ioapic.c
+KERN_CCOMP_SRC	+= $(KERN_DIR)/dev/ide.c
+
 $(KERN_OBJDIR)/dev/kbd.o: $(KERN_DIR)/dev/kbd.c
 	@echo + cc[KERN/dev] $<
 	@mkdir -p $(@D)
@@ -40,7 +48,6 @@ $(KERN_OBJDIR)/dev/%.o: $(KERN_DIR)/dev/%.c
 	@echo + ccomp[KERN/dev] $<
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
-	$(V)$(CLIGHTGEN) $(CLIGHTGEN_FLAGS) $<
 
 else
 

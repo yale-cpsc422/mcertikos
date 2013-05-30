@@ -42,7 +42,7 @@ KERN_OBJFILES	:= $(patsubst %.S, $(OBJDIR)/%.o, $(KERN_OBJFILES))
 # Targets
 
 # Top-level target of building kernel
-sys: kern
+sys: kern kern_coq
 
 install_sys: install_kern
 
@@ -55,6 +55,10 @@ install_kern: $(KERN_OBJDIR)/kernel $(CERTIKOS_IMG)
 	$(V)sudo mkdir -p /mnt/boot
 	$(V)sudo cp -f $(KERN_OBJDIR)/kernel /mnt/boot/kernel
 	$(V)$(UTILSDIR)/umount.sh
+
+kern_coq: arch_headers $(KERN_CCOMP_SRC)
+	@echo + clightgen $(KERN_CCOMP_SRC)
+	$(V)$(CLIGHTGEN) $(CLIGHTGEN_FLAGS) $(KERN_CCOMP_SRC)
 
 # Link kernel
 $(KERN_OBJDIR)/kernel: $(KERN_OBJFILES) $(KERN_BINFILES)

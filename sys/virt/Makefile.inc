@@ -7,11 +7,13 @@ KERN_SRCFILES	+= $(KERN_DIR)/virt/hvm.c
 # Targets
 
 ifdef ENABLE_CCOMP
+
+KERN_CCOMP_SRC	+= $(KERN_DIR)/virt/hvm.c
+
 $(KERN_OBJDIR)/virt/hvm.o: $(KERN_DIR)/virt/hvm.c
 	@echo + ccomp[KERN/virt] $<
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
-	$(V)$(CLIGHTGEN) $(CLIGHTGEN_FLAGS) $<
 
 endif
 

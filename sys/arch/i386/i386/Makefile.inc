@@ -14,23 +14,25 @@ KERN_SRCFILES	+= $(ARCH_DIR)/i386/switch.S
 
 ifdef ENABLE_CCOMP
 
+KERN_CCOMP_SRC	+= $(ARCH_DIR)/i386/mem.c
+KERN_CCOMP_SRC	+= $(ARCH_DIR)/i386/pmap.c
+KERN_CCOMP_SRC	+= $(ARCH_DIR)/i386/pcpu.c
+
 $(ARCH_OBJDIR)/i386/mem.o: $(ARCH_DIR)/i386/mem.c
 	@echo + ccomp[KERN/i386] $<
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
-	$(V)$(CLIGHTGEN) $(CLIGHTGEN_FLAGS) $<
+
 
 $(ARCH_OBJDIR)/i386/pmap.o: $(ARCH_DIR)/i386/pmap.c
 	@echo + ccomp[KERN/i386] $<
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
-	$(V)$(CLIGHTGEN) $(CLIGHTGEN_FLAGS) $<
 
 $(ARCH_OBJDIR)/i386/pcpu.o: $(ARCH_DIR)/i386/pcpu.c
 	@echo + ccomp[KERN/i386] $<
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
-	$(V)$(CLIGHTGEN) $(CLIGHTGEN_FLAGS) $<
 
 endif
 

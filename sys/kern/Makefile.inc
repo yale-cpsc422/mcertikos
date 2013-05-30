@@ -19,6 +19,17 @@ KERN_SRCFILES	+= $(KERN_DIR)/kern/ipc.c
 
 ifdef ENABLE_CCOMP
 
+KERN_CCOMP_SRC	+= $(KERN_DIR)/kern/init.c
+KERN_CCOMP_SRC	+= $(KERN_DIR)/kern/console.c
+KERN_CCOMP_SRC	+= $(KERN_DIR)/kern/pcpu.c
+KERN_CCOMP_SRC	+= $(KERN_DIR)/kern/context.c
+KERN_CCOMP_SRC	+= $(KERN_DIR)/kern/trap.c
+KERN_CCOMP_SRC	+= $(KERN_DIR)/kern/proc.c
+KERN_CCOMP_SRC	+= $(KERN_DIR)/kern/syscall.c
+KERN_CCOMP_SRC	+= $(KERN_DIR)/kern/channel.c
+KERN_CCOMP_SRC	+= $(KERN_DIR)/kern/sched.c
+KERN_CCOMP_SRC	+= $(KERN_DIR)/kern/ipc.c
+
 $(KERN_OBJDIR)/kern/intr.o: $(KERN_DIR)/kern/intr.c
 	@echo + cc[KERN/kern] $<
 	@mkdir -p $(@D)
@@ -33,7 +44,6 @@ $(KERN_OBJDIR)/kern/%.o: $(KERN_DIR)/kern/%.c
 	@echo + ccomp[KERN/kern] $<
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
-	$(V)$(CLIGHTGEN) $(CLIGHTGEN_FLAGS) $<
 
 else
 
