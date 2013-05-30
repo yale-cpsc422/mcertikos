@@ -9,6 +9,7 @@ V		:=
 endif
 
 ARCH		:= i386
+ENABLE_CCOMP	:= 1
 
 # Cross-compiler toolchain
 #
