@@ -141,27 +141,11 @@ trap_dump(tf_t *tf)
 #endif
 }
 
-struct pcpu;
 struct context;
 
 typedef int (*trap_cb_t) (uint8_t trapno, struct context *);
 
 void trap(tf_t *);
-void trap_init_array(struct pcpu *c);
-void trap_handler_register(int trapno, trap_cb_t);
-
-/* exception handlers */
-int default_exception_handler(uint8_t trapno, struct context *);
-int gpf_handler(uint8_t trapno, struct context *);
-int pgf_handler(uint8_t trapno, struct context *);
-
-/* external interrupt handlers */
-int spurious_intr_handler(uint8_t trapno, struct context *);
-int timer_intr_handler(uint8_t trapno, struct context *);
-int kbd_intr_handler(uint8_t trapno, struct context *);
-
-/* IPI handlers */
-int ipi_resched_handler(uint8_t trapno, struct context *);
 
 #endif /* !_ASSEMBLER__ */
 

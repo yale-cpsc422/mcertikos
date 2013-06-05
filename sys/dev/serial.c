@@ -120,10 +120,3 @@ serial_intenable(void)
 		serial_intr();
 	}
 }
-
-int
-serial_intr_handler(uint8_t trapno, struct context *ctx)
-{
-	intr_eoi();
-	return 0;
-}

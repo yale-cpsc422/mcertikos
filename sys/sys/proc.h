@@ -12,8 +12,6 @@
 #include <sys/trap.h>
 #include <sys/types.h>
 
-#include <dev/pcpu.h>
-
 #define MAX_PID		64
 #define MAX_MSG		8
 

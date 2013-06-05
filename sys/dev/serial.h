@@ -52,6 +52,5 @@ void serial_init(void);
 void serial_putc(char c);
 void serial_intenable(void);
 void serial_intr(void); // irq 4
-int serial_intr_handler(uint8_t trapno, struct context *);
 
 #endif /* !_KERN_DEV_SERIAL_H_ */

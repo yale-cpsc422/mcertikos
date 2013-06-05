@@ -7,7 +7,6 @@
 #include <sys/kstack.h>
 #include <sys/pmap.h>
 #include <sys/spinlock.h>
-#include <sys/trap.h>
 #include <sys/types.h>
 
 #include <dev/lapic.h>
@@ -53,7 +52,6 @@ struct pcpu {
 	volatile bool	booted;		/* does this processor boot up ? */
 	struct kstack	*kstack;	/* bootstrap kernel stack */
 	struct pcpuinfo	arch_info;	/* arch-dependent information */
-	trap_cb_t	**trap_handler;	/* arrays of trap handlers */
 
 	bool		hvm_inited;	/* is HVM already initialized? */
 };

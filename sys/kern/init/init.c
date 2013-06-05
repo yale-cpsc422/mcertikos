@@ -52,48 +52,9 @@ static char *welcome_msg =
 static void
 kern_main(void)
 {
-	struct pcpu *c;
 	struct proc *idle_proc, *guest_proc;
 	struct kstack *ap_kstack;
 	int i;
-
-	c = pcpu_cur();
-	KERN_ASSERT(c != NULL && c->booted == TRUE);
-
-	/* register trap handlers */
-	trap_init_array(c);
-	KERN_INFO("[BSP KERN] Register exception handlers ... ");
-	trap_handler_register(T_GPFLT, gpf_handler);
-	trap_handler_register(T_PGFLT, pgf_handler);
-	trap_handler_register(T_SYSCALL, syscall_handler);
-	/* use default handler to handle other exceptions */
-	trap_handler_register(T_DIVIDE, default_exception_handler);
-	trap_handler_register(T_DEBUG, default_exception_handler);
-	trap_handler_register(T_NMI, default_exception_handler);
-	trap_handler_register(T_BRKPT, default_exception_handler);
-	trap_handler_register(T_OFLOW, default_exception_handler);
-	trap_handler_register(T_BOUND, default_exception_handler);
-	trap_handler_register(T_ILLOP, default_exception_handler);
-	trap_handler_register(T_DEVICE, default_exception_handler);
-	trap_handler_register(T_DBLFLT, default_exception_handler);
-	trap_handler_register(T_COPROC, default_exception_handler);
-	trap_handler_register(T_TSS, default_exception_handler);
-	trap_handler_register(T_SEGNP, default_exception_handler);
-	trap_handler_register(T_STACK, default_exception_handler);
-	trap_handler_register(T_RES, default_exception_handler);
-	trap_handler_register(T_FPERR, default_exception_handler);
-	trap_handler_register(T_ALIGN, default_exception_handler);
-	trap_handler_register(T_MCHK, default_exception_handler);
-	trap_handler_register(T_SIMD, default_exception_handler);
-	trap_handler_register(T_SECEV, default_exception_handler);
-	KERN_INFO("done.\n");
-
-	KERN_INFO("[BSP KERN] Register interrupt handlers ... ");
-	trap_handler_register(T_IRQ0+IRQ_SPURIOUS, spurious_intr_handler);
-	trap_handler_register(T_IRQ0+IRQ_TIMER, timer_intr_handler);
-	trap_handler_register(T_IRQ0+IRQ_KBD, kbd_intr_handler);
-	trap_handler_register(T_IRQ0+IRQ_SERIAL13, serial_intr_handler);
-	KERN_INFO("done.\n");
 
 	/* enable interrupts */
 	KERN_INFO("[BSP KERN] Enable TIMER interrupt ... ");

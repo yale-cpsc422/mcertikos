@@ -5,6 +5,7 @@
 #include <sys/x86.h>
 
 #include <dev/intr.h>
+#include <dev/pcpu.h>
 
 #include "svm.h"
 
