@@ -2,12 +2,6 @@
 #include <sys/types.h>
 #include <sys/x86.h>
 
-void
-ccomp_rdtscp(uint64_t *tsc)
-{
-	*tsc = rdtscp();
-}
-
 uint32_t
 ccomp_rcr4(void)
 {
@@ -57,12 +51,6 @@ ccomp_enable_sse(void)
 
 	cr0 = rcr0() | CR0_MP;
 	cr0 &= ~ (CR0_EM | CR0_TS);
-}
-
-void
-ccomp_pause(void)
-{
-	pause();
 }
 
 void

@@ -621,9 +621,7 @@ smp_rmb(void)
 
 #else /* !__COMPCERT__ */
 
-void     ccomp_rdtscp(uint64_t *tsc);
 void     ccomp_enable_sse(void);
-void     ccomp_pause(void);
 void     ccomp_cld(void);
 uint8_t  ccomp_inb(int port);
 uint16_t ccomp_inw(int port);
@@ -642,7 +640,6 @@ uint32_t ccomp_rcr2(void);
 void     ccomp_cpuid(uint32_t info, uint32_t *eaxp, uint32_t *ebxp,
 		     uint32_t *ecxp, uint32_t *edxp);
 
-#define pause()			ccomp_pause()
 #define cld()			ccomp_cld()
 #define inb(port)		ccomp_inb((port))
 #define inw(port)		ccomp_inw((port))
