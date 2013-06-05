@@ -488,6 +488,9 @@ svm_get_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc)
 	KERN_ASSERT(vm != NULL);
 	KERN_ASSERT(desc != NULL);
 
+	if (!(0 <= seg && seg < 10))
+		return -1;
+
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb_save_area *save = &svm->vmcb->save;
 	struct vmcb_seg *vmcb_seg =
@@ -508,6 +511,9 @@ svm_set_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc)
 {
 	KERN_ASSERT(vm != NULL);
 	KERN_ASSERT(desc != NULL);
+
+	if (!(0 <= seg && seg < 10))
+		return -1;
 
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb_save_area *save = &svm->vmcb->save;
@@ -556,6 +562,9 @@ svm_inject_event(struct vm *vm,
 		 guest_event_t type, uint8_t vector, uint32_t errcode, bool ev)
 {
 	KERN_ASSERT(vm != NULL);
+
+	if (!(0 <= type && type < 4))
+		return -1;
 
 	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb_control_area *ctrl = &svm->vmcb->control;
