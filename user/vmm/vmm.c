@@ -31,15 +31,17 @@
 
 static struct guest_seg_desc guest_seg_desc[GUEST_MAX_SEG_DESC] = {
 	/* 0: code segment */
-	{ .sel = 0xf000, .base = 0x000f0000, .lim = 0xffff, .ar = CODE_SEG_AR },
+	{ .sel = 0xf000, .base_lo = 0x000f0000, .base_hi = 0,
+	  .lim = 0xffff, .ar = CODE_SEG_AR },
 	/* 1: data segment */
-	{ .sel = 0x0000, .base = 0x00000000, .lim = 0xffff, .ar = DATA_SEG_AR },
+	{ .sel = 0x0000, .base_lo = 0x00000000, .base_hi = 0,
+	  .lim = 0xffff, .ar = DATA_SEG_AR },
 	/* 2: LDT */
-	{ .sel = 0, .base = 0, .lim = 0xffff, .ar = LDT_AR },
+	{ .sel = 0, .base_lo = 0, .base_hi = 0, .lim = 0xffff, .ar = LDT_AR },
 	/* 3: TSS */
-	{ .sel = 0, .base = 0, .lim = 0xffff, .ar = TSS_AR },
+	{ .sel = 0, .base_lo = 0, .base_hi = 0, .lim = 0xffff, .ar = TSS_AR },
 	/* 4: GDT/IDT */
-	{ .sel = 0, .base = 0, .lim = 0xffff, .ar = 0 }
+	{ .sel = 0, .base_lo = 0, .base_hi = 0, .lim = 0xffff, .ar = 0 }
 };
 
 #undef CODE_SEG_AR

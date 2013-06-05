@@ -81,12 +81,8 @@ typedef enum {
 
 struct guest_seg_desc {
 	uint16_t	sel;
-#ifndef __COMPCERT__
-	uint64_t	base;
-#else
 	uint32_t	base_lo;
 	uint32_t	base_hi;
-#endif
 	uint32_t	lim;
 	uint32_t	ar;
 };
@@ -115,8 +111,6 @@ struct vm {
 
 	exit_reason_t	exit_reason;	/* the reason of the latest VMEXIT */
 	exit_info_t	exit_info;	/* the information of the latest VMEXIT */
-
-	uint8_t		guest_irq;
 
 	void		*cookie;
 };
