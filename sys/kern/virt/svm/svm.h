@@ -521,11 +521,20 @@ struct svm {
 
 #endif
 
-#ifdef __COMPCERT__
-
-void init_hvm_ops_amd(void);
-
-#endif
+int svm_init(void);
+int svm_init_vm(struct vm *vm);
+int svm_run_vm(struct vm *vm);
+int svm_intercept_vintr(struct vm *vm, bool enable);
+int svm_get_reg(struct vm *vm, guest_reg_t reg, uint32_t *val);
+int svm_set_reg(struct vm *vm, guest_reg_t reg, uint32_t val);
+int svm_get_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc);
+int svm_set_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc);
+int svm_set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa, int type);
+int svm_inject_event(struct vm *vm, guest_event_t type, uint8_t vector,
+		     uint32_t errcode, bool ev);
+int svm_get_next_eip(struct vm *vm, guest_instr_t instr, uint32_t *val);
+bool svm_pending_event(struct vm *vm);
+bool svm_intr_shadow(struct vm *vm);
 
 #endif /* _KERN_ */
 

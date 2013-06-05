@@ -129,7 +129,7 @@ svm_handle_exit(struct vm *vm)
  *
  * @return 0 if succeed
  */
-static int
+int
 svm_init(void)
 {
 	memzero(&svm0, sizeof(svm0));
@@ -151,7 +151,7 @@ svm_init(void)
 	return svm_drv_init(hsave_addr);
 }
 
-static int
+int
 svm_init_vm(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
@@ -262,7 +262,7 @@ svm_init_vm(struct vm *vm)
 	return rc;
 }
 
-static int
+int
 svm_run_vm(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
@@ -322,7 +322,7 @@ svm_inject_vintr(struct vmcb *vmcb, uint8_t vector, uint8_t priority)
 	ctrl->int_vector = vector;
 }
 
-static int
+int
 svm_intercept_vintr(struct vm *vm, bool enable)
 {
 	KERN_ASSERT(vm != NULL);
@@ -340,7 +340,7 @@ svm_intercept_vintr(struct vm *vm, bool enable)
 	return 0;
 }
 
-static int
+int
 svm_get_reg(struct vm *vm, guest_reg_t reg, uint32_t *val)
 {
 	KERN_ASSERT(vm != NULL);
@@ -399,7 +399,7 @@ svm_get_reg(struct vm *vm, guest_reg_t reg, uint32_t *val)
 	return 0;
 }
 
-static int
+int
 svm_set_reg(struct vm *vm, guest_reg_t reg, uint32_t val)
 {
 	KERN_ASSERT(vm != NULL);
@@ -482,7 +482,7 @@ init_seg_offset(void)
 	seg_offset[GUEST_IDTR]	= offsetof(struct vmcb_save_area, idtr);
 }
 
-static int
+int
 svm_get_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc)
 {
 	KERN_ASSERT(vm != NULL);
@@ -503,7 +503,7 @@ svm_get_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc)
 	return 0;
 }
 
-static int
+int
 svm_set_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc)
 {
 	KERN_ASSERT(vm != NULL);
@@ -523,7 +523,7 @@ svm_set_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc)
 	return 0;
 }
 
-static int
+int
 svm_set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa, int type)
 {
 	KERN_ASSERT(vm != NULL);
@@ -551,7 +551,7 @@ init_svm_event_type(void)
 	svm_event_type[EVENT_SWINT]	= SVM_EVTINJ_TYPE_SOFT;
 }
 
-static int
+int
 svm_inject_event(struct vm *vm,
 		 guest_event_t type, uint8_t vector, uint32_t errcode, bool ev)
 {
@@ -574,7 +574,7 @@ svm_inject_event(struct vm *vm,
 	return 0;
 }
 
-static int
+int
 svm_get_next_eip(struct vm *vm, guest_instr_t instr, uint32_t *val)
 {
 	KERN_ASSERT(vm != NULL);
@@ -605,7 +605,7 @@ svm_get_next_eip(struct vm *vm, guest_instr_t instr, uint32_t *val)
 	return 0;
 }
 
-static bool
+bool
 svm_pending_event(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
@@ -616,7 +616,7 @@ svm_pending_event(struct vm *vm)
 	return (ctrl->event_inj & SVM_EVTINJ_VALID) ? TRUE : FALSE;
 }
 
-static bool
+bool
 svm_intr_shadow(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
@@ -625,25 +625,4 @@ svm_intr_shadow(struct vm *vm)
 	struct vmcb_control_area *ctrl = &svm->vmcb->control;
 
 	return (ctrl->int_state & 0x1) ? TRUE : FALSE;
-}
-
-struct hvm_ops hvm_ops_amd;
-
-void
-init_hvm_ops_amd(void)
-{
-	hvm_ops_amd.signature		= AMD_SVM;
-	hvm_ops_amd.hw_init		= svm_init;
-	hvm_ops_amd.intercept_intr_window = svm_intercept_vintr;
-	hvm_ops_amd.vm_init		= svm_init_vm;
-	hvm_ops_amd.vm_run		= svm_run_vm;
-	hvm_ops_amd.get_reg		= svm_get_reg;
-	hvm_ops_amd.set_reg		= svm_set_reg;
-	hvm_ops_amd.get_desc		= svm_get_desc;
-	hvm_ops_amd.set_desc		= svm_set_desc;
-	hvm_ops_amd.set_mmap		= svm_set_mmap;
-	hvm_ops_amd.inject_event	= svm_inject_event;
-	hvm_ops_amd.get_next_eip	= svm_get_next_eip;
-	hvm_ops_amd.pending_event	= svm_pending_event;
-	hvm_ops_amd.intr_shadow		= svm_intr_shadow;
 }

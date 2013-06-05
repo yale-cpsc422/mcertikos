@@ -218,7 +218,6 @@ pcpu_init(void)
 	pcpu_arch_init(&cpu0);
 
 	spinlock_init(&cpu0.lk);
-	cpu0.hvm_inited = FALSE;
 	cpu0.inited = TRUE;
 
 	pcpu_inited = TRUE;

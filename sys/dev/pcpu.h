@@ -52,8 +52,6 @@ struct pcpu {
 	volatile bool	booted;		/* does this processor boot up ? */
 	struct kstack	*kstack;	/* bootstrap kernel stack */
 	struct pcpuinfo	arch_info;	/* arch-dependent information */
-
-	bool		hvm_inited;	/* is HVM already initialized? */
 };
 
 /*
