@@ -1,9 +1,9 @@
-#include <sys/console.h>
 #include <sys/debug.h>
 #include <sys/spinlock.h>
 #include <sys/string.h>
 #include <sys/types.h>
 
+#include <dev/console.h>
 #include <dev/kbd.h>
 #include <dev/serial.h>
 #include <dev/video.h>

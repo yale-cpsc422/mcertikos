@@ -1,5 +1,5 @@
-#ifndef _MACHINE_PMAP_H_
-#define _MACHINE_PMAP_H_
+#ifndef _KERN_PMAP_H_
+#define _KERN_PMAP_H_
 
 #ifdef _KERN_
 
@@ -113,4 +113,4 @@ uintptr_t pmap_la2pa(pmap_t *, uintptr_t la);
 
 #endif /* _KERN_ */
 
-#endif /* !_MACHINE_PMAP_H_ */
+#endif /* !_KERN_PMAP_H_ */

@@ -4,9 +4,8 @@
 #ifdef _KERN_
 
 #include <sys/gcc.h>
+#include <sys/mmu.h>
 #include <sys/types.h>
-
-#include <machine/mmu.h>
 
 #define KSTACK_SIZE	4096
 #define KSTACK_MAGIC	0x98765432

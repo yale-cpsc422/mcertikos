@@ -1,14 +1,13 @@
-#include <sys/console.h>
 #include <sys/context.h>
 #include <sys/debug.h>
-#include <sys/intr.h>
+#include <sys/trap.h>
 #include <sys/types.h>
 #include <sys/x86.h>
 
-#include <machine/trap.h>
-
-#include <dev/kbd.h>
+#include <dev/console.h>
+#include <dev/intr.h>
 #include <dev/ioapic.h>
+#include <dev/kbd.h>
 #include <dev/lapic.h>
 #include <dev/pic.h>
 

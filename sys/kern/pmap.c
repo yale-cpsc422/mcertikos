@@ -2,12 +2,11 @@
 #include <sys/gcc.h>
 #include <sys/mem.h>
 #include <sys/mmu.h>
+#include <sys/pmap.h>
 #include <sys/string.h>
 #include <sys/types.h>
 #include <sys/vm.h>
 #include <sys/x86.h>
-
-#include <machine/pmap.h>
 
 #include <dev/ioapic.h>
 

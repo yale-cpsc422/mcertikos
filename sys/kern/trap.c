@@ -1,22 +1,21 @@
 #include <sys/context.h>
 #include <sys/debug.h>
-#include <sys/intr.h>
-#include <sys/pcpu.h>
+#include <sys/pmap.h>
 #include <sys/proc.h>
 #include <sys/sched.h>
 #include <sys/string.h>
 #include <sys/syscall.h>
 #include <sys/trap.h>
 #include <sys/types.h>
+#include <sys/vm.h>
 #include <sys/x86.h>
 
 #include <sys/virt/hvm.h>
 
-#include <machine/pmap.h>
-#include <machine/vm.h>
-
+#include <dev/intr.h>
 #include <dev/kbd.h>
 #include <dev/lapic.h>
+#include <dev/pcpu.h>
 #include <dev/tsc.h>
 
 static gcc_inline void

@@ -6,8 +6,6 @@
 #include <sys/context.h>
 #include <sys/types.h>
 
-#include <machine/trap.h>
-
 int syscall_handler(uint8_t trapno, struct context *);
 
 #endif /* _KERN_ */

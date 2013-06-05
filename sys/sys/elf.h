@@ -3,10 +3,9 @@
 
 #ifdef _KERN_
 
-#include <sys/types.h>
+#include <sys/pmap.h>
 #include <sys/proc.h>
-
-#include <machine/pmap.h>
+#include <sys/types.h>
 
 #define ELF_MAGIC 0x464C457FU	/* "\x7FELF" in little endian */
 

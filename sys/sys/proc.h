@@ -6,13 +6,13 @@
 #include <sys/channel.h>
 #include <sys/context.h>
 #include <sys/gcc.h>
-#include <sys/pcpu.h>
+#include <sys/pmap.h>
 #include <sys/queue.h>
 #include <sys/spinlock.h>
 #include <sys/trap.h>
 #include <sys/types.h>
 
-#include <machine/pmap.h>
+#include <dev/pcpu.h>
 
 #define MAX_PID		64
 #define MAX_MSG		8

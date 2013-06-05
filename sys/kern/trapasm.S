@@ -2,8 +2,7 @@
 /* See COPYRIGHT for copyright information. */
 
 #include <sys/mmu.h>
-
-#include <machine/trap.h>
+#include <sys/trap.h>
 
 
 /* The TRAPHANDLER macro defines a globally-visible function for handling

@@ -1,11 +1,10 @@
 #include <sys/debug.h>
-#include <sys/pcpu.h>
+#include <sys/trap.h>
 #include <sys/types.h>
 #include <sys/x86.h>
 
-#include <machine/trap.h>
-
 #include <dev/lapic.h>
+#include <dev/pcpu.h>
 #include <dev/timer.h>
 
 volatile lapic_t *lapic;

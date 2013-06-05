@@ -1,11 +1,11 @@
 #include <sys/debug.h>
-#include <sys/intr.h>
-#include <sys/pcpu.h>
 #include <sys/types.h>
 #include <sys/x86.h>
 
+#include <dev/intr.h>
 #include <dev/ioapic.h>
 #include <dev/lapic.h>
+#include <dev/pcpu.h>
 #include <dev/pic.h>
 
 volatile static bool using_apic = FALSE;

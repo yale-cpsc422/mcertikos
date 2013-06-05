@@ -1,8 +1,8 @@
 #include <sys/debug.h>
-#include <sys/pcpu.h>
 #include <sys/types.h>
 
 #include <dev/ioapic.h>
+#include <dev/pcpu.h>
 
 #define IRQ_START	16
 #define MAX_IOAPIC	16

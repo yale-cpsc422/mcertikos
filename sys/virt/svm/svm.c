@@ -1,12 +1,13 @@
 #include <sys/debug.h>
-#include <sys/intr.h>
 #include <sys/mem.h>
-#include <sys/pcpu.h>
 #include <sys/string.h>
 #include <sys/types.h>
 #include <sys/x86.h>
 
 #include <sys/virt/hvm.h>
+
+#include <dev/intr.h>
+#include <dev/pcpu.h>
 
 #include "svm.h"
 #include "svm_drv.h"

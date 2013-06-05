@@ -1,5 +1,5 @@
-#ifndef _KERN_INTR_H_
-#define _KERN_INTR_H_
+#ifndef _DEV_INTR_H_
+#define _DEV_INTR_H_
 
 #ifdef _KERN_
 
@@ -40,4 +40,4 @@ void intr_eoi(void);
 
 #endif /* _KERN_ */
 
-#endif /* !_KERN_INTR_H_ */
+#endif /* !_DEV_INTR_H_ */

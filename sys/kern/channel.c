@@ -2,7 +2,6 @@
 #include <sys/debug.h>
 #include <sys/gcc.h>
 #include <sys/mem.h>
-#include <sys/pcpu.h>
 #include <sys/proc.h>
 #include <sys/queue.h>
 #include <sys/sched.h>
@@ -10,6 +9,8 @@
 #include <sys/string.h>
 #include <sys/types.h>
 #include <sys/vm.h>
+
+#include <dev/pcpu.h>
 
 #ifdef DEBUG_CHANNEL
 

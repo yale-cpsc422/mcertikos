@@ -12,6 +12,9 @@ KERN_SRCFILES	+= $(KERN_DIR)/dev/ioapic.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/timer.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/tsc.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/ide.c
+KERN_SRCFILES	+= $(KERN_DIR)/dev/console.c
+KERN_SRCFILES	+= $(KERN_DIR)/dev/pcpu.c
+KERN_SRCFILES	+= $(KERN_DIR)/dev/intr.c
 
 # Targets
 
@@ -23,6 +26,8 @@ KERN_CCOMP_SRC	+= $(KERN_DIR)/dev/acpi.c
 KERN_CCOMP_SRC	+= $(KERN_DIR)/dev/pic.c
 KERN_CCOMP_SRC	+= $(KERN_DIR)/dev/ioapic.c
 KERN_CCOMP_SRC	+= $(KERN_DIR)/dev/ide.c
+KERN_CCOMP_SRC	+= $(KERN_DIR)/dev/console.c
+KERN_CCOMP_SRC	+= $(KERN_DIR)/dev/pcpu.c
 
 $(KERN_OBJDIR)/dev/kbd.o: $(KERN_DIR)/dev/kbd.c
 	@echo + cc[KERN/dev] $<
@@ -40,6 +45,11 @@ $(KERN_OBJDIR)/dev/timer.o: $(KERN_DIR)/dev/timer.c
 	$(V)$(CC) $(KERN_CFLAGS) -c -o $@ $<
 
 $(KERN_OBJDIR)/dev/tsc.o: $(KERN_DIR)/dev/tsc.c
+	@echo + cc[KERN/dev] $<
+	@mkdir -p $(@D)
+	$(V)$(CC) $(KERN_CFLAGS) -c -o $@ $<
+
+$(KERN_OBJDIR)/dev/intr.o: $(KERN_DIR)/dev/intr.c
 	@echo + cc[KERN/dev] $<
 	@mkdir -p $(@D)
 	$(V)$(CC) $(KERN_CFLAGS) -c -o $@ $<

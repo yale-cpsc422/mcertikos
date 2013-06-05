@@ -1,10 +1,11 @@
 #include <sys/debug.h>
-#include <sys/pcpu.h>
 #include <sys/spinlock.h>
 #include <sys/string.h>
 #include <sys/types.h>
 
 #include <sys/virt/hvm.h>
+
+#include <dev/pcpu.h>
 
 #include "svm/svm.h"
 

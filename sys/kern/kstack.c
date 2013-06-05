@@ -1,15 +1,15 @@
 #include <sys/context.h>
 #include <sys/debug.h>
 #include <sys/gcc.h>
+#include <sys/kstack.h>
 #include <sys/mem.h>
-#include <sys/pcpu.h>
+#include <sys/mmu.h>
 #include <sys/proc.h>
 #include <sys/string.h>
 #include <sys/types.h>
 #include <sys/x86.h>
 
-#include <machine/kstack.h>
-#include <machine/mmu.h>
+#include <dev/pcpu.h>
 
 static void
 kstack_init_common(struct kstack *ks)

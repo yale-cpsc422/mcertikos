@@ -1,9 +1,8 @@
 #include <sys/channel.h>
-#include <sys/console.h>
 #include <sys/debug.h>
 #include <sys/ipc.h>
 #include <sys/mmu.h>
-#include <sys/pcpu.h>
+#include <sys/pmap.h>
 #include <sys/proc.h>
 #include <sys/sched.h>
 #include <sys/string.h>
@@ -15,10 +14,10 @@
 
 #include <sys/virt/hvm.h>
 
+#include <dev/console.h>
 #include <dev/ide.h>
+#include <dev/pcpu.h>
 #include <dev/tsc.h>
-
-#include <machine/pmap.h>
 
 #ifdef DEBUG_SYSCALL
 

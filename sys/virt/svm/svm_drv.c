@@ -1,9 +1,10 @@
 #include <sys/debug.h>
-#include <sys/intr.h>
 #include <sys/string.h>
 #include <sys/types.h>
 #include <sys/virt/hvm.h>
 #include <sys/x86.h>
+
+#include <dev/intr.h>
 
 #include "svm.h"
 

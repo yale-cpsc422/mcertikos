@@ -1,19 +1,8 @@
-/*
- * Process Management & Process Scheduler.
- *
- * - CertiKOS runs a round-robin process scheduler on each processor core.
- *
- * - The scheduler only schedules processes on that processor core.
- *
- * - A process is pined to one processor core and can't be migrated to another
- *   processor.
- */
-
 #include <sys/channel.h>
 #include <sys/context.h>
 #include <sys/debug.h>
 #include <sys/elf.h>
-#include <sys/pcpu.h>
+#include <sys/pmap.h>
 #include <sys/proc.h>
 #include <sys/queue.h>
 #include <sys/sched.h>
@@ -22,8 +11,7 @@
 #include <sys/types.h>
 #include <sys/vm.h>
 
-#include <machine/pmap.h>
-
+#include <dev/pcpu.h>
 #include <dev/tsc.h>
 
 #ifdef DEBUG_PROC

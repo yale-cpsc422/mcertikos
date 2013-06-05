@@ -1,12 +1,13 @@
 #include <sys/debug.h>
 #include <sys/gcc.h>
 #include <sys/mem.h>
-#include <sys/pcpu.h>
 #include <sys/queue.h>
 #include <sys/slab.h>
 #include <sys/spinlock.h>
 #include <sys/string.h>
 #include <sys/types.h>
+
+#include <dev/pcpu.h>
 
 #ifdef DEBUG_SLAB
 

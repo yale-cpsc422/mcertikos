@@ -1,12 +1,11 @@
 #include <sys/channel.h>
-#include <sys/console.h>
 #include <sys/context.h>
 #include <sys/debug.h>
-#include <sys/intr.h>
+#include <sys/kstack.h>
 #include <sys/mboot.h>
 #include <sys/mem.h>
 #include <sys/mmu.h>
-#include <sys/pcpu.h>
+#include <sys/pmap.h>
 #include <sys/proc.h>
 #include <sys/sched.h>
 #include <sys/spinlock.h>
@@ -19,12 +18,12 @@
 
 #include <sys/virt/hvm.h>
 
-#include <machine/kstack.h>
-#include <machine/pmap.h>
-
+#include <dev/console.h>
 #include <dev/ide.h>
+#include <dev/intr.h>
 #include <dev/kbd.h>
 #include <dev/lapic.h>
+#include <dev/pcpu.h>
 #include <dev/serial.h>
 #include <dev/tsc.h>
 #include <dev/timer.h>

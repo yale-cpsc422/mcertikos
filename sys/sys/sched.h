@@ -3,11 +3,12 @@
 
 #ifdef _KERN_
 
-#include <sys/pcpu.h>
 #include <sys/proc.h>
 #include <sys/queue.h>
 #include <sys/spinlock.h>
 #include <sys/types.h>
+
+#include <dev/pcpu.h>
 
 /*
  * Initialize the process scheduler.

@@ -4,9 +4,8 @@
 #ifdef _KERN_
 
 #include <sys/gcc.h>
+#include <sys/trap.h>
 #include <sys/types.h>
-
-#include <machine/trap.h>
 
 struct proc;	/* defined in sys/sys/proc.h */
 

@@ -1,10 +1,10 @@
 #ifdef DEBUG_MSG
 
-#include <sys/console.h>
 #include <sys/debug.h>
 #include <sys/stdarg.h>
 #include <sys/types.h>
 
+#include <dev/console.h>
 #include <dev/serial.h>
 
 struct dprintbuf {

@@ -2,13 +2,12 @@
 #include <sys/debug.h>
 #include <sys/gcc.h>
 #include <sys/mem.h>
+#include <sys/pmap.h>
 #include <sys/proc.h>
+#include <sys/trap.h>
 #include <sys/types.h>
 #include <sys/vm.h>
 #include <sys/x86.h>
-
-#include <machine/pmap.h>
-#include <machine/trap.h>
 
 /*
  * Initialize the context of a process.

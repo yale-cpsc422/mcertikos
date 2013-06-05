@@ -8,10 +8,9 @@
  * Adapted for PIOS by Bryan Ford at Yale University.
  */
 
+#include <sys/trap.h>
 #include <sys/types.h>
 #include <sys/x86.h>
-
-#include <machine/trap.h>
 
 #include <dev/pic.h>
 

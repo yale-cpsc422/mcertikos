@@ -6,7 +6,7 @@ KERN_OBJDIR	:= $(OBJDIR)/sys
 OBJDIRS		+= $(KERN_OBJDIR)
 
 # Arch-independent compiling and linking options
-KERN_CFLAGS	:= $(CFLAGS) -D_KERN_ -I$(KERN_DIR) -I.
+KERN_CFLAGS	:= $(CFLAGS) -D_KERN_ -I$(KERN_DIR) -I. -m32
 ifdef ENABLE_CCOMP
 CCOMP_KERN_CFLAGS := $(CCOMP_CFLAGS) -D_KERN_ -I$(KERN_DIR) -I.
 CLIGHTGEN_FLAGS   += -D_KERN_ -I$(KERN_DIR) -I.
@@ -18,11 +18,11 @@ else
 KERN_CFLAGS	+= -O2
 endif
 
-KERN_LDFLAGS	:= $(LDFLAGS) -e start
+KERN_LDFLAGS	:= $(LDFLAGS) -e start -m elf_i386 -Ttext=0x00100000
+GCC_LIBS        := $(GCC_LIB32)
 
 # Sub-makefiles
 include		$(KERN_DIR)/config.mk
-include		$(KERN_DIR)/arch/Makefile.inc
 include		$(KERN_DIR)/dev/Makefile.inc
 include		$(KERN_DIR)/kern/Makefile.inc
 include		$(KERN_DIR)/lib/Makefile.inc
@@ -46,7 +46,7 @@ sys: kern kern_coq
 
 install_sys: install_kern
 
-kern: arch_headers $(KERN_OBJDIR)/kernel
+kern: $(KERN_OBJDIR)/kernel
 	@echo All targets of kernel are done.
 
 install_kern: $(KERN_OBJDIR)/kernel $(CERTIKOS_IMG)
@@ -56,7 +56,7 @@ install_kern: $(KERN_OBJDIR)/kernel $(CERTIKOS_IMG)
 	$(V)sudo cp -f $(KERN_OBJDIR)/kernel /mnt/boot/kernel
 	$(V)$(UTILSDIR)/umount.sh
 
-kern_coq: arch_headers $(KERN_CCOMP_SRC)
+kern_coq: $(KERN_CCOMP_SRC)
 	@echo + clightgen $(KERN_CCOMP_SRC)
 	$(V)$(CLIGHTGEN) $(CLIGHTGEN_FLAGS) $(KERN_CCOMP_SRC)
 
