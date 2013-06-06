@@ -58,7 +58,7 @@ svm_handle_exit(struct svm *svm)
 	case SVM_EXIT_INTR:
 		return EXIT_REASON_EXTINT;
 	case SVM_EXIT_VINTR:
-		svm_intercept_vintr(svm, FALSE);
+		ctrl->int_ctl &= ~SVM_INTR_CTRL_VIRQ;
 		return EXIT_REASON_INTWIN;
 	case SVM_EXIT_IOIO:
 		svm->port = (exitinfo1 & SVM_EXITINFO1_PORT_MASK) >>
