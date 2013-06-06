@@ -1,6 +1,7 @@
 #include <sys/context.h>
 #include <sys/debug.h>
 #include <sys/gcc.h>
+#include <sys/kstack.h>
 #include <sys/mem.h>
 #include <sys/pmap.h>
 #include <sys/proc.h>
@@ -48,6 +49,7 @@ ctx_start(struct context *ctx)
 
 	struct proc *cur_p = proc_cur();
 	KERN_ASSERT(cur_p != NULL);
+	kstack_switch(cur_p->kstack);
 	pmap_install(cur_p->pmap);
 
 	tf_t *tf = &ctx->tf;

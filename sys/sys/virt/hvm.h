@@ -3,7 +3,6 @@
 
 #ifdef _KERN_
 
-#include <sys/proc.h>
 #include <sys/types.h>
 
 #else
@@ -106,8 +105,6 @@ typedef enum {
 struct vm {
 	int		vmid;		/* identifier of the virtual machine */
 	int		inuse;		/* in use? */
-
-	struct proc	*proc;		/* the owner process */
 
 	exit_reason_t	exit_reason;	/* the reason of the latest VMEXIT */
 	exit_info_t	exit_info;	/* the information of the latest VMEXIT */

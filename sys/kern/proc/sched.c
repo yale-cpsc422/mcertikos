@@ -324,8 +324,6 @@ sched_switch(struct sched *sched, struct proc *from, struct proc *to)
 	sched->cur_proc = to;
 	to->state = PROC_RUNNING;
 
-	kstack_switch(to->kstack); /* XXX: is this necessary? */
-
 	if (from != NULL)
 		swtch(&from->kctx, to->kctx);
 	else

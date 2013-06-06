@@ -61,7 +61,6 @@ hvm_create_vm(void)
 		return NULL;
 
 	vm->vmid = 0;
-	vm->proc = proc_cur();
 	vm->exit_reason = EXIT_REASON_NONE;
 
 	if ((vm->cookie = svm_init_vm()) == NULL) {
@@ -85,9 +84,6 @@ hvm_run_vm(struct vm *vm)
 		HVM_DEBUG("svm_run_vm() failed.\n");
 		return -1;
 	}
-
-	/* restore TSS */
-	kstack_switch(proc_cur()->kstack);
 
 	vm->exit_reason = reason;
 
