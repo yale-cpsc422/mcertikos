@@ -320,24 +320,7 @@ sys_hvm_set_desc(int vmid, guest_seg_t seg, struct guest_seg_desc *desc)
 	asm volatile("int %1"
 		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
-		       "a" (SYS_hvm_set_desc),
-		       "b" (vmid),
-		       "c" (seg),
-		       "d" (desc)
-		     : "cc", "memory");
-
-	return errno;
-}
-
-static gcc_inline int
-sys_hvm_get_desc(int vmid, guest_seg_t seg, struct guest_seg_desc *desc)
-{
-	int errno;
-
-	asm volatile("int %1"
-		     : "=a" (errno)
-		     : "i" (T_SYSCALL),
-		       "a" (SYS_hvm_get_desc),
+		       "a" (SYS_hvm_set_seg),
 		       "b" (vmid),
 		       "c" (seg),
 		       "d" (desc)

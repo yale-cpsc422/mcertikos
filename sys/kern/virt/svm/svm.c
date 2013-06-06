@@ -14,9 +14,6 @@
 
 static struct svm svm0;
 
-static void init_seg_offset(void);
-static void init_svm_event_type(void);
-
 /*
  * Set an interception bit in VMCB.
  *
@@ -42,12 +39,11 @@ set_intercept(struct vmcb *vmcb, int bit, bool enable)
 	}
 }
 
-static int
-svm_handle_exit(struct vm *vm)
+static exit_reason_t
+svm_handle_exit(struct svm *svm)
 {
-	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(svm != NULL);
 
-	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_control_area *ctrl = &vmcb->control;
 	uint32_t exitinfo1 = ctrl->exit_info_1_lo;
@@ -60,44 +56,27 @@ svm_handle_exit(struct vm *vm)
 
 	switch (ctrl->exit_code) {
 	case SVM_EXIT_INTR:
-		vm->exit_reason = EXIT_REASON_EXTINT;
-		break;
-
+		return EXIT_REASON_EXTINT;
 	case SVM_EXIT_VINTR:
-		vm->exit_reason = EXIT_REASON_INTWIN;
-		ctrl->int_ctl &= ~SVM_INTR_CTRL_VIRQ;
-		break;
-
+		svm_intercept_vintr(svm, FALSE);
+		return EXIT_REASON_INTWIN;
 	case SVM_EXIT_IOIO:
-		vm->exit_reason = EXIT_REASON_IOPORT;
-		vm->exit_info.ioport.port =
-			(exitinfo1 & SVM_EXITINFO1_PORT_MASK) >>
+		svm->port = (exitinfo1 & SVM_EXITINFO1_PORT_MASK) >>
 			SVM_EXITINFO1_PORT_SHIFT;
-		vm->exit_info.ioport.width =
-			(exitinfo1 & SVM_EXITINFO1_SZ8) ? SZ8 :
+		svm->width = (exitinfo1 & SVM_EXITINFO1_SZ8) ? SZ8 :
 			(exitinfo1 & SVM_EXITINFO1_SZ16) ? SZ16 : SZ32;
-		vm->exit_info.ioport.write =
-			(exitinfo1 & SVM_EXITINFO1_TYPE_IN) ? FALSE : TRUE;
-		vm->exit_info.ioport.rep =
-			(exitinfo1 & SVM_EXITINFO1_REP) ? TRUE : FALSE;
-		vm->exit_info.ioport.str =
-			(exitinfo1 & SVM_EXITINFO1_STR) ? TRUE : FALSE;
-		break;
+		svm->write = (exitinfo1 & SVM_EXITINFO1_TYPE_IN) ? FALSE : TRUE;
+		svm->rep = (exitinfo1 & SVM_EXITINFO1_REP) ? TRUE : FALSE;
+		svm->str = (exitinfo1 & SVM_EXITINFO1_STR) ? TRUE : FALSE;
+		return EXIT_REASON_IOPORT;
 
 	case SVM_EXIT_NPF:
-		vm->exit_reason = EXIT_REASON_PGFLT;
-		vm->exit_info.pgflt.addr = (uintptr_t) PGADDR(exitinfo2);
-		KERN_DEBUG("NPT fault @ 0x%08x.\n", vm->exit_info.pgflt.addr);
-		break;
-
+		svm->fault_addr = (uintptr_t) PGADDR(exitinfo2);
+		return EXIT_REASON_PGFLT;
 	case SVM_EXIT_CPUID:
-		vm->exit_reason = EXIT_REASON_CPUID;
-		break;
-
+		return EXIT_REASON_CPUID;
 	case SVM_EXIT_RDTSC:
-		vm->exit_reason = EXIT_REASON_RDTSC;
-		break;
-
+		return EXIT_REASON_RDTSC;
 	case SVM_EXIT_VMMCALL:
 	case SVM_EXIT_HLT:
 	case SVM_EXIT_MSR:
@@ -111,14 +90,10 @@ svm_handle_exit(struct vm *vm)
 	case SVM_EXIT_MONITOR:
 	case SVM_EXIT_MWAIT:
 	case SVM_EXIT_MWAIT_COND:
-		vm->exit_reason = EXIT_REASON_INVAL_INSTR;
-		break;
-
+		return EXIT_REASON_INVAL_INSTR;
 	default:
-		vm->exit_reason = EXIT_REASON_INVAL;
+		return EXIT_REASON_INVAL;
 	}
-
-	return 0;
 }
 
 /*
@@ -135,9 +110,6 @@ svm_init(void)
 	memzero(&svm0, sizeof(svm0));
 	svm0.inuse = 0;
 
-	init_seg_offset();
-	init_svm_event_type();
-
 	pageinfo_t *hsave_pi = mem_page_alloc();
 
 	if (hsave_pi == NULL) {
@@ -151,11 +123,9 @@ svm_init(void)
 	return svm_drv_init(hsave_addr);
 }
 
-int
-svm_init_vm(struct vm *vm)
+struct svm *
+svm_init_vm(void)
 {
-	KERN_ASSERT(vm != NULL);
-
 	int rc;
 	struct svm *svm = &svm0;
 	pageinfo_t *vmcb_pi, *iopm_pi, *msrpm_pi, *ncr3_pi;
@@ -170,7 +140,6 @@ svm_init_vm(struct vm *vm)
 	}
 	memzero(svm, sizeof(struct svm));
 	svm->inuse = 1;
-	vm->cookie = svm;
 
 	if ((vmcb_pi = mem_page_alloc()) == NULL) {
 		rc = -2;
@@ -248,7 +217,7 @@ svm_init_vm(struct vm *vm)
 	svm->vmcb->control.int_ctl =
 		(SVM_INTR_CTRL_VINTR_MASK | (0x0 & SVM_INTR_CTRL_VTPR));
 
-	return 0;
+	return svm;
 
  err4:
 	mem_pages_free(msrpm_pi);
@@ -259,15 +228,14 @@ svm_init_vm(struct vm *vm)
  err1:
 	svm->inuse = 0;
  err0:
-	return rc;
+	return NULL;
 }
 
-int
-svm_run_vm(struct vm *vm)
+exit_reason_t
+svm_run_vm(struct svm *svm)
 {
-	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(svm != NULL);
 
-	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 	struct vmcb_control_area *ctrl = &vmcb->control;
 
@@ -303,10 +271,10 @@ svm_run_vm(struct vm *vm)
 
 	if (ctrl->exit_code == SVM_EXIT_ERR) {
 		svm_handle_err(vmcb);
-		return -1;
+		return EXIT_REASON_INVAL;
 	}
 
-	return svm_handle_exit(vm);
+	return svm_handle_exit(svm);
 }
 
 static void
@@ -322,12 +290,11 @@ svm_inject_vintr(struct vmcb *vmcb, uint8_t vector, uint8_t priority)
 	ctrl->int_vector = vector;
 }
 
-int
-svm_intercept_vintr(struct vm *vm, bool enable)
+void
+svm_intercept_vintr(struct svm *svm, bool enable)
 {
-	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(svm != NULL);
 
-	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb *vmcb = svm->vmcb;
 
 	if (enable == TRUE) {
@@ -336,75 +303,54 @@ svm_intercept_vintr(struct vm *vm, bool enable)
 	} else {
 		set_intercept(vmcb, INTERCEPT_VINTR, FALSE);
 	}
-
-	return 0;
 }
 
-int
-svm_get_reg(struct vm *vm, guest_reg_t reg, uint32_t *val)
+uint32_t
+svm_get_reg(struct svm *svm, guest_reg_t reg)
 {
-	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(val != NULL);
+	KERN_ASSERT(svm != NULL);
 
-	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb_save_area *save = &svm->vmcb->save;
 
 	switch (reg) {
 	case GUEST_EAX:
-		*val = save->rax_lo;
-		break;
+		return save->rax_lo;
 	case GUEST_EBX:
-		*val = (uint32_t) svm->g_rbx;
-		break;
+		return (uint32_t) svm->g_rbx;
 	case GUEST_ECX:
-		*val = (uint32_t) svm->g_rcx;
-		break;
+		return (uint32_t) svm->g_rcx;
 	case GUEST_EDX:
-		*val = (uint32_t) svm->g_rdx;
-		break;
+		return (uint32_t) svm->g_rdx;
 	case GUEST_ESI:
-		*val = (uint32_t) svm->g_rsi;
-		break;
+		return (uint32_t) svm->g_rsi;
 	case GUEST_EDI:
-		*val = (uint32_t) svm->g_rdi;
-		break;
+		return (uint32_t) svm->g_rdi;
 	case GUEST_EBP:
-		*val = (uint32_t) svm->g_rbp;
-		break;
+		return (uint32_t) svm->g_rbp;
 	case GUEST_ESP:
-		*val = save->rsp_lo;
-		break;
+		return save->rsp_lo;
 	case GUEST_EIP:
-		*val = save->rip_lo;
-		break;
+		return save->rip_lo;
 	case GUEST_EFLAGS:
-		*val = save->rflags_lo;
-		break;
+		return save->rflags_lo;
 	case GUEST_CR0:
-		*val = save->cr0_lo;
-		break;
+		return save->cr0_lo;
 	case GUEST_CR2:
-		*val = save->cr2_lo;
-		break;
+		return save->cr2_lo;
 	case GUEST_CR3:
-		*val = save->cr3_lo;
-		break;
+		return save->cr3_lo;
 	case GUEST_CR4:
-		*val = save->cr4_lo;
-		break;
+		return save->cr4_lo;
 	default:
-		return 1;
+		return 0xffffffff;
 	}
-
-	return 0;
 }
 
 int
-svm_set_reg(struct vm *vm, guest_reg_t reg, uint32_t val)
+svm_set_reg(struct svm *svm, guest_reg_t reg, uint32_t val)
 {
-	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(svm != NULL);
 
-	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb_save_area *save = &svm->vmcb->save;
 
 	switch (reg) {
@@ -459,85 +405,73 @@ svm_set_reg(struct vm *vm, guest_reg_t reg, uint32_t val)
 		save->cr4_hi = 0;
 		break;
 	default:
-		return 1;
+		return -1;
 	}
 
 	return 0;
 }
 
-static uintptr_t seg_offset[10];
-
-static void
-init_seg_offset(void)
-{
-	seg_offset[GUEST_CS]	= offsetof(struct vmcb_save_area, cs);
-	seg_offset[GUEST_DS]	= offsetof(struct vmcb_save_area, ds);
-	seg_offset[GUEST_ES]	= offsetof(struct vmcb_save_area, es);
-	seg_offset[GUEST_FS]	= offsetof(struct vmcb_save_area, fs);
-	seg_offset[GUEST_GS]	= offsetof(struct vmcb_save_area, gs);
-	seg_offset[GUEST_SS]	= offsetof(struct vmcb_save_area, ss);
-	seg_offset[GUEST_LDTR]	= offsetof(struct vmcb_save_area, ldtr);
-	seg_offset[GUEST_TR]	= offsetof(struct vmcb_save_area, tr);
-	seg_offset[GUEST_GDTR]	= offsetof(struct vmcb_save_area, gdtr);
-	seg_offset[GUEST_IDTR]	= offsetof(struct vmcb_save_area, idtr);
-}
-
 int
-svm_get_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc)
+svm_set_seg(struct svm *svm, guest_seg_t seg, uint16_t sel,
+	    uint32_t base_lo, uint32_t base_hi, uint32_t lim, uint32_t ar)
 {
-	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(desc != NULL);
+	KERN_ASSERT(svm != NULL);
 
-	if (!(0 <= seg && seg < 10))
-		return -1;
-
-	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb_save_area *save = &svm->vmcb->save;
-	struct vmcb_seg *vmcb_seg =
-		(struct vmcb_seg *) ((uintptr_t) save + seg_offset[seg]);
+	struct vmcb_seg *vmcb_seg;
 
-	desc->sel = vmcb_seg->selector;
-	desc->base_lo = vmcb_seg->base_lo;
-	desc->base_hi = vmcb_seg->base_hi;
-	desc->lim = vmcb_seg->limit;
-	desc->ar =
-		(vmcb_seg->attrib & 0xff) | ((vmcb_seg->attrib & 0xf00) << 4);
+	switch (seg) {
+	case GUEST_CS:
+		vmcb_seg = &save->cs;
+		break;
+	case GUEST_DS:
+		vmcb_seg = &save->ds;
+		break;
+	case GUEST_ES:
+		vmcb_seg = &save->es;
+		break;
+	case GUEST_FS:
+		vmcb_seg = &save->fs;
+		break;
+	case GUEST_GS:
+		vmcb_seg = &save->gs;
+		break;
+	case GUEST_SS:
+		vmcb_seg = &save->ss;
+		break;
+	case GUEST_LDTR:
+		vmcb_seg = &save->ldtr;
+		break;
+	case GUEST_TR:
+		vmcb_seg = &save->tr;
+		break;
+	case GUEST_GDTR:
+		vmcb_seg = &save->gdtr;
+		break;
+	case GUEST_IDTR:
+		vmcb_seg = &save->idtr;
+		break;
+	default:
+		return -1;
+	}
+
+	vmcb_seg->selector = sel;
+	vmcb_seg->base_lo = base_lo;
+	vmcb_seg->base_hi = base_hi;
+	vmcb_seg->limit = lim;
+	vmcb_seg->attrib = (ar & 0xff) | ((ar & 0xf000) >> 4);
 
 	return 0;
 }
 
 int
-svm_set_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc)
+svm_set_mmap(struct svm *svm, uintptr_t gpa, uintptr_t hpa)
 {
-	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(desc != NULL);
-
-	if (!(0 <= seg && seg < 10))
-		return -1;
-
-	struct svm *svm = (struct svm *) vm->cookie;
-	struct vmcb_save_area *save = &svm->vmcb->save;
-	struct vmcb_seg *vmcb_seg =
-		(struct vmcb_seg *) ((uintptr_t) save + seg_offset[seg]);
-
-	vmcb_seg->selector = desc->sel;
-	vmcb_seg->base_lo = desc->base_lo;
-	vmcb_seg->base_hi = desc->base_hi;
-	vmcb_seg->limit = desc->lim;
-	vmcb_seg->attrib = (desc->ar & 0xff) | ((desc->ar & 0xf000) >> 4);
-
-	return 0;
-}
-
-int
-svm_set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa, int type)
-{
-	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(svm != NULL);
 
 	if (ROUNDDOWN(gpa, PAGESIZE) != gpa || ROUNDDOWN(hpa, PAGESIZE) != hpa)
 		return 1;
 
-	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb_control_area *ctrl = &svm->vmcb->control;
 	pmap_t *npt = (pmap_t *)(uintptr_t) ctrl->nested_cr3_lo;
 
@@ -546,35 +480,32 @@ svm_set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa, int type)
 	return (npt == NULL) ? 2 : 0;
 }
 
-static int svm_event_type[4];
-
-static void
-init_svm_event_type(void)
-{
-	svm_event_type[EVENT_EXTINT]	= SVM_EVTINJ_TYPE_INTR;
-	svm_event_type[EVENT_NMI]	= SVM_EVTINJ_TYPE_NMI;
-	svm_event_type[EVENT_EXCEPTION]	= SVM_EVTINJ_TYPE_EXEPT;
-	svm_event_type[EVENT_SWINT]	= SVM_EVTINJ_TYPE_SOFT;
-}
-
 int
-svm_inject_event(struct vm *vm,
+svm_inject_event(struct svm *svm,
 		 guest_event_t type, uint8_t vector, uint32_t errcode, bool ev)
 {
-	KERN_ASSERT(vm != NULL);
+	KERN_ASSERT(svm != NULL);
 
-	if (!(0 <= type && type < 4))
-		return -1;
+	int evt_type;
 
-	struct svm *svm = (struct svm *) vm->cookie;
+	if (type == EVENT_EXTINT)
+		evt_type = SVM_EVTINJ_TYPE_INTR;
+	else if (type == EVENT_NMI)
+		evt_type = SVM_EVTINJ_TYPE_NMI;
+	else if (type == EVENT_EXCEPTION)
+		evt_type = SVM_EVTINJ_TYPE_EXEPT;
+	else if (type == EVENT_SWINT)
+		evt_type = SVM_EVTINJ_TYPE_SOFT;
+	else
+		return 1;
+
 	struct vmcb_control_area *ctrl = &svm->vmcb->control;
 
 	if (ctrl->event_inj & SVM_EVTINJ_VALID)
-		return 1;
+		return 2;
 
 	ctrl->event_inj = SVM_EVTINJ_VALID | (vector & SVM_EVTINJ_VEC_MASK) |
-		((svm_event_type[type] << SVM_EVTINJ_TYPE_SHIFT) &
-		 SVM_EVTINJ_TYPE_MASK);
+		((evt_type << SVM_EVTINJ_TYPE_SHIFT) & SVM_EVTINJ_TYPE_MASK);
 	ctrl->event_inj_err = errcode;
 
 	if (ev == TRUE)
@@ -583,55 +514,76 @@ svm_inject_event(struct vm *vm,
 	return 0;
 }
 
-int
-svm_get_next_eip(struct vm *vm, guest_instr_t instr, uint32_t *val)
+uint32_t
+svm_get_next_eip(struct svm *svm, guest_instr_t instr)
 {
-	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(val != NULL);
+	KERN_ASSERT(svm != NULL);
 
-	struct svm *svm = (struct svm *) vm->cookie;
 	struct vmcb_control_area *ctrl = &svm->vmcb->control;
-	struct vmcb_save_area *save = &svm->vmcb->save;
 
 	switch (instr) {
 	case INSTR_IN:
 	case INSTR_OUT:
-		*val = ctrl->exit_info_2_lo;
-		break;
-	case INSTR_RDMSR:
-	case INSTR_WRMSR:
-	case INSTR_CPUID:
-	case INSTR_RDTSC:
-		*val = save->rip_lo + 2;
-		break;
-	case INSTR_HYPERCALL:
-		*val = save->rip_lo + 3;
-		break;
+		return ctrl->exit_info_2_lo;
 	default:
-		return 1;
+		return ctrl->next_rip_lo;
 	}
-
-	return 0;
 }
 
 bool
-svm_pending_event(struct vm *vm)
+svm_pending_event(struct svm *svm)
 {
-	KERN_ASSERT(vm != NULL);
-
-	struct svm *svm = (struct svm *) vm->cookie;
+	KERN_ASSERT(svm != NULL);
 	struct vmcb_control_area *ctrl = &svm->vmcb->control;
-
 	return (ctrl->event_inj & SVM_EVTINJ_VALID) ? TRUE : FALSE;
 }
 
 bool
-svm_intr_shadow(struct vm *vm)
+svm_intr_shadow(struct svm *svm)
 {
-	KERN_ASSERT(vm != NULL);
-
-	struct svm *svm = (struct svm *) vm->cookie;
+	KERN_ASSERT(svm != NULL);
 	struct vmcb_control_area *ctrl = &svm->vmcb->control;
-
 	return (ctrl->int_state & 0x1) ? TRUE : FALSE;
+}
+
+uint16_t
+svm_exit_io_port(struct svm *svm)
+{
+	KERN_ASSERT(svm != NULL);
+	return svm->port;
+}
+
+data_sz_t
+svm_exit_io_width(struct svm *svm)
+{
+	KERN_ASSERT(svm != NULL);
+	return svm->width;
+}
+
+bool
+svm_exit_io_write(struct svm *svm)
+{
+	KERN_ASSERT(svm != NULL);
+	return svm->write;
+}
+
+bool
+svm_exit_io_rep(struct svm *svm)
+{
+	KERN_ASSERT(svm != NULL);
+	return svm->rep;
+}
+
+bool
+svm_exit_io_str(struct svm *svm)
+{
+	KERN_ASSERT(svm != NULL);
+	return svm->str;
+}
+
+uintptr_t
+svm_exit_fault_addr(struct svm *svm)
+{
+	KERN_ASSERT(svm != NULL);
+	return svm->fault_addr;
 }

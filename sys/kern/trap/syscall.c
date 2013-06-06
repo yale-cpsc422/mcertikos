@@ -41,8 +41,7 @@ static char *syscall_name[MAX_SYSCALL_NR] =
 		[SYS_hvm_set_mmap]	= "sys_hvm_set_mmap",
 		[SYS_hvm_set_reg]	= "sys_hvm_set_reg",
 		[SYS_hvm_get_reg]	= "sys_hvm_get_reg",
-		[SYS_hvm_set_desc]	= "sys_hvm_set_desc",
-		[SYS_hvm_get_desc]	= "sys_hvm_get_desc",
+		[SYS_hvm_set_seg]	= "sys_hvm_set_seg",
 		[SYS_hvm_get_next_eip]	= "sys_hvm_get_next_eip",
 		[SYS_hvm_inject_event]	= "sys_hvm_inject_event",
 		[SYS_hvm_pending_event]	= "sys_hvm_pending_event",
@@ -493,6 +492,9 @@ sys_sysinfo_lookup(sysinfo_name_t name, uintptr_t info_la)
 static int
 sys_hvm_create_vm(uintptr_t vmid_la)
 {
+	if (hvm_available() == FALSE)
+		return E_INVAL_HVM;
+
 	if (!(VM_USERLO <= vmid_la && vmid_la + sizeof(int) <= VM_USERHI))
 		return E_INVAL_ADDR;
 
@@ -511,6 +513,9 @@ sys_hvm_create_vm(uintptr_t vmid_la)
 static int
 sys_hvm_run_vm(int vmid, uintptr_t exit_reason_la, uintptr_t exit_info_la)
 {
+	if (hvm_available() == FALSE)
+		return E_INVAL_HVM;
+
 	struct vm *vm = hvm_get_vm(vmid);
 
 	if (vm == NULL)
@@ -541,6 +546,9 @@ sys_hvm_run_vm(int vmid, uintptr_t exit_reason_la, uintptr_t exit_info_la)
 static int
 sys_hvm_set_mmap(int vmid, uintptr_t hvm_mmap_la)
 {
+	if (hvm_available() == FALSE)
+		return E_INVAL_HVM;
+
 	struct vm *vm = hvm_get_vm(vmid);
 	struct user_hvm_mmap hvm_mmap;
 
@@ -565,8 +573,7 @@ sys_hvm_set_mmap(int vmid, uintptr_t hvm_mmap_la)
 		return E_INVAL_CACHE_TYPE;
 
 	if (hvm_set_mmap(vm, hvm_mmap.gpa,
-			 pmap_la2pa(proc_cur()->pmap, hvm_mmap.hva),
-			 hvm_mmap.type))
+			 pmap_la2pa(proc_cur()->pmap, hvm_mmap.hva)))
 		return E_HVM_MMAP;
 	else
 		return E_SUCC;
@@ -575,6 +582,9 @@ sys_hvm_set_mmap(int vmid, uintptr_t hvm_mmap_la)
 static int
 sys_hvm_set_reg(int vmid, guest_reg_t reg, uint32_t val)
 {
+	if (hvm_available() == FALSE)
+		return E_INVAL_HVM;
+
 	struct vm *vm = hvm_get_vm(vmid);
 
 	if (vm == NULL)
@@ -592,6 +602,9 @@ sys_hvm_set_reg(int vmid, guest_reg_t reg, uint32_t val)
 static int
 sys_hvm_get_reg(int vmid, guest_reg_t reg, uintptr_t val_la)
 {
+	if (hvm_available() == FALSE)
+		return E_INVAL_HVM;
+
 	struct vm *vm = hvm_get_vm(vmid);
 	uint32_t val;
 
@@ -604,8 +617,7 @@ sys_hvm_get_reg(int vmid, guest_reg_t reg, uintptr_t val_la)
 	if (!(VM_USERLO <= val_la && val_la + sizeof(uint32_t) <= VM_USERHI))
 		return E_INVAL_ADDR;
 
-	if (hvm_get_reg(vm, reg, &val))
-		return E_HVM_REG;
+	val = hvm_get_reg(vm, reg);
 
 	if (copy_to_user(proc_cur()->pmap, val_la, (uintptr_t) &val,
 			 sizeof(uint32_t)) != sizeof(uint32_t))
@@ -615,8 +627,11 @@ sys_hvm_get_reg(int vmid, guest_reg_t reg, uintptr_t val_la)
 }
 
 static int
-sys_hvm_set_desc(int vmid, guest_seg_t seg, uintptr_t desc_la)
+sys_hvm_set_seg(int vmid, guest_seg_t seg, uintptr_t desc_la)
 {
+	if (hvm_available() == FALSE)
+		return E_INVAL_HVM;
+
 	struct vm *vm = hvm_get_vm(vmid);
 	struct guest_seg_desc desc;
 
@@ -633,40 +648,19 @@ sys_hvm_set_desc(int vmid, guest_seg_t seg, uintptr_t desc_la)
 			   sizeof(desc)) != sizeof(desc))
 		return E_MEM;
 
-	if (hvm_set_desc(vm, seg, &desc))
+	if (hvm_set_seg(vm, seg, desc.sel, desc.base_lo, desc.base_hi,
+			desc.lim, desc.ar))
 		return E_HVM_SEG;
 	else
 		return E_SUCC;
 }
 
 static int
-sys_hvm_get_desc(int vmid, guest_seg_t seg, uintptr_t desc_la)
-{
-	struct vm *vm = hvm_get_vm(vmid);
-	struct guest_seg_desc desc;
-
-	if (vm == NULL)
-		return E_INVAL_VMID;
-
-	if (!(GUEST_CS <= seg && seg < GUEST_MAX_SEG_DESC))
-		return E_INVAL_SEG;
-
-	if (!(VM_USERLO <= desc_la && desc_la + sizeof(desc) <= VM_USERHI))
-		return E_INVAL_ADDR;
-
-	if (hvm_get_desc(vm, seg, &desc))
-		return E_HVM_SEG;
-
-	if (copy_to_user(proc_cur()->pmap, desc_la, (uintptr_t) &desc,
-			 sizeof(desc)) != sizeof(desc))
-		return E_MEM;
-
-	return E_SUCC;
-}
-
-static int
 sys_hvm_get_next_eip(int vmid, guest_instr_t instr, uintptr_t neip_la)
 {
+	if (hvm_available() == FALSE)
+		return E_INVAL_HVM;
+
 	struct vm *vm = hvm_get_vm(vmid);
 	uint32_t neip;
 
@@ -676,8 +670,7 @@ sys_hvm_get_next_eip(int vmid, guest_instr_t instr, uintptr_t neip_la)
 	if (!(VM_USERLO <= neip_la && neip_la + sizeof(uintptr_t) <= VM_USERHI))
 		return E_INVAL_ADDR;
 
-	if (hvm_get_next_eip(vm, instr, &neip))
-		return E_HVM_NEIP;
+	neip = hvm_get_next_eip(vm, instr);
 
 	if (copy_to_user(proc_cur()->pmap, neip_la, (uintptr_t) &neip,
 			 sizeof(uint32_t)) != sizeof(uint32_t))
@@ -689,6 +682,9 @@ sys_hvm_get_next_eip(int vmid, guest_instr_t instr, uintptr_t neip_la)
 static int
 sys_hvm_inject_event(int vmid, uintptr_t event_la)
 {
+	if (hvm_available() == FALSE)
+		return E_INVAL_HVM;
+
 	struct vm *vm = hvm_get_vm(vmid);
 	struct user_hvm_event event;
 
@@ -715,6 +711,9 @@ sys_hvm_inject_event(int vmid, uintptr_t event_la)
 static int
 sys_hvm_pending_event(int vmid, uintptr_t result_la)
 {
+	if (hvm_available() == FALSE)
+		return E_INVAL_HVM;
+
 	struct vm *vm = hvm_get_vm(vmid);
 	int result;
 
@@ -736,6 +735,9 @@ sys_hvm_pending_event(int vmid, uintptr_t result_la)
 static int
 sys_hvm_intr_shadow(int vmid, uintptr_t result_la)
 {
+	if (hvm_available() == FALSE)
+		return E_INVAL_HVM;
+
 	struct vm *vm = hvm_get_vm(vmid);
 	int result;
 
@@ -757,15 +759,17 @@ sys_hvm_intr_shadow(int vmid, uintptr_t result_la)
 static int
 sys_hvm_intercept_intr_window(int vmid, bool enable)
 {
+	if (hvm_available() == FALSE)
+		return E_INVAL_HVM;
+
 	struct vm *vm = hvm_get_vm(vmid);
 
 	if (vm == NULL)
 		return E_INVAL_VMID;
 
-	if (hvm_intercept_intr_window(vm, enable))
-		return E_HVM_INTRWIN;
-	else
-		return E_SUCC;
+	hvm_intercept_intr_window(vm, enable);
+
+	return E_SUCC;
 }
 
 static int
@@ -991,25 +995,14 @@ syscall_handler(uint8_t trapno, struct context *ctx)
 		errno = sys_hvm_get_reg((int) a[0],
 					(guest_reg_t) a[1], (uintptr_t) a[2]);
 		break;
-	case SYS_hvm_set_desc:
+	case SYS_hvm_set_seg:
 		/*
 		 * Set the segment descriptor of a virtual machine.
 		 * a[0]: the virtual machine descriptor
 		 * a[1]: the guest segment
 		 * a[2]: the linear address of the descriptor information
 		 */
-		errno = sys_hvm_set_desc((int) a[0],
-					 (guest_seg_t) a[1], (uintptr_t) a[2]);
-		break;
-	case SYS_hvm_get_desc:
-		/*
-		 * Get the content of the segment descriptor of a virtual
-		 * machine.
-		 * a[0]: the virtual machine descriptor
-		 * a[1]: the guest segment
-		 * a[2]: the linear address where the descriptor is returned to
-		 */
-		errno = sys_hvm_get_desc((int) a[0],
+		errno = sys_hvm_set_seg((int) a[0],
 					 (guest_seg_t) a[1], (uintptr_t) a[2]);
 		break;
 	case SYS_hvm_get_next_eip:

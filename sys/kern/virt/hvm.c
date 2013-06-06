@@ -55,8 +55,6 @@ hvm_init(void)
 struct vm *
 hvm_create_vm(void)
 {
-	KERN_ASSERT(hvm_ops != NULL);
-
 	struct vm *vm = &vm0;
 
 	if (vm->inuse)
@@ -66,7 +64,7 @@ hvm_create_vm(void)
 	vm->proc = proc_cur();
 	vm->exit_reason = EXIT_REASON_NONE;
 
-	if (svm_init_vm(vm)) {
+	if ((vm->cookie = svm_init_vm()) == NULL) {
 		HVM_DEBUG("svm_init_vm() failed.\n");
 		return NULL;
 	}
@@ -81,28 +79,40 @@ hvm_run_vm(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
 
-	int rc;
+	exit_reason_t reason;
 
-	if ((rc = svm_run_vm(vm))) {
+	if ((reason = svm_run_vm(vm->cookie)) == EXIT_REASON_INVAL) {
 		HVM_DEBUG("svm_run_vm() failed.\n");
-		return rc;
+		return -1;
 	}
 
 	/* restore TSS */
 	kstack_switch(proc_cur()->kstack);
 
+	vm->exit_reason = reason;
+
+	if (reason == EXIT_REASON_IOPORT) {
+		vm->exit_info.ioport.port = svm_exit_io_port(vm->cookie);
+		vm->exit_info.ioport.width = svm_exit_io_width(vm->cookie);
+		vm->exit_info.ioport.write = svm_exit_io_write(vm->cookie);
+		vm->exit_info.ioport.rep = svm_exit_io_rep(vm->cookie);
+		vm->exit_info.ioport.str = svm_exit_io_str(vm->cookie);
+	} else if (reason == EXIT_REASON_PGFLT) {
+		vm->exit_info.pgflt.addr = svm_exit_fault_addr(vm->cookie);
+	}
+
 	return 0;
 }
 
 int
-hvm_set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa, int type)
+hvm_set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa)
 {
 	KERN_ASSERT(vm != NULL);
 
 	if (gpa % PAGESIZE || hpa % PAGESIZE)
 		return -1;
 
-	return svm_set_mmap(vm, gpa, hpa, type);
+	return svm_set_mmap(vm->cookie, gpa, hpa);
 }
 
 int
@@ -110,43 +120,32 @@ hvm_set_reg(struct vm *vm, guest_reg_t reg, uint32_t val)
 {
 	KERN_ASSERT(vm != NULL);
 
-	return svm_set_reg(vm, reg, val);
+	return svm_set_reg(vm->cookie, reg, val);
+}
+
+uint32_t
+hvm_get_reg(struct vm *vm, guest_reg_t reg)
+{
+	KERN_ASSERT(vm != NULL);
+
+	return svm_get_reg(vm->cookie, reg);
 }
 
 int
-hvm_get_reg(struct vm *vm, guest_reg_t reg, uint32_t *val)
+hvm_set_seg(struct vm *vm, guest_seg_t seg, uint16_t sel, uint32_t base_lo,
+	    uint32_t base_hi, uint32_t lim, uint32_t ar)
 {
 	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(val != NULL);
 
-	return svm_get_reg(vm, reg, val);
+	return svm_set_seg(vm->cookie, seg, sel, base_lo, base_hi, lim, ar);
 }
 
-int
-hvm_set_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc)
+uint32_t
+hvm_get_next_eip(struct vm *vm, guest_instr_t instr)
 {
 	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(desc != NULL);
 
-	return svm_set_desc(vm, seg, desc);
-}
-
-int
-hvm_get_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc)
-{
-	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(desc != NULL);
-
-	return svm_get_desc(vm, seg, desc);
-}
-
-int
-hvm_get_next_eip(struct vm *vm, guest_instr_t instr, uintptr_t *neip)
-{
-	KERN_ASSERT(vm != NULL);
-	KERN_ASSERT(neip != NULL);
-
-	return svm_get_next_eip(vm, instr, neip);
+	return svm_get_next_eip(vm->cookie, instr);
 }
 
 int
@@ -155,7 +154,7 @@ hvm_inject_event(struct vm *vm, guest_event_t type,
 {
 	KERN_ASSERT(vm != NULL);
 
-	return svm_inject_event(vm, type, vector, errcode, ev);
+	return svm_inject_event(vm->cookie, type, vector, errcode, ev);
 }
 
 int
@@ -163,7 +162,7 @@ hvm_pending_event(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
 
-	return svm_pending_event(vm);
+	return svm_pending_event(vm->cookie);
 }
 
 int
@@ -171,15 +170,15 @@ hvm_intr_shadow(struct vm *vm)
 {
 	KERN_ASSERT(vm != NULL);
 
-	return svm_intr_shadow(vm);
+	return svm_intr_shadow(vm->cookie);
 }
 
-int
+void
 hvm_intercept_intr_window(struct vm *vm, bool enabled)
 {
 	KERN_ASSERT(vm != NULL);
 
-	return svm_intercept_vintr(vm, enabled);
+	svm_intercept_vintr(vm->cookie, enabled);
 }
 
 struct vm *

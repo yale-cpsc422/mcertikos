@@ -42,8 +42,7 @@ enum __syscall_nr {
 	SYS_hvm_set_mmap,
 	SYS_hvm_set_reg,
 	SYS_hvm_get_reg,
-	SYS_hvm_set_desc,
-	SYS_hvm_get_desc,
+	SYS_hvm_set_seg,
 	SYS_hvm_get_next_eip,
 	SYS_hvm_inject_event,
 	SYS_hvm_pending_event,
@@ -74,6 +73,7 @@ enum __error_nr {
 	E_INVAL_EVENT,
 	E_INVAL_SYSINFO_NAME,
 	E_INVAL_PORT,
+	E_INVAL_HVM,
 	E_SEND,		/* fail to send */
 	E_RECV,		/* fail to receive */
 	E_CHANNEL,	/* fail to create a channel */

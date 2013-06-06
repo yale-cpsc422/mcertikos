@@ -146,28 +146,25 @@ int hvm_run_vm(struct vm *vm);
  * @param vm  the virtual machine
  * @param gpa the guest physical address of the guest physical memory page
  * @param hpa the host physical address of the host physical memory page
- * @param type the cache type
  *
  * @return 0 if successful; otherwise, return a non-zero value.
  */
-int hvm_set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa, int type);
+int hvm_set_mmap(struct vm *vm, uintptr_t gpa, uintptr_t hpa);
 
-int hvm_set_reg(struct vm *vm, guest_reg_t reg, uint32_t val);
-int hvm_get_reg(struct vm *vm, guest_reg_t reg, uint32_t *val);
+int      hvm_set_reg(struct vm *vm, guest_reg_t reg, uint32_t val);
+uint32_t hvm_get_reg(struct vm *vm, guest_reg_t reg);
 
-int hvm_set_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc);
-int hvm_get_desc(struct vm *vm, guest_seg_t seg, struct guest_seg_desc *desc);
+int hvm_set_seg(struct vm *vm, guest_seg_t seg, uint16_t sel, uint32_t base_lo,
+		uint32_t base_hi, uint32_t lim, uint32_t ar);
 
-int hvm_get_next_eip(struct vm *vm, guest_instr_t instr, uintptr_t *neip);
+uint32_t hvm_get_next_eip(struct vm *vm, guest_instr_t instr);
 
 int hvm_inject_event(struct vm *vm, guest_event_t type,
 		     uint8_t vector, uint32_t errcode, bool ev);
 int hvm_pending_event(struct vm *vm);
 int hvm_intr_shadow(struct vm *vm);
 
-int hvm_intercept_ioport(struct vm *vm, uint16_t port, bool enabled);
-int hvm_intercept_msr(struct vm *vm, uint32_t msr, bool enabled);
-int hvm_intercept_intr_window(struct vm *vm, bool enabled);
+void hvm_intercept_intr_window(struct vm *vm, bool enabled);
 
 struct vm *hvm_get_vm(int vmid);
 
