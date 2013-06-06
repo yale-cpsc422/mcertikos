@@ -69,7 +69,6 @@ svm_handle_exit(struct svm *svm)
 		svm->rep = (exitinfo1 & SVM_EXITINFO1_REP) ? TRUE : FALSE;
 		svm->str = (exitinfo1 & SVM_EXITINFO1_STR) ? TRUE : FALSE;
 		return EXIT_REASON_IOPORT;
-
 	case SVM_EXIT_NPF:
 		svm->fault_addr = (uintptr_t) PGADDR(exitinfo2);
 		return EXIT_REASON_PGFLT;

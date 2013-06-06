@@ -511,7 +511,7 @@ struct svm {
 	uintptr_t	fault_addr;
 
 	int		inuse;
-};
+} gcc_packed;
 
 #ifdef DEBUG_SVM
 

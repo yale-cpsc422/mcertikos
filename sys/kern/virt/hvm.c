@@ -41,7 +41,7 @@ hvm_init(void)
 	}
 
 	if (svm_init()) {
-		HVM_DEBUG("Cannot intialize HVM on CPU%d.\n", pcpu_cpu_idx(c));
+		HVM_DEBUG("Cannot intialize HVM.\n");
 		return -2;
 	}
 
