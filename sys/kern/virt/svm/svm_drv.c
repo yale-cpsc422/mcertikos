@@ -74,7 +74,8 @@ svm_drv_init(uintptr_t hsave_addr)
 }
 
 /* defined in svm_asm.S */
-extern void svm_run(struct svm *);
+extern void svm_run(struct vmcb *vmcb, uint32_t *ebx, uint32_t *ecx,
+		    uint32_t *edx, uint32_t *esi, uint32_t *edi, uint32_t *ebp);
 
 #define save_host_segment(seg, val)					\
 	__asm __volatile("mov %%" #seg ", %0" : "=r" (val) :: "memory")
@@ -87,7 +88,8 @@ extern void svm_run(struct svm *);
 	} while (0)
 
 void
-svm_drv_run_vm(struct svm *svm)
+svm_drv_run_vm(struct vmcb *vmcb, uint32_t *ebx, uint32_t *ecx,
+	       uint32_t *edx, uint32_t *esi, uint32_t *edi, uint32_t *ebp)
 {
 	volatile uint16_t h_fs, h_gs, h_ldt;
 
@@ -98,7 +100,7 @@ svm_drv_run_vm(struct svm *svm)
 	h_ldt = rldt();
 
 	intr_local_enable();
-	svm_run(svm);
+	svm_run(vmcb, ebx, ecx, edx, esi, edi, ebp);
 	intr_local_disable();
 
 	load_host_segment(fs, h_fs);

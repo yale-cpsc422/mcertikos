@@ -189,7 +189,8 @@ svm_run_vm(struct svm *svm)
 
 	struct vmcb *vmcb = svm->vmcb;
 
-	svm_drv_run_vm(svm);
+	svm_drv_run_vm(vmcb, &svm->g_rbx, &svm->g_rcx, &svm->g_rdx, &svm->g_rsi,
+		       &svm->g_rdi, &svm->g_rbp);
 
 	uint32_t exit_int_info = vmcb_get_exit_int_info(vmcb);
 
