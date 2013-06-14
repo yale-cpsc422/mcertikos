@@ -10,6 +10,7 @@
 #include <dev/intr.h>
 #include <dev/pcpu.h>
 
+#include "npt.h"
 #include "svm.h"
 #include "svm_drv.h"
 #include "vmcb.h"
@@ -100,7 +101,7 @@ svm_init_vm(void)
 {
 	struct svm *svm = &svm0;
 	struct vmcb *vmcb;
-	pageinfo_t *ncr3_pi;
+	npt_t npt;
 
 	if (svm->inuse == 1)
 		return NULL;
@@ -113,13 +114,12 @@ svm_init_vm(void)
 	}
 	svm->vmcb = vmcb;
 
-	if ((ncr3_pi = mem_page_alloc()) == NULL) {
+	if ((npt = npt_new()) == NULL) {
 		svm->inuse = 0;
 		vmcb_free(vmcb);
 		return NULL;
 	}
-	memzero(mem_pi2ptr(ncr3_pi), PAGESIZE);
-	vmcb_set_ncr3(vmcb, mem_pi2phys(ncr3_pi));
+	vmcb_set_ncr3(vmcb, (uintptr_t) npt);
 
 	/*
 	 * Setup default interception.
@@ -323,11 +323,9 @@ svm_set_mmap(struct svm *svm, uintptr_t gpa, uintptr_t hpa)
 	if (ROUNDDOWN(gpa, PAGESIZE) != gpa || ROUNDDOWN(hpa, PAGESIZE) != hpa)
 		return 1;
 
-	pmap_t *npt = (pmap_t *) vmcb_get_ncr3(svm->vmcb);
+	npt_t npt = (npt_t) vmcb_get_ncr3(svm->vmcb);
 
-	npt = pmap_insert(npt, mem_phys2pi(hpa), gpa, PTE_W | PTE_G | PTE_U);
-
-	return (npt == NULL) ? 2 : 0;
+	return npt_insert(npt, gpa, hpa);
 }
 
 int

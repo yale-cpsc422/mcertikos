@@ -6,11 +6,13 @@ KERN_SRCFILES	+= $(KERN_DIR)/kern/virt/svm/svm.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/virt/svm/svm_drv.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/virt/svm/svm_asm.S
 KERN_SRCFILES	+= $(KERN_DIR)/kern/virt/svm/vmcb.c
+KERN_SRCFILES	+= $(KERN_DIR)/kern/virt/svm/npt.c
 
 # Targets
 
 KERN_CCOMP_SRC	+= $(KERN_DIR)/kern/virt/svm/svm.c
 KERN_CCOMP_SRC	+= $(KERN_DIR)/kern/virt/svm/vmcb.c
+KERN_CCOMP_SRC	+= $(KERN_DIR)/kern/virt/svm/npt.c
 
 $(KERN_OBJDIR)/kern/virt/svm/svm.o: $(KERN_DIR)/kern/virt/svm/svm.c
 	@echo + ccomp[KERN/kern/virt] $<
@@ -18,6 +20,11 @@ $(KERN_OBJDIR)/kern/virt/svm/svm.o: $(KERN_DIR)/kern/virt/svm/svm.c
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
 
 $(KERN_OBJDIR)/kern/virt/svm/vmcb.o: $(KERN_DIR)/kern/virt/svm/vmcb.c
+	@echo + ccomp[KERN/kern/virt] $<
+	@mkdir -p $(@D)
+	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
+
+$(KERN_OBJDIR)/kern/virt/svm/npt.o: $(KERN_DIR)/kern/virt/svm/npt.c
 	@echo + ccomp[KERN/kern/virt] $<
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
