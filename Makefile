@@ -90,15 +90,8 @@ QEMUOPTS_BIOS	:= -L $(UTILSDIR)/qemu/
 .PHONY: all boot dev kern lib sys user deps
 
 
-ifndef ENABLE_CCOMP
 all: boot sys user
 	@echo "All targets are done."
-else
-# Compcert dones't support -MD, so we have to clean all the already generated
-# files.
-all: clean boot sys user
-	@echo "All targets are done."
-endif
 
 install_img: install_boot install_sys install_user
 	@echo "CertiKOS is installed on the disk image."

@@ -1,4 +1,5 @@
 #include <sys/debug.h>
+#include <sys/gcc.h>
 #include <sys/mem.h>
 #include <sys/string.h>
 #include <sys/types.h>
@@ -14,6 +15,7 @@
 #include "vmcb.h"
 
 static struct svm svm0;
+static uint8_t hsave_area[PAGESIZE] gcc_aligned(PAGESIZE);
 
 static exit_reason_t
 svm_handle_exit(struct svm *svm)
@@ -71,18 +73,6 @@ svm_handle_exit(struct svm *svm)
 	}
 }
 
-static void
-svm_intercept_all_ioports(struct svm *svm)
-{
-	KERN_ASSERT(svm != NULL);
-
-	struct vmcb *vmcb = svm->vmcb;
-	void *iopm = (void *) vmcb_get_iopm_base(vmcb);
-
-	memset(iopm, 0xff, SVM_IOPM_SIZE);
-	vmcb_set_intercept(vmcb, INTERCEPT_IOIO_PROT);
-}
-
 /*
  * Initialize SVM module.
  * - check whether SVM is supported
@@ -99,53 +89,34 @@ svm_init(void)
 	memzero(&svm0, sizeof(svm0));
 	svm0.inuse = 0;
 
-	pageinfo_t *hsave_pi = mem_page_alloc();
-
-	if (hsave_pi == NULL) {
-		SVM_DEBUG("Cannot allocate memory for host state-save area.\n");
-		return -1;
-	}
-
-	uintptr_t hsave_addr = mem_pi2phys(hsave_pi);
 	SVM_DEBUG("Host state-save area is at %x.\n", hsave_addr);
+	memzero(hsave_area, PAGESIZE);
 
-	return svm_drv_init(hsave_addr);
+	return svm_drv_init((uintptr_t) hsave_area);
 }
 
 struct svm *
 svm_init_vm(void)
 {
-	int rc;
 	struct svm *svm = &svm0;
 	struct vmcb *vmcb;
-	pageinfo_t *iopm_pi, *ncr3_pi;
+	pageinfo_t *ncr3_pi;
 
-	/*
-	 * Allocate memory.
-	 */
-
-	if (svm->inuse == 1) {
-		rc = -1;
-		goto err0;
-	}
+	if (svm->inuse == 1)
+		return NULL;
 	memzero(svm, sizeof(struct svm));
 	svm->inuse = 1;
 
-	if ((vmcb = vmcb_alloc()) == NULL) {
-		rc = -2;
-		goto err1;
+	if ((vmcb = vmcb_new()) == NULL) {
+		svm->inuse = 0;
+		return NULL;
 	}
 	svm->vmcb = vmcb;
 
-	if ((iopm_pi = mem_pages_alloc(SVM_IOPM_SIZE)) == NULL) {
-		rc = -3;
-		goto err2;
-	}
-	vmcb_set_iopm_base(vmcb, mem_pi2phys(iopm_pi));
-
 	if ((ncr3_pi = mem_page_alloc()) == NULL) {
-		rc = -5;
-		goto err4;
+		svm->inuse = 0;
+		vmcb_free(vmcb);
+		return NULL;
 	}
 	memzero(mem_pi2ptr(ncr3_pi), PAGESIZE);
 	vmcb_set_ncr3(vmcb, mem_pi2phys(ncr3_pi));
@@ -153,9 +124,6 @@ svm_init_vm(void)
 	/*
 	 * Setup default interception.
 	 */
-
-	/* intercept all I/O ports */
-	svm_intercept_all_ioports(svm);
 
 	/* intercept instructions */
 	vmcb_set_intercept(svm->vmcb, INTERCEPT_VMRUN);		/* vmrun */
@@ -165,21 +133,12 @@ svm_init_vm(void)
 	vmcb_set_intercept(svm->vmcb, INTERCEPT_CPUID);		/* cpuid */
 	vmcb_set_intercept(svm->vmcb, INTERCEPT_RDTSC);		/* rdtsc */
 	vmcb_set_intercept(svm->vmcb, INTERCEPT_RDTSCP);	/* rdtscp */
+	vmcb_set_intercept(vmcb, INTERCEPT_IOIO_PROT);		/* in/out */
 
 	/* intercept interrupts */
 	vmcb_set_intercept(svm->vmcb, INTERCEPT_INTR);
 
 	return svm;
-
- err4:
- err3:
-	mem_pages_free(iopm_pi);
- err2:
-	vmcb_free(vmcb);
- err1:
-	svm->inuse = 0;
- err0:
-	return NULL;
 }
 
 exit_reason_t
@@ -226,7 +185,9 @@ svm_run_vm(struct svm *svm)
 	uint32_t exit_code = vmcb_get_exit_code(vmcb);
 
 	if (exit_code == SVM_EXIT_ERR) {
+#ifdef DEBUG_MSG
 		svm_handle_err(vmcb);
+#endif
 		return EXIT_REASON_INVAL;
 	}
 
@@ -347,11 +308,11 @@ svm_set_reg(struct svm *svm, guest_reg_t reg, uint32_t val)
 }
 
 int
-svm_set_seg(struct svm *svm, guest_seg_t seg, uint16_t sel,
-	    uint32_t base_lo, uint32_t base_hi, uint32_t lim, uint32_t ar)
+svm_set_seg(struct svm *svm, guest_seg_t seg,
+	    uint16_t sel, uint32_t base, uint32_t lim, uint32_t ar)
 {
 	KERN_ASSERT(svm != NULL);
-	return vmcb_set_seg(svm->vmcb, seg, sel, base_lo, base_hi, lim, ar);
+	return vmcb_set_seg(svm->vmcb, seg, sel, base, lim, ar);
 }
 
 int
@@ -379,12 +340,8 @@ svm_inject_event(struct svm *svm,
 
 	if (type == EVENT_EXTINT)
 		evt_type = SVM_EVTINJ_TYPE_INTR;
-	else if (type == EVENT_NMI)
-		evt_type = SVM_EVTINJ_TYPE_NMI;
 	else if (type == EVENT_EXCEPTION)
 		evt_type = SVM_EVTINJ_TYPE_EXEPT;
-	else if (type == EVENT_SWINT)
-		evt_type = SVM_EVTINJ_TYPE_SOFT;
 	else
 		return 1;
 

@@ -457,20 +457,17 @@ struct vmcb {
 /* functions */
 
 /*
- * Allocate the memory for a VMCB.
+ * Get a new VMCB.
  *
- * @return a pointer to the VMCB if successful; otherwise, return NULL.
+ * @return a pointer to the intialized VMCB if successful; otherwise, return
+ *         NULL.
  */
-struct vmcb *vmcb_alloc(void);
+struct vmcb *vmcb_new(void);
 
 /*
- * Free the memory for a VMCB.
- *
- * @param vmcb the VMCB to free; it must be aligned to 4096 bytes
- *
- * @return 0 if successful; otherwise, return a non-zero value
+ * Free a VMCB.
  */
-int vmcb_free(struct vmcb *vmcb);
+void vmcb_free(struct vmcb *vmcb);
 
 /*
  * Set a bit of the intercept field of the control area of VMCB.
@@ -493,26 +490,6 @@ int vmcb_set_intercept(struct vmcb *vmcb, int bit);
  * @return 0 if successful; otherwise, return a non-zero value.
  */
 int vmcb_clear_intercept(struct vmcb *vmcb, int bit);
-
-/*
- * Get the physical address of IOPM in VMCB.
- *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- *
- * @return the physical address of IOPM; if VMCB is not aligned to 4096 bytes,
- *         the returned value is undefined.
- */
-uint32_t vmcb_get_iopm_base(struct vmcb *vmcb);
-
-/*
- * Set the physical address of IOPM in VMCB.
- *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- * @param base the physical address of IOPM; it must be aligned to 4096 bytes
- *
- * @return 0 if successful; otherwise, return a non-zero value.
- */
-int vmcb_set_iopm_base(struct vmcb *vmcb, uint32_t base);
 
 /*
  * Clear the pending virtual interrupt in VMCB.
@@ -643,18 +620,17 @@ uint32_t vmcb_get_neip(struct vmcb *vmcb);
 /*
  * Set the guest segment in VMCB.
  *
- * @param vmcb    the VMCB; it must be aligned to 4096 bytes
- * @param seg     the guest segment
- * @param sel     the selector of the segment
- * @param base_lo the lower 32-bit of the base address of the segment
- * @param base_hi the higher 32-bit of the base address of the segment
- * @param lim     the limitation of the segment
- * @param ar      the attributes of the segment
+ * @param vmcb  the VMCB; it must be aligned to 4096 bytes
+ * @param seg   the guest segment
+ * @param sel   the selector of the segment
+ * @param base  the lower 32-bit of the base address of the segment
+ * @param lim   the limitation of the segment
+ * @param ar    the attributes of the segment
  *
  * @return 0 if successful; otherwise, return a non-zero value.
  */
-int vmcb_set_seg(struct vmcb *vmcb, guest_seg_t seg, uint16_t sel,
-		 uint32_t base_lo, uint32_t base_hi, uint32_t lim, uint32_t ar);
+int vmcb_set_seg(struct vmcb *vmcb, guest_seg_t seg,
+		 uint16_t sel, uint32_t base, uint32_t lim, uint32_t ar);
 
 /*
  * Get the guest control register in VMCB.

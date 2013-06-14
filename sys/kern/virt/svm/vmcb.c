@@ -1,4 +1,5 @@
 #include <sys/debug.h>
+#include <sys/gcc.h>
 #include <sys/mem.h>
 #include <sys/string.h>
 #include <sys/types.h>
@@ -6,16 +7,17 @@
 
 #include "vmcb.h"
 
-struct vmcb *
-vmcb_alloc(void)
-{
-	pageinfo_t *pi;
-	struct vmcb *vmcb;
+static struct vmcb vmcb0 gcc_aligned(PAGESIZE);
+static uint8_t iopm0[SVM_IOPM_SIZE] gcc_aligned(PAGESIZE);
+static int vmcb0_inuse = 0;
 
-	if ((pi = mem_page_alloc()) == NULL)
+struct vmcb *
+vmcb_new(void)
+{
+	if (vmcb0_inuse == 1)
 		return NULL;
 
-	vmcb = mem_pi2ptr(pi);
+	struct vmcb *vmcb = &vmcb0;
 	memzero(vmcb, sizeof(struct vmcb));
 
 	vmcb->save.dr6_lo = 0xffff0ff0;
@@ -37,16 +39,21 @@ vmcb_alloc(void)
 	vmcb->control.int_ctl =
 		(SVM_INTR_CTRL_VINTR_MASK | (0x0 & SVM_INTR_CTRL_VTPR));
 
+	memset(iopm0, 0xff, SVM_IOPM_SIZE);
+	vmcb->control.iopm_base_pa_lo = (uintptr_t) iopm0;
+	vmcb->control.iopm_base_pa_hi = 0;
+
+	vmcb0_inuse = 1;
+
 	return vmcb;
 }
 
-int
+void
 vmcb_free(struct vmcb *vmcb)
 {
-	if ((uintptr_t) vmcb % PAGESIZE)
-		return -1;
-	mem_page_free(mem_ptr2pi(vmcb));
-	return 0;
+	if (vmcb == &vmcb0)
+		return;
+	vmcb0_inuse = 0;
 }
 
 int
@@ -79,29 +86,6 @@ vmcb_clear_intercept(struct vmcb *vmcb, int bit)
 		vmcb->control.intercept_lo &= ~(1UL << bit);
 	else
 		vmcb->control.intercept_hi &= ~(1UL << (bit - 32));
-
-	return 0;
-}
-
-uint32_t
-vmcb_get_iopm_base(struct vmcb *vmcb)
-{
-	if ((uintptr_t) vmcb % PAGESIZE)
-		return 0xffffffff;
-	return vmcb->control.iopm_base_pa_lo;
-}
-
-int
-vmcb_set_iopm_base(struct vmcb *vmcb, uint32_t base)
-{
-	if ((uintptr_t) vmcb % PAGESIZE)
-		return -1;
-
-	if (base % PAGESIZE)
-		return -2;
-
-	vmcb->control.iopm_base_pa_lo = base;
-	vmcb->control.iopm_base_pa_hi = 0;
 
 	return 0;
 }
@@ -245,8 +229,8 @@ vmcb_get_neip(struct vmcb *vmcb)
 }
 
 int
-vmcb_set_seg(struct vmcb *vmcb, guest_seg_t seg, uint16_t sel,
-	     uint32_t base_lo, uint32_t base_hi, uint32_t lim, uint32_t ar)
+vmcb_set_seg(struct vmcb *vmcb, guest_seg_t seg,
+	     uint16_t sel, uint32_t base, uint32_t lim, uint32_t ar)
 {
 	if ((uintptr_t) vmcb % PAGESIZE)
 		return -1;
@@ -290,8 +274,8 @@ vmcb_set_seg(struct vmcb *vmcb, guest_seg_t seg, uint16_t sel,
 	}
 
 	vmcb_seg->selector = sel;
-	vmcb_seg->base_lo = base_lo;
-	vmcb_seg->base_hi = base_hi;
+	vmcb_seg->base_lo = base;
+	vmcb_seg->base_hi = 0;
 	vmcb_seg->limit = lim;
 	vmcb_seg->attrib = (ar & 0xff) | ((ar & 0xf000) >> 4);
 

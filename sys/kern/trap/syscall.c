@@ -654,8 +654,7 @@ sys_hvm_set_seg(int vmid, guest_seg_t seg, uintptr_t desc_la)
 			   sizeof(desc)) != sizeof(desc))
 		return E_MEM;
 
-	if (hvm_set_seg(vmid, seg, desc.sel, desc.base_lo, desc.base_hi,
-			desc.lim, desc.ar))
+	if (hvm_set_seg(vmid, seg, desc.sel, desc.base, desc.lim, desc.ar))
 		return E_HVM_SEG;
 	else
 		return E_SUCC;
@@ -702,7 +701,7 @@ sys_hvm_inject_event(int vmid, uintptr_t event_la)
 			   sizeof(event)) != sizeof(event))
 		return E_MEM;
 
-	if (!(EVENT_EXTINT <= event.type && event.type <= EVENT_SWINT))
+	if (event.type != EVENT_EXTINT && event.type != EVENT_EXCEPTION)
 		return E_INVAL_EVENT;
 
 	if (hvm_inject_event(vmid,

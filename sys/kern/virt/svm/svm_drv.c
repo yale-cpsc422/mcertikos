@@ -112,6 +112,8 @@ svm_drv_run_vm(struct vmcb *vmcb, uint32_t *ebx, uint32_t *ecx,
 	return;
 }
 
+#ifdef DEBUG_MSG
+
 int
 svm_handle_err(struct vmcb *vmcb)
 {
@@ -197,3 +199,5 @@ svm_handle_err(struct vmcb *vmcb)
 
 	return 0;
 }
+
+#endif /* DEBUG_MSG */

@@ -80,17 +80,14 @@ typedef enum {
 
 struct guest_seg_desc {
 	uint16_t	sel;
-	uint32_t	base_lo;
-	uint32_t	base_hi;
+	uint32_t	base;
 	uint32_t	lim;
 	uint32_t	ar;
 };
 
 typedef enum {
 	EVENT_EXTINT,		/* external interrupt */
-	EVENT_NMI,		/* non-maskable interrupt */
-	EVENT_EXCEPTION,	/* exception */
-	EVENT_SWINT		/* software interrupt */
+	EVENT_EXCEPTION		/* exception */
 } guest_event_t;
 
 typedef enum {
@@ -177,18 +174,17 @@ uint32_t hvm_get_reg(int vmid, guest_reg_t reg);
  * Set the content of a guest segment (one of cs, ds, es, fs, gs ,ss,
  * ldt, tss, gdt, idt).
  *
- * @param vmid    the ID of the virtual machine
- * @param seg     the guest segment
- * @param sel     the selector of the segment
- * @param base_lo the lower 32-bit of the base address of the segment
- * @param base_hi the higher 32-bit of the base address of the segment
- * @param lim     the limitation of the segment
- * @param ar      the attributes of the segment
+ * @param vmid the ID of the virtual machine
+ * @param seg  the guest segment
+ * @param sel  the selector of the segment
+ * @param base the lower 32-bit of the base address of the segment
+ * @param lim  the limitation of the segment
+ * @param ar   the attributes of the segment
  *
  * @return 0 if successful; otherwise, return a non-zero value.
  */
-int hvm_set_seg(int vmid, guest_seg_t seg, uint16_t sel, uint32_t base_lo,
-		uint32_t base_hi, uint32_t lim, uint32_t ar);
+int hvm_set_seg(int vmid, guest_seg_t seg,
+		uint16_t sel, uint32_t base, uint32_t lim, uint32_t ar);
 
 /*
  * Get the address of the next instruction in a virtual machine.

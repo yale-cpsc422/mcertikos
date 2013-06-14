@@ -138,12 +138,12 @@ hvm_get_reg(int vmid, guest_reg_t reg)
 }
 
 int
-hvm_set_seg(int vmid, guest_seg_t seg, uint16_t sel, uint32_t base_lo,
-	    uint32_t base_hi, uint32_t lim, uint32_t ar)
+hvm_set_seg(int vmid, guest_seg_t seg,
+	    uint16_t sel, uint32_t base, uint32_t lim, uint32_t ar)
 {
 	KERN_ASSERT(hvm_valid_vm(vmid));
 	struct vm *vm = hvm_get_vm(vmid);
-	return svm_set_seg(vm->cookie, seg, sel, base_lo, base_hi, lim, ar);
+	return svm_set_seg(vm->cookie, seg, sel, base, lim, ar);
 }
 
 uint32_t

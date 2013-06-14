@@ -142,16 +142,15 @@ int svm_set_reg(struct svm *svm, guest_reg_t reg, uint32_t val);
  * Set the content of a guest segment (one of cs, ds, es, fs, gs ,ss,
  * ldt, tss, gdt, idt).
  *
- * @param svm     the SVM structure
- * @param seg     the guest segment
- * @param sel     the selector of the segment
- * @param base_lo the lower 32-bit of the base address of the segment
- * @param base_hi the higher 32-bit of the base address of the segment
- * @param lim     the limitation of the segment
- * @param ar      the attributes of the segment
+ * @param svm  the SVM structure
+ * @param seg  the guest segment
+ * @param sel  the selector of the segment
+ * @param base the lower 32-bit of the base address of the segment
+ * @param lim  the limitation of the segment
+ * @param ar   the attributes of the segment
  */
-int svm_set_seg(struct svm *svm, guest_seg_t seg, uint16_t sel,
-		uint32_t base_lo, uint32_t base_hi, uint32_t lim, uint32_t ar);
+int svm_set_seg(struct svm *svm, guest_seg_t seg,
+		uint16_t sel, uint32_t base, uint32_t lim, uint32_t ar);
 
 /*
  * Map a guest physical page to a host physical page in NPT.
