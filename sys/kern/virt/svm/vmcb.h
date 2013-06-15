@@ -598,16 +598,6 @@ bool vmcb_pending_event(struct vmcb *vmcb);
 int vmcb_set_ncr3(struct vmcb *vmcb, uintptr_t ncr3);
 
 /*
- * Get the nested page table CR3.
- *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- *
- * @return the nested page table CR3; if VMCB is not aligned to 4096 bytes, the
- *         returned value is undefined.
- */
-uint32_t vmcb_get_ncr3(struct vmcb *vmcb);
-
-/*
  * Get the next_rip field of VMCB.
  *
  * @param vmcb the VMCB; it must be aligned to 4096 bytes

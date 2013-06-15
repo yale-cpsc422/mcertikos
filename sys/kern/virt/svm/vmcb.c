@@ -213,14 +213,6 @@ vmcb_set_ncr3(struct vmcb *vmcb, uintptr_t ncr3)
 }
 
 uint32_t
-vmcb_get_ncr3(struct vmcb *vmcb)
-{
-	if ((uintptr_t) vmcb % PAGESIZE)
-		return 0xffffffff;
-	return vmcb->control.nested_cr3_lo;
-}
-
-uint32_t
 vmcb_get_neip(struct vmcb *vmcb)
 {
 	if ((uintptr_t) vmcb % PAGESIZE)
