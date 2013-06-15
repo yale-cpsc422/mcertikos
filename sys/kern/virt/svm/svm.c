@@ -119,7 +119,8 @@ svm_init_vm(void)
 		vmcb_free(vmcb);
 		return NULL;
 	}
-	vmcb_set_ncr3(vmcb, (uintptr_t) npt);
+	svm->npt = npt;
+	npt_install(vmcb, npt);
 
 	/*
 	 * Setup default interception.
@@ -323,7 +324,7 @@ svm_set_mmap(struct svm *svm, uintptr_t gpa, uintptr_t hpa)
 	if (ROUNDDOWN(gpa, PAGESIZE) != gpa || ROUNDDOWN(hpa, PAGESIZE) != hpa)
 		return 1;
 
-	npt_t npt = (npt_t) vmcb_get_ncr3(svm->vmcb);
+	npt_t npt = svm->npt;
 
 	return npt_insert(npt, gpa, hpa);
 }

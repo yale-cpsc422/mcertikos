@@ -1,4 +1,11 @@
+#ifndef _VIRT_SVM_NPT_H_
+#define _VIRT_SVM_NPT_H_
+
+#ifdef _KERN_
+
 #include <sys/types.h>
+
+#include "vmcb.h"
 
 typedef uint32_t *npt_t;
 
@@ -24,3 +31,15 @@ void npt_free(npt_t npt);
  * @return 0 if successful; otherwise, return a non-zero value.
  */
 int npt_insert(npt_t npt, uintptr_t gpa, uintptr_t hpa);
+
+/*
+ * Set ncr3 of a VMCB.
+ *
+ * @param vmcb the VMCB
+ * @param npt  the root of the nested page table
+ */
+void npt_install(struct vmcb *vmcb, npt_t npt);
+
+#endif /* _KERN_ */
+
+#endif /* _VIRT_SVM_NPT_H_ */

@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <sys/virt/hvm.h>
 
+#include "npt.h"
 #include "vmcb.h"
 
 #define CPUID_FEATURE_FUNC	0x80000001
@@ -55,6 +56,8 @@ struct svm {
 	 */
 	uint32_t	g_rbx, g_rcx, g_rdx, g_rsi, g_rdi, g_rbp;
 	struct vmcb	*vmcb;		/* VMCB */
+
+	npt_t		npt;
 
 	uint16_t	port;
 	int		width;

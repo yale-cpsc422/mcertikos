@@ -5,6 +5,7 @@
 #include <sys/types.h>
 
 #include "npt.h"
+#include "vmcb.h"
 
 static uint32_t npt_lv1[NPDENTRIES] gcc_aligned(PAGESIZE);
 static uint32_t npt_lv2[NPDENTRIES][NPTENTRIES] gcc_aligned(PAGESIZE);
@@ -56,4 +57,10 @@ npt_insert(npt_t npt, uintptr_t gpa, uintptr_t hpa)
 	*lv2_entry = PGADDR(hpa) | PTE_P | PTE_W | PTE_U | PTE_G;
 
 	return 0;
+}
+
+void
+npt_install(struct vmcb *vmcb, npt_t npt)
+{
+	vmcb_set_ncr3(vmcb, (uintptr_t) npt);
 }
