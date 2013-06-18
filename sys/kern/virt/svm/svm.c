@@ -16,7 +16,6 @@
 #include "vmcb.h"
 
 static struct svm svm0;
-static uint8_t hsave_area[PAGESIZE] gcc_aligned(PAGESIZE);
 
 static exit_reason_t
 svm_handle_exit(struct svm *svm)
@@ -90,10 +89,7 @@ svm_init(void)
 	memzero(&svm0, sizeof(svm0));
 	svm0.inuse = 0;
 
-	SVM_DEBUG("Host state-save area is at %x.\n", hsave_addr);
-	memzero(hsave_area, PAGESIZE);
-
-	return svm_drv_init((uintptr_t) hsave_area);
+	return svm_drv_init();
 }
 
 struct svm *

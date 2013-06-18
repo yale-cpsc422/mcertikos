@@ -1,4 +1,5 @@
 #include <sys/debug.h>
+#include <sys/gcc.h>
 #include <sys/string.h>
 #include <sys/types.h>
 #include <sys/virt/hvm.h>
@@ -8,6 +9,8 @@
 #include <dev/pcpu.h>
 
 #include "svm.h"
+
+static uint8_t hsave_area[PAGESIZE] gcc_aligned(PAGESIZE);
 
 /*
  * Check whether the machine supports SVM. (Sec 15.4, APM Vol2 r3.19)
@@ -62,14 +65,16 @@ svm_enable(void)
 }
 
 int
-svm_drv_init(uintptr_t hsave_addr)
+svm_drv_init(void)
 {
 	/* check whether the processor supports SVM */
 	if (svm_check() == FALSE)
 		return 1;
 	/* enable SVM */
 	svm_enable();
-	wrmsr(MSR_VM_HSAVE_PA, hsave_addr);
+	SVM_DEBUG("Host state-save area is at %x.\n", hsave_addr);
+	memzero(hsave_area, PAGESIZE);
+	wrmsr(MSR_VM_HSAVE_PA, (uintptr_t) hsave_area);
 	return 0;
 }
 
