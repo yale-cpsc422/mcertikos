@@ -1,7 +1,7 @@
-#include <sys/gcc.h>
-#include <sys/spinlock.h>
-#include <sys/types.h>
-#include <sys/x86.h>
+#include <lib/gcc.h>
+#include <lib/spinlock.h>
+#include <lib/types.h>
+#include <lib/x86.h>
 
 gcc_inline void
 ccomp_spinlock_init(spinlock_t *lk)

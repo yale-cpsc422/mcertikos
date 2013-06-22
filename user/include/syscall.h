@@ -1,7 +1,7 @@
 #ifndef _USER_SYSCALL_H_
 #define _USER_SYSCALL_H_
 
-#include <sys/syscall.h>
+#include <sys/trap/syscall.h>
 
 #include <debug.h>
 #include <gcc.h>

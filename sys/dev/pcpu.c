@@ -1,9 +1,9 @@
-#include <sys/types.h>
-#include <sys/debug.h>
-#include <sys/gcc.h>
-#include <sys/queue.h>
-#include <sys/spinlock.h>
-#include <sys/string.h>
+#include <lib/types.h>
+#include <lib/debug.h>
+#include <lib/gcc.h>
+#include <lib/queue.h>
+#include <lib/spinlock.h>
+#include <lib/string.h>
 
 #include <dev/acpi.h>
 #include <dev/ioapic.h>

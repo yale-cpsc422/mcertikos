@@ -1,8 +1,8 @@
 #ifndef _KERN_SVM_DRV_H_
 #define _KERN_SVM_DRV_H_
 
-#include <sys/types.h>
-#include <sys/virt/hvm.h>
+#include <lib/types.h>
+#include <virt/hvm.h>
 #include "svm.h"
 
 int svm_drv_init(void);

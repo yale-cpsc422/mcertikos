@@ -1,8 +1,8 @@
 /* Trap handler entry and exit code. */
 /* See COPYRIGHT for copyright information. */
 
-#include <sys/mmu.h>
-#include <sys/trap.h>
+#include <dev/mmu.h>
+#include <trap/trap.h>
 
 
 /* The TRAPHANDLER macro defines a globally-visible function for handling

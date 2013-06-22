@@ -7,9 +7,9 @@
  * debugging file descriptor code!
  */
 
-#include <sys/debug.h>
-#include <sys/stdarg.h>
-#include <sys/types.h>
+#include <lib/debug.h>
+#include <lib/stdarg.h>
+#include <lib/types.h>
 
 #include <dev/console.h>
 

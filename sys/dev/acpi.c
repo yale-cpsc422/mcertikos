@@ -1,5 +1,5 @@
-#include <sys/debug.h>
-#include <sys/types.h>
+#include <lib/debug.h>
+#include <lib/types.h>
 
 #include <dev/acpi.h>
 

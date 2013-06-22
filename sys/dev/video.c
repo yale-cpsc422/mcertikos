@@ -1,8 +1,13 @@
-#include <sys/string.h>
-#include <sys/types.h>
-#include <sys/x86.h>
+#include <lib/string.h>
+#include <lib/types.h>
+#include <lib/x86.h>
 
 #include <dev/video.h>
+
+#define MONO_BASE	0x3B4
+#define MONO_BUF	0xB0000
+#define CGA_BASE	0x3D4
+#define CGA_BUF		0xB8000
 
 static unsigned addr_6845;
 static uint16_t *crt_buf;

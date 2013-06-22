@@ -1,6 +1,6 @@
-#include <sys/debug.h>
-#include <sys/types.h>
-#include <sys/x86.h>
+#include <lib/debug.h>
+#include <lib/types.h>
+#include <lib/x86.h>
 
 #include <dev/ide.h>
 

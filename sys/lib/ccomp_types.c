@@ -1,4 +1,4 @@
-#include <sys/types.h>
+#include <lib/types.h>
 
 uint32_t
 ccomp_min(uint32_t a, uint32_t b)

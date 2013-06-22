@@ -1,15 +1,16 @@
 # -*-Makefile-*-
 
 KERN_DIR	:= sys
+KERN_INCDIR	:= $(KERN_DIR)/include
 KERN_OBJDIR	:= $(OBJDIR)/sys
 
 OBJDIRS		+= $(KERN_OBJDIR)
 
 # Arch-independent compiling and linking options
-KERN_CFLAGS	:= $(CFLAGS) -D_KERN_ -I$(KERN_DIR) -I. -m32
+KERN_CFLAGS	:= $(CFLAGS) -D_KERN_ -I $(KERN_INCDIR) -I. -m32
 ifdef ENABLE_CCOMP
-CCOMP_KERN_CFLAGS := $(CCOMP_CFLAGS) -D_KERN_ -I$(KERN_DIR) -I.
-CLIGHTGEN_FLAGS   += -D_KERN_ -I$(KERN_DIR) -I.
+CCOMP_KERN_CFLAGS := $(CCOMP_CFLAGS) -D_KERN_ -I $(KERN_INCDIR) -I$(KERN_DIR) -I.
+CLIGHTGEN_FLAGS   += -D_KERN_ -I $(KERN_INCDIR) -I$(KERN_DIR) -I.
 endif
 
 ifdef DEBUG_MSG
@@ -41,9 +42,14 @@ KERN_OBJFILES	:= $(patsubst %.S, $(OBJDIR)/%.o, $(KERN_OBJFILES))
 # Targets
 
 # Top-level target of building kernel
-sys: kern kern_coq
+sys: headers kern kern_coq
 
 install_sys: install_kern
+
+headers:
+	$(V)mkdir -p $(OBJDIR)/headers
+	$(V)rm -f $(OBJDIR)/headers/sys
+	$(V)ln -fs $(shell pwd)/sys/include $(OBJDIR)/headers/sys
 
 kern: $(KERN_OBJDIR)/kernel
 	@echo All targets of kernel are done.

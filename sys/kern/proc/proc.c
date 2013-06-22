@@ -1,15 +1,15 @@
-#include <sys/channel.h>
-#include <sys/context.h>
-#include <sys/debug.h>
-#include <sys/elf.h>
-#include <sys/pmap.h>
-#include <sys/proc.h>
-#include <sys/queue.h>
-#include <sys/sched.h>
-#include <sys/spinlock.h>
-#include <sys/string.h>
-#include <sys/types.h>
-#include <sys/vm.h>
+#include <proc/channel.h>
+#include <proc/context.h>
+#include <lib/debug.h>
+#include <lib/elf.h>
+#include <mm/pmap.h>
+#include <proc/proc.h>
+#include <lib/queue.h>
+#include <proc/sched.h>
+#include <lib/spinlock.h>
+#include <lib/string.h>
+#include <lib/types.h>
+#include <mm/vm.h>
 
 #include <dev/pcpu.h>
 #include <dev/tsc.h>

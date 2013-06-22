@@ -1,5 +1,5 @@
-#include <sys/string.h>
-#include <sys/types.h>
+#include <lib/string.h>
+#include <lib/types.h>
 
 int
 strnlen(const char *s, size_t size)

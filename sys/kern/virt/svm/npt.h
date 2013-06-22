@@ -3,7 +3,7 @@
 
 #ifdef _KERN_
 
-#include <sys/types.h>
+#include <lib/types.h>
 
 #include "vmcb.h"
 

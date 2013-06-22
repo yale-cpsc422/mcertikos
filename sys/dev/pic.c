@@ -8,11 +8,22 @@
  * Adapted for PIOS by Bryan Ford at Yale University.
  */
 
-#include <sys/trap.h>
-#include <sys/types.h>
-#include <sys/x86.h>
+#include <trap/trap.h>
+#include <lib/types.h>
+#include <lib/x86.h>
 
 #include <dev/pic.h>
+
+#define MAX_IRQS	16	// Number of IRQs
+
+/* I/O Addresses of the two 8259A programmable interrupt controllers */
+#define IO_PIC1		0x20	/* Master (IRQs 0-7) */
+#define IO_PIC2		0xA0	/* Slave (IRQs 8-15) */
+
+#define IRQ_SLAVE	2	/* IRQ at which slave connects to master */
+
+#define IO_ELCR1	0x4d0
+#define IO_ELCR2	0x4d1
 
 /* i8259 */
 

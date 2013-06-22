@@ -4,9 +4,9 @@
  * This code is also used by both the kernel and user programs.
  */
 
-#include <sys/stdarg.h>
-#include <sys/string.h>
-#include <sys/types.h>
+#include <lib/stdarg.h>
+#include <lib/string.h>
+#include <lib/types.h>
 
 typedef void (*putch_t)(int, void *);
 

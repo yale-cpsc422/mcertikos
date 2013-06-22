@@ -1,18 +1,18 @@
-#include <sys/channel.h>
-#include <sys/debug.h>
-#include <sys/ipc.h>
-#include <sys/mmu.h>
-#include <sys/pmap.h>
-#include <sys/proc.h>
-#include <sys/sched.h>
-#include <sys/string.h>
-#include <sys/syscall.h>
-#include <sys/trap.h>
-#include <sys/types.h>
-#include <sys/vm.h>
-#include <sys/x86.h>
+#include <proc/channel.h>
+#include <lib/debug.h>
+#include <proc/ipc.h>
+#include <dev/mmu.h>
+#include <mm/pmap.h>
+#include <proc/proc.h>
+#include <proc/sched.h>
+#include <lib/string.h>
+#include <trap/syscall.h>
+#include <trap/trap.h>
+#include <lib/types.h>
+#include <mm/vm.h>
+#include <lib/x86.h>
 
-#include <sys/virt/hvm.h>
+#include <virt/hvm.h>
 
 #include <dev/console.h>
 #include <dev/ide.h>

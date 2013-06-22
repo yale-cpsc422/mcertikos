@@ -1,9 +1,9 @@
-#include <sys/debug.h>
-#include <sys/gcc.h>
-#include <sys/string.h>
-#include <sys/types.h>
-#include <sys/virt/hvm.h>
-#include <sys/x86.h>
+#include <lib/debug.h>
+#include <lib/gcc.h>
+#include <lib/string.h>
+#include <lib/types.h>
+#include <virt/hvm.h>
+#include <lib/x86.h>
 
 #include <dev/intr.h>
 #include <dev/pcpu.h>

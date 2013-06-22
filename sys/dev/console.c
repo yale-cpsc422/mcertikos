@@ -1,7 +1,7 @@
-#include <sys/debug.h>
-#include <sys/spinlock.h>
-#include <sys/string.h>
-#include <sys/types.h>
+#include <lib/debug.h>
+#include <lib/spinlock.h>
+#include <lib/string.h>
+#include <lib/types.h>
 
 #include <dev/console.h>
 #include <dev/kbd.h>

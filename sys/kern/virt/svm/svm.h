@@ -3,9 +3,9 @@
 
 #ifdef _KERN_
 
-#include <sys/gcc.h>
-#include <sys/types.h>
-#include <sys/virt/hvm.h>
+#include <lib/gcc.h>
+#include <lib/types.h>
+#include <virt/hvm.h>
 
 #include "npt.h"
 #include "vmcb.h"

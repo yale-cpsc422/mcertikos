@@ -1,11 +1,12 @@
-#include <sys/debug.h>
-#include <sys/string.h>
-#include <sys/types.h>
+#include <lib/debug.h>
+#include <lib/string.h>
+#include <lib/types.h>
 
-#include <sys/virt/hvm.h>
+#include <virt/hvm.h>
 
 #include <dev/pcpu.h>
 
+#include "hvm.h"
 #include "svm/svm.h"
 
 #ifdef DEBUG_HVM
@@ -24,8 +25,6 @@
 #endif
 
 static bool		hvm_inited = FALSE;
-
-static struct vm	vm0;
 
 static struct vm *
 hvm_get_vm(int vmid)

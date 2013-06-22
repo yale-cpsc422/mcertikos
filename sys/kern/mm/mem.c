@@ -1,11 +1,11 @@
-#include <sys/debug.h>
-#include <sys/mboot.h>
-#include <sys/mem.h>
-#include <sys/queue.h>
-#include <sys/spinlock.h>
-#include <sys/string.h>
-#include <sys/types.h>
-#include <sys/x86.h>
+#include <lib/debug.h>
+#include <dev/mboot.h>
+#include <mm/mem.h>
+#include <lib/queue.h>
+#include <lib/spinlock.h>
+#include <lib/string.h>
+#include <lib/types.h>
+#include <lib/x86.h>
 
 /*
  * Data structures and variables for BIOS E820 table.

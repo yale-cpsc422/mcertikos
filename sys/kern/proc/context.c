@@ -1,14 +1,14 @@
-#include <sys/context.h>
-#include <sys/debug.h>
-#include <sys/gcc.h>
-#include <sys/kstack.h>
-#include <sys/mem.h>
-#include <sys/pmap.h>
-#include <sys/proc.h>
-#include <sys/trap.h>
-#include <sys/types.h>
-#include <sys/vm.h>
-#include <sys/x86.h>
+#include <proc/context.h>
+#include <lib/debug.h>
+#include <lib/gcc.h>
+#include <proc/kstack.h>
+#include <mm/mem.h>
+#include <mm/pmap.h>
+#include <proc/proc.h>
+#include <trap/trap.h>
+#include <lib/types.h>
+#include <mm/vm.h>
+#include <lib/x86.h>
 
 /*
  * Initialize the context of a process.

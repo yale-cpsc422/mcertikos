@@ -1,13 +1,13 @@
-#include <sys/context.h>
-#include <sys/debug.h>
-#include <sys/gcc.h>
-#include <sys/kstack.h>
-#include <sys/mem.h>
-#include <sys/mmu.h>
-#include <sys/proc.h>
-#include <sys/string.h>
-#include <sys/types.h>
-#include <sys/x86.h>
+#include <proc/context.h>
+#include <lib/debug.h>
+#include <lib/gcc.h>
+#include <proc/kstack.h>
+#include <mm/mem.h>
+#include <dev/mmu.h>
+#include <proc/proc.h>
+#include <lib/string.h>
+#include <lib/types.h>
+#include <lib/x86.h>
 
 #include <dev/pcpu.h>
 

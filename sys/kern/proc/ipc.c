@@ -1,10 +1,10 @@
-#include <sys/channel.h>
-#include <sys/debug.h>
-#include <sys/ipc.h>
-#include <sys/proc.h>
-#include <sys/sched.h>
-#include <sys/types.h>
-#include <sys/vm.h>
+#include <proc/channel.h>
+#include <lib/debug.h>
+#include <proc/ipc.h>
+#include <proc/proc.h>
+#include <proc/sched.h>
+#include <lib/types.h>
+#include <mm/vm.h>
 
 #ifdef DEBUG_IPC
 

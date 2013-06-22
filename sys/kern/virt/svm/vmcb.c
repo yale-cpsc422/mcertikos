@@ -1,9 +1,9 @@
-#include <sys/debug.h>
-#include <sys/gcc.h>
-#include <sys/mem.h>
-#include <sys/string.h>
-#include <sys/types.h>
-#include <sys/x86.h>
+#include <lib/debug.h>
+#include <lib/gcc.h>
+#include <mm/mem.h>
+#include <lib/string.h>
+#include <lib/types.h>
+#include <lib/x86.h>
 
 #include "vmcb.h"
 

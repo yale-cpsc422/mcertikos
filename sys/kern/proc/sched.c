@@ -8,16 +8,16 @@
  *   processes on that processor.
  */
 
-#include <sys/debug.h>
-#include <sys/gcc.h>
-#include <sys/proc.h>
-#include <sys/queue.h>
-#include <sys/sched.h>
-#include <sys/slab.h>
-#include <sys/spinlock.h>
-#include <sys/string.h>
-#include <sys/trap.h>
-#include <sys/types.h>
+#include <lib/debug.h>
+#include <lib/gcc.h>
+#include <proc/proc.h>
+#include <lib/queue.h>
+#include <proc/sched.h>
+#include <mm/slab.h>
+#include <lib/spinlock.h>
+#include <lib/string.h>
+#include <trap/trap.h>
+#include <lib/types.h>
 
 #include <dev/lapic.h>
 #include <dev/pcpu.h>
