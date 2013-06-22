@@ -11,3 +11,4 @@ misc/qemu/*
 misc/iso
 misc/iso/*
 *.v
+Icon*
