@@ -1,12 +1,14 @@
 #include <lib/debug.h>
+#include <lib/seg.h>
 #include <lib/types.h>
 #include <lib/x86.h>
 
-#include <dev/intr.h>
-#include <dev/ioapic.h>
-#include <dev/lapic.h>
-#include <dev/pcpu.h>
-#include <dev/pic.h>
+#include "intr.h"
+#include "ioapic.h"
+#include "lapic.h"
+#include "pcpu.h"
+#include "pic.h"
+#include "trap.h"
 
 volatile static bool using_apic = FALSE;
 volatile static bool intr_inited = FALSE;
@@ -135,13 +137,13 @@ intr_eoi(void)
 }
 
 void
-ccomp_intr_local_enable(void)
+intr_local_enable(void)
 {
 	sti();
 }
 
 void
-ccomp_intr_local_disable(void)
+intr_local_disable(void)
 {
 	cli();
 }

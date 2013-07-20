@@ -1,10 +1,5 @@
-#include <lib/debug.h>
-#include <lib/elf.h>
-#include <dev/mmu.h>
-#include <mm/pmap.h>
-#include <lib/string.h>
-#include <lib/types.h>
-#include <lib/x86.h>
+#include "debug.h"
+#include "types.h"
 
 /*
  * Load elf execution file exe to the virtual address space pmap.

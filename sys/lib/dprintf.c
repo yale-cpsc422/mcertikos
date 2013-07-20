@@ -1,11 +1,10 @@
 #ifdef DEBUG_MSG
 
-#include <lib/debug.h>
-#include <lib/stdarg.h>
-#include <lib/types.h>
-
 #include <dev/console.h>
 #include <dev/serial.h>
+
+#include "debug.h"
+#include "stdarg.h"
 
 struct dprintbuf {
 	int idx;	/* current buffer index */

@@ -7,7 +7,7 @@
 #define MAX_BUF 4096
 
 #define getc()		sys_getc()
-#define puts(str)	sys_puts(str)
+#define puts(str, len)	sys_puts((str), (len))
 
 int printf(const char *fmt, ...);
 int vcprintf(const char *fmt, va_list ap);

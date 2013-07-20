@@ -1,11 +1,11 @@
 #include <lib/debug.h>
-#include <trap/trap.h>
 #include <lib/types.h>
 #include <lib/x86.h>
 
-#include <dev/lapic.h>
-#include <dev/pcpu.h>
-#include <dev/timer.h>
+#include "lapic.h"
+#include "timer.h"
+#include "trap.h"
+#include "tsc.h"
 
 volatile lapic_t *lapic;
 
@@ -107,6 +107,9 @@ lapic_init()
 
 	/* debug("Use local APIC at %x\n", (uintptr_t) lapic); */
 
+	/* intialize TSC */
+	tsc_init();
+
 	/* enable local APIC */
 	lapic_write(LAPIC_SVR, LAPIC_SVR_ENABLE | (T_IRQ0 + IRQ_SPURIOUS));
 
@@ -182,76 +185,4 @@ lapic_eoi(void)
 {
 	if (lapic)
 		lapic_write(LAPIC_EOI, 0);
-}
-
-#define IO_RTC  0x70
-
-/*
- * Start additional processor running bootstrap code at addr.
- * See Appendix B of MultiProcessor Specification.
- */
-void
-lapic_startcpu(lapicid_t apicid, uintptr_t addr)
-{
-	int i;
-	uint16_t *wrv;
-
-	// "The BSP must initialize CMOS shutdown code to 0AH
-	// and the warm reset vector (DWORD based at 40:67) to point at
-	// the AP startup code prior to the [universal startup algorithm]."
-	outb(IO_RTC, 0xF);  // offset 0xF is shutdown code
-	outb(IO_RTC+1, 0x0A);
-	wrv = (uint16_t*)(0x40<<4 | 0x67);  // Warm reset vector
-	wrv[0] = 0;
-	wrv[1] = addr >> 4;
-
-	// "Universal startup algorithm."
-	// Send INIT (level-triggered) interrupt to reset other CPU.
-	lapic_write(LAPIC_ICRHI, apicid<<24);
-	lapic_write(LAPIC_ICRLO,
-		    LAPIC_ICRLO_INIT | LAPIC_ICRLO_LEVEL | LAPIC_ICRLO_ASSERT);
-	microdelay(200);
-	lapic_write(LAPIC_ICRLO, LAPIC_ICRLO_INIT | LAPIC_ICRLO_LEVEL);
-	microdelay(100);    // should be 10ms, but too slow in Bochs!
-
-	// Send startup IPI (twice!) to enter bootstrap code.
-	// Regular hardware is supposed to only accept a STARTUP
-	// when it is in the halted state due to an INIT.  So the second
-	// should be ignored, but it is part of the official Intel algorithm.
-	// Bochs complains about the second one.  Too bad for Bochs.
-	for (i = 0; i < 2; i++) {
-		lapic_write(LAPIC_ICRHI, apicid<<24);
-		lapic_write(LAPIC_ICRLO, LAPIC_ICRLO_STARTUP | (addr>>12));
-		microdelay(200);
-	}
-}
-
-uint32_t
-lapic_read_debug(int index)
-{
-	return lapic_read(index);
-}
-
-/*
- * Send an IPI.
- */
-void
-lapic_send_ipi(lapicid_t apicid, uint8_t vector,
-	       uint32_t deliver_mode, uint32_t shorthand_mode)
-{
-	KERN_ASSERT(deliver_mode != LAPIC_ICRLO_INIT &&
-		    deliver_mode != LAPIC_ICRLO_STARTUP);
-	KERN_ASSERT(vector >= T_IPI0);
-
-	while (lapic_read(LAPIC_ICRLO) & LAPIC_ICRLO_DELIVS)
-		pause();
-
-	if (shorthand_mode == LAPIC_ICRLO_NOBCAST)
-		lapic_write(LAPIC_ICRHI, (apicid << LAPIC_ICRHI_DEST_SHIFT) &
-			    LAPIC_ICRHI_DEST_MASK);
-
-	lapic_write(LAPIC_ICRLO, shorthand_mode | /* LAPIC_ICRLO_LEVEL | */
-		    deliver_mode | (vector & LAPIC_ICRLO_VECTOR));
-
-	/* KERN_DEBUG("IPI %d has been sent to processor %d.\n", vector, apicid); */
 }

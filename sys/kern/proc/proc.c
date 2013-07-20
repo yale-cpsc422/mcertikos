@@ -1,58 +1,46 @@
-#include <proc/channel.h>
-#include <proc/context.h>
 #include <lib/debug.h>
-#include <lib/elf.h>
-#include <mm/pmap.h>
-#include <proc/proc.h>
-#include <lib/queue.h>
-#include <proc/sched.h>
-#include <lib/spinlock.h>
-#include <lib/string.h>
-#include <lib/types.h>
-#include <mm/vm.h>
+#include <lib/export.h>
+#include <mm/export.h>
 
-#include <dev/pcpu.h>
-#include <dev/tsc.h>
+#include "context.h"
+#include "elf.h"
+#include "kstack.h"
+#include "proc.h"
+#include "thread.h"
 
-#ifdef DEBUG_PROC
+static bool		proc_inited = FALSE;
+static struct proc	all_processes[MAX_PROC];
+static struct proc	*curr_proc = NULL;
 
-#define PROC_DEBUG(fmt, ...)				\
-	do {						\
-		KERN_DEBUG(fmt, ##__VA_ARGS__);		\
-	} while (0)
-#else
+void
+proc_init(void)
+{
+	if (proc_inited == TRUE)
+		return;
 
-#define PROC_DEBUG(fmt...)			\
-	do {					\
-	} while (0)
+	thread_init();
 
-#endif
-
-static bool 				proc_inited = FALSE;
-
-static spinlock_t			proc_pool_lk;
-static TAILQ_HEAD(proc_pool, proc)	proc_pool;
-static struct proc 			process[MAX_PID];
+	memzero(all_processes, sizeof(struct proc) * MAX_PROC);
+	curr_proc = NULL;
+	proc_inited = TRUE;
+}
 
 static struct proc *
 proc_alloc(void)
 {
-	KERN_ASSERT(proc_inited == TRUE);
-
 	struct proc *p;
+	int i;
 
-	spinlock_acquire(&proc_pool_lk);
+	for (i = 0; i < MAX_PROC; i++)
+		if (all_processes[i].inuse == FALSE)
+			break;
 
-	if (TAILQ_EMPTY(&proc_pool)) {
-		spinlock_release(&proc_pool_lk);
-		PROC_DEBUG("Process pool is empty.\n");
+	if (i == MAX_PROC)
 		return NULL;
-	}
 
-	p = TAILQ_FIRST(&proc_pool);
-	TAILQ_REMOVE(&proc_pool, p, entry);
-
-	spinlock_release(&proc_pool_lk);
+	p = &all_processes[i];
+	p->pid = i;
+	p->inuse = TRUE;
 
 	return p;
 }
@@ -60,207 +48,89 @@ proc_alloc(void)
 static void
 proc_free(struct proc *p)
 {
-	KERN_ASSERT(proc_inited == TRUE);
-	KERN_ASSERT(p != NULL);
-	KERN_ASSERT(0 <= p - process && p - process < MAX_PID);
-
-	spinlock_acquire(&proc_pool_lk);
-	TAILQ_INSERT_TAIL(&proc_pool, p, entry);
-	spinlock_release(&proc_pool_lk);
+	if (p == NULL)
+		return;
+	p->inuse = FALSE;
 }
 
-/*
- * The first-created process uses proc_spawn_return() to return to userspace.
- *
- * XXX: The lock the scheduler of the current processor must be acquired
- *      before entering proc_spawn_return().
- */
-static void
-proc_spawn_return(void)
+void
+proc_start_user(void)
 {
-	sched_unlock();
-	/* return to ctx_start() (see kstack_init_proc()) */
-}
-
-int
-proc_init(void)
-{
-	pid_t pid;
-
-	if (proc_inited == TRUE)
-		return 0;
-
-	spinlock_init(&proc_pool_lk);
-
-	memzero(process, sizeof(struct proc) * MAX_PID);
-
-	TAILQ_INIT(&proc_pool);
-	for (pid = 0; pid < MAX_PID; pid++) {
-		process[pid].pid = pid;
-		TAILQ_INSERT_TAIL(&proc_pool, &process[pid], entry);
-	}
-
-	sched_init();
-
-	proc_inited = TRUE;
-
-	return 0;
+	kstack_switch(curr_proc->td->td_kstack);
+	pmap_install(curr_proc->pmap);
+	ctx_start(&curr_proc->uctx);
 }
 
 struct proc *
-proc_new(struct proc *parent, struct channel *ch)
+proc_create(uintptr_t elf_addr)
 {
-	KERN_ASSERT(proc_inited == TRUE);
-
 	struct proc *p;
-	pageinfo_t *user_pi, *buf_pi;
 
-	/* allocate a PCB */
-	if ((p = proc_alloc()) == NULL) {
-		PROC_DEBUG("Cannot create a PCB.\n");
+	if ((p = proc_alloc()) == NULL)
+		return NULL;
+
+	if ((p->td = thread_spawn(proc_start_user)) == NULL) {
+		proc_free(p);
 		return NULL;
 	}
 
-	/* maintain the process tree */
-	p->parent = (parent == NULL) ? p : parent;
-	if (parent != NULL)
-		TAILQ_INSERT_TAIL(&parent->children, p, child);
-	TAILQ_INIT(&p->children);
-
-	/* create the channel to parent */
-	if (parent != NULL && ch != NULL) {
-		channel_lock(ch);
-		p->parent_ch = ch;
-		channel_unlock(ch);
-	}
-
-	/* initialize the page structures */
 	if ((p->pmap = pmap_new()) == NULL) {
-		PROC_DEBUG("Cannot initialize page structures.\n");
+		thread_kill(p->td);
 		proc_free(p);
 		return NULL;
 	}
 
-	/* initialize the kernel stack for the process */
-	if ((p->kstack = kstack_alloc()) == NULL) {
-		PROC_DEBUG("Cannot allocate memory for kernek stack.\n");
-		pmap_free(p->pmap);
-		proc_free(p);
-		return NULL;
-	}
+	elf_load(elf_addr, p->pmap);
 
-	/* allocate memory for the syscall buffer */
-	if ((buf_pi = mem_page_alloc()) == NULL) {
-		PROC_DEBUG("Cannot allocate memory for syscall buffer.\n");
-		pmap_free(p->pmap);
-		kstack_free(p->kstack);
-		proc_free(p);
-		return NULL;
-	}
-	p->sys_buf = (uint8_t *) mem_pi2ptr(buf_pi);
-
-	/* allocate memory for the userspace stack */
-	if ((user_pi = mem_page_alloc()) == NULL) {
-		PROC_DEBUG("Cannot allocate memory for userspace stack.\n");
-		mem_page_free(buf_pi);
-		pmap_free(p->pmap);
-		kstack_free(p->kstack);
-		proc_free(p);
-		return NULL;
-	}
-	pmap_insert(p->pmap, user_pi,
-		    VM_STACKHI - PAGESIZE, PTE_P | PTE_U | PTE_W);
-
-	/* other fields */
-	p->inv = NULL;
-	spinlock_init(&p->proc_lk);
-	p->state = PROC_INITED;
+	ctx_init(&p->uctx, elf_entry(elf_addr), VM_USERHI - PAGESIZE);
 
 	return p;
 }
 
 int
-proc_exec(struct proc *p, uintptr_t u_elf)
+proc_exit(void)
 {
-	KERN_ASSERT(proc_inited == TRUE);
-	KERN_ASSERT(p != NULL && p->state == PROC_INITED);
-
-	proc_lock(p);
-
-	/* load the execution file */
-	elf_load(u_elf, p->pmap);
-
-	/* initialize user context */
-	ctx_init(p, (void (*)(void)) elf_entry(u_elf), VM_STACKHI - PAGESIZE);
-
-	kstack_init_proc(p, proc_spawn_return);
-
-	sched_lock();
-	sched_add(p);
-	sched_unlock();
-
-	proc_unlock(p);
-
-	return 0;
+	KERN_PANIC("proc_exit() not implemented yet.\n");
+	return -1;
 }
 
-void
-proc_sleep(struct proc *p, void *wchan, spinlock_t *inv)
+int
+proc_terminate(struct proc *p)
 {
-	KERN_ASSERT(proc_inited == TRUE);
-	KERN_ASSERT(p != NULL);
-	KERN_ASSERT(wchan != NULL);
-	KERN_ASSERT(inv == NULL || spinlock_holding(inv) == TRUE);
-
-	sched_lock();
-	sched_sleep(p, wchan, inv);
-	sched_unlock();
-
-	KERN_ASSERT(inv == NULL || spinlock_holding(inv) == TRUE);
-}
-
-void
-proc_wake(void *wchan)
-{
-	KERN_ASSERT(proc_inited == TRUE);
-	KERN_ASSERT(wchan != NULL);
-	sched_wake(wchan);
+	KERN_PANIC("proc_terminate() not implemented yet.\n");
+	return -1;
 }
 
 void
 proc_yield(void)
 {
-	KERN_ASSERT(proc_inited == TRUE);
-	sched_lock();
-	sched_yield();
-	sched_unlock();
-}
-
-struct proc *
-proc_cur(void)
-{
-	KERN_ASSERT(proc_inited == TRUE);
-	return sched_cur_proc();
-}
-
-struct proc *
-proc_pid2proc(pid_t pid)
-{
-	KERN_ASSERT(proc_inited == TRUE);
-	if (!(0 <= pid && pid < MAX_PID))
-		return NULL;
-	return &process[pid];
+	struct proc *p = curr_proc;
+	thread_yield();
+	curr_proc = p;
 }
 
 void
-proc_save(struct proc *p, tf_t *tf)
+proc_sleep(struct threadq *slpq)
 {
-	KERN_ASSERT(proc_inited == TRUE);
-	KERN_ASSERT(p != NULL);
-	KERN_ASSERT(p->state == PROC_RUNNING);
-	KERN_ASSERT(tf != NULL);
+	struct proc *cur_p = curr_proc;
+	thread_sleep(slpq);
+	curr_proc = cur_p;
+}
 
-	proc_lock(p);
+void
+proc_wakeup(struct threadq *slpq)
+{
+	thread_wakeup(slpq);
+}
+
+struct proc *
+proc_curr(void)
+{
+	return curr_proc;
+}
+
+void
+proc_save_uctx(struct proc *p, tf_t *tf)
+{
 	p->uctx.tf = *tf;
-	proc_unlock(p);
 }

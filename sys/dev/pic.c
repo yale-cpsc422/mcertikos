@@ -8,11 +8,11 @@
  * Adapted for PIOS by Bryan Ford at Yale University.
  */
 
-#include <trap/trap.h>
 #include <lib/types.h>
 #include <lib/x86.h>
 
-#include <dev/pic.h>
+#include "pic.h"
+#include "trap.h"
 
 #define MAX_IRQS	16	// Number of IRQs
 

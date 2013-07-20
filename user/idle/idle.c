@@ -4,7 +4,7 @@
 int
 main(int argc, char **argv)
 {
-	printf("idle %d.\n", getpid());
+	printf("idle\n");
 
 	while (1)
 		yield();

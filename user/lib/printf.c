@@ -28,7 +28,7 @@ putch(int ch, struct printbuf *b)
 	b->buf[b->idx++] = ch;
 	if (b->idx == MAX_BUF-1) {
 		b->buf[b->idx] = 0;
-		puts(b->buf);
+		puts(b->buf, b->idx);
 		b->idx = 0;
 	}
 	b->cnt++;
@@ -44,7 +44,7 @@ vcprintf(const char *fmt, va_list ap)
 	vprintfmt((void*)putch, &b, fmt, ap);
 
 	b.buf[b.idx] = 0;
-	puts(b.buf);
+	puts(b.buf, b.idx);
 
 	return b.cnt;
 }

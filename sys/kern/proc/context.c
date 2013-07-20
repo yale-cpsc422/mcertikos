@@ -1,42 +1,32 @@
-#include <proc/context.h>
 #include <lib/debug.h>
-#include <lib/gcc.h>
-#include <proc/kstack.h>
-#include <mm/mem.h>
-#include <mm/pmap.h>
-#include <proc/proc.h>
-#include <trap/trap.h>
-#include <lib/types.h>
-#include <mm/vm.h>
-#include <lib/x86.h>
+#include <lib/export.h>
+
+#include "context.h"
 
 /*
  * Initialize the context of a process.
  */
 void
-ctx_init(struct proc *p, void (*entry)(void), uintptr_t stack)
+ctx_init(struct context *ctx, uintptr_t entry, uintptr_t stack_top)
 {
-	KERN_ASSERT(p != NULL && entry != NULL);
+	KERN_ASSERT(ctx != NULL);
 
-	struct context *ctx = &p->uctx;
 	tf_t *tf = &ctx->tf;
 
-	ctx->p = p;
-
 	/* setup segment registers */
-	tf->es = CPU_GDT_UDATA | 3;
-	tf->ds = CPU_GDT_UDATA | 3;
-	tf->cs = CPU_GDT_UCODE | 3;
-	tf->ss = CPU_GDT_UDATA | 3;
+	tf->es = 0x20 | 3;	/* CPU_GDT_UDATA | 3 */
+	tf->ds = 0x20 | 3;	/* CPU_GDT_UDATA | 3 */
+	tf->cs = 0x18 | 3;	/* CPU_GDT_UCODE | 3 */
+	tf->ss = 0x20 | 3;	/* CPU_GDT_UDATA | 3 */
 
 	/* setup the entry point */
-	tf->eip = (uintptr_t) entry;
+	tf->eip = entry;
 
 	/* setup the one-page stack  */
-	tf->esp = (uintptr_t) stack + PAGE_SIZE;
+	tf->esp = stack_top;
 
 	/* enable interrupt */
-	tf->eflags = FL_IF;
+	tf->eflags = 0x00000200;/* FL_IF */
 }
 
 /*
@@ -47,21 +37,7 @@ ctx_start(struct context *ctx)
 {
 	KERN_ASSERT(ctx != NULL);
 
-	struct proc *cur_p = proc_cur();
-	KERN_ASSERT(cur_p != NULL);
-	kstack_switch(cur_p->kstack);
-	pmap_install(cur_p->pmap);
-
-	tf_t *tf = &ctx->tf;
-
-	if (ctx->p != NULL) {
-		KERN_ASSERT(spinlock_holding(&ctx->p->proc_lk) == FALSE);
-	} else {
-		KERN_ASSERT(tf->eip < VM_USERLO);
-		KERN_ASSERT(tf->eflags & FL_IF);
-	}
-
-	trap_return(tf);
+	trap_return(&ctx->tf);
 }
 
 uint32_t
@@ -99,18 +75,58 @@ ctx_arg4(struct context *ctx)
 	return ctx->tf.regs.edx;
 }
 
-void
-ctx_set_retval(struct context *ctx, uint32_t rc)
+uint32_t
+ctx_arg5(struct context *ctx)
 {
 	KERN_ASSERT(ctx != NULL);
-	ctx->tf.regs.eax = rc;
+	return ctx->tf.regs.esi;
+}
+
+uint32_t
+ctx_arg6(struct context *ctx)
+{
+	KERN_ASSERT(ctx != NULL);
+	return ctx->tf.regs.edi;
 }
 
 void
-ctx_dump(struct context *ctx)
+ctx_set_errno(struct context *ctx, uint32_t errno)
 {
-	if (ctx == NULL)
-		return;
+	KERN_ASSERT(ctx != NULL);
+	ctx->tf.regs.eax = errno;
+}
 
-	trap_dump(&ctx->tf);
+void
+ctx_set_retval1(struct context *ctx, uint32_t ret)
+{
+	KERN_ASSERT(ctx != NULL);
+	ctx->tf.regs.ebx = ret;
+}
+
+void
+ctx_set_retval2(struct context *ctx, uint32_t ret)
+{
+	KERN_ASSERT(ctx != NULL);
+	ctx->tf.regs.ecx = ret;
+}
+
+void
+ctx_set_retval3(struct context *ctx, uint32_t ret)
+{
+	KERN_ASSERT(ctx != NULL);
+	ctx->tf.regs.edx = ret;
+}
+
+void
+ctx_set_retval4(struct context *ctx, uint32_t ret)
+{
+	KERN_ASSERT(ctx != NULL);
+	ctx->tf.regs.esi = ret;
+}
+
+void
+ctx_set_retval5(struct context *ctx, uint32_t ret)
+{
+	KERN_ASSERT(ctx != NULL);
+	ctx->tf.regs.edi = ret;
 }

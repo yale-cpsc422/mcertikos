@@ -1,15 +1,10 @@
-#include <proc/context.h>
 #include <lib/debug.h>
-#include <trap/trap.h>
-#include <lib/types.h>
 #include <lib/x86.h>
 
-#include <dev/console.h>
-#include <dev/intr.h>
-#include <dev/ioapic.h>
-#include <dev/kbd.h>
-#include <dev/lapic.h>
-#include <dev/pic.h>
+#include "console.h"
+#include "intr.h"
+#include "kbd.h"
+#include "trap.h"
 
 #define NO		0
 
@@ -248,14 +243,14 @@ kbd_proc_data(void)
 }
 
 void
-kbd_intr(void)
+kbd_init(void)
 {
-	cons_intr(kbd_proc_data);
 }
 
 void
-kbd_init(void)
+kbd_intr(void)
 {
+	cons_intr(kbd_proc_data);
 }
 
 void

@@ -492,21 +492,8 @@ extern struct vmm_ops vmm_ops_amd;
 int
 vmm_init_vm(struct vm *vm, uint64_t cpufreq, size_t memsize)
 {
-	sysinfo_info_t sysinfo;
-	uint64_t host_cpu_freq;
-
 	if (vm == NULL)
 		return -1;
-
-	sys_sysinfo_lookup(SYSINFO_CPU_FREQ, &sysinfo);
-	host_cpu_freq =
-		((uint64_t) sysinfo.info64.hi << 32) | sysinfo.info64.lo;
-
-	if (cpufreq >= host_cpu_freq) {
-		VMM_DEBUG("Guest CPU frequency cannot be higher than the host "
-			   "CPU frequency.\n");
-		return -2;
-	}
 
 	if ((vm->vmid = sys_hvm_create_vm()) == -1) {
 		VMM_DEBUG("sys_hvm_create_vm() failed.\n");
@@ -520,15 +507,7 @@ vmm_init_vm(struct vm *vm, uint64_t cpufreq, size_t memsize)
 	vm->exit_reason = EXIT_REASON_NONE;
 	vm->exit_handled = TRUE;
 
-	sys_sysinfo_lookup(SYSINFO_CPU_VENDOR, &sysinfo);
-
-	if (sysinfo.info32 == CPU_AMD) {
-		vm->ops = &vmm_ops_amd;
-	} else {
-		VMM_DEBUG("Unsupported CPU.\n");
-		vm->ops = NULL;
-		return -4;
-	}
+	vm->ops = &vmm_ops_amd;
 
 	if (vmm_init_mmap(vm)) {
 		VMM_DEBUG("Cannot initialize EPT/NPT.\n");
@@ -551,8 +530,11 @@ vmm_init_vm(struct vm *vm, uint64_t cpufreq, size_t memsize)
 	sys_hvm_set_reg(vm->vmid, GUEST_EAX, 0x00000000);
 	sys_hvm_set_reg(vm->vmid, GUEST_EBX, 0x00000000);
 	sys_hvm_set_reg(vm->vmid, GUEST_ECX, 0x00000000);
-	sys_sysinfo_lookup(SYSINFO_CPU_INFO, &sysinfo);
-	sys_hvm_set_reg(vm->vmid, GUEST_EDX, sysinfo.info32);
+
+	uint32_t dummy, eax;
+	cpuid(0x1, &eax, &dummy, &dummy, &dummy);
+	sys_hvm_set_reg(vm->vmid, GUEST_EDX, eax);
+
 	sys_hvm_set_reg(vm->vmid, GUEST_ESI, 0x00000000);
 	sys_hvm_set_reg(vm->vmid, GUEST_EDI, 0x00000000);
 	sys_hvm_set_reg(vm->vmid, GUEST_EBP, 0x00000000);
@@ -584,14 +566,11 @@ vmm_run_vm(struct vm *vm)
 	if (vm == NULL)
 		return -1;
 
-	sysinfo_info_t sysinfo;
 	uint64_t host_cpu_freq;
 	uint64_t start_tsc, exit_tsc;
 	int rc, injected;
 
-	sys_sysinfo_lookup(SYSINFO_CPU_FREQ, &sysinfo);
-	host_cpu_freq =
-		((uint64_t) sysinfo.info64.hi << 32) | sysinfo.info64.lo;
+	host_cpu_freq = 1000000000ULL;
 
 	VMM_DEBUG("Start running VM ... \n");
 

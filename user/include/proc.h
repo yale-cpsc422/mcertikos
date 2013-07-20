@@ -3,9 +3,7 @@
 
 #include <types.h>
 
-pid_t spawn(uintptr_t exe, chid_t chid);
+pid_t spawn(uintptr_t exe);
 void  yield(void);
-pid_t getpid(void);
-pid_t getppid(void);
 
 #endif /* !_USER_PROC_H_ */

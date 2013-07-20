@@ -2,7 +2,8 @@
 #include <lib/types.h>
 #include <lib/x86.h>
 
-#include <dev/ide.h>
+#include "ide.h"
+#include "trap.h"
 
 #ifdef DEBUG_DISK
 

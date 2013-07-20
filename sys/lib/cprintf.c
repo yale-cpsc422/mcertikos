@@ -7,11 +7,10 @@
  * debugging file descriptor code!
  */
 
-#include <lib/debug.h>
-#include <lib/stdarg.h>
-#include <lib/types.h>
-
 #include <dev/console.h>
+
+#include "debug.h"
+#include "stdarg.h"
 
 /*
  * Collect up to CONSBUFSIZE-1 characters into a buffer

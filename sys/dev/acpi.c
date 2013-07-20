@@ -1,7 +1,7 @@
 #include <lib/debug.h>
 #include <lib/types.h>
 
-#include <dev/acpi.h>
+#include "acpi.h"
 
 static uint8_t
 sum(uint8_t * addr, int len)

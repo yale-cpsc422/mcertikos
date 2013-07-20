@@ -1,13 +1,8 @@
 #include <lib/debug.h>
-#include <lib/string.h>
-#include <lib/types.h>
-
-#include <virt/hvm.h>
-
-#include <dev/pcpu.h>
+#include <lib/export.h>
 
 #include "hvm.h"
-#include "svm/svm.h"
+#include "svm.h"
 
 #ifdef DEBUG_HVM
 
@@ -24,7 +19,21 @@
 
 #endif
 
+struct vm {
+	int		vmid;		/* identifier of the virtual machine */
+	int		inuse;		/* in use? */
+
+	exit_reason_t	exit_reason;	/* the reason of the latest VMEXIT */
+	exit_info_t	exit_info;	/* the information of the latest VMEXIT */
+
+	struct svm	*cookie;
+};
+
 static bool		hvm_inited = FALSE;
+static struct vm	vm0;
+
+#define MAX_VMID	1
+#define PAGESIZE	4096
 
 static struct vm *
 hvm_get_vm(int vmid)
@@ -39,13 +48,6 @@ hvm_init(void)
 {
 	if (hvm_inited == TRUE)
 		return 0;
-
-	struct pcpu *c = pcpu_cur();
-
-	if (c->arch_info.cpu_vendor != AMD) {
-		HVM_DEBUG("Not support non-AMD platform.\n");
-		return -1;
-	}
 
 	if (svm_init()) {
 		HVM_DEBUG("Cannot intialize HVM.\n");

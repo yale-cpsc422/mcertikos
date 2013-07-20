@@ -1,31 +1,10 @@
-#include <lib/debug.h>
-#include <lib/spinlock.h>
-#include <lib/stdarg.h>
-#include <lib/types.h>
-#include <lib/x86.h>
-
 #include <dev/intr.h>
-#include <dev/pcpu.h>
 
-static spinlock_t debug_lk;
-
-void
-debug_init(void)
-{
-	spinlock_init(&debug_lk);
-}
-
-void
-debug_lock(void)
-{
-	spinlock_acquire(&debug_lk);
-}
-
-void
-debug_unlock(void)
-{
-	spinlock_release(&debug_lk);
-}
+#include "debug.h"
+#include "gcc.h"
+#include "stdarg.h"
+#include "types.h"
+#include "x86.h"
 
 void
 debug_info(const char *fmt, ...)

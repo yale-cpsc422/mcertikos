@@ -1,8 +1,10 @@
 #ifndef _USER_VMM_H_
 #define _USER_VMM_H_
 
+#include <kern/virt/common.h>
+
 #include <types.h>
-#include <sys/virt/hvm.h>
+
 #include "vmm_dev.h"
 
 struct vmm_ops;

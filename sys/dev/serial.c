@@ -11,15 +11,13 @@
  * Adapted for PIOS by Bryan Ford at Yale University.
  */
 
-#include <trap/trap.h>
+#include <lib/types.h>
 #include <lib/x86.h>
 
-#include <dev/console.h>
-#include <dev/intr.h>
-#include <dev/ioapic.h>
-#include <dev/lapic.h>
-#include <dev/pic.h>
-#include <dev/serial.h>
+#include "console.h"
+#include "intr.h"
+#include "serial.h"
+#include "trap.h"
 
 #define COM1		0x3F8
 #define COM2		0x2F8

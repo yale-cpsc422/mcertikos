@@ -2,8 +2,8 @@
 #include <lib/types.h>
 #include <lib/x86.h>
 
-#include <dev/timer.h>
-#include <dev/tsc.h>
+#include "timer.h"
+#include "tsc.h"
 
 /*
  * XXX: From Linux 3.2.6: arch/x86/kernel/tsc.c: pit_calibrate_tsc()
@@ -67,6 +67,8 @@ tsc_init(void)
 	uint64_t ret;
 	int i;
 
+	timer_hw_init();
+
 	tsc_per_ms = 0;
 
 	/*
@@ -92,19 +94,14 @@ tsc_init(void)
 	}
 }
 
-/*
- * Wait for ms millisecond.
- */
-void
-delay(uint32_t ms)
+uint32_t
+tsc_freq_lo(void)
 {
-	volatile uint64_t ticks = tsc_per_ms * ms;
-	volatile uint64_t start = rdtscp();
-	while (rdtscp() < start + ticks);
+	return (tsc_per_ms * 1000) & 0xffffffff;
 }
 
-uint64_t
-time_ms(void)
+uint32_t
+tsc_freq_hi(void)
 {
-	return (rdtscp() / tsc_per_ms);
+	return ((tsc_per_ms * 1000) >> 32) & 0xffffffff;
 }

@@ -2,7 +2,7 @@
 #include <lib/types.h>
 #include <lib/x86.h>
 
-#include <dev/video.h>
+#include "video.h"
 
 #define MONO_BASE	0x3B4
 #define MONO_BUF	0xB0000
