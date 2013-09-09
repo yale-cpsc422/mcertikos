@@ -3,30 +3,19 @@
 
 #ifdef _KERN_
 
-#define PAGESIZE	4096
-
-#define VM_USERHI	0xf0000000
-#define VM_USERLO	0x40000000
-
-#define PTE_P		0x001	/* Present */
-#define PTE_W		0x002	/* Writeable */
-#define PTE_U		0x004	/* User-accessible */
-
-#define PFE_PR		0x1	/* Page fault caused by protection violation */
-
-struct mboot_info;
-typedef uint32_t	pmap_t;
-
-void mem_init(struct mboot_info *mbi);
-void pmap_init(void);
-pmap_t *pmap_new(void);
-pmap_t *pmap_kern_map(void);
-void pmap_install_kern(void);
-void pmap_install(pmap_t *pmap);
-int pmap_reserve(pmap_t *pmap, uintptr_t va, int perm);
-int pmap_copy(pmap_t *dst_pmap, uintptr_t dst_la,
-	      pmap_t *src_pmap, uintptr_t src_la, size_t size);
-uintptr_t pmap_la2pa(pmap_t *pmap, uintptr_t va);
+void pmap_init(unsigned int mbi_addr);
+int  pt_new(void);
+void pt_resv(int proc_index, unsigned int vaddr, int perm);
+void pt_free(int proc_idx);
+unsigned int pt_read(int proc_index, unsigned int va);
+void pt_in(void);
+void pt_out(void);
+void pfree(int idx);
+int  palloc(void);
+void set_PT(int idx);
+int  pt_copyin(int pmap_id, unsigned int uva, char *kva, unsigned int len);
+int  pt_copyout(char *kva, int pmap_id, unsigned int uva, unsigned int len);
+int  pt_memset(int pmap_id, unsigned int va, char c, unsigned int len);
 
 #endif /* _KERN_ */
 
