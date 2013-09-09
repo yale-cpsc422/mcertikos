@@ -119,7 +119,7 @@ ide_disk_read(uint32_t lba_lo, uint32_t lba_hi, void *buf, uint16_t nsectors)
 
 	uint32_t offset = 0;
 	uint32_t *__buf = buf;
-	int rc;
+	int rc = 0;
 
 	ide_wait_ready();
 
@@ -160,7 +160,7 @@ ide_disk_write(uint32_t lba_lo, uint32_t lba_hi, void *buf, uint16_t nsectors)
 
 	uint32_t offset = 0;
 	uint16_t *__buf = buf;
-	int rc;
+	int rc = 0;
 
 	ide_wait_ready();
 
