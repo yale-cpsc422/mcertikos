@@ -6,6 +6,14 @@
 
 #include "syscall.h"
 
+#define VM_USERHI	0xf0000000
+#define VM_USERLO	0x40000000
+
+#define PTE_P		0x001	/* Present */
+#define PTE_W		0x002	/* Writeable */
+#define PTE_U		0x004	/* User-accessible */
+
+
 #define u64_add_u32(a_lo, a_hi, b, c_lo, c_hi) do {	\
 		uint32_t __a_lo = (a_lo);		\
 		uint32_t __a_hi = (a_hi);		\
@@ -21,42 +29,20 @@
 		}					\
 	} while (0)
 
-static size_t
-rw_user(uintptr_t ka, pmap_t *pmap, uintptr_t la, size_t size, int write)
-{
-	KERN_ASSERT(ka + size <= VM_USERLO);
-	KERN_ASSERT(pmap != NULL);
-
-	if (la < VM_USERLO || VM_USERLO - size > la)
-		return 0;
-
-	if (write)
-		return pmap_copy(pmap, la, pmap_kern_map(), ka, size);
-	else
-		return pmap_copy(pmap_kern_map(), ka, pmap, la, size);
-}
-
-#define copy_from_user(ka, pmap, la, size)	\
-	rw_user((ka), (pmap), (la), (size), 0)
-
-#define copy_to_user(pmap, la, ka, size)	\
-	rw_user((ka), (pmap), (la), (size), 1)
-
 static int
 sys_puts(uintptr_t str_la, size_t len)
 {
 	if (!(VM_USERLO <= str_la && str_la + len <= VM_USERHI))
 		return E_INVAL_ADDR;
 
-	struct proc *p = proc_curr();
+	struct proc *p = proc_cur();
 	size_t remain = len;
 	uintptr_t cur_pos = str_la;
 
 	while (remain) {
 		size_t nbytes = min(remain, PAGESIZE-1);
 
-		if (copy_from_user((uintptr_t) p->sysbuf, p->pmap,
-				   cur_pos, nbytes) != nbytes)
+		if (pt_copyin(p->pmap_id, cur_pos, p->sysbuf, nbytes) != nbytes)
 			return E_MEM;
 
 		p->sysbuf[nbytes] = 0;
@@ -100,7 +86,7 @@ __sys_disk_read(uint32_t lba_lo, uint32_t lba_hi, uint32_t nsectors,
 	uint32_t remaining;
 	uintptr_t cur_la;
 
-	struct proc *p = proc_curr();
+	struct proc *p = proc_cur();
 
 	cur_lba_lo = lba_lo;
 	cur_lba_hi = lba_hi;
@@ -112,8 +98,8 @@ __sys_disk_read(uint32_t lba_lo, uint32_t lba_hi, uint32_t nsectors,
 
 		if (ide_disk_read(cur_lba_lo, cur_lba_hi, p->sysbuf, n))
 			return E_DISK_OP;
-		if (copy_to_user(p->pmap, cur_la, (uintptr_t) p->sysbuf,
-				 n * ATA_SECTOR_SIZE) == 0)
+		if (pt_copyout(p->sysbuf, p->pmap_id, cur_la,
+			       n * ATA_SECTOR_SIZE) != n * ATA_SECTOR_SIZE)
 			return E_MEM;
 
 		u64_add_u32(cur_lba_lo, cur_lba_hi, n, cur_lba_lo, cur_lba_hi);
@@ -132,7 +118,7 @@ __sys_disk_write(uint32_t lba_lo, uint32_t lba_hi, uint32_t nsectors,
 	uint32_t remaining;
 	uintptr_t cur_la;
 
-	struct proc *p = proc_curr();
+	struct proc *p = proc_cur();
 
 	cur_lba_lo = lba_lo;
 	cur_lba_hi = lba_hi;
@@ -142,8 +128,8 @@ __sys_disk_write(uint32_t lba_lo, uint32_t lba_hi, uint32_t nsectors,
 	while (remaining > 0) {
 		uint32_t n = min(remaining, PAGESIZE / ATA_SECTOR_SIZE);
 
-		if (copy_from_user((uintptr_t) p->sysbuf, p->pmap, cur_la,
-				   n * ATA_SECTOR_SIZE) == 0)
+		if (pt_copyin(p->pmap_id, cur_la, p->sysbuf,
+			      n * ATA_SECTOR_SIZE) != n * ATA_SECTOR_SIZE)
 			return E_MEM;
 		if (ide_disk_write(cur_lba_lo, cur_lba_hi, p->sysbuf, n))
 			return E_DISK_OP;
@@ -250,6 +236,8 @@ sys_hvm_run_vm(struct context *ctx, int vmid)
 static int
 sys_hvm_set_mmap(int vmid, uint32_t gpa, uint32_t hva)
 {
+	uint32_t hpa;
+
 	if (hvm_available() == FALSE)
 		return E_INVAL_HVM;
 
@@ -260,7 +248,16 @@ sys_hvm_set_mmap(int vmid, uint32_t gpa, uint32_t hva)
 	    !(VM_USERLO <= hva && hva + PAGESIZE <= VM_USERHI))
 		return E_INVAL_ADDR;
 
-	if (hvm_set_mmap(vmid, gpa, pmap_la2pa(proc_curr()->pmap, hva)))
+	hpa = pt_read(proc_cur()->pmap_id, hva);
+
+	if ((hpa & PTE_P) == 0) {
+		pt_resv(proc_cur()->pmap_id, hva, PTE_P | PTE_U | PTE_W);
+		hpa = pt_read(proc_cur()->pmap_id, hva);
+	}
+
+	hpa = (hpa & 0xfffff000) + (hva % PAGESIZE);
+
+	if (hvm_set_mmap(vmid, gpa, hpa))
 		return E_HVM_MMAP;
 	else
 		return E_SUCC;
@@ -318,8 +315,8 @@ sys_hvm_set_seg(int vmid, guest_seg_t seg, uintptr_t desc_la)
 	if (!(VM_USERLO <= desc_la && desc_la + sizeof(desc) <= VM_USERHI))
 		return E_INVAL_ADDR;
 
-	if (copy_from_user((uintptr_t) &desc, proc_curr()->pmap, desc_la,
-			   sizeof(desc)) != sizeof(desc))
+	if (pt_copyin(proc_cur()->pmap_id, desc_la, (char *) &desc,
+		      sizeof(desc)) != sizeof(desc))
 		return E_MEM;
 
 	if (hvm_set_seg(vmid, seg, desc.sel, desc.base, desc.lim, desc.ar))
@@ -439,7 +436,7 @@ sys_write_ioport(uint16_t port, data_sz_t width, uint32_t data)
 void
 syscall_handler(void)
 {
-	struct context *ctx = &proc_curr()->uctx;
+	struct context *ctx = &proc_cur()->uctx;
 	uint32_t nr = ctx_arg1(ctx);
 
 	uint32_t a[5];

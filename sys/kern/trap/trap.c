@@ -2,7 +2,6 @@
 #include <mm/export.h>
 #include <proc/export.h>
 
-
 #include "exception.h"
 #include "interrupt.h"
 #include "syscall.h"
@@ -10,8 +9,8 @@
 void
 trap(tf_t *tf)
 {
-	proc_save_uctx(proc_curr(), tf);
-	pmap_install_kern();
+	proc_save_uctx(proc_cur(), tf);
+	set_PT(0);
 
 	switch (tf->trapno) {
 	case T_DIVIDE...T_SECEV:
