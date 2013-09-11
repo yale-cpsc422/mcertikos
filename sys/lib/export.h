@@ -3,6 +3,8 @@
 
 #ifdef _KERN_
 
+#include "mboot.h"
+
 /*
  * Types.
  */
@@ -19,17 +21,16 @@
  * Segments.
  */
 
-struct taskgate;
-
-void seg_init(void);
-void tss_switch(struct taskgate *to);
+#include "seg.h"
 
 /*
  * String functions.
  */
 
+int  strncmp(const char *p, const char *q, size_t n);
 void *memset(void *dst, int c, size_t len);
 void *memzero(void *dst, size_t len);
+void *memcpy(void *dst, const void *src, size_t n);
 
 /*
  * Wrapers of x86 instructions.

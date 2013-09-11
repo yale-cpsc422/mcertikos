@@ -76,7 +76,7 @@ ide_init(void)
 {
 	int rc;
 
-	outb(IDE_MASTER + IDE_PORT_DRV, IDE_DRV_MASTER_IDENT);
+	outb(IDE_MASTER + IDE_PORT_DRV, IDE_DRV_MASTER_IDENT | IDE_DRV_SECONDARY);
 	outb(IDE_MASTER + IDE_PORT_NSECT, 0);
 	outb(IDE_MASTER + IDE_PORT_LBA_LO, 0);
 	outb(IDE_MASTER + IDE_PORT_LBA_MI, 0);
@@ -123,7 +123,7 @@ ide_disk_read(uint32_t lba_lo, uint32_t lba_hi, void *buf, uint16_t nsectors)
 
 	ide_wait_ready();
 
-	outb(IDE_MASTER + IDE_PORT_DRV, IDE_DRV_MASTER_EXT);
+	outb(IDE_MASTER + IDE_PORT_DRV, IDE_DRV_MASTER_EXT | IDE_DRV_SECONDARY);
 	outb(IDE_MASTER + IDE_PORT_NSECT, (nsectors >> 8) & 0xff);
 	outb(IDE_MASTER + IDE_PORT_LBA_LO, (lba_lo >> 24) & 0xff);
 	outb(IDE_MASTER + IDE_PORT_LBA_MI, lba_hi & 0xff);
@@ -164,7 +164,7 @@ ide_disk_write(uint32_t lba_lo, uint32_t lba_hi, void *buf, uint16_t nsectors)
 
 	ide_wait_ready();
 
-	outb(IDE_MASTER + IDE_PORT_DRV, IDE_DRV_MASTER_EXT);
+	outb(IDE_MASTER + IDE_PORT_DRV, IDE_DRV_MASTER_EXT | IDE_DRV_SECONDARY);
 	outb(IDE_MASTER + IDE_PORT_NSECT, (nsectors >> 8) & 0xff);
 	outb(IDE_MASTER + IDE_PORT_LBA_LO, (lba_lo >> 24) & 0xff);
 	outb(IDE_MASTER + IDE_PORT_LBA_MI, lba_hi & 0xff);

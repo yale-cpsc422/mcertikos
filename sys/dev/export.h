@@ -16,6 +16,12 @@ void cons_init(void);
 void pcpu_init(void);
 
 /*
+ * Pmap.
+ */
+
+#include "pmap.h"
+
+/*
  * IDE disk driver.
  */
 

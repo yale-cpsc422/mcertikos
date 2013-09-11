@@ -17,6 +17,7 @@ KERN_SRCFILES	+= $(KERN_DIR)/dev/pcpu.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/intr.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/svm_drv.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/svm_asm.S
+KERN_SRCFILES	+= $(KERN_DIR)/dev/pmap.c
 
 $(KERN_OBJDIR)/dev/%.o: $(KERN_DIR)/dev/%.c
 	@echo + cc[KERN/dev] $<
