@@ -8,9 +8,10 @@
 #include "proc.h"
 #include "thread.h"
 
+#define VM_USERHI	0xf0000000
+
 static bool		proc_inited = FALSE;
 static struct proc	all_processes[MAX_PROC];
-static struct proc	*curr_proc = NULL;
 
 void
 proc_init(void)
@@ -21,7 +22,6 @@ proc_init(void)
 	thread_init();
 
 	memzero(all_processes, sizeof(struct proc) * MAX_PROC);
-	curr_proc = NULL;
 	proc_inited = TRUE;
 }
 
@@ -56,9 +56,9 @@ proc_free(struct proc *p)
 void
 proc_start_user(void)
 {
-	kstack_switch(curr_proc->td->td_kstack);
-	pmap_install(curr_proc->pmap);
-	ctx_start(&curr_proc->uctx);
+	kstack_switch(proc_cur()->td->td_kstack);
+	set_PT(proc_cur()->pmap_id);
+	ctx_start(&proc_cur()->uctx);
 }
 
 struct proc *
@@ -73,14 +73,10 @@ proc_create(uintptr_t elf_addr)
 		proc_free(p);
 		return NULL;
 	}
+	p->td->td_proc = p;
 
-	if ((p->pmap = pmap_new()) == NULL) {
-		thread_kill(p->td);
-		proc_free(p);
-		return NULL;
-	}
-
-	elf_load(elf_addr, p->pmap);
+	p->pmap_id = pt_new();
+	elf_load(elf_addr, p->pmap_id);
 
 	ctx_init(&p->uctx, elf_entry(elf_addr), VM_USERHI - PAGESIZE);
 
@@ -104,17 +100,13 @@ proc_terminate(struct proc *p)
 void
 proc_yield(void)
 {
-	struct proc *p = curr_proc;
 	thread_yield();
-	curr_proc = p;
 }
 
 void
 proc_sleep(struct threadq *slpq)
 {
-	struct proc *cur_p = curr_proc;
 	thread_sleep(slpq);
-	curr_proc = cur_p;
 }
 
 void
@@ -124,9 +116,9 @@ proc_wakeup(struct threadq *slpq)
 }
 
 struct proc *
-proc_curr(void)
+proc_cur(void)
 {
-	return curr_proc;
+	return current_thread()->td_proc;
 }
 
 void

@@ -12,6 +12,7 @@
 
 struct kstack {
 	bool	inuse;
+	tss_t	tss;
 	uint8_t	kstack_lo[1];
 	uint8_t	kstack_hi[0] gcc_aligned(KSTACK_SIZE);
 };

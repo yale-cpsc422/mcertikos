@@ -33,6 +33,10 @@ kstack_new(void)
 
 	ks = &all_kstacks[i];
 	memzero(ks, KSTACK_SIZE);
+
+	ks->tss.ts_esp0 = (uint32_t) ks->kstack_hi;
+	ks->tss.ts_ss0 = CPU_GDT_KDATA;
+
 	ks->inuse = TRUE;
 
 	return ks;
@@ -50,5 +54,5 @@ kstack_free(struct kstack *ks)
 void
 kstack_switch(struct kstack *ks)
 {
-	/* TODO: */
+	tss_switch(&ks->tss);
 }

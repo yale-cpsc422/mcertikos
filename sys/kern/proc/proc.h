@@ -8,6 +8,7 @@
 #include "context.h"
 #include "thread.h"
 
+#define PAGESIZE	4096
 #define MAX_PROC	MAX_THREAD
 
 typedef int		pid_t;
@@ -15,9 +16,9 @@ typedef int		pid_t;
 struct proc {
 	pid_t		pid;
 	struct thread	*td;
-	pmap_t		*pmap;
+	int		pmap_id;
 	struct context	uctx;
-	uint8_t		sysbuf[PAGESIZE];
+	char		sysbuf[PAGESIZE];
 	bool		inuse;
 };
 
@@ -69,7 +70,7 @@ void proc_wakeup(struct threadq *slpq);
 /*
  * Get the current process.
  */
-struct proc *proc_curr(void);
+struct proc *proc_cur(void);
 
 /*
  * Save the trapframe in the user context of the specified process.

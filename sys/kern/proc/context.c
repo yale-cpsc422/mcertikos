@@ -1,4 +1,3 @@
-#include <lib/debug.h>
 #include <lib/export.h>
 
 #include "context.h"
@@ -36,7 +35,6 @@ void
 ctx_start(struct context *ctx)
 {
 	KERN_ASSERT(ctx != NULL);
-
 	trap_return(&ctx->tf);
 }
 

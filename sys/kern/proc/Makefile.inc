@@ -8,6 +8,7 @@ KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/kctx.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/context.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/thread.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/proc.c
+KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/elf.c
 
 $(KERN_OBJDIR)/kern/proc/%.o: $(KERN_DIR)/kern/proc/%.c
 	@echo + cc[KERN/kern] $<

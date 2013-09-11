@@ -3,6 +3,8 @@
 
 #ifdef _KERN_
 
+#define PAGESIZE	4096
+
 /*
  * User context.
  */
@@ -34,9 +36,9 @@ typedef int		pid_t;
 struct proc {
 	pid_t		pid;
 	struct thread	*td;
-	pmap_t		*pmap;
+	int		pmap_id;
 	struct context	uctx;
-	uint8_t		sysbuf[PAGESIZE];
+	char		sysbuf[PAGESIZE];
 	bool		inuse;
 };
 
@@ -51,7 +53,7 @@ void proc_yield(void);
 int proc_exit(void);
 void proc_sleep(struct threadq *slpq);
 void proc_wakeup(struct threadq *slpq);
-struct proc *proc_curr(void);
+struct proc *proc_cur(void);
 void proc_save_uctx(struct proc *p, tf_t *tf);
 void proc_start_user(void);
 void thread_sched(void);

@@ -149,6 +149,7 @@ thread_spawn(void (*f)(void))
 	td->td_kctx = kctx;
 	td->td_prev = td->td_next = NULL;
 	td->td_state = TDS_READY;
+	td->td_proc = NULL;
 
 	enqueue(&rdyq, td);
 
@@ -207,4 +208,10 @@ thread_wakeup(struct threadq *slpq)
 		td->td_state = TDS_READY;
 		enqueue(slpq, td);
 	}
+}
+
+struct thread *
+current_thread(void)
+{
+	return cur_thread;
 }

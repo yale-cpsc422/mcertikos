@@ -18,6 +18,7 @@ typedef enum {
 } td_stat_t;
 
 struct threadq;
+struct proc;
 
 struct thread {
 	struct kctx	*td_kctx;
@@ -25,6 +26,7 @@ struct thread {
 	struct thread	*td_prev, *td_next;
 	struct threadq	*td_slpq;
 	struct kstack	*td_kstack;
+	struct proc	*td_proc;
 	bool		inuse;
 };
 
@@ -85,6 +87,11 @@ void thread_sleep(struct threadq *slpq);
  * @oaram slpq the sleep queue
  */
 void thread_wakeup(struct threadq *slpq);
+
+/*
+ * Get the current thread.
+ */
+struct thread *current_thread(void);
 
 #endif /* _KERN_ */
 
