@@ -125,7 +125,8 @@ pmmap_dump(void)
 	SLIST_FOREACH(slot, &pmmap_list, next) {
 		KERN_INFO("BIOS-e820: 0x%08x - 0x%08x (%s)\n",
 			  slot->start,
-			  (slot->start == slot->end) ? slot->end : slot->end-1,
+			  (slot->start == slot->end) ? slot->end :
+			  (slot->end == 0xffffffff) ? slot->end : slot->end - 1,
 			  (slot->type == MEM_RAM) ? "usable" :
 			  (slot->type == MEM_RESERVED) ? "reserved" :
 			  (slot->type == MEM_ACPI) ? "ACPI data" :
@@ -233,7 +234,7 @@ pmmap_entry_length(int idx)
 int
 pmmap_entry_usable(int idx)
 {
-int i = 0;
+	int i = 0;
 	struct pmmap *slot = NULL;
 
 	SLIST_FOREACH(slot, &pmmap_list, next) {
@@ -245,5 +246,5 @@ int i = 0;
 	if (slot == NULL || i == pmmap_nentries)
 		return 0;
 
-	return slot->type == PMMAP_USABLE;
+	return slot->type == MEM_RAM;
 }
