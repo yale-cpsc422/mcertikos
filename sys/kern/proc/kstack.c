@@ -4,7 +4,8 @@
 #include "kstack.h"
 
 static bool		kstack_inited = FALSE;
-static struct kstack	all_kstacks[MAX_KSTACK] gcc_aligned(KSTACK_SIZE);
+static struct kstack	all_kstacks[MAX_KSTACK];
+static uint8_t		all_stacks[MAX_KSTACK][KSTACK_SIZE] gcc_aligned(KSTACK_SIZE);
 
 void
 kstack_init(void)
@@ -34,7 +35,7 @@ kstack_new(void)
 	ks = &all_kstacks[i];
 	memzero(ks, KSTACK_SIZE);
 
-	ks->tss.ts_esp0 = (uint32_t) ks->kstack_hi;
+	ks->tss.ts_esp0 = (uint32_t) all_stacks[i] + KSTACK_SIZE;
 	ks->tss.ts_ss0 = CPU_GDT_KDATA;
 
 	ks->inuse = TRUE;

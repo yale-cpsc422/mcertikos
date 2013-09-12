@@ -134,7 +134,7 @@ thread_spawn(void (*f)(void))
 		return NULL;
 	}
 
-	if ((kctx = kctx_new(f, (uintptr_t) ks->kstack_hi)) == NULL) {
+	if ((kctx = kctx_new(f, ks->tss.ts_esp0)) == NULL) {
 		kstack_free(ks);
 		return NULL;
 	}
