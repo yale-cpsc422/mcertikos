@@ -53,16 +53,7 @@ vmm_init_mmap(struct vm *vm)
 	if (vm == NULL)
 		return -1;
 
-	uint64_t addr;
-
-	for (addr = 0; addr < vm->memsize; addr += PAGESIZE)
-		if (sys_hvm_set_mmap(vm->vmid, addr,
-				     (uintptr_t) &vm->memory[addr],
-				     PAT_WRITE_BACK)) {
-			VMM_DEBUG("Cannot map GPA 0x%08x to HVA 0x%08x.\n",
-				  addr, (uintptr_t) &vm->memory[addr]);
-			return -2;
-		}
+	memzero(vm->mmap_bitmap, sizeof(uint32_t) * MMAP_BITMAP_SIZE);
 
 	return 0;
 }
@@ -212,10 +203,19 @@ vmm_handle_pgflt(struct vm *vm)
 	exit_info_t *exit_info = &vm->exit_info;
 	uint32_t fault_pa = exit_info->pgflt.addr;
 	uintptr_t host_va;
+	int pfn, line, row;
 
 	if (vm->memsize <= fault_pa && fault_pa < 0xf0000000) {
 		PANIC("EPT/NPT fault @ 0x%08x: out of range.\n", fault_pa);
 		return 1;
+	}
+
+	pfn = fault_pa / PAGESIZE;
+	line = pfn / 32;
+	row = pfn % 32;
+
+	if (vm->mmap_bitmap[line] & (1UL << row)) {
+		PANIC("GPA 0x%08x is already mapped.\n", fault_pa);
 	}
 
 	host_va = (fault_pa < 0xf0000000) ?
@@ -231,6 +231,8 @@ vmm_handle_pgflt(struct vm *vm)
 		      "HVA 0x%08x.\n", fault_pa, host_va);
 		return 3;
 	}
+
+	vm->mmap_bitmap[line] |= (1UL << row);
 
 #ifdef DEBUG_GUEST_PGFLT
 	DEBUG("EPT/NPT fault @ 0x%08x: mapped to HVA 0x%08x.\n",
@@ -675,5 +677,24 @@ vmm_translate_gp2hv(struct vm *vm, uintptr_t gpa)
 {
 	if (vm == NULL || gpa >= vm->memsize)
 		return 0xffffffff;
+
+	uintptr_t pfn;
+	int line, row;
+
+	pfn = gpa / PAGESIZE;
+	line = pfn / 32;
+	row = pfn % 32;
+
+	if ((vm->mmap_bitmap[line] & (1UL << row)) == 0) {
+		uintptr_t hva = (gpa >= 0xf0000000) ?
+			(uintptr_t) &vm->memory_dev[pfn * PAGESIZE] :
+			(uintptr_t) &vm->memory[pfn * PAGESIZE];
+		if (sys_hvm_set_mmap(vm->vmid,
+				     pfn * PAGESIZE, hva, PAT_WRITE_BACK))
+			PANIC("Cannot map GPA 0x%08x to HVA 0x%08x.\n",
+			      pfn * PAGESIZE, hva);
+		vm->mmap_bitmap[line] |= (1UL << row);
+	}
+
 	return (uintptr_t) vm->memory + gpa;
 }

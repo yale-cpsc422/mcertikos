@@ -7,6 +7,10 @@
 
 #include "vmm_dev.h"
 
+#define PAGESIZE		4096
+#define MAX_GUEST_MEMSIZE	(4ULL * 1024 * 1024 * 1024)
+#define MMAP_BITMAP_SIZE	(MAX_GUEST_MEMSIZE / (PAGESIZE * 32))
+
 struct vmm_ops;
 
 struct vm {
@@ -16,6 +20,7 @@ struct vm {
 	uint64_t	cpufreq;	/* guest CPU frequency */
 	uint8_t		*memory;
 	uint8_t		*memory_dev;
+	uint32_t	mmap_bitmap[MMAP_BITMAP_SIZE];
 	uint64_t	tsc;
 
 	struct vmm_ops	*ops;
