@@ -7,6 +7,16 @@
 
 #include "common.h"
 
+struct vm {
+	int		vmid;		/* identifier of the virtual machine */
+	int		inuse;		/* in use? */
+
+	exit_reason_t	exit_reason;	/* the reason of the latest VMEXIT */
+	exit_info_t	exit_info;	/* the information of the latest VMEXIT */
+
+	struct svm	*cookie;
+};
+
 /*
  * Initialize the Virtual Machine Management module.
  *
