@@ -21,12 +21,12 @@ pt_rmv(int proc_index, unsigned int vaddr)
 	rmv_PTX(proc_index, pdx_index, vaddrl);
 }
 
-int
+unsigned int
 pt_read(int proc_index, unsigned int vaddr)
 {
 	int pdx_index;
 	int vaddrl;
-	int paddr;
+	unsigned int paddr;
 	pdx_index = vaddr / (4096 * 1024);
 	vaddrl = (vaddr / 4096) % 1024;
 	paddr = get_PTX(proc_index, pdx_index, vaddrl);
