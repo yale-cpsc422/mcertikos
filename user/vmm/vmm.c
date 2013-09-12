@@ -689,6 +689,8 @@ vmm_translate_gp2hv(struct vm *vm, uintptr_t gpa)
 		uintptr_t hva = (gpa >= 0xf0000000) ?
 			(uintptr_t) &vm->memory_dev[pfn * PAGESIZE] :
 			(uintptr_t) &vm->memory[pfn * PAGESIZE];
+		if (gpa >= 0xf000000)
+			memzero((void *) hva, PAGESIZE);
 		if (sys_hvm_set_mmap(vm->vmid,
 				     pfn * PAGESIZE, hva, PAT_WRITE_BACK))
 			PANIC("Cannot map GPA 0x%08x to HVA 0x%08x.\n",
