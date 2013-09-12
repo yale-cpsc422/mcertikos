@@ -34,8 +34,8 @@ pt_new(void)
 			pt_new_free_index = pt_new_index;
 		pt_new_index ++;
 	}
-	set_bit(pt_new_index-1, 1);
-	return pt_new_index-1;
+	set_bit(pt_new_free_index, 1);
+	return pt_new_free_index;
 }
 
 void
