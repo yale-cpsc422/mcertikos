@@ -12,20 +12,12 @@ trap(tf_t *tf)
 	proc_save_uctx(proc_cur(), tf);
 	set_PT(0);
 
-	switch (tf->trapno) {
-	case T_DIVIDE...T_SECEV:
+	if (T_DIVIDE <= tf->trapno && tf->trapno <= T_SECEV)
 		exception_handler(tf);
-		break;
-	case T_IRQ0+IRQ_TIMER...T_IRQ0+IRQ_IDE2:
+	else if (T_IRQ0+IRQ_TIMER <= tf->trapno && tf->trapno <= T_IRQ0+IRQ_IDE2)
 		interrupt_handler(tf);
-		break;
-	case T_SYSCALL:
+	else if (tf->trapno == T_SYSCALL)
 		syscall_handler();
-		break;
-	default:
-		/* God bless bad things never happen to a certified kernel */
-		break;
-	}
 
 	proc_start_user();
 }

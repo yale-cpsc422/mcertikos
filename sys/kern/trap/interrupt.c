@@ -1,21 +1,30 @@
 #include <lib/export.h>
 #include <dev/export.h>
 
-void
+/*
+ * XXX: The dummy return statements in spurious_intr_handler(),
+ *      timer_inter_handler() and default_inter_handler() are used to prevent
+ *      CompCert doing tail call opitimization.
+ */
+
+static int
 spurious_intr_handler(void)
 {
+	return 0;
 }
 
-void
+static int
 timer_intr_handler(void)
 {
 	intr_eoi();
+	return 0;
 }
 
-void
+static int
 default_intr_handler(void)
 {
 	intr_eoi();
+	return 0;
 }
 
 void
