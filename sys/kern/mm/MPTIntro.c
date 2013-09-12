@@ -40,7 +40,7 @@ void
 set_PDX(int proc_index, int pdx_index)
 {
 	PTPool_LOC[proc_index].pdir[pdx_index] =
-		(unsigned int) PTPool_LOC[proc_index].pt[pdx_index] + PDXPERM;
+		(char *) PTPool_LOC[proc_index].pt[pdx_index] + PDXPERM;
 }
 
 void
