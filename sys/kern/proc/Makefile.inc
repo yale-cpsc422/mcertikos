@@ -11,9 +11,9 @@ KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/proc.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/elf.c
 
 $(KERN_OBJDIR)/kern/proc/%.o: $(KERN_DIR)/kern/proc/%.c
-	@echo + cc[KERN/kern] $<
+	@echo + ccomp[KERN/kern] $<
 	@mkdir -p $(@D)
-	$(V)$(CC) $(KERN_CFLAGS) -c -o $@ $<
+	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
 
 $(KERN_OBJDIR)/kern/proc/%.o: $(KERN_DIR)/kern/proc/%.S
 	@echo + as[KERN/kern] $<
