@@ -8,7 +8,7 @@ struct PTStruct {
 	unsigned int pt[1024][1024] gcc_aligned(4096);
 };
 
-static struct PTStruct PTPool_LOC[64];
+static struct PTStruct PTPool_LOC[64] gcc_aligned(4096);
 
 /*
  * TODO: what is PDXPERM ?
