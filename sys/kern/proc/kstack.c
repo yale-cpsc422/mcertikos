@@ -33,7 +33,7 @@ kstack_new(void)
 		return NULL;
 
 	ks = &all_kstacks[i];
-	memzero(ks, KSTACK_SIZE);
+	memzero(all_stacks[i], KSTACK_SIZE);
 
 	ks->tss.ts_esp0 = (uint32_t) all_stacks[i] + KSTACK_SIZE;
 	ks->tss.ts_ss0 = CPU_GDT_KDATA;
