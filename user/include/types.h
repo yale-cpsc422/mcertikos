@@ -24,6 +24,10 @@ typedef uint8_t			bool;
 typedef int32_t			pid_t;
 
 typedef enum {
+	A16, A32, A64
+} addr_sz_t;
+
+typedef enum {
 	SZ8, SZ16, SZ32
 } data_sz_t;
 

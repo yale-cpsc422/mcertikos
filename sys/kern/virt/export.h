@@ -3,7 +3,7 @@
 
 #ifdef _KERN_
 
-#include "hvm.h"
+#include "svm.h"
 
 #endif /* _KERN_ */
 

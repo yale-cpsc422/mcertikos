@@ -143,7 +143,7 @@ sys_hvm_run_vm(int vmid, exit_reason_t *reason, exit_info_t *info)
 	switch (exit_reason) {
 	case EXIT_REASON_IOPORT:
 		info->ioport.port = (uint16_t) exit_info[0];
-		info->ioport.width = (data_sz_t) exit_info[1];
+		info->ioport.dw = (data_sz_t) exit_info[1];
 		info->ioport.write = (exit_info[2] & 0x1) ? 1 : 0;
 		info->ioport.rep = (exit_info[2] & 0x2) ? 1 : 0;
 		info->ioport.str = (exit_info[2] & 0x4) ? 1 : 0;

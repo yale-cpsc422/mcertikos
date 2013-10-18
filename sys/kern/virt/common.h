@@ -19,10 +19,13 @@ typedef union {
 	/* valid when exiting for I/O ports */
 	struct {
 		uint16_t  port;	/* I/O port */
-		data_sz_t width;/* data width */
+		uint8_t	  seg;	/* segment */
+		addr_sz_t aw;	/* address width */
+		data_sz_t dw;	/* data width */
 		bool      write;/* is write? */
 		bool      rep;	/* has the prefix rep? */
 		bool      str;	/* is a string operation? */
+		uintptr_t neip;	/* address of the next instruction */
 	} ioport;
 
 	/* valid when exiting for EPT/NPT page faults */

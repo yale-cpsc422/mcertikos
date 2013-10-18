@@ -1,9 +1,11 @@
 #include <lib/export.h>
 #include <dev/export.h>
 
-#include "npt.h"
+#include "npt_init.h"
 #include "svm.h"
 #include "vmcb.h"
+
+#include "npt_intro.h"
 
 #ifdef DEBUG_SVM
 
@@ -24,40 +26,51 @@
 
 #define PAGESIZE	4096
 
+static bool svm_inited = FALSE;
 static struct svm svm0;
+static bool svm0_inited = FALSE;
 
 static exit_reason_t
-svm_handle_exit(struct svm *svm)
+svm_handle_exit(void)
 {
-	KERN_ASSERT(svm != NULL);
-
-	struct vmcb *vmcb = svm->vmcb;
-	uint32_t exitcode = vmcb_get_exit_code(vmcb);
-	uint32_t exitinfo1 = vmcb_get_exit_info1(vmcb);
-	uint32_t exitinfo2 = vmcb_get_exit_info2(vmcb);
+	uint32_t exitcode = vmcb_get_exit_code();
+	uint32_t exitinfo1 = vmcb_get_exit_info1();
+	uint32_t exitinfo2 = vmcb_get_exit_info2();
 
 #ifdef DEBUG_VMEXIT
 	SVM_DEBUG("VMEXIT exit_code 0x%x, guest EIP 0x%08x.\n",
-		  exitcode, vmcb_get_eip(vmcb));
+		  exitcode, vmcb_get_eip());
 #endif
 
 	switch (exitcode) {
 	case SVM_EXIT_INTR:
 		return EXIT_REASON_EXTINT;
 	case SVM_EXIT_VINTR:
-		vmcb_clear_virq(vmcb);
+		vmcb_clear_virq();
 		return EXIT_REASON_INTWIN;
 	case SVM_EXIT_IOIO:
-		svm->port = (exitinfo1 & SVM_EXITINFO1_PORT_MASK) >>
+		svm0.exit_info.ioport.port =
+			(exitinfo1 & SVM_EXITINFO1_PORT_MASK) >>
 			SVM_EXITINFO1_PORT_SHIFT;
-		svm->width = (exitinfo1 & SVM_EXITINFO1_SZ8) ? SZ8 :
+		svm0.exit_info.ioport.seg =
+			(exitinfo1 & SVM_EXITINFO1_SEG_MASK) >>
+			SVM_EXITINFO1_SEG_SHIFT;
+		svm0.exit_info.ioport.aw =
+			(exitinfo1 & SVM_EXITINFO1_A16) ? A16 :
+			(exitinfo1 & SVM_EXITINFO1_A32) ? A32 : A64;
+		svm0.exit_info.ioport.dw =
+			(exitinfo1 & SVM_EXITINFO1_SZ8) ? SZ8 :
 			(exitinfo1 & SVM_EXITINFO1_SZ16) ? SZ16 : SZ32;
-		svm->write = (exitinfo1 & SVM_EXITINFO1_TYPE_IN) ? FALSE : TRUE;
-		svm->rep = (exitinfo1 & SVM_EXITINFO1_REP) ? TRUE : FALSE;
-		svm->str = (exitinfo1 & SVM_EXITINFO1_STR) ? TRUE : FALSE;
+		svm0.exit_info.ioport.write =
+			(exitinfo1 & SVM_EXITINFO1_TYPE_IN) ? FALSE : TRUE;
+		svm0.exit_info.ioport.rep =
+			(exitinfo1 & SVM_EXITINFO1_REP) ? TRUE : FALSE;
+		svm0.exit_info.ioport.str =
+			(exitinfo1 & SVM_EXITINFO1_STR) ? TRUE : FALSE;
+		svm0.exit_info.ioport.neip = exitinfo2;
 		return EXIT_REASON_IOPORT;
 	case SVM_EXIT_NPF:
-		svm->fault_addr = (uintptr_t) PGADDR(exitinfo2);
+		svm0.exit_info.pgflt.addr = (uintptr_t) PGADDR(exitinfo2);
 		return EXIT_REASON_PGFLT;
 	case SVM_EXIT_CPUID:
 		return EXIT_REASON_CPUID;
@@ -82,86 +95,43 @@ svm_handle_exit(struct svm *svm)
 	}
 }
 
-/*
- * Initialize SVM module.
- * - check whether SVM is supported
- * - enable SVM
- * - allocate host save area
- *
- * @return 0 if succeed
- */
-int
+void
 svm_init(void)
 {
-	memzero(&svm0, sizeof(svm0));
-	svm0.inuse = 0;
+	if (svm_inited == TRUE)
+		return;
 
-	return svm_drv_init();
+	svm_drv_init();
+	svm_inited = TRUE;
 }
 
-struct svm *
+void
 svm_init_vm(void)
 {
-	struct svm *svm = &svm0;
-	struct vmcb *vmcb;
-	npt_t npt;
+	if (svm0_inited == TRUE)
+		return;
 
-	if (svm->inuse == 1)
-		return NULL;
-	memzero(svm, sizeof(struct svm));
-	svm->inuse = 1;
+	memzero(&svm0, sizeof(struct svm));
+	vmcb_init();
+	npt_init();
 
-	if ((vmcb = vmcb_new()) == NULL) {
-		svm->inuse = 0;
-		return NULL;
-	}
-	svm->vmcb = vmcb;
-
-	if ((npt = npt_new()) == NULL) {
-		svm->inuse = 0;
-		vmcb_free(vmcb);
-		return NULL;
-	}
-	svm->npt = npt;
-	npt_install(vmcb, npt);
-
-	/*
-	 * Setup default interception.
-	 */
-
-	/* intercept instructions */
-	vmcb_set_intercept(svm->vmcb, INTERCEPT_VMRUN);		/* vmrun */
-	vmcb_set_intercept(svm->vmcb, INTERCEPT_VMMCALL);	/* vmmcall */
-	vmcb_set_intercept(svm->vmcb, INTERCEPT_STGI);		/* stgi */
-	vmcb_set_intercept(svm->vmcb, INTERCEPT_CLGI);		/* clgi */
-	vmcb_set_intercept(svm->vmcb, INTERCEPT_CPUID);		/* cpuid */
-	vmcb_set_intercept(svm->vmcb, INTERCEPT_RDTSC);		/* rdtsc */
-	vmcb_set_intercept(svm->vmcb, INTERCEPT_RDTSCP);	/* rdtscp */
-	vmcb_set_intercept(vmcb, INTERCEPT_IOIO_PROT);		/* in/out */
-
-	/* intercept interrupts */
-	vmcb_set_intercept(svm->vmcb, INTERCEPT_INTR);
-
-	return svm;
+	svm0_inited = TRUE;
 }
 
-exit_reason_t
-svm_run_vm(struct svm *svm)
+void
+svm_run_vm(void)
 {
-	KERN_ASSERT(svm != NULL);
+	enter_guest(&svm0.g_rbx, &svm0.g_rcx, &svm0.g_rdx, &svm0.g_rsi,
+		    &svm0.g_rdi, &svm0.g_rbp);
 
-	struct vmcb *vmcb = svm->vmcb;
-
-	svm_drv_run_vm(vmcb, &svm->g_rbx, &svm->g_rcx, &svm->g_rdx, &svm->g_rsi,
-		       &svm->g_rdi, &svm->g_rbp);
-
-	uint32_t exit_int_info = vmcb_get_exit_int_info(vmcb);
+	uint32_t exit_int_info = vmcb_get_exit_intinfo();
 
 	if (exit_int_info & SVM_EXITINTINFO_VALID) {
-		uint32_t errcode = vmcb_get_exit_int_errcode(vmcb);;
+		uint32_t errcode = vmcb_get_exit_interr();
+		bool ev = (exit_int_info & SVM_EXITINTINFO_VALID_ERR) ?
+			TRUE : FALSE;
 		uint32_t int_type = exit_int_info & SVM_EXITINTINFO_TYPE_MASK;
-
-		struct vmcb_control_area *ctrl = &vmcb->control;
+		uint8_t vector = exit_int_info & SVM_EXITINTINFO_VEC_MASK;
 
 		switch (int_type) {
 		case SVM_EXITINTINFO_TYPE_INTR:
@@ -169,16 +139,14 @@ svm_run_vm(struct svm *svm)
 			SVM_DEBUG("Pending INTR: vec=%x.\n",
 				  exit_int_info & SVM_EXITINTINFO_VEC_MASK);
 #endif
-			ctrl->event_inj = exit_int_info;
-			ctrl->event_inj_err = errcode;
+			vmcb_inject_event(int_type >> 7, vector, errcode, ev);
 			break;
 
 		case SVM_EXITINTINFO_TYPE_NMI:
 #ifdef DEBUG_GUEST_INTR
 			SVM_DEBUG("Pending NMI.\n");
 #endif
-			ctrl->event_inj = exit_int_info;
-			ctrl->event_inj_err = errcode;
+			vmcb_inject_event(int_type >> 7, vector, errcode, ev);
 			break;
 
 		default:
@@ -186,154 +154,126 @@ svm_run_vm(struct svm *svm)
 		}
 	}
 
-	uint32_t exit_code = vmcb_get_exit_code(vmcb);
-
-	if (exit_code == SVM_EXIT_ERR)
-		return EXIT_REASON_INVAL;
-
-	return svm_handle_exit(svm);
+	svm0.exit_reason = svm_handle_exit();
 }
 
 void
-svm_intercept_vintr(struct svm *svm, bool enable)
+svm_set_intercept_vint(void)
 {
-	KERN_ASSERT(svm != NULL);
+	vmcb_inject_virq();
+	vmcb_set_intercept_vint();
+}
 
-	struct vmcb *vmcb = svm->vmcb;
-
-	if (enable == TRUE) {
-		vmcb_inject_virq(vmcb, 0, 0);
-		vmcb_set_intercept(vmcb, INTERCEPT_VINTR);
-	} else {
-		vmcb_clear_intercept(vmcb, INTERCEPT_VINTR);
-	}
+void
+svm_clear_intercept_vint(void)
+{
+	vmcb_clear_intercept_vint();
 }
 
 uint32_t
-svm_get_reg(struct svm *svm, guest_reg_t reg)
+svm_get_reg(guest_reg_t reg)
 {
-	KERN_ASSERT(svm != NULL);
-
-	struct vmcb *vmcb = svm->vmcb;
-
 	switch (reg) {
 	case GUEST_EAX:
-		return vmcb_get_eax(vmcb);
+		return vmcb_get_reg(GUEST_EAX);
 	case GUEST_EBX:
-		return (uint32_t) svm->g_rbx;
+		return svm0.g_rbx;
 	case GUEST_ECX:
-		return (uint32_t) svm->g_rcx;
+		return svm0.g_rcx;
 	case GUEST_EDX:
-		return (uint32_t) svm->g_rdx;
+		return svm0.g_rdx;
 	case GUEST_ESI:
-		return (uint32_t) svm->g_rsi;
+		return svm0.g_rsi;
 	case GUEST_EDI:
-		return (uint32_t) svm->g_rdi;
+		return svm0.g_rdi;
 	case GUEST_EBP:
-		return (uint32_t) svm->g_rbp;
+		return svm0.g_rbp;
 	case GUEST_ESP:
-		return vmcb_get_esp(vmcb);
+		return vmcb_get_reg(GUEST_ESP);
 	case GUEST_EIP:
-		return vmcb_get_eip(vmcb);
+		return vmcb_get_reg(GUEST_EIP);
 	case GUEST_EFLAGS:
-		return vmcb_get_eflags(vmcb);
+		return vmcb_get_reg(GUEST_EFLAGS);
 	case GUEST_CR0:
-		return vmcb_get_cr0(vmcb);
+		return vmcb_get_reg(GUEST_CR0);
 	case GUEST_CR2:
-		return vmcb_get_cr2(vmcb);
+		return vmcb_get_reg(GUEST_CR2);
 	case GUEST_CR3:
-		return vmcb_get_cr3(vmcb);
+		return vmcb_get_reg(GUEST_CR3);
 	case GUEST_CR4:
-		return vmcb_get_cr4(vmcb);
+		return vmcb_get_reg(GUEST_CR4);
 	default:
 		return 0xffffffff;
 	}
 }
 
-int
-svm_set_reg(struct svm *svm, guest_reg_t reg, uint32_t val)
+void
+svm_set_reg(guest_reg_t reg, uint32_t val)
 {
-	KERN_ASSERT(svm != NULL);
-
-	struct vmcb *vmcb = svm->vmcb;
-
 	switch (reg) {
 	case GUEST_EAX:
-		vmcb_set_eax(vmcb, val);
+		vmcb_set_reg(GUEST_EAX, val);
 		break;
 	case GUEST_EBX:
-		svm->g_rbx = val;
+		svm0.g_rbx = val;
 		break;
 	case GUEST_ECX:
-		svm->g_rcx = val;
+		svm0.g_rcx = val;
 		break;
 	case GUEST_EDX:
-		svm->g_rdx = val;
+		svm0.g_rdx = val;
 		break;
 	case GUEST_ESI:
-		svm->g_rsi = val;
+		svm0.g_rsi = val;
 		break;
 	case GUEST_EDI:
-		svm->g_rdi = val;
+		svm0.g_rdi = val;
 		break;
 	case GUEST_EBP:
-		svm->g_rbp = val;
+		svm0.g_rbp = val;
 		break;
 	case GUEST_ESP:
-		vmcb_set_esp(vmcb, val);
+		vmcb_set_reg(GUEST_ESP, val);
 		break;
 	case GUEST_EIP:
-		vmcb_set_eip(vmcb, val);
+		vmcb_set_reg(GUEST_EIP, val);
 		break;
 	case GUEST_EFLAGS:
-		vmcb_set_eflags(vmcb, val);
+		vmcb_set_reg(GUEST_EFLAGS, val);
 		break;
 	case GUEST_CR0:
-		vmcb_set_cr0(vmcb, val);
+		vmcb_set_reg(GUEST_CR0, val);
 		break;
 	case GUEST_CR2:
-		vmcb_set_cr2(vmcb, val);
+		vmcb_set_reg(GUEST_CR2, val);
 		break;
 	case GUEST_CR3:
-		vmcb_set_cr3(vmcb, val);
+		vmcb_set_reg(GUEST_CR3, val);
 		break;
 	case GUEST_CR4:
-		vmcb_set_cr4(vmcb, val);
+		vmcb_set_reg(GUEST_CR4, val);
 		break;
 	default:
-		return -1;
 	}
-
-	return 0;
 }
 
-int
-svm_set_seg(struct svm *svm, guest_seg_t seg,
+void
+svm_set_seg(guest_seg_t seg,
 	    uint16_t sel, uint32_t base, uint32_t lim, uint32_t ar)
 {
-	KERN_ASSERT(svm != NULL);
-	return vmcb_set_seg(svm->vmcb, seg, sel, base, lim, ar);
+	vmcb_set_seg(seg, sel, base, lim, ar);
 }
 
-int
-svm_set_mmap(struct svm *svm, uintptr_t gpa, uintptr_t hpa)
+void
+svm_set_mmap(uintptr_t gpa, uintptr_t hpa)
 {
-	KERN_ASSERT(svm != NULL);
-
-	if (rounddown(gpa, PAGESIZE) != gpa || rounddown(hpa, PAGESIZE) != hpa)
-		return 1;
-
-	npt_t npt = svm->npt;
-
-	return npt_insert(npt, gpa, hpa);
+	KERN_ASSERT((gpa % PAGESIZE) == 0 || (hpa % PAGESIZE) == 0);
+	npt_insert(gpa, hpa);
 }
 
-int
-svm_inject_event(struct svm *svm,
-		 guest_event_t type, uint8_t vector, uint32_t errcode, bool ev)
+void
+svm_inject_event(guest_event_t type, uint8_t vector, uint32_t errcode, bool ev)
 {
-	KERN_ASSERT(svm != NULL);
-
 	int evt_type;
 
 	if (type == EVENT_EXTINT)
@@ -341,79 +281,73 @@ svm_inject_event(struct svm *svm,
 	else if (type == EVENT_EXCEPTION)
 		evt_type = SVM_EVTINJ_TYPE_EXEPT;
 	else
-		return 1;
+		return;
 
-	return vmcb_inject_event(svm->vmcb, evt_type, vector, errcode, ev);
+	vmcb_inject_event(evt_type, vector, errcode, ev);
 }
 
 uint32_t
-svm_get_next_eip(struct svm *svm, guest_instr_t instr)
+svm_get_next_eip(void)
 {
-	KERN_ASSERT(svm != NULL);
-
-	struct vmcb *vmcb = svm->vmcb;
-
-	switch (instr) {
-	case INSTR_IN:
-	case INSTR_OUT:
-		return vmcb_get_exit_info2(vmcb);
-	default:
-		return vmcb_get_neip(vmcb);
-	}
+	return vmcb_get_next_eip();
 }
 
 bool
-svm_pending_event(struct svm *svm)
+svm_check_pending_event(void)
 {
-	KERN_ASSERT(svm != NULL);
-	return vmcb_pending_event(svm->vmcb);
+	return vmcb_check_pending_event();
 }
 
 bool
-svm_intr_shadow(struct svm *svm)
+svm_check_int_shadow(void)
 {
-	KERN_ASSERT(svm != NULL);
-	return vmcb_get_intr_shadow(svm->vmcb);
+	return vmcb_check_int_shadow();
+}
+
+exit_reason_t
+svm_get_exit_reason(void)
+{
+	return svm0.exit_reason;
 }
 
 uint16_t
-svm_exit_io_port(struct svm *svm)
+svm_get_exit_io_port(void)
 {
-	KERN_ASSERT(svm != NULL);
-	return svm->port;
+	return svm0.exit_info.ioport.port;
 }
 
 data_sz_t
-svm_exit_io_width(struct svm *svm)
+svm_get_exit_io_width(void)
 {
-	KERN_ASSERT(svm != NULL);
-	return svm->width;
+	return svm0.exit_info.ioport.dw;
 }
 
 bool
-svm_exit_io_write(struct svm *svm)
+svm_get_exit_io_write(void)
 {
-	KERN_ASSERT(svm != NULL);
-	return svm->write;
+	return svm0.exit_info.ioport.write;
 }
 
 bool
-svm_exit_io_rep(struct svm *svm)
+svm_get_exit_io_rep(void)
 {
-	KERN_ASSERT(svm != NULL);
-	return svm->rep;
+	return svm0.exit_info.ioport.rep;
 }
 
 bool
-svm_exit_io_str(struct svm *svm)
+svm_get_exit_io_str(void)
 {
-	KERN_ASSERT(svm != NULL);
-	return svm->str;
+	return svm0.exit_info.ioport.str;
+}
+
+uint32_t
+svm_get_exit_io_neip(void)
+{
+	return svm0.exit_info.ioport.neip;
 }
 
 uintptr_t
-svm_exit_fault_addr(struct svm *svm)
+svm_get_exit_fault_addr(void)
 {
-	KERN_ASSERT(svm != NULL);
-	return svm->fault_addr;
+	return svm0.exit_info.pgflt.addr;
 }

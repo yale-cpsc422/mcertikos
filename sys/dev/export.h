@@ -45,11 +45,9 @@ void intr_enable(uint8_t irq);
  * SVM.
  */
 
-struct vmcb;
-
 int svm_drv_init(void);
-void svm_drv_run_vm(struct vmcb *vmcb, uint32_t *ebx, uint32_t *ecx,
-		    uint32_t *edx, uint32_t *esi, uint32_t *edi, uint32_t *ebp);
+void enter_guest(uint32_t *ebx, uint32_t *ecx,
+		 uint32_t *edx, uint32_t *esi, uint32_t *edi, uint32_t *ebp);
 
 #endif /* _KERN_ */
 

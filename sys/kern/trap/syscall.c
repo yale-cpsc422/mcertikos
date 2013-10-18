@@ -186,15 +186,9 @@ sys_disk_cap(struct context *ctx)
 static int
 sys_hvm_create_vm(struct context *ctx)
 {
-	if (hvm_available() == FALSE)
-		return E_INVAL_HVM;
+	svm_init_vm();
 
-	int vmid = hvm_create_vm();
-
-	if (vmid < 0)
-		return E_INVAL_VMID;
-
-	ctx_set_retval1(ctx, vmid);
+	ctx_set_retval1(ctx, 0);
 
 	return E_SUCC;
 }
@@ -202,32 +196,28 @@ sys_hvm_create_vm(struct context *ctx)
 static int
 sys_hvm_run_vm(struct context *ctx, int vmid)
 {
-	if (hvm_available() == FALSE)
-		return E_INVAL_HVM;
-
-	if (hvm_valid_vm(vmid) == FALSE)
+	if (vmid != 0)
 		return E_INVAL_VMID;
 
-	if (hvm_run_vm(vmid))
-		return E_HVM_VMRUN;
+	svm_run_vm();
 
-	exit_reason_t reason = hvm_exit_reason(vmid);
+	exit_reason_t reason = svm_get_exit_reason();
 	uint32_t flags = 0;
 
 	ctx_set_retval1(ctx, reason);
 
 	if (reason == EXIT_REASON_IOPORT) {
-		ctx_set_retval2(ctx, hvm_exit_io_port(vmid));
-		ctx_set_retval3(ctx, hvm_exit_io_width(vmid));
-		if (hvm_exit_io_write(vmid))
+		ctx_set_retval2(ctx, svm_get_exit_io_port());
+		ctx_set_retval3(ctx, svm_get_exit_io_width());
+		if (svm_get_exit_io_write())
 			flags |= (1 << 0);
-		if (hvm_exit_io_rep(vmid))
+		if (svm_get_exit_io_rep())
 			flags |= (1 << 1);
-		if (hvm_exit_io_str(vmid))
+		if (svm_get_exit_io_str())
 			flags |= (1 << 2);
 		ctx_set_retval4(ctx, flags);
 	} else if (reason == EXIT_REASON_PGFLT) {
-		ctx_set_retval2(ctx, hvm_exit_fault_addr(vmid));
+		ctx_set_retval2(ctx, svm_get_exit_fault_addr());
 	}
 
 	return E_SUCC;
@@ -238,10 +228,7 @@ sys_hvm_set_mmap(int vmid, uint32_t gpa, uint32_t hva)
 {
 	uint32_t hpa;
 
-	if (hvm_available() == FALSE)
-		return E_INVAL_HVM;
-
-	if (hvm_valid_vm(vmid) == FALSE)
+	if (vmid != 0)
 		return E_INVAL_VMID;
 
 	if (gpa % PAGESIZE != 0 || hva % PAGESIZE != 0 ||
@@ -257,43 +244,34 @@ sys_hvm_set_mmap(int vmid, uint32_t gpa, uint32_t hva)
 
 	hpa = (hpa & 0xfffff000) + (hva % PAGESIZE);
 
-	if (hvm_set_mmap(vmid, gpa, hpa))
-		return E_HVM_MMAP;
-	else
-		return E_SUCC;
+	svm_set_mmap(gpa, hpa);
+
+	return E_SUCC;
 }
 
 static int
 sys_hvm_set_reg(int vmid, guest_reg_t reg, uint32_t val)
 {
-	if (hvm_available() == FALSE)
-		return E_INVAL_HVM;
-
-	if (hvm_valid_vm(vmid) == FALSE)
+	if (vmid != 0)
 		return E_INVAL_VMID;
 
 	if (!(GUEST_EAX <= reg && reg < GUEST_MAX_REG))
 		return E_INVAL_REG;
 
-	if (hvm_set_reg(vmid, reg, val))
-		return E_HVM_REG;
-	else
-		return E_SUCC;
+	svm_set_reg(reg, val);
+	return E_SUCC;
 }
 
 static int
 sys_hvm_get_reg(struct context *ctx, int vmid, guest_reg_t reg)
 {
-	if (hvm_available() == FALSE)
-		return E_INVAL_HVM;
-
-	if (hvm_valid_vm(vmid) == FALSE)
+	if (vmid != 0)
 		return E_INVAL_VMID;
 
 	if (!(GUEST_EAX <= reg && reg < GUEST_MAX_REG))
 		return E_INVAL_REG;
 
-	ctx_set_retval1(ctx, hvm_get_reg(vmid, reg));
+	ctx_set_retval1(ctx, svm_get_reg(reg));
 
 	return E_SUCC;
 }
@@ -301,10 +279,7 @@ sys_hvm_get_reg(struct context *ctx, int vmid, guest_reg_t reg)
 static int
 sys_hvm_set_seg(int vmid, guest_seg_t seg, uintptr_t desc_la)
 {
-	if (hvm_available() == FALSE)
-		return E_INVAL_HVM;
-
-	if (hvm_valid_vm(vmid) == FALSE)
+	if (vmid != 0)
 		return E_INVAL_VMID;
 
 	struct guest_seg_desc desc;
@@ -319,22 +294,23 @@ sys_hvm_set_seg(int vmid, guest_seg_t seg, uintptr_t desc_la)
 		      sizeof(desc)) != sizeof(desc))
 		return E_MEM;
 
-	if (hvm_set_seg(vmid, seg, desc.sel, desc.base, desc.lim, desc.ar))
-		return E_HVM_SEG;
-	else
-		return E_SUCC;
+	svm_set_seg(seg, desc.sel, desc.base, desc.lim, desc.ar);
+
+	return E_SUCC;
 }
 
 static int
 sys_hvm_get_next_eip(struct context *ctx, int vmid, guest_instr_t instr)
 {
-	if (hvm_available() == FALSE)
-		return E_INVAL_HVM;
-
-	if (hvm_valid_vm(vmid) == FALSE)
+	if (vmid != 0)
 		return E_INVAL_VMID;
 
-	ctx_set_retval1(ctx, hvm_get_next_eip(vmid, instr));
+	exit_reason_t reason = svm_get_exit_reason();
+
+	if (reason == EXIT_REASON_IOPORT)
+		ctx_set_retval1(ctx, svm_get_exit_io_neip());
+	else
+		ctx_set_retval1(ctx, svm_get_next_eip());
 
 	return E_SUCC;
 }
@@ -343,31 +319,24 @@ static int
 sys_hvm_inject_event(int vmid, guest_event_t ev_type, uint8_t vector,
 		     uint32_t errcode, bool ev)
 {
-	if (hvm_available() == FALSE)
-		return E_INVAL_HVM;
-
-	if (hvm_valid_vm(vmid) == FALSE)
+	if (vmid != 0)
 		return E_INVAL_VMID;
 
 	if (ev_type != EVENT_EXTINT && ev_type != EVENT_EXCEPTION)
 		return E_INVAL_EVENT;
 
-	if (hvm_inject_event(vmid, ev_type, vector, errcode, ev))
-		return E_HVM_INJECT;
-	else
-		return E_SUCC;
+	svm_inject_event(ev_type, vector, errcode, ev);
+
+	return E_SUCC;
 }
 
 static int
 sys_hvm_pending_event(struct context *ctx, int vmid)
 {
-	if (hvm_available() == FALSE)
-		return E_INVAL_HVM;
-
-	if (hvm_valid_vm(vmid) == FALSE)
+	if (vmid != 0)
 		return E_INVAL_VMID;
 
-	ctx_set_retval1(ctx, hvm_pending_event(vmid));
+	ctx_set_retval1(ctx, svm_check_pending_event());
 
 	return E_SUCC;
 }
@@ -375,13 +344,10 @@ sys_hvm_pending_event(struct context *ctx, int vmid)
 static int
 sys_hvm_intr_shadow(struct context *ctx, int vmid)
 {
-	if (hvm_available() == FALSE)
-		return E_INVAL_HVM;
-
-	if (hvm_valid_vm(vmid) == FALSE)
+	if (vmid != 0)
 		return E_INVAL_VMID;
 
-	ctx_set_retval1(ctx, hvm_intr_shadow(vmid));
+	ctx_set_retval1(ctx, svm_check_int_shadow());
 
 	return E_SUCC;
 }
@@ -389,13 +355,13 @@ sys_hvm_intr_shadow(struct context *ctx, int vmid)
 static int
 sys_hvm_intercept_intr_window(int vmid, bool enable)
 {
-	if (hvm_available() == FALSE)
-		return E_INVAL_HVM;
-
-	if (hvm_valid_vm(vmid) == FALSE)
+	if (vmid != 0)
 		return E_INVAL_VMID;
 
-	hvm_intercept_intr_window(vmid, enable);
+	if (enable == TRUE)
+		svm_set_intercept_vint();
+	else
+		svm_clear_intercept_vint();
 
 	return E_SUCC;
 }

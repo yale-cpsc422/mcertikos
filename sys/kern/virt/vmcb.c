@@ -2,17 +2,18 @@
 
 #include "vmcb.h"
 
-static struct vmcb vmcb0 gcc_aligned(4096);
+struct vmcb vmcb0 gcc_aligned(4096);
 static uint8_t iopm0[SVM_IOPM_SIZE] gcc_aligned(4096);
-static int vmcb0_inuse = 0;
+static bool vmcb0_inited = FALSE;
 
-struct vmcb *
-vmcb_new(void)
+void
+vmcb_init(void)
 {
-	if (vmcb0_inuse == 1)
-		return NULL;
+	if (vmcb0_inited == TRUE)
+		return;
 
 	struct vmcb *vmcb = &vmcb0;
+
 	memzero(vmcb, sizeof(struct vmcb));
 
 	vmcb->save.dr6_lo = 0xffff0ff0;
@@ -38,141 +39,101 @@ vmcb_new(void)
 	vmcb->control.iopm_base_pa_lo = (uintptr_t) iopm0;
 	vmcb->control.iopm_base_pa_hi = 0;
 
-	vmcb0_inuse = 1;
+	/* setup default interception */
+	vmcb->control.intercept_lo = (1UL << INTERCEPT_INTR) |
+		(1UL << INTERCEPT_RDTSC) | (1UL << INTERCEPT_CPUID) |
+		(1UL << INTERCEPT_HLT) | (1UL << INTERCEPT_IOIO_PROT);
+	vmcb->control.intercept_hi = (1UL << (INTERCEPT_VMRUN - 32)) |
+		(1UL << (INTERCEPT_VMMCALL - 32)) |
+		(1UL << (INTERCEPT_VMLOAD - 32)) |
+		(1UL << (INTERCEPT_VMSAVE - 32)) |
+		(1UL << (INTERCEPT_STGI - 32)) |
+		(1UL << (INTERCEPT_CLGI - 32)) |
+		(1UL << (INTERCEPT_SKINIT - 32)) |
+		(1UL << (INTERCEPT_RDTSCP - 32)) |
+		(1UL << (INTERCEPT_MONITOR - 32)) |
+		(1UL << (INTERCEPT_MWAIT - 32)) |
+		(1UL << (INTERCEPT_MWAIT_COND - 32));
 
-	return vmcb;
+	vmcb0_inited = TRUE;
 }
 
 void
-vmcb_free(struct vmcb *vmcb)
+vmcb_set_intercept_vint(void)
 {
-	if (vmcb == &vmcb0)
-		return;
-	vmcb0_inuse = 0;
+	vmcb0.control.intercept_lo |= (1UL << INTERCEPT_VINTR);
 }
 
-int
-vmcb_set_intercept(struct vmcb *vmcb, int bit)
+void
+vmcb_clear_intercept_vint(void)
 {
-	if ((uintptr_t) vmcb % 4096)
-		return -1;
-
-	if (!(INTERCEPT_INTR <= bit && bit <= INTERCEPT_XSETBV))
-		return -2;
-
-	if (bit < 32)
-		vmcb->control.intercept_lo |= (1UL << bit);
-	else
-		vmcb->control.intercept_hi |= (1UL << (bit - 32));
-
-	return 0;
+	vmcb0.control.intercept_lo &= ~(1UL << INTERCEPT_VINTR);
 }
 
-int
-vmcb_clear_intercept(struct vmcb *vmcb, int bit)
+void
+vmcb_clear_virq(void)
 {
-	if ((uintptr_t) vmcb % 4096)
-		return -1;
-
-	if (!(INTERCEPT_INTR <= bit && bit <= INTERCEPT_XSETBV))
-		return -2;
-
-	if (bit < 32)
-		vmcb->control.intercept_lo &= ~(1UL << bit);
-	else
-		vmcb->control.intercept_hi &= ~(1UL << (bit - 32));
-
-	return 0;
+	vmcb0.control.int_ctl &= ~SVM_INTR_CTRL_VIRQ;
 }
 
-int
-vmcb_clear_virq(struct vmcb *vmcb)
+void
+vmcb_inject_virq(void)
 {
-	if ((uintptr_t) vmcb % 4096)
-		return -1;
-	vmcb->control.int_ctl &= ~SVM_INTR_CTRL_VIRQ;
-	return 0;
-}
-
-int
-vmcb_inject_virq(struct vmcb *vmcb, uint8_t vector, uint8_t priority)
-{
-	if ((uintptr_t) vmcb % 4096)
-		return -1;
-
-	struct vmcb_control_area *ctrl = &vmcb->control;
+	struct vmcb_control_area *ctrl = &vmcb0.control;
 
 	ctrl->int_ctl |= SVM_INTR_CTRL_VIRQ |
-		((priority << SVM_INTR_CTRL_PRIO_SHIFT) & SVM_INTR_CTRL_PRIO) |
+		((0 << SVM_INTR_CTRL_PRIO_SHIFT) & SVM_INTR_CTRL_PRIO) |
 		SVM_INTR_CTRL_IGN_VTPR;
-	ctrl->int_vector = vector;
-
-	return 0;
+	ctrl->int_vector = 0;
 }
 
 uint32_t
-vmcb_get_exit_code(struct vmcb *vmcb)
+vmcb_get_exit_code(void)
 {
-	if ((uintptr_t) vmcb % 4096)
-		return 0xffffffff;
-	return vmcb->control.exit_code;
+	return vmcb0.control.exit_code;
 }
 
 uint32_t
-vmcb_get_exit_info1(struct vmcb *vmcb)
+vmcb_get_exit_info1(void)
 {
-	if ((uintptr_t) vmcb % 4096)
-		return 0xffffffff;
-	return vmcb->control.exit_info_1_lo;
+	return vmcb0.control.exit_info_1_lo;
 }
 
 uint32_t
-vmcb_get_exit_info2(struct vmcb *vmcb)
+vmcb_get_exit_info2(void)
 {
-	if ((uintptr_t) vmcb % 4096)
-		return 0xffffffff;
-	return vmcb->control.exit_info_2_lo;
+	return vmcb0.control.exit_info_2_lo;
 }
 
 uint32_t
-vmcb_get_exit_int_info(struct vmcb *vmcb)
+vmcb_get_exit_intinfo(void)
 {
-	if ((uintptr_t) vmcb % 4096)
-		return 0xffffffff;
-	return vmcb->control.exit_int_info;
+	return vmcb0.control.exit_int_info;
 }
 
 uint32_t
-vmcb_get_exit_int_errcode(struct vmcb *vmcb)
+vmcb_get_exit_interr(void)
 {
-	if ((uintptr_t) vmcb % 4096)
-		return 0xffffffff;
-	return vmcb->control.exit_int_info_err;
+	return vmcb0.control.exit_int_info_err;
 }
 
 bool
-vmcb_get_intr_shadow(struct vmcb *vmcb)
+vmcb_check_int_shadow(void)
 {
-	if ((uintptr_t) vmcb % 4096)
-		return FALSE;
-	return (vmcb->control.int_state & 0x1) ? TRUE : FALSE;
+	return (vmcb0.control.int_state & 0x1) ? TRUE : FALSE;
 }
 
-int
-vmcb_inject_event(struct vmcb *vmcb, int type, uint8_t vector,
-		  uint32_t errcode, bool ev)
+void
+vmcb_inject_event(int type, uint8_t vector, uint32_t errcode, bool ev)
 {
-	if ((uintptr_t) vmcb % 4096)
-		return -1;
+	KERN_ASSERT(type == SVM_EVTINJ_TYPE_INTR ||
+		    type == SVM_EVTINJ_TYPE_NMI ||
+		    type == SVM_EVTINJ_TYPE_EXEPT ||
+		    type == SVM_EVTINJ_TYPE_SOFT);
 
-	if (type != SVM_EVTINJ_TYPE_INTR && type != SVM_EVTINJ_TYPE_NMI &&
-	    type != SVM_EVTINJ_TYPE_EXEPT && type != SVM_EVTINJ_TYPE_SOFT)
-		return -2;
+	struct vmcb_control_area *ctrl = &vmcb0.control;
 
-	struct vmcb_control_area *ctrl = &vmcb->control;
-
-	if (ctrl->event_inj & SVM_EVTINJ_VALID)
-		return -3;
+	KERN_ASSERT((ctrl->event_inj & SVM_EVTINJ_VALID) == 0);
 
 	ctrl->event_inj = SVM_EVTINJ_VALID | (vector & SVM_EVTINJ_VEC_MASK) |
 		((type << SVM_EVTINJ_TYPE_SHIFT) & SVM_EVTINJ_TYPE_MASK);
@@ -180,49 +141,25 @@ vmcb_inject_event(struct vmcb *vmcb, int type, uint8_t vector,
 
 	if (ev == TRUE)
 		ctrl->event_inj |= SVM_EVTINJ_VALID_ERR;
-
-	return 0;
 }
 
 bool
-vmcb_pending_event(struct vmcb *vmcb)
+vmcb_check_pending_event(void)
 {
-	if ((uintptr_t) vmcb % 4096)
-		return FALSE;
-	return (vmcb->control.event_inj & SVM_EVTINJ_VALID) ? TRUE : FALSE;
-}
-
-int
-vmcb_set_ncr3(struct vmcb *vmcb, uintptr_t ncr3)
-{
-	if ((uintptr_t) vmcb % 4096)
-		return -1;
-
-	if (ncr3 % 4096)
-		return -2;
-
-	vmcb->control.nested_cr3_lo = ncr3;
-	vmcb->control.nested_cr3_hi = 0;
-
-	return 0;
+	return (vmcb0.control.event_inj & SVM_EVTINJ_VALID) ? TRUE : FALSE;
 }
 
 uint32_t
-vmcb_get_neip(struct vmcb *vmcb)
+vmcb_get_next_eip(void)
 {
-	if ((uintptr_t) vmcb % 4096)
-		return 0xffffffff;
-	return vmcb->control.next_rip_lo;
+	return vmcb0.control.next_rip_lo;
 }
 
-int
-vmcb_set_seg(struct vmcb *vmcb, guest_seg_t seg,
+void
+vmcb_set_seg(guest_seg_t seg,
 	     uint16_t sel, uint32_t base, uint32_t lim, uint32_t ar)
 {
-	if ((uintptr_t) vmcb % 4096)
-		return -1;
-
-	struct vmcb_save_area *save = &vmcb->save;
+	struct vmcb_save_area *save = &vmcb0.save;
 	struct vmcb_seg *vmcb_seg;
 
 	switch (seg) {
@@ -257,7 +194,8 @@ vmcb_set_seg(struct vmcb *vmcb, guest_seg_t seg,
 		vmcb_seg = &save->idtr;
 		break;
 	default:
-		return -2;
+		KERN_PANIC("Unrecognized segment %d.\n", seg);
+		vmcb_seg = NULL;
 	}
 
 	vmcb_seg->selector = sel;
@@ -265,166 +203,75 @@ vmcb_set_seg(struct vmcb *vmcb, guest_seg_t seg,
 	vmcb_seg->base_hi = 0;
 	vmcb_seg->limit = lim;
 	vmcb_seg->attrib = (ar & 0xff) | ((ar & 0xf000) >> 4);
+}
 
-	return 0;
+void
+vmcb_set_reg(guest_reg_t reg, uint32_t val)
+{
+	struct vmcb_save_area *save = &vmcb0.save;
+
+	switch (reg) {
+	case GUEST_EAX:
+		save->rax_lo = val;
+		save->rax_hi = 0;
+		break;
+	case GUEST_EIP:
+		save->rip_lo = val;
+		save->rip_hi = 0;
+		break;
+	case GUEST_ESP:
+		save->rsp_lo = val;
+		save->rsp_hi = 0;
+		break;
+	case GUEST_EFLAGS:
+		save->rflags_lo = val;
+		save->rflags_hi = val;
+		break;
+	case GUEST_CR0:
+		save->cr0_lo = val;
+		save->cr0_hi = 0;
+		break;
+	case GUEST_CR2:
+		save->cr2_lo = val;
+		save->cr2_hi = 0;
+		break;
+	case GUEST_CR3:
+		save->cr3_lo = val;
+		save->cr3_hi = 0;
+		break;
+	case GUEST_CR4:
+		save->cr4_lo = val;
+		save->cr4_hi = 0;
+		break;
+	default:
+		KERN_PANIC("Unrecognized register %d.\n", reg);
+	}
 }
 
 uint32_t
-vmcb_get_cr0(struct vmcb *vmcb)
+vmcb_get_reg(guest_reg_t reg)
 {
-	if ((uintptr_t) vmcb % 4096)
+	struct vmcb_save_area *save = &vmcb0.save;
+
+	switch (reg) {
+	case GUEST_EAX:
+		return save->rax_lo;
+	case GUEST_EIP:
+		return save->rip_lo;
+	case GUEST_ESP:
+		return save->rsp_lo;
+	case GUEST_EFLAGS:
+		return save->rflags_lo;
+	case GUEST_CR0:
+		return save->cr0_lo;
+	case GUEST_CR2:
+		return save->cr2_lo;
+	case GUEST_CR3:
+		return save->cr3_lo;
+	case GUEST_CR4:
+		return save->cr4_lo;
+	default:
+		KERN_PANIC("Unrecognized register %d.\n", reg);
 		return 0xffffffff;
-	return vmcb->save.cr0_lo;
-}
-
-uint32_t
-vmcb_get_cr2(struct vmcb *vmcb)
-{
-	if ((uintptr_t) vmcb % 4096)
-		return 0xffffffff;
-	return vmcb->save.cr2_lo;
-}
-
-uint32_t
-vmcb_get_cr3(struct vmcb *vmcb)
-{
-	if ((uintptr_t) vmcb % 4096)
-		return 0xffffffff;
-	return vmcb->save.cr3_lo;
-}
-
-uint32_t
-vmcb_get_cr4(struct vmcb *vmcb)
-{
-	if ((uintptr_t) vmcb % 4096)
-		return 0xffffffff;
-	return vmcb->save.cr4_lo;
-}
-
-int
-vmcb_set_cr0(struct vmcb *vmcb, uint32_t val)
-{
-	if ((uintptr_t) vmcb % 4096)
-		return -1;
-
-	vmcb->save.cr0_lo = val;
-	vmcb->save.cr0_hi = 0;
-
-	return 0;
-}
-
-int
-vmcb_set_cr2(struct vmcb *vmcb, uint32_t val)
-{
-	if ((uintptr_t) vmcb % 4096)
-		return -1;
-
-	vmcb->save.cr2_lo = val;
-	vmcb->save.cr2_hi = 0;
-
-	return 0;
-}
-
-int
-vmcb_set_cr3(struct vmcb *vmcb, uint32_t val)
-{
-	if ((uintptr_t) vmcb % 4096)
-		return -1;
-
-	vmcb->save.cr3_lo = val;
-	vmcb->save.cr3_hi = 0;
-
-	return 0;
-}
-
-int
-vmcb_set_cr4(struct vmcb *vmcb, uint32_t val)
-{
-	if ((uintptr_t) vmcb % 4096)
-		return -1;
-
-	vmcb->save.cr4_lo = val;
-	vmcb->save.cr4_hi = 0;
-
-	return 0;
-}
-
-uint32_t
-vmcb_get_eip(struct vmcb *vmcb)
-{
-	if ((uintptr_t) vmcb % 4096)
-		return 0xffffffff;
-	return vmcb->save.rip_lo;
-}
-
-int
-vmcb_set_eip(struct vmcb *vmcb, uint32_t eip)
-{
-	if ((uintptr_t) vmcb % 4096)
-		return -1;
-
-	vmcb->save.rip_lo = eip;
-	vmcb->save.rip_hi = 0;
-
-	return 0;
-}
-
-uint32_t
-vmcb_get_esp(struct vmcb *vmcb)
-{
-	if ((uintptr_t) vmcb % 4096)
-		return 0xffffffff;
-	return vmcb->save.rsp_lo;
-}
-
-int
-vmcb_set_esp(struct vmcb *vmcb, uint32_t esp)
-{
-	if ((uintptr_t) vmcb % 4096)
-		return -1;
-
-	vmcb->save.rsp_lo = esp;
-	vmcb->save.rsp_hi = 0;
-
-	return 0;
-}
-
-uint32_t
-vmcb_get_eax(struct vmcb *vmcb)
-{
-	if ((uintptr_t) vmcb % 4096)
-		return 0xffffffff;
-	return vmcb->save.rax_lo;
-}
-
-int
-vmcb_set_eax(struct vmcb *vmcb, uint32_t eax)
-{
-	if ((uintptr_t) vmcb % 4096)
-		return -1;
-
-	vmcb->save.rax_lo = eax;
-	vmcb->save.rax_hi = 0;
-
-	return 0;
-}
-
-uint32_t
-vmcb_get_eflags(struct vmcb *vmcb)
-{
-	if ((uintptr_t) vmcb % 4096)
-		return 0xffffffff;
-	return vmcb->save.rflags_lo;
-}
-
-int
-vmcb_set_eflags(struct vmcb *vmcb, uint32_t eflags)
-{
-	if ((uintptr_t) vmcb % 4096)
-		return -1;
-
-	vmcb->save.rflags_lo = eflags;
-	vmcb->save.rflags_hi = 0;
-
-	return 0;
+	}
 }

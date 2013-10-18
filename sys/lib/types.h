@@ -22,6 +22,10 @@ typedef uint8_t			bool;
 #define NULL			((void *) 0)
 
 typedef enum {
+	A16, A32, A64
+} addr_sz_t;
+
+typedef enum {
 	SZ8, SZ16, SZ32
 } data_sz_t;
 

@@ -90,7 +90,7 @@ vmm_handle_ioport(struct vm *vm)
 	}
 
 	port = exit_info->ioport.port;
-	width = exit_info->ioport.width;
+	width = exit_info->ioport.dw;
 
 	/*
 	 * XXX: I/O permission check is not necessary when using HVM. If the

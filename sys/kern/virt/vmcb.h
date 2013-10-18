@@ -385,160 +385,90 @@ struct vmcb {
 /* functions */
 
 /*
- * Get a new VMCB.
- *
- * @return a pointer to the intialized VMCB if successful; otherwise, return
- *         NULL.
+ * Initialize VMCB.
  */
-struct vmcb *vmcb_new(void);
+void vmcb_init(void);
 
 /*
- * Free a VMCB.
+ * Enable/Disbale intercepting the virtual interrupts.
  */
-void vmcb_free(struct vmcb *vmcb);
-
-/*
- * Set a bit of the intercept field of the control area of VMCB.
- *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- * @param bit  the intercept bit; it must be in
- *             [INTERCEPT_INTR, INTERCEPT_XSETBV]
- *
- * @return 0 if successful; otherwise, return a non-zero value.
- */
-int vmcb_set_intercept(struct vmcb *vmcb, int bit);
-
-/*
- * Clear a bit of the intercept filed of the control area of VMCB.
- *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- * @param bit  the intercept bit; it must be in
- *             [INTERCEPT_INTR, INTERCEPT_XSETBV]
- *
- * @return 0 if successful; otherwise, return a non-zero value.
- */
-int vmcb_clear_intercept(struct vmcb *vmcb, int bit);
+void vmcb_set_intercept_vint(void);
+void vmcb_clear_intercept_vint(void);
 
 /*
  * Clear the pending virtual interrupt in VMCB.
- *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- *
- * @return 0 if successful; otherwise, return a non-zero value.
  */
-int vmcb_clear_virq(struct vmcb *vmcb);
+void vmcb_clear_virq(void);
 
 /*
  * Inject a virtual interrupt.
- *
- * @param vmcb     the VMCB; it must be aligned to 4096 bytes
- * @param vector   the vector number of the virtual interrupt
- * @param priority the priority of the virtual interrupt
- *
- * @return 0 if successful; otherwise, return a non-zerp value.
  */
-int vmcb_inject_virq(struct vmcb *vmcb, uint8_t vector, uint8_t priority);
+void vmcb_inject_virq(void);
 
 /*
  * Get the exit_code field of VMCB.
  *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- *
- * @return the 32-bit value of the exit_code; if VMCB is not aligned to 4096
- *         bytes, the returned value is undefined.
+ * @return the 32-bit value of the exit_code
  */
-uint32_t vmcb_get_exit_code(struct vmcb *vmcb);
+uint32_t vmcb_get_exit_code(void);
 
 /*
  * Get the exit_info_1/exit_info_2 field of VMCB.
  *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- *
- * @return the 32-bit value of the exit_info1/exit_info2; if VMCB is not aligned
- *         to 4096 bytes, the returned value is undefined.
+ * @return the 32-bit value of the exit_info1/exit_info2
  */
-uint32_t vmcb_get_exit_info1(struct vmcb *vmcb);
-uint32_t vmcb_get_exit_info2(struct vmcb *vmcb);
+uint32_t vmcb_get_exit_info1(void);
+uint32_t vmcb_get_exit_info2(void);
 
 /*
  * Get the exit_int_info field of VMCB.
  *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- *
- * @return the 32-bit value of the exit_int_info; if VMCB is not aligned to 4096
- *         bytes, the returned value is undefined.
+ * @return the 32-bit value of the exit_int_info
  */
-uint32_t vmcb_get_exit_int_info(struct vmcb *vmcb);
+uint32_t vmcb_get_exit_intinfo(void);
 
 /*
  * Get the exit_int_info_error field of VMCB.
  *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- *
- * @return the 32-bit value of the exit_int_info_error; if VMCB is not aligned
- *         to 4096 bytes, the returned value is undefined.
+ * @return the 32-bit value of the exit_int_info_error
  */
-uint32_t vmcb_get_exit_int_errcode(struct vmcb *vmcb);
+uint32_t vmcb_get_exit_interr(void);
 
 /*
  * Is the interrupt shadow bit set in the int_state field of VMCB.
  *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- *
- * @return TRUE if set; FALSE if not; if VMCB is not aligned to 4096 bytes, the
- *         returned value is undefined.
+ * @return TRUE if set; FALSE if not
  */
-bool vmcb_get_intr_shadow(struct vmcb *vmcb);
+bool vmcb_check_int_shadow(void);
 
 /*
  * Inject a vector event (one of external interrupt, exception, NMI, software
  * interrupt).
  *
- * @param vmcb    the VMCB; it must be aligned to 4096 bytes
  * @param type    the event type
  * @param vector  the vector number of the event
  * @param errcode the error code; it's ignored if ev == FALSE
  * @param ev      if errcode is valid
- *
- * @return 0 if successful; otherwise, return a non-zero value.
  */
-int vmcb_inject_event(struct vmcb *vmcb, int type, uint8_t vector,
-		      uint32_t errcode, bool ev);
+void vmcb_inject_event(int type, uint8_t vector, uint32_t errcode, bool ev);
 
 /*
  * Is there a pending event in VMCB?
  *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- *
- * @return TRUE if there is a pending event; FALSE if not; if vmcb is not
- *         aligned to 4096 bytes, the returned value is undefined.
+ * @return TRUE if there is a pending event; FALSE if not
  */
-bool vmcb_pending_event(struct vmcb *vmcb);
-
-/*
- * Set the nested page table CR3.
- *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- * @param ncr3 the nested page table CR3; it must be aligned to 4096 bytes
- *
- * @return 0 if successful; otherwise, return a non-zero value.
- */
-int vmcb_set_ncr3(struct vmcb *vmcb, uintptr_t ncr3);
+bool vmcb_check_pending_event(void);
 
 /*
  * Get the next_rip field of VMCB.
  *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- *
- * @return the next_rip; if VMCB is not aligned to 4096 bytes, the returned
- *         value is undefined.
+ * @return the next_rip
  */
-uint32_t vmcb_get_neip(struct vmcb *vmcb);
+uint32_t vmcb_get_next_eip(void);
 
 /*
  * Set the guest segment in VMCB.
  *
- * @param vmcb  the VMCB; it must be aligned to 4096 bytes
  * @param seg   the guest segment
  * @param sel   the selector of the segment
  * @param base  the lower 32-bit of the base address of the segment
@@ -547,114 +477,25 @@ uint32_t vmcb_get_neip(struct vmcb *vmcb);
  *
  * @return 0 if successful; otherwise, return a non-zero value.
  */
-int vmcb_set_seg(struct vmcb *vmcb, guest_seg_t seg,
-		 uint16_t sel, uint32_t base, uint32_t lim, uint32_t ar);
+void vmcb_set_seg(guest_seg_t seg,
+		  uint16_t sel, uint32_t base, uint32_t lim, uint32_t ar);
 
 /*
- * Get the guest control register in VMCB.
+ * Set the guest registers in VMCB.
  *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- *
- * @return the guest control registers; if vmcb is not aligned to 4096 bytes,
- *         the returned value is undefined.
+ * @param reg the guest register
+ * @param val the lower 32-bit of the value of the register
  */
-uint32_t vmcb_get_cr0(struct vmcb *vmcb);
-uint32_t vmcb_get_cr2(struct vmcb *vmcb);
-uint32_t vmcb_get_cr3(struct vmcb *vmcb);
-uint32_t vmcb_get_cr4(struct vmcb *vmcb);
+void vmcb_set_reg(guest_reg_t reg, uint32_t val);
 
 /*
- * Set the guest control register in VMCB.
+ * Get the value of the guest register in VMCB.
  *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- * @param val  the value of the guest control register
+ * @param reg the guest register
  *
- * @return 0 if successful; otherwise, return a non-zero value.
+ * @return the lower 32-bit of the value of the guest register
  */
-int vmcb_set_cr0(struct vmcb *vmcb, uint32_t val);
-int vmcb_set_cr2(struct vmcb *vmcb, uint32_t val);
-int vmcb_set_cr3(struct vmcb *vmcb, uint32_t val);
-int vmcb_set_cr4(struct vmcb *vmcb, uint32_t val);
-
-/*
- * Get the guest EIP in VMCB.
- *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- *
- * @return the 32-bit value of the guest EIP; if VMCB is not aligned to 4096
- *         butes, the returned value is undefined.
- */
-uint32_t vmcb_get_eip(struct vmcb *vmcb);
-
-/*
- * Set the guest EIP in VMCB.
- *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- * @param eip  the value of EIP
- *
- * @return 0 if successful; otherwise, return a non-zero value
- */
-int vmcb_set_eip(struct vmcb *vmcb, uint32_t eip);
-
-/*
- * Get the guest ESP in VMCB.
- *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- *
- * @return the 32-bit value of the guest ESP; if VMCB is not aligned to 4096
- *         butes, the returned value is undefined.
- */
-uint32_t vmcb_get_esp(struct vmcb *vmcb);
-
-/*
- * Set the guest ESP in VMCB.
- *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- * @param esp  the value of ESP
- *
- * @return 0 if successful; otherwise, return a non-zero value
- */
-int vmcb_set_esp(struct vmcb *vmcb, uint32_t esp);
-
-/*
- * Get the guest EAX in VMCB.
- *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- *
- * @return the 32-bit value of the guest EAX; if VMCB is not aligned to 4096
- *         butes, the returned value is undefined.
- */
-uint32_t vmcb_get_eax(struct vmcb *vmcb);
-
-/*
- * Set the guest EAX in VMCB.
- *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- * @param eax  the value of EAX
- *
- * @return 0 if successful; otherwise, return a non-zero value
- */
-int vmcb_set_eax(struct vmcb *vmcb, uint32_t eax);
-
-/*
- * Get the guest EFLAGS in VMCB.
- *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- *
- * @return the 32-bit value of the guest EFLAGS; if VMCB is not aligned to 4096
- *         butes, the returned value is undefined.
- */
-uint32_t vmcb_get_eflags(struct vmcb *vmcb);
-
-/*
- * Set the guest EFLAGS in VMCB.
- *
- * @param vmcb the VMCB; it must be aligned to 4096 bytes
- * @param eflags  the value of EFLAGS
- *
- * @return 0 if successful; otherwise, return a non-zero value
- */
-int vmcb_set_eflags(struct vmcb *vmcb, uint32_t eflags);
+uint32_t vmcb_get_reg(guest_reg_t reg);
 
 #endif /* _KERN_ */
 

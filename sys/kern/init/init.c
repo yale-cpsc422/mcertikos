@@ -93,7 +93,7 @@ kern_init(uintptr_t mbi_addr)
 	 * Initialize the hardware virtualization driver.
 	 */
 	KERN_INFO("Initialize virtualization module ... ");
-	hvm_init();
+	svm_init();
 	KERN_INFO("done.\n");
 
 	/*

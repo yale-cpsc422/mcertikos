@@ -115,11 +115,16 @@ extern void svm_run(struct vmcb *vmcb, uint32_t *ebx, uint32_t *ecx,
 				 : "+r" (_val) :: "memory");	\
 	} while (0)
 
+extern struct vmcb vmcb0;
+extern uint32_t npt_lv1[1024] gcc_aligned(4096);
+
 void
-svm_drv_run_vm(struct vmcb *vmcb, uint32_t *ebx, uint32_t *ecx,
-	       uint32_t *edx, uint32_t *esi, uint32_t *edi, uint32_t *ebp)
+enter_guest(uint32_t *ebx, uint32_t *ecx,
+	    uint32_t *edx, uint32_t *esi, uint32_t *edi, uint32_t *ebp)
 {
 	volatile uint16_t h_fs, h_gs, h_ldt;
+
+	vmcb0.control.nested_cr3 = (uintptr_t) npt_lv1;
 
 	SVM_CLGI();
 
@@ -128,7 +133,7 @@ svm_drv_run_vm(struct vmcb *vmcb, uint32_t *ebx, uint32_t *ecx,
 	h_ldt = rldt();
 
 	sti();
-	svm_run(vmcb, ebx, ecx, edx, esi, edi, ebp);
+	svm_run(&vmcb0, ebx, ecx, edx, esi, edi, ebp);
 	cli();
 
 	load_host_segment(fs, h_fs);
