@@ -63,15 +63,15 @@ vmcb_init(void)
 	vmcb0_inited = TRUE;
 }
 
-extern void enter_guest(struct vmcb *vmcb,
-			uint32_t *ebx, uint32_t *ecx, uint32_t *edx,
-			uint32_t *esi, uint32_t *edi, uint32_t *ebp);
+extern void svm_switch(struct vmcb *vmcb,
+		       uint32_t *ebx, uint32_t *ecx, uint32_t *edx,
+		       uint32_t *esi, uint32_t *edi, uint32_t *ebp);
 
 void
 vmcb_run_vm(uint32_t *ebx, uint32_t *ecx, uint32_t *edx,
 	    uint32_t *esi, uint32_t *edi, uint32_t *ebp)
 {
-	enter_guest(&vmcb0, ebx, ecx, edx, esi, edi, ebp);
+	svm_switch(&vmcb0, ebx, ecx, edx, esi, edi, ebp);
 }
 
 void

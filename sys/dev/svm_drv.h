@@ -8,8 +8,13 @@
 #include "vmcb.h"
 
 int svm_drv_init(void);
-void enter_guest(struct vmcb *vmcb, uint32_t *ebx, uint32_t *ecx,
-		 uint32_t *edx, uint32_t *esi, uint32_t *edi, uint32_t *ebp);
+
+void enter_guest(struct vmcb *vmcb,
+		 uint32_t *g_ebx, uint32_t *g_ecx, uint32_t *g_edx,
+		 uint32_t *g_esi, uint32_t *g_edi, uint32_t *g_ebp,
+		 uint32_t *h_fs, uint32_t *h_gs, uint32_t *h_ldt,
+		 uint32_t *h_ebx, uint32_t *h_ecx, uint32_t *h_edx,
+		 uint32_t *h_esi, uint32_t *h_edi, uint32_t *h_ebp);
 
 #endif /* _KERN_ */
 

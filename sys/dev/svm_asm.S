@@ -1,37 +1,47 @@
 	.globl enter_guest
-/* void enter_guest(struct vmcb *vmcb, uint32_t *ebx, uint32_t *ecx,
-                    uint32_t *edx, uint32_t *esi, uint32_t *edi, uint32_t *ebp) */
+/* void enter_guest(struct vmcb *vmcb,
+                    uint32_t *g_ebx, uint32_t *g_ecx, uint32_t *g_edx,
+                    uint32_t *g_esi, uint32_t *g_edi, uint32_t *g_ebp,
+                    uint32_t *h_fs, uint32_t *h_gs, uint32_t *h_ldt,
+                    uint32_t *h_ebx, uint32_t *h_ecx, uint32_t *h_edx,
+                    uint32_t *h_esi, uint32_t *h_edi, uint32_t *h_ebp) */
 enter_guest:
 	clgi
 
 	/* save host segments fs, gs and ldt */
 	movw	%fs, %ax
-	pushl	%eax
+	movw	%ax, 32(%esp)
 	movw	%gs, %ax
-	pushl	%eax
+	movw	%ax, 36(%esp)
 	sldt	%ax
-	pushl	%eax
+	movw	%ax, 40(%esp)
 
 	/* save other host general-purpose registers */
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%edx
-	pushl	%esi
-	pushl	%edi
-	pushl	%ebp
+	movl	44(%esp), %eax
+	movl	%ebx, (%eax)
+	movl	48(%esp), %eax
+	movl	%ecx, (%eax)
+	movl	52(%esp), %eax
+	movl	%edx, (%eax)
+	movl	56(%esp), %eax
+	movl	%esi, (%eax)
+	movl	60(%esp), %eax
+	movl	%edi, (%eax)
+	movl	64(%esp), %eax
+	movl	%ebp, (%eax)
 
 	/* restore guest registers */
-	movl	44(%esp), %eax	/* guest %ebx */
+	movl	8(%esp), %eax	/* guest %ebx */
 	movl	(%eax), %ebx
-	movl	48(%esp), %eax	/* guest %ecx */
+	movl	12(%esp), %eax	/* guest %ecx */
 	movl	(%eax), %ecx
-	movl	52(%esp), %eax	/* guest %edx */
+	movl	16(%esp), %eax	/* guest %edx */
 	movl	(%eax), %edx
-	movl	56(%esp), %eax	/* guest %esi */
+	movl	20(%esp), %eax	/* guest %esi */
 	movl	(%eax), %esi
-	movl	60(%esp), %eax	/* guest %edi */
+	movl	24(%esp), %eax	/* guest %edi */
 	movl	(%eax), %edi
-	movl	64(%esp), %eax	/* guest %ebp */
+	movl	28(%esp), %eax	/* guest %ebp */
 	movl	(%eax), %ebp
 
 	/* setup interrupt flags */
@@ -39,7 +49,7 @@ enter_guest:
 	nop
 
 	/* load VMCB */
-	movl	40(%esp), %eax
+	movl	4(%esp), %eax
 	vmload
 
 	/* switch to guest */
@@ -53,34 +63,40 @@ __exit_guest:
 	cli
 
 	/* save guest registers */
-	movl	44(%esp), %eax	/* guest %ebx */
+	movl	8(%esp), %eax	/* guest %ebx */
 	movl	%ebx, (%eax)
-	movl	48(%esp), %eax	/* guest %ecx */
+	movl	12(%esp), %eax	/* guest %ecx */
 	movl	%ecx, (%eax)
-	movl	52(%esp), %eax	/* guest %edx */
+	movl	16(%esp), %eax	/* guest %edx */
 	movl	%edx, (%eax)
-	movl	56(%esp), %eax	/* guest %esi */
+	movl	20(%esp), %eax	/* guest %esi */
 	movl	%esi, (%eax)
-	movl	60(%esp), %eax	/* guest %edi */
+	movl	24(%esp), %eax	/* guest %edi */
 	movl	%edi, (%eax)
-	movl	64(%esp), %eax	/* guest %ebp */
+	movl	28(%esp), %eax	/* guest %ebp */
 	movl	%ebp, (%eax)
 
 	/* restore host general-purpose registers */
-	popl	%ebp
-	popl	%edi
-	popl	%esi
-	popl	%edx
-	popl	%ecx
-	popl	%ebx
+	movl	44(%esp), %eax
+	movl	(%eax), %ebx
+	movl	48(%esp), %eax
+	movl	(%eax), %ecx
+	movl	52(%esp), %eax
+	movl	(%eax), %edx
+	movl	56(%esp), %eax
+	movl	(%eax), %esi
+	movl	60(%esp), %eax
+	movl	(%eax), %edi
+	movl	64(%esp), %eax
+	movl	(%eax), %ebp
 
 	/* restore host segment registers fs, gs and ldt */
-	popl	%eax
-	lldt	%ax
-	popl	%eax
-	movw	%ax, %gs
-	popl	%eax
+	movw	32(%esp), %ax
 	movw	%ax, %fs
+	movw	36(%esp), %ax
+	movw	%ax, %gs
+	movw	40(%esp), %ax
+	sldt	%ax
 
 	stgi
 

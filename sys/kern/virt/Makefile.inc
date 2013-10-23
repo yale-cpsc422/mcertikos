@@ -2,6 +2,7 @@
 
 OBJDIRS		+= $(KERN_OBJDIR)/kern/virt
 
+KERN_SRCFILES	+= $(KERN_DIR)/kern/virt/svm_switch.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/virt/npt_intro.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/virt/npt_ops.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/virt/npt_init.c
