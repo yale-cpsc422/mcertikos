@@ -382,12 +382,16 @@ struct vmcb {
 #define SVM_EXITINFO1_NFP_ADDR		(1ULL << 32)
 #define SVM_EXITINFO1_NFP_WALK		(1ULL << 33)
 
+
 /* functions */
 
 /*
  * Initialize VMCB.
  */
 void vmcb_init(void);
+
+void vmcb_run_vm(uint32_t *ebx, uint32_t *ecx, uint32_t *edx,
+		 uint32_t *esi, uint32_t *edi, uint32_t *ebp);
 
 /*
  * Enable/Disbale intercepting the virtual interrupts.

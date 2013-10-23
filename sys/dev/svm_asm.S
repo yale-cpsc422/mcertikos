@@ -1,32 +1,18 @@
-	.globl	svm_run
-/* void svm_run(struct vmcb *vmcb, uint32_t *ebx, uint32_t *ecx,
-		uint32_t *edx, uint32_t *esi, uint32_t *edi, uint32_t *ebp) */
-svm_run:
-	/*
-	 * Stack view during the execution of svm_run():
-	 * * each slot is 4 bytes
-	 *
-	 * +---------------+
-	 * |      ebp      |
-	 * |      edi      |
-	 * |      esi      |
-	 * |      edx      |
-	 * |      ecx      |
-	 * |      ebx      |
-	 * |      vmcb     | <-- esp + 28
-	 * +---------------+
-	 * |  return addr  |
-	 * +---------------+ <-- esp (when entering svm_run())
-	 * |   host %ebx   |
-	 * |   host %ecx   |
-	 * |   host %edx   |
-	 * |   host %esi   |
-	 * |   host %edi   |
-	 * |   host %ebp   |
-	 * +---------------+ <-- esp (after storing host registers)
-	 */
+	.globl enter_guest
+/* void enter_guest(struct vmcb *vmcb, uint32_t *ebx, uint32_t *ecx,
+                    uint32_t *edx, uint32_t *esi, uint32_t *edi, uint32_t *ebp) */
+enter_guest:
+	clgi
 
-	/* store host registers */
+	/* save host segments fs, gs and ldt */
+	movw	%fs, %ax
+	pushl	%eax
+	movw	%gs, %ax
+	pushl	%eax
+	sldt	%ax
+	pushl	%eax
+
+	/* save other host general-purpose registers */
 	pushl	%ebx
 	pushl	%ecx
 	pushl	%edx
@@ -35,49 +21,67 @@ svm_run:
 	pushl	%ebp
 
 	/* restore guest registers */
-	movl	32(%esp), %eax	/* guest %ebx */
+	movl	44(%esp), %eax	/* guest %ebx */
 	movl	(%eax), %ebx
-	movl	36(%esp), %eax	/* guest %ecx */
+	movl	48(%esp), %eax	/* guest %ecx */
 	movl	(%eax), %ecx
-	movl	40(%esp), %eax	/* guest %edx */
+	movl	52(%esp), %eax	/* guest %edx */
 	movl	(%eax), %edx
-	movl	44(%esp), %eax	/* guest %esi */
+	movl	56(%esp), %eax	/* guest %esi */
 	movl	(%eax), %esi
-	movl	48(%esp), %eax	/* guest %edi */
+	movl	60(%esp), %eax	/* guest %edi */
 	movl	(%eax), %edi
-	movl	52(%esp), %eax	/* guest %ebp */
+	movl	64(%esp), %eax	/* guest %ebp */
 	movl	(%eax), %ebp
 
+	/* setup interrupt flags */
+	sti
+	nop
+
 	/* load VMCB */
-	movl	28(%esp), %eax
+	movl	40(%esp), %eax
 	vmload
 
-	/* switch to the guest */
+	/* switch to guest */
 	vmrun
 
+__exit_guest:
 	/* when returning from the guest... */
 	vmsave
 
+	/* reset interrupt flags */
+	cli
+
 	/* save guest registers */
-	movl	32(%esp), %eax	/* guest %ebx */
+	movl	44(%esp), %eax	/* guest %ebx */
 	movl	%ebx, (%eax)
-	movl	36(%esp), %eax	/* guest %ecx */
+	movl	48(%esp), %eax	/* guest %ecx */
 	movl	%ecx, (%eax)
-	movl	40(%esp), %eax	/* guest %edx */
+	movl	52(%esp), %eax	/* guest %edx */
 	movl	%edx, (%eax)
-	movl	44(%esp), %eax	/* guest %esi */
+	movl	56(%esp), %eax	/* guest %esi */
 	movl	%esi, (%eax)
-	movl	48(%esp), %eax	/* guest %edi */
+	movl	60(%esp), %eax	/* guest %edi */
 	movl	%edi, (%eax)
-	movl	52(%esp), %eax	/* guest %ebp */
+	movl	64(%esp), %eax	/* guest %ebp */
 	movl	%ebp, (%eax)
 
-	/* restore host registers */
+	/* restore host general-purpose registers */
 	popl	%ebp
 	popl	%edi
 	popl	%esi
 	popl	%edx
 	popl	%ecx
 	popl	%ebx
+
+	/* restore host segment registers fs, gs and ldt */
+	popl	%eax
+	lldt	%ax
+	popl	%eax
+	movw	%ax, %gs
+	popl	%eax
+	movw	%ax, %fs
+
+	stgi
 
 	ret

@@ -121,7 +121,7 @@ svm_init_vm(void)
 void
 svm_run_vm(void)
 {
-	enter_guest(&svm0.g_rbx, &svm0.g_rcx, &svm0.g_rdx, &svm0.g_rsi,
+	vmcb_run_vm(&svm0.g_rbx, &svm0.g_rcx, &svm0.g_rdx, &svm0.g_rsi,
 		    &svm0.g_rdi, &svm0.g_rbp);
 
 	uint32_t exit_int_info = vmcb_get_exit_intinfo();
