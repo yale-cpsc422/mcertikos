@@ -11,6 +11,7 @@ struct svm {
 	uint32_t	g_rbx, g_rcx, g_rdx, g_rsi, g_rdi, g_rbp;
 	exit_reason_t	exit_reason;
 	exit_info_t	exit_info;
+	bool		synced;
 };
 
 /*
@@ -28,6 +29,11 @@ void svm_init_vm(void);
  * or an error.
  */
 void svm_run_vm(void);
+
+/*
+ * Synchronize svm0 with VMCB.
+ */
+void svm_sync(void);
 
 /*
  * Enable/Disable intercepting the virtual interrupts.

@@ -196,10 +196,18 @@ sys_hvm_create_vm(struct context *ctx)
 static int
 sys_hvm_run_vm(struct context *ctx, int vmid)
 {
+	ctx_set_errno(ctx, (vmid == 0) ? E_SUCC : E_INVAL_VMID);
+	svm_run_vm();
+	return E_SUCC;
+}
+
+static int
+sys_hvm_get_exitinfo(struct context *ctx, int vmid)
+{
 	if (vmid != 0)
 		return E_INVAL_VMID;
 
-	svm_run_vm();
+	svm_sync();
 
 	exit_reason_t reason = svm_get_exit_reason();
 	uint32_t flags = 0;
@@ -244,6 +252,7 @@ sys_hvm_set_mmap(int vmid, uint32_t gpa, uint32_t hva)
 
 	hpa = (hpa & 0xfffff000) + (hva % PAGESIZE);
 
+	svm_sync();
 	svm_set_mmap(gpa, hpa);
 
 	return E_SUCC;
@@ -258,7 +267,9 @@ sys_hvm_set_reg(int vmid, guest_reg_t reg, uint32_t val)
 	if (!(GUEST_EAX <= reg && reg < GUEST_MAX_REG))
 		return E_INVAL_REG;
 
+	svm_sync();
 	svm_set_reg(reg, val);
+
 	return E_SUCC;
 }
 
@@ -270,6 +281,8 @@ sys_hvm_get_reg(struct context *ctx, int vmid, guest_reg_t reg)
 
 	if (!(GUEST_EAX <= reg && reg < GUEST_MAX_REG))
 		return E_INVAL_REG;
+
+	svm_sync();
 
 	ctx_set_retval1(ctx, svm_get_reg(reg));
 
@@ -294,6 +307,7 @@ sys_hvm_set_seg(int vmid, guest_seg_t seg, uintptr_t desc_la)
 		      sizeof(desc)) != sizeof(desc))
 		return E_MEM;
 
+	svm_sync();
 	svm_set_seg(seg, desc.sel, desc.base, desc.lim, desc.ar);
 
 	return E_SUCC;
@@ -304,6 +318,8 @@ sys_hvm_get_next_eip(struct context *ctx, int vmid, guest_instr_t instr)
 {
 	if (vmid != 0)
 		return E_INVAL_VMID;
+
+	svm_sync();
 
 	exit_reason_t reason = svm_get_exit_reason();
 
@@ -325,6 +341,7 @@ sys_hvm_inject_event(int vmid, guest_event_t ev_type, uint8_t vector,
 	if (ev_type != EVENT_EXTINT && ev_type != EVENT_EXCEPTION)
 		return E_INVAL_EVENT;
 
+	svm_sync();
 	svm_inject_event(ev_type, vector, errcode, ev);
 
 	return E_SUCC;
@@ -336,6 +353,7 @@ sys_hvm_pending_event(struct context *ctx, int vmid)
 	if (vmid != 0)
 		return E_INVAL_VMID;
 
+	svm_sync();
 	ctx_set_retval1(ctx, svm_check_pending_event());
 
 	return E_SUCC;
@@ -347,6 +365,7 @@ sys_hvm_intr_shadow(struct context *ctx, int vmid)
 	if (vmid != 0)
 		return E_INVAL_VMID;
 
+	svm_sync();
 	ctx_set_retval1(ctx, svm_check_int_shadow());
 
 	return E_SUCC;
@@ -357,6 +376,8 @@ sys_hvm_intercept_intr_window(int vmid, bool enable)
 {
 	if (vmid != 0)
 		return E_INVAL_VMID;
+
+	svm_sync();
 
 	if (enable == TRUE)
 		svm_set_intercept_vint();
@@ -532,10 +553,24 @@ syscall_handler(void)
 		 *   None.
 		 *
 		 * Error:
-		 *   E_INVAL_VMID, E_INVAL_VMRUN
+		 *   E_INVAL_VMID
 		 *
 		 */
 		errno = sys_hvm_run_vm(ctx, (int) a[0]);
+		break;
+	case SYS_hvm_get_exitinfo:
+		/*
+		 * Get the information of the latest VMEXIT.
+		 *
+		 * Parameters:
+		 *   a[0]: the virtual machine descriptor
+		 *
+		 * Return:
+		 *
+		 * Error:
+		 *
+		 */
+		errno = sys_hvm_get_exitinfo(ctx, (int) a[0]);
 		break;
 	case SYS_hvm_set_mmap:
 		/*

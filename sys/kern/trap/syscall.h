@@ -17,6 +17,7 @@ enum __syscall_nr {
 	 */
 	SYS_hvm_create_vm,
 	SYS_hvm_run_vm,
+	SYS_hvm_get_exitinfo,
 	SYS_hvm_set_mmap,
 	SYS_hvm_set_reg,
 	SYS_hvm_get_reg,

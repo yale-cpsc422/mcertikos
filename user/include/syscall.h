@@ -118,7 +118,22 @@ sys_hvm_create_vm(void)
 }
 
 static gcc_inline int
-sys_hvm_run_vm(int vmid, exit_reason_t *reason, exit_info_t *info)
+sys_hvm_run_vm(int vmid)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_run_vm),
+		       "b" (vmid)
+		     : "cc", "memory");
+
+	return errno ? errno : 0;
+}
+
+static gcc_inline int
+sys_hvm_get_exitinfo(int vmid, exit_reason_t *reason, exit_info_t *info)
 {
 	int errno;
 	exit_reason_t exit_reason;
@@ -131,7 +146,7 @@ sys_hvm_run_vm(int vmid, exit_reason_t *reason, exit_info_t *info)
 		       "=d" (exit_info[1]),
 		       "=S" (exit_info[2])
 		     : "i" (T_SYSCALL),
-		       "a" (SYS_hvm_run_vm),
+		       "a" (SYS_hvm_get_exitinfo),
 		       "b" (vmid)
 		     : "cc", "memory");
 

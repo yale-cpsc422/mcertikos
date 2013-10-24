@@ -583,12 +583,14 @@ vmm_run_vm(struct vm *vm)
 		injected = 0;
 		start_tsc = rdtscp();
 
-		if ((rc = sys_hvm_run_vm(vm->vmid,
-					 &vm->exit_reason, &vm->exit_info)))
+		if ((rc = sys_hvm_run_vm(vm->vmid)))
 			break;
 
 		exit_tsc = rdtscp();
 		vmm_update_guest_tsc(vm, start_tsc, exit_tsc, host_cpu_freq);
+
+		sys_hvm_get_exitinfo(vm->vmid,
+				     &vm->exit_reason, &vm->exit_info);
 
 		injected = vmm_intr_assist(vm);
 

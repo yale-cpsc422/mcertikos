@@ -39,7 +39,7 @@ svm_handle_exit(void)
 
 #ifdef DEBUG_VMEXIT
 	SVM_DEBUG("VMEXIT exit_code 0x%x, guest EIP 0x%08x.\n",
-		  exitcode, vmcb_get_eip());
+		  exitcode, vmcb_get_reg(GUEST_EIP));
 #endif
 
 	switch (exitcode) {
@@ -115,14 +115,25 @@ svm_init_vm(void)
 	vmcb_init();
 	npt_init();
 
+	svm0.synced = FALSE;
+
 	svm0_inited = TRUE;
 }
 
 void
 svm_run_vm(void)
 {
+	svm0.synced = FALSE;
+
 	vmcb_run_vm(&svm0.g_rbx, &svm0.g_rcx, &svm0.g_rdx, &svm0.g_rsi,
 		    &svm0.g_rdi, &svm0.g_rbp);
+}
+
+void
+svm_sync(void)
+{
+	if (svm0.synced == TRUE)
+		return;
 
 	uint32_t exit_int_info = vmcb_get_exit_intinfo();
 
@@ -155,6 +166,7 @@ svm_run_vm(void)
 	}
 
 	svm0.exit_reason = svm_handle_exit();
+	svm0.synced = TRUE;
 }
 
 void
