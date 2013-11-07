@@ -3,7 +3,8 @@
 
 #ifdef _KERN_
 
-#include <lib/export.h>
+#include <lib/seg.h>
+#include <lib/types.h>
 
 #include "kctx.h"
 

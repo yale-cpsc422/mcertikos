@@ -3,8 +3,11 @@
 
 #ifdef _KERN_
 
+#include <lib/seg.h>
+#include <lib/trap.h>
+#include <lib/types.h>
+
 #include <mm/export.h>
-#include <lib/export.h>
 
 struct context {
 	tf_t 		tf;	/* trapframe */

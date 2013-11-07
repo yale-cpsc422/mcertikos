@@ -3,7 +3,7 @@
 
 #ifdef _KERN_
 
-#include <lib/export.h>
+#include <lib/types.h>
 
 void npt_init(void);
 void npt_insert(uint32_t gpa, uint32_t hpa);

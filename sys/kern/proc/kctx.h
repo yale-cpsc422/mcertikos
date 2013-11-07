@@ -3,7 +3,7 @@
 
 #ifdef _KERN_
 
-#include <lib/export.h>
+#include <lib/types.h>
 
 #define MAX_KCTX	64
 

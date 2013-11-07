@@ -2,18 +2,12 @@
 
 OBJDIRS		+= $(KERN_OBJDIR)/dev
 
-KERN_SRCFILES	+= $(KERN_DIR)/dev/video.c
-KERN_SRCFILES	+= $(KERN_DIR)/dev/kbd.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/serial.c
-KERN_SRCFILES	+= $(KERN_DIR)/dev/acpi.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/pic.c
-KERN_SRCFILES	+= $(KERN_DIR)/dev/lapic.c
-KERN_SRCFILES	+= $(KERN_DIR)/dev/ioapic.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/timer.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/tsc.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/ide.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/console.c
-KERN_SRCFILES	+= $(KERN_DIR)/dev/pcpu.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/intr.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/svm_drv.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/svm_asm.S

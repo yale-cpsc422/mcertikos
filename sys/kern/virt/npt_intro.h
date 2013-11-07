@@ -3,7 +3,8 @@
 
 #ifdef _KERN_
 
-#include <lib/export.h>
+#include <lib/gcc.h>
+#include <lib/types.h>
 
 extern uint32_t npt_lv1[1024] gcc_aligned(4096);
 extern uint32_t npt_lv2[1024][1024] gcc_aligned(4096);

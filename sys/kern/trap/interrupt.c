@@ -1,5 +1,5 @@
-#include <lib/export.h>
-#include <dev/export.h>
+#include <dev/intr.h>
+#include <lib/trap.h>
 
 /*
  * XXX: The dummy return statements in spurious_intr_handler(),

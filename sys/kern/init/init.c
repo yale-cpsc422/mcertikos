@@ -1,6 +1,13 @@
 #include <lib/debug.h>
-#include <lib/export.h>
-#include <dev/export.h>
+#include <lib/seg.h>
+#include <lib/types.h>
+#include <lib/x86.h>
+
+#include <dev/console.h>
+#include <dev/ide.h>
+#include <dev/intr.h>
+#include <dev/tsc.h>
+
 #include <mm/export.h>
 #include <proc/export.h>
 #include <virt/export.h>
@@ -60,19 +67,18 @@ kern_init(uintptr_t mbi_addr)
 	cons_init();
 	KERN_INFO("Console is ready.\n");
 
-
-	/*
-	 * Detect CPU.
-	 */
-	KERN_INFO("Detect CPU and APIC ... ");
-	pcpu_init();
-	KERN_INFO("done.\n");
-
 	/*
 	 * Initialize the virtual memory.
 	 */
 	KERN_INFO("Initialize memory management module ... ");
 	pmap_init(mbi_addr);
+	KERN_INFO("done.\n");
+
+	/*
+	 * Initiailize TSC and timer.
+	 */
+	KERN_INFO("Initialize TSC/Timer ... ");
+	tsc_init();
 	KERN_INFO("done.\n");
 
 	/*

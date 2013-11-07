@@ -1,16 +1,12 @@
 #include <lib/debug.h>
 #include <lib/seg.h>
+#include <lib/trap.h>
 #include <lib/types.h>
 #include <lib/x86.h>
 
 #include "intr.h"
-#include "ioapic.h"
-#include "lapic.h"
-#include "pcpu.h"
 #include "pic.h"
-#include "trap.h"
 
-volatile static bool using_apic = FALSE;
 volatile static bool intr_inited = FALSE;
 
 /* Entries of interrupt handlers, defined in trapasm.S by TRAPHANDLE* */
@@ -96,20 +92,11 @@ intr_init_idt(void)
 void
 intr_init(void)
 {
+	if (intr_inited == TRUE)
+		return;
+
 	pic_init();
-
-	/* check whether local APIC is available */
-	uint32_t dummy, edx;
-	cpuid(0x00000001, &dummy, &dummy, &dummy, &edx);
-	using_apic = (edx & CPUID_FEATURE_APIC) ? TRUE : FALSE;
-
-	if (using_apic == TRUE) {
-		ioapic_init();
-		lapic_init();
-	}
-
 	intr_init_idt();
-
 	intr_inited = TRUE;
 }
 
@@ -118,22 +105,13 @@ intr_enable(uint8_t irq)
 {
 	if (irq >= 16)
 		return;
-
-	if (using_apic == TRUE) {
-		ioapic_enable(irq, pcpu_cpu_lapicid());
-	} else {
-		KERN_ASSERT(irq < 16);
-		pic_enable(irq);
-	}
+	pic_enable(irq);
 }
 
 void
 intr_eoi(void)
 {
-	if (using_apic == TRUE)
-		lapic_eoi();
-	else
-		pic_eoi();
+	pic_eoi();
 }
 
 void

@@ -34,7 +34,6 @@ putch(int ch, struct dprintbuf *b)
 int
 vdprintf(const char *fmt, va_list ap)
 {
-#ifdef SERIAL_DEBUG
 	struct dprintbuf b;
 
 	b.idx = 0;
@@ -45,9 +44,6 @@ vdprintf(const char *fmt, va_list ap)
 	cputs(b.buf);
 
 	return b.cnt;
-#else /* !SERIAL_DEBUG */
-	return vcprintf(fmt, ap);
-#endif /* SERIAL_DEBUG */
 }
 
 int

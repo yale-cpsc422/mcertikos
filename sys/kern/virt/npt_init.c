@@ -1,3 +1,6 @@
+#include <lib/string.h>
+#include <lib/types.h>
+
 #include "npt_intro.h"
 #include "npt_ops.h"
 

@@ -86,10 +86,14 @@ tsc_init(void)
 		KERN_DEBUG("TSC calibration failed.\n");
 		KERN_DEBUG("Assume TSC freq = 1 GHz.\n");
 		tsc_per_ms = 1000000;
+
+		timer_hw_init();
 		return 1;
 	} else {
 		tsc_per_ms = ret;
 		KERN_DEBUG("TSC freq = %llu Hz.\n", tsc_per_ms*1000);
+
+		timer_hw_init();
 		return 0;
 	}
 }

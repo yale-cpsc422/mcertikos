@@ -3,7 +3,7 @@
 
 #ifdef _KERN_
 
-#include <lib/export.h>
+#include <lib/types.h>
 
 #include "context.h"
 #include "thread.h"

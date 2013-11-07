@@ -3,6 +3,8 @@
 
 #ifdef _KERN_
 
+#include <lib/types.h>
+
 void elf_load(uintptr_t user_elf_addr, int pmap_id);
 uintptr_t elf_entry(uintptr_t user_elf_addr);
 

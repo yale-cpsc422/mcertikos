@@ -1,8 +1,9 @@
-#include "gcc.h"
+#include <lib/gcc.h>
+#include <lib/string.h>
+#include <lib/types.h>
+#include <lib/x86.h>
+
 #include "seg.h"
-#include "string.h"
-#include "types.h"
-#include "x86.h"
 
 static segdesc_t	gdt[CPU_GDT_NDESC];
 static tss_t		tss;

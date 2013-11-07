@@ -1,4 +1,8 @@
-#include <lib/export.h>
+#include <lib/debug.h>
+#include <lib/trap.h>
+#include <lib/types.h>
+#include <lib/x86.h>
+
 #include <mm/export.h>
 #include <proc/export.h>
 

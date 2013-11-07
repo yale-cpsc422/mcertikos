@@ -1,5 +1,6 @@
 #include <lib/debug.h>
-#include <lib/export.h>
+#include <lib/string.h>
+
 #include <mm/export.h>
 
 #include "context.h"

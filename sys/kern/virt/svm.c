@@ -1,5 +1,8 @@
-#include <lib/export.h>
-#include <dev/export.h>
+#include <lib/debug.h>
+#include <lib/string.h>
+#include <lib/types.h>
+
+#include <dev/svm_drv.h>
 
 #include "npt_init.h"
 #include "svm.h"

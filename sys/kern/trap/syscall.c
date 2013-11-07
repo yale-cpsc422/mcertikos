@@ -1,5 +1,9 @@
-#include <lib/export.h>
-#include <dev/export.h>
+#include <dev/ide.h>
+
+#include <lib/debug.h>
+#include <lib/types.h>
+#include <lib/x86.h>
+
 #include <mm/export.h>
 #include <proc/export.h>
 #include <virt/export.h>

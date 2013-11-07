@@ -3,7 +3,8 @@
 
 #ifdef _KERN_
 
-#define	TIMER_FREQ	1193181.182
+#define	TIMER_FREQ	1193182
+
 #define CAL_MS		10
 #define CAL_LATCH	(TIMER_FREQ / (1000 / CAL_MS))
 #define CAL_PIT_LOOPS	1000

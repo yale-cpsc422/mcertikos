@@ -3,7 +3,7 @@
 
 #ifdef _KERN_
 
-#include <lib/export.h>
+#include <lib/trap.h>
 
 void interrupt_handler(tf_t *tf);
 

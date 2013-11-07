@@ -1,5 +1,8 @@
+#include <lib/debug.h>
+#include <lib/string.h>
+#include <lib/types.h>
+
 #include <mm/export.h>
-#include <lib/export.h>
 
 #define ELF_MAGIC 0x464C457FU	/* "\x7FELF" in little endian */
 

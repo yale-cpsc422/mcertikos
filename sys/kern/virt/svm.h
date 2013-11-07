@@ -3,7 +3,8 @@
 
 #ifdef _KERN_
 
-#include <lib/export.h>
+#include <lib/gcc.h>
+#include <lib/types.h>
 
 #include "common.h"
 

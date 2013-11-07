@@ -1,4 +1,5 @@
-#include <lib/export.h>
+#include <lib/trap.h>
+
 #include <mm/export.h>
 #include <proc/export.h>
 

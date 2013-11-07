@@ -1,3 +1,5 @@
+#include <lib/types.h>
+
 #include "npt_intro.h"
 
 void

@@ -1,4 +1,4 @@
-#include <lib/export.h>
+#include <lib/string.h>
 
 #include "kctx.h"
 #include "kstack.h"

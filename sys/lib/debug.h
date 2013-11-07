@@ -44,8 +44,6 @@
 		debug_info(fmt, ##__VA_ARGS__);	\
 	} while (0)
 
-int cprintf(const char *, ...);
-int vcprintf(const char *, va_list);
 void vprintfmt(void (*putch)(int, void *), void *, const char *, va_list);
 
 void debug_info(const char *, ...);

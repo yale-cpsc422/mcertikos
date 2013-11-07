@@ -1,9 +1,9 @@
 #include <lib/debug.h>
+#include <lib/trap.h>
 #include <lib/types.h>
 #include <lib/x86.h>
 
 #include "ide.h"
-#include "trap.h"
 
 #ifdef DEBUG_DISK
 
