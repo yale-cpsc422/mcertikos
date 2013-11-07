@@ -1,10 +1,11 @@
-#include <dev/intr.h>
+#include <preinit/dev/intr.h>
 
-#include "debug.h"
-#include "gcc.h"
-#include "stdarg.h"
-#include "types.h"
-#include "x86.h"
+#include <preinit/lib/debug.h>
+#include <preinit/lib/gcc.h>
+#include <preinit/lib/stdarg.h>
+
+#include <lib/types.h>
+#include <lib/x86.h>
 
 void
 debug_info(const char *fmt, ...)

@@ -1,7 +1,5 @@
 #include <lib/types.h>
 
-#include <dev/svm_drv.h>
-
 struct host_ctx {
 	uint32_t ebx, ecx, edx, esi, edi, ebp;
 };

@@ -1,8 +1,9 @@
-#include "debug.h"
-#include "gcc.h"
-#include "mboot.h"
-#include "queue.h"
-#include "types.h"
+#include <preinit/lib/debug.h>
+#include <preinit/lib/gcc.h>
+#include <preinit/lib/mboot.h>
+#include <preinit/lib/queue.h>
+
+#include <lib/types.h>
 
 #define PAGESIZE		4096
 

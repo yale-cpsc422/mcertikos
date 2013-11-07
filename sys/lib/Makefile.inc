@@ -4,12 +4,8 @@ OBJDIRS		+= $(KERN_OBJDIR)/lib
 
 KERN_SRCFILES	+= $(KERN_DIR)/lib/entry.S
 KERN_SRCFILES	+= $(KERN_DIR)/lib/types.c
-KERN_SRCFILES	+= $(KERN_DIR)/lib/printfmt.c
-KERN_SRCFILES	+= $(KERN_DIR)/lib/dprintf.c
-KERN_SRCFILES	+= $(KERN_DIR)/lib/debug.c
 KERN_SRCFILES	+= $(KERN_DIR)/lib/string.c
 KERN_SRCFILES	+= $(KERN_DIR)/lib/x86.c
-KERN_SRCFILES	+= $(KERN_DIR)/lib/mboot.c
 KERN_SRCFILES	+= $(KERN_DIR)/lib/seg.c
 KERN_SRCFILES	+= $(KERN_DIR)/lib/trap_asm.S
 

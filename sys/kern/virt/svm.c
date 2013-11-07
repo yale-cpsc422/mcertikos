@@ -1,8 +1,8 @@
-#include <lib/debug.h>
+#include <preinit/lib/debug.h>
+#include <preinit/dev/svm_drv.h>
+
 #include <lib/string.h>
 #include <lib/types.h>
-
-#include <dev/svm_drv.h>
 
 #include "npt_init.h"
 #include "svm.h"

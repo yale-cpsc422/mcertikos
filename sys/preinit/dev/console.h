@@ -1,5 +1,5 @@
-#ifndef _KERN_CONSOLE_H_
-#define _KERN_CONSOLE_H_
+#ifndef _SYS_PREINIT_DEV_CONSOLE_H_
+#define _SYS_PREINIT_DEV_CONSOLE_H_
 
 #ifdef _KERN_
 
@@ -12,4 +12,4 @@ void cons_intr(int (*proc)(void));
 
 #endif /* _KERN_ */
 
-#endif /* !_KERN_CONSOLE_H_ */
+#endif /* !_SYS_PREINIT_DEV_CONSOLE_H_ */

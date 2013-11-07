@@ -202,8 +202,6 @@ rdtsc(void)
 	return (rv);
 }
 
-#include "debug.h"
-
 void
 enable_sse(void)
 {

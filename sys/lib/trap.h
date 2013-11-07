@@ -70,7 +70,6 @@
 
 #ifndef __ASSEMBLER__
 
-#include <lib/debug.h>
 #include <lib/gcc.h>
 #include <lib/types.h>
 
@@ -105,7 +104,7 @@ struct tf_t {
 	uint16_t ss;		uint16_t padding_ss;
 } tf_t;
 
-void trap_return(tf_t *) gcc_noreturn;
+void trap_return(tf_t *);
 
 #endif /* !_ASSEMBLER__ */
 

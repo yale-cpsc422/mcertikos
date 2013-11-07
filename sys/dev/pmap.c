@@ -1,4 +1,3 @@
-#include <lib/debug.h>
 #include <lib/types.h>
 #include <lib/x86.h>
 
@@ -18,10 +17,7 @@ set_pe(void)
 
 	/* turn on paging */
 	uint32_t cr0 = rcr0();
-	cr0 |= CR0_PE|CR0_PG|CR0_AM|CR0_WP|CR0_NE|CR0_TS|CR0_MP;
-	cr0 &= ~CR0_EM;
-#ifdef __COMPCERT__
-	cr0 &= ~CR0_TS;
-#endif
+	cr0 |= CR0_PE | CR0_PG | CR0_AM | CR0_WP | CR0_NE | CR0_MP;
+	cr0 &= ~(CR0_EM | CR0_TS);
 	lcr0(cr0);
 }

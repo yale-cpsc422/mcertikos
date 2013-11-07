@@ -1,4 +1,5 @@
-#include <lib/debug.h>
+#include <preinit/lib/debug.h>
+
 #include <lib/string.h>
 
 #include <mm/export.h>

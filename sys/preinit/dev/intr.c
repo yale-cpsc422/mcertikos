@@ -1,11 +1,12 @@
-#include <lib/debug.h>
-#include <lib/seg.h>
 #include <lib/trap.h>
 #include <lib/types.h>
 #include <lib/x86.h>
 
-#include "intr.h"
-#include "pic.h"
+#include <preinit/lib/debug.h>
+#include <preinit/lib/seg.h>
+
+#include <preinit/dev/intr.h>
+#include <preinit/dev/pic.h>
 
 volatile static bool intr_inited = FALSE;
 

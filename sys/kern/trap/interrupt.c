@@ -1,4 +1,4 @@
-#include <dev/intr.h>
+#include <preinit/dev/intr.h>
 #include <lib/trap.h>
 
 /*

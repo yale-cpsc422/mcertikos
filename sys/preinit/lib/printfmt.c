@@ -4,10 +4,11 @@
  * This code is also used by both the kernel and user programs.
  */
 
-#include "debug.h"
-#include "stdarg.h"
-#include "string.h"
-#include "types.h"
+#include <preinit/lib/debug.h>
+#include <preinit/lib/stdarg.h>
+
+#include <lib/string.h>
+#include <lib/types.h>
 
 typedef void (*putch_t)(int, void *);
 

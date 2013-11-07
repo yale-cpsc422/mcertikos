@@ -35,8 +35,8 @@
  * Adapted for CertiKOS by Haozhong Zhang at Yale University.
  */
 
-#ifndef _SYS_QUEUE_H_
-#define	_SYS_QUEUE_H_
+#ifndef _SYS_PREINTI_LIB_QUEUE_H_
+#define	_SYS_PREINIT_LIB_QUEUE_H_
 
 #ifdef _KERN_
 
@@ -193,4 +193,4 @@ struct {								\
 
 #endif /* _KERN_ */
 
-#endif /* !_SYS_QUEUE_H_ */
+#endif /* !_SYS_PREINIT_LIB_QUEUE_H_ */

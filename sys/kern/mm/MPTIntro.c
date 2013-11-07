@@ -1,4 +1,3 @@
-#include <lib/debug.h>
 #include <lib/gcc.h>
 
 #include "MAL.h"

@@ -1,22 +1,20 @@
-#include <lib/debug.h>
-#include <lib/trap.h>
 #include <lib/types.h>
 #include <lib/x86.h>
 
 #include "ide.h"
 
-#ifdef DEBUG_DISK
+/* #ifdef DEBUG_DISK */
 
-#define DISK_DEBUG(fmt, ...) do {		\
-		KERN_DEBUG(fmt, ##__VA_ARGS__);	\
-	} while (0)
+/* #define DISK_DEBUG(fmt, ...) do {		\ */
+/* 		KERN_DEBUG(fmt, ##__VA_ARGS__);	\ */
+/* 	} while (0) */
 
-#else
+/* #else */
 
-#define DISK_DEBUG(fmt, ...) do {		\
-	} while (0)
+/* #define DISK_DEBUG(fmt, ...) do {		\ */
+/* 	} while (0) */
 
-#endif
+/* #endif */
 
 #define IDE_MASTER		0x1f0
 
@@ -105,8 +103,8 @@ ide_init(void)
 
 	ide_inited = TRUE;
 
-	KERN_DEBUG("Disk size 0x%08x%08x sectors.\n",
-		   ide_disk_size_hi(), ide_disk_size_lo());
+	/* KERN_DEBUG("Disk size 0x%08x%08x sectors.\n", */
+	/* 	   ide_disk_size_hi(), ide_disk_size_lo()); */
 
 	return 0;
 }
@@ -143,11 +141,11 @@ ide_disk_read(uint32_t lba_lo, uint32_t lba_hi, void *buf, uint16_t nsectors)
 		delay();
 	}
 
-	if (rc)
-		DISK_DEBUG("ide_disk_read() failed: LBA 0x%08x%08x, buf 0x%08x, "
-			   "%d sectors, failed sector %lld.\n",
-			   lba_hi, lba_lo, buf, nsectors,
-			   offset * 4 / DISK_SECT_SIZE);
+	/* if (rc) */
+	/* 	DISK_DEBUG("ide_disk_read() failed: LBA 0x%08x%08x, buf 0x%08x, " */
+	/* 		   "%d sectors, failed sector %lld.\n", */
+	/* 		   lba_hi, lba_lo, buf, nsectors, */
+	/* 		   offset * 4 / DISK_SECT_SIZE); */
 
 	return rc;
 }
@@ -184,10 +182,10 @@ ide_disk_write(uint32_t lba_lo, uint32_t lba_hi, void *buf, uint16_t nsectors)
 	}
 
 	if (rc)
-		DISK_DEBUG("ide_disk_write() failed: LBA 0x%08x%08x, buf 0x%08x, "
-			   "%d sectors, failed sector %lld.\n",
-			   lba_hi, lba_lo, buf, nsectors,
-			   offset * 2 / DISK_SECT_SIZE);
+		/* DISK_DEBUG("ide_disk_write() failed: LBA 0x%08x%08x, buf 0x%08x, " */
+		/* 	   "%d sectors, failed sector %lld.\n", */
+		/* 	   lba_hi, lba_lo, buf, nsectors, */
+		/* 	   offset * 2 / DISK_SECT_SIZE) */;
 	else
 		outb(IDE_MASTER + IDE_PORT_CMD, IDE_CMD_CACHE_FLUSH);
 

@@ -1,4 +1,4 @@
-#include <lib/debug.h>
+#include <preinit/lib/debug.h>
 
 #include "MALOp.h"
 

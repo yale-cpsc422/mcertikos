@@ -1,7 +1,7 @@
 /* Trap handler entry and exit code. */
 /* See COPYRIGHT for copyright information. */
 
-#include "seg.h"
+#include <preinit/lib/seg.h>
 #include "trap.h"
 
 

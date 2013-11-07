@@ -1,3 +1,5 @@
+#include <lib/gcc.h>
+#include <lib/seg.h>
 #include <lib/string.h>
 
 #include "kctx.h"

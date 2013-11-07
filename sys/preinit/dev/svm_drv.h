@@ -1,5 +1,5 @@
-#ifndef _KERN_DEV_SVM_DRV_H_
-#define _KERN_DEV_SVM_DRV_H_
+#ifndef _SYS_PREINIT_DEV_SVM_DRV_H_
+#define _SYS_PREINIT_DEV_SVM_DRV_H_
 
 #ifdef _KERN_
 
@@ -15,4 +15,4 @@ void enter_guest(void *vmcb,
 
 #endif /* _KERN_ */
 
-#endif /* !_KERN_DEV_SVM_DRV_H_ */
+#endif /* !_SYS_PREINIT_DEV_SVM_DRV_H_ */

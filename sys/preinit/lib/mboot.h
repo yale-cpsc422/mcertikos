@@ -3,7 +3,7 @@
 
 #ifdef _KERN_
 
-#include "types.h"
+#include <lib/types.h>
 
 typedef
 struct mboot_info {
@@ -89,7 +89,6 @@ struct mboot_mmap
 #define MEM_RESERVED		2
 #define MEM_ACPI		3
 #define MEM_NVS			4
-
 
 void pmmap_init(uintptr_t mbi_addr);
 int pmmap_entries_nr(void);

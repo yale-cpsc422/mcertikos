@@ -1,5 +1,5 @@
-#ifndef _DEV_INTR_H_
-#define _DEV_INTR_H_
+#ifndef _SYS_PREINIT_DEV_INTR_H_
+#define _SYS_PREINIT_DEV_INTR_H_
 
 #ifdef _KERN_
 
@@ -13,4 +13,4 @@ void intr_eoi(void);
 
 #endif /* _KERN_ */
 
-#endif /* !_DEV_INTR_H_ */
+#endif /* !_SYS_PREINIT_DEV_INTR_H_ */

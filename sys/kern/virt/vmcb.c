@@ -1,4 +1,4 @@
-#include <lib/debug.h>
+#include <preinit/lib/debug.h>
 #include <lib/gcc.h>
 #include <lib/string.h>
 #include <lib/types.h>
