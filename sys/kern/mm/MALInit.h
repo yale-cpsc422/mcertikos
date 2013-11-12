@@ -3,27 +3,31 @@
 
 #ifdef _KERN_
 
-int  get_nps();
-void set_nps(int nps);
+/*
+ * Primitives defined by this layer.
+ */
 
-int  is_norm(int idx);
-void set_norm(int idx, int val);
+unsigned int get_nps(void);
+void set_nps(unsigned int nps);
 
-int  at_get(int idx);
-void at_set(int idx, int val);
+unsigned int is_norm(unsigned int idx);
+void set_norm(unsigned int idx, unsigned int val);
+
+unsigned int at_get(unsigned int idx);
+void at_set(unsigned int idx, unsigned int val);
 
 /*
- * Derived from lower layers.
+ * Primitives derived from the lower layer.
  */
 
 void set_pe(void);
-void set_pt(int *);
-int  pmmap_init(unsigned int mbi_addr);
-int  pmmap_entries_nr(void);
-int  pmmap_entry_start(int idx);
-int  pmmap_entry_length(int idx);
-int  pmmap_entry_usable(int idx);
-int  is_usable(int);
+void set_pt(unsigned int *);
+unsigned int pmmap_init(unsigned int mbi_addr);
+unsigned int pmmap_entries_nr(void);
+unsigned int pmmap_entry_start(unsigned int idx);
+unsigned int pmmap_entry_length(unsigned int idx);
+unsigned int pmmap_entry_usable(unsigned int idx);
+unsigned int is_usable(unsigned int);
 
 #endif /* _KERN_ */
 

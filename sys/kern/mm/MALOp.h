@@ -3,18 +3,20 @@
 
 #ifdef _KERN_
 
+/*
+ * Primitives defined by this layer
+ */
+
 void mem_init(unsigned int mbi_addr);
+unsigned int palloc(void);
+void pfree(unsigned int pfree_index);
 
 /*
  * Derived from lower layers.
  */
 
-int  get_nps(void);
-int  is_norm(int idx);
-int  at_get(int idx);
-void at_set(int idx, int val);
 void set_pe(void);
-void set_pt(int *);
+void set_pt(unsigned int *);
 
 #endif /* _KERN_ */
 

@@ -9,15 +9,16 @@ void pt_init_comm(unsigned int mbi_addr);
  * Derived from lower layers.
  */
 
-void pt_insert(int proc_index, unsigned int va, unsigned int pa, int perm);
-void pt_rmv(int proc_index, unsigned int va);
-unsigned int pt_read(int proc_index, unsigned int va);
+void pt_insert(unsigned int pid,
+	       unsigned int va, unsigned int pa, unsigned int perm);
+void pt_rmv(unsigned int pid, unsigned int va);
+unsigned int pt_read(unsigned int pid, unsigned int va);
 void pt_in(void);
 void pt_out(void);
-void pfree(int idx);
-int  palloc(void);
+void pfree(unsigned int idx);
+unsigned int palloc(void);
 void set_pe(void);
-void set_PT(int idx);
+void set_PT(unsigned int idx);
 
 #endif /* _KERN_ */
 

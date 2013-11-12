@@ -1,15 +1,15 @@
-static int PTP_LOC[64];
+static unsigned int PTP_LOC[64];
 
 void
-set_bit(int proc_index, int val)
+set_bit(unsigned int pid, unsigned int val)
 {
-	PTP_LOC[proc_index] = val;
+	PTP_LOC[pid] = val;
 }
 
-int
-is_used(int proc_index)
+unsigned int
+is_used(unsigned int pid)
 {
-	int val;
-	val = PTP_LOC[proc_index];
+	unsigned int val;
+	val = PTP_LOC[pid];
 	return val;
 }

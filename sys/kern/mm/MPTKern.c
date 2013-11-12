@@ -1,20 +1,23 @@
 #include "MPTComm.h"
 
-#define PgSize		4096
-#define kern_low	262144UL
-#define kern_high	983040UL
-#define adr_low		(kern_low * PgSize)
-#define adr_high	(kern_high * PgSize)
-#define PTK_false	3
+#define PAGESIZE	4096
+#define VM_USERLO	0x40000000
+#define VM_USERHI	0xF0000000
+#define VM_USERLO_PI	(VM_USERLO / PAGESIZE)
+#define VM_USERHI_PI	(VM_USERHI / PAGESIZE)
+
+#define PTE_P		0x001	/* Present */
+#define PTE_W		0x002	/* Writeable */
+#define PTE_USER	(PTE_P | PTE_W)
 
 void
 pt_init_kern(unsigned int mbi_addr)
 {
 	unsigned int i;
 	pt_init_comm(mbi_addr);
-	i = adr_low;
-	while (i < adr_high) {
-		pt_insert(0, i, i, PTK_false);
-		i = i + PgSize;
+	i = VM_USERLO;
+	while (i < VM_USERHI) {
+		pt_insert(0, i, i, PTE_USER);
+		i = i + PAGESIZE;
 	}
 }

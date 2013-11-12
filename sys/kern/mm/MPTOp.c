@@ -1,44 +1,39 @@
 #include "MPTIntro.h"
 
+#define PAGESIZE	4096
+#define NPDENTRIES	1024	/* PDEs per page directory */
+#define NPTENTRIES	1024	/* PTEs per page table */
+
 void
-pt_insert(int proc_index, unsigned int vaddr, unsigned int paddr, int perm)
+pt_insert(unsigned int pid,
+	  unsigned int vaddr, unsigned int paddr, unsigned int perm)
 {
-	int pdx_index;
-	int vaddrl;
-	pdx_index = vaddr / (4096 * 1024);
-	vaddrl = (vaddr / 4096) % 1024;
-	set_PDX(proc_index, pdx_index);
-	set_PTX(proc_index, pdx_index, vaddrl, paddr, perm);
+	unsigned int pdx;
+	unsigned int ptx;
+	pdx = vaddr / (PAGESIZE * NPTENTRIES);
+	ptx = (vaddr / PAGESIZE) % NPTENTRIES;
+	set_PDX(pid, pdx);
+	set_PTX(pid, pdx, ptx, paddr, perm);
 }
 
 void
-pt_rmv(int proc_index, unsigned int vaddr)
+pt_rmv(unsigned int pid, unsigned int vaddr)
 {
-	int pdx_index;
-	int vaddrl;
-	pdx_index = vaddr / (4096 * 1024);
-	vaddrl = (vaddr / 4096) % 1024;
-	rmv_PTX(proc_index, pdx_index, vaddrl);
+	unsigned int pdx;
+	unsigned int ptx;
+	pdx = vaddr / (PAGESIZE * NPTENTRIES);
+	ptx = (vaddr / PAGESIZE) % NPTENTRIES;
+	rmv_PTX(pid, pdx, ptx);
 }
 
 unsigned int
-pt_read(int proc_index, unsigned int vaddr)
+pt_read(unsigned int pid, unsigned int vaddr)
 {
-	int pdx_index;
-	int vaddrl;
+	unsigned int pdx;
+	unsigned int ptx;
 	unsigned int paddr;
-	pdx_index = vaddr / (4096 * 1024);
-	vaddrl = (vaddr / 4096) % 1024;
-	paddr = get_PTX(proc_index, pdx_index, vaddrl);
+	pdx = vaddr / (PAGESIZE * NPTENTRIES);
+	ptx = (vaddr / PAGESIZE) % NPTENTRIES;
+	paddr = get_PTX(pid, pdx, ptx);
 	return paddr;
-}
-
-void
-pt_unpresent(int proc_index, unsigned int vaddr)
-{
-	int pdx_index;
-	int vaddrl;
-	pdx_index = vaddr / (4096 * 1024);
-	vaddrl = (vaddr / 4096) % 1024;
-	set_PTX_P(proc_index, pdx_index, vaddrl);
 }

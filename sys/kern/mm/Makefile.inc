@@ -4,7 +4,6 @@ OBJDIRS		+= $(KERN_OBJDIR)/kern/mm
 
 KERN_SRCFILES	+= $(KERN_DIR)/kern/mm/MALInit.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/mm/MALOp.c
-KERN_SRCFILES	+= $(KERN_DIR)/kern/mm/MAL.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/mm/MPTIntro.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/mm/MPTOp.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/mm/MPTComm.c
