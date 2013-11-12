@@ -6,7 +6,6 @@
 #include "vmcb.h"
 
 struct vmcb vmcb0 gcc_aligned(4096);
-static uint8_t iopm0[SVM_IOPM_SIZE] gcc_aligned(4096);
 static bool vmcb0_inited = FALSE;
 
 void
@@ -17,8 +16,6 @@ vmcb_init(void)
 
 	extern uint32_t npt_lv1[1024] gcc_aligned(4096);
 	struct vmcb *vmcb = &vmcb0;
-
-	memzero(vmcb, sizeof(struct vmcb));
 
 	vmcb->save.dr6_lo = 0xffff0ff0;
 	vmcb->save.dr6_hi = 0;
@@ -39,10 +36,6 @@ vmcb_init(void)
 	vmcb->control.int_ctl =
 		(SVM_INTR_CTRL_VINTR_MASK | (0x0 & SVM_INTR_CTRL_VTPR));
 
-	memset(iopm0, 0xff, SVM_IOPM_SIZE);
-	vmcb->control.iopm_base_pa_lo = (uintptr_t) iopm0;
-	vmcb->control.iopm_base_pa_hi = 0;
-
 	/* setup default interception */
 	vmcb->control.intercept_lo = (1UL << INTERCEPT_INTR) |
 		(1UL << INTERCEPT_RDTSC) | (1UL << INTERCEPT_CPUID) |
@@ -58,10 +51,6 @@ vmcb_init(void)
 		(1UL << (INTERCEPT_MONITOR - 32)) |
 		(1UL << (INTERCEPT_MWAIT - 32)) |
 		(1UL << (INTERCEPT_MWAIT_COND - 32));
-
-	/* setup NPT permanently */
-	vmcb->control.nested_cr3_lo = (uintptr_t) npt_lv1;
-	vmcb->control.nested_cr3_hi = 0;
 
 	vmcb0_inited = TRUE;
 }

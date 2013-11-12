@@ -5,7 +5,7 @@
 
 #include <lib/types.h>
 
-int svm_drv_init(void);
+int svm_hw_init(void);
 
 void enter_guest(void *vmcb,
 		 uint32_t *g_ebx, uint32_t *g_ecx, uint32_t *g_edx,

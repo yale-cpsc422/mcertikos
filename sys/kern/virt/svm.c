@@ -103,8 +103,6 @@ svm_init(void)
 {
 	if (svm_inited == TRUE)
 		return;
-
-	svm_drv_init();
 	svm_inited = TRUE;
 }
 

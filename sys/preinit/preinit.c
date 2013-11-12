@@ -7,6 +7,7 @@
 #include <preinit/dev/console.h>
 #include <preinit/dev/intr.h>
 #include <preinit/dev/tsc.h>
+#include <preinit/dev/svm_drv.h>
 
 #include <preinit/lib/seg.h>
 
@@ -19,6 +20,7 @@ preinit(void)
 	tsc_init();
 	intr_init();
 	ide_init();
+	svm_hw_init();
 
 	/* enable interrupts */
 	intr_enable(IRQ_TIMER);
