@@ -5,8 +5,8 @@
 
 #include <lib/types.h>
 
-void elf_load(uintptr_t user_elf_addr, int pmap_id);
-uintptr_t elf_entry(uintptr_t user_elf_addr);
+void elf_load(void *user_elf_addr, int pmap_id);
+uintptr_t elf_entry(void *user_elf_addr);
 
 #endif /* _KERN_ */
 

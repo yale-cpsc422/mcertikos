@@ -1,8 +1,8 @@
 #ifndef _USER_VMM_H_
 #define _USER_VMM_H_
 
-#include <kern/virt/common.h>
-
+#include <hvm.h>
+#include <syscall.h>
 #include <types.h>
 
 #include "vmm_dev.h"

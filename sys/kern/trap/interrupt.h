@@ -3,9 +3,37 @@
 
 #ifdef _KERN_
 
-#include <lib/trap.h>
+void set_PT(unsigned int pid);
 
-void interrupt_handler(tf_t *tf);
+unsigned int get_curid(void);
+
+void proc_start_user(void);
+
+enum {
+	U_EDI,
+	U_ESI,
+	U_EBP,
+	U_OLD_ESP,
+	U_EBX,
+	U_EDX,
+	U_ECX,
+	U_EAX,
+	U_ES,
+	U_DS,
+	U_TRAPNO,
+	U_ERRNO,
+	U_EIP,
+	U_CS,
+	U_EFLAGS,
+	U_ESP,
+	U_SS
+};
+
+unsigned int uctx_get(unsigned int pid, unsigned int idx);
+
+void interrupt_handler(void);
+void syscall_dispatch(void);
+void exception_handler(void);
 
 #endif /* _KERN_ */
 

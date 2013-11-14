@@ -3,11 +3,11 @@
 #include <lib/x86.h>
 
 void
-tss_switch(tss_t *to)
+tss_switch(uint32_t pid)
 {
 	gdt[CPU_GDT_TSS >> 3] =
 		SEGDESC16(STS_T32A,
-			  (uint32_t) (to), sizeof(tss_t) - 1, 0);
+			  (uint32_t) (&tss[pid]), sizeof(tss_t) - 1, 0);
 	gdt[CPU_GDT_TSS >> 3].sd_s = 0;
 	ltr(CPU_GDT_TSS);
 }

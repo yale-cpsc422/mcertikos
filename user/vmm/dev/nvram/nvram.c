@@ -2,6 +2,7 @@
 #include <string.h>
 #include <syscall.h>
 #include <types.h>
+#include <x86.h>
 
 #include "bios.h"
 #include "nvram.h"
@@ -44,15 +45,13 @@ vnvram_ioport_read(struct vnvram *nvram, uint16_t port)
 	ASSERT(nvram != NULL);
 	ASSERT(port == CMOS_INDEX_PORT || port == CMOS_DATA_PORT);
 
-	uint8_t data;
-
 	if (port == CMOS_INDEX_PORT)
-		return sys_read_ioport(port, SZ8, &data) ? 0xff : data;
+		return inb(port);
 
 	if (nvram->data_valid == TRUE)
 		return nvram->data;
 	else
-		return sys_read_ioport(port, SZ8, &data) ? 0xff : data;
+		return inb(port);
 }
 
 static void
@@ -63,7 +62,7 @@ vnvram_ioport_write(struct vnvram *nvram, uint16_t port, uint8_t data)
 
 	if (port == CMOS_DATA_PORT) {
 		VNVRAM_DEBUG("Write host I/O port 0x%x.\n", port);
-		sys_write_ioport(port, SZ8, data);
+		outb(port, data);
 		return;
 	}
 
@@ -108,7 +107,7 @@ vnvram_ioport_write(struct vnvram *nvram, uint16_t port, uint8_t data)
 	default:
 		VNVRAM_DEBUG("Passthrough index 0x%x.\n", idx);
 		nvram->data_valid = FALSE;
-		sys_write_ioport(port, SZ8, data);
+		outb(port, data);
 		return;
 	}
 

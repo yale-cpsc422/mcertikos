@@ -48,7 +48,7 @@ struct taskgate {
 
 #define CPU_GDT_KDATA	0x10	    /* kernel data */
 
-void tss_switch(tss_t *to);
+void tss_switch(uint32_t pid);
 
 #endif /* _KERN_ */
 

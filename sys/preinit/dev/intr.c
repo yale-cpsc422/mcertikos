@@ -1,9 +1,9 @@
 #include <lib/trap.h>
 #include <lib/types.h>
-#include <lib/x86.h>
 
 #include <preinit/lib/debug.h>
 #include <preinit/lib/seg.h>
+#include <preinit/lib/x86.h>
 
 #include <preinit/dev/intr.h>
 #include <preinit/dev/pic.h>

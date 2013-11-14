@@ -1,27 +1,20 @@
-#include <lib/types.h>
-
 struct host_ctx {
-	uint32_t ebx, ecx, edx, esi, edi, ebp;
+	unsigned int ebx;
+	unsigned int ecx;
+	unsigned int edx;
+	unsigned int esi;
+	unsigned int edi;
+	unsigned int ebp;
 };
 
-static struct host_ctx h_ctx0;
-
-struct vmcb;
-
-void enter_guest(struct vmcb *vmcb,
-		 uint32_t *g_ebx, uint32_t *g_ecx, uint32_t *g_edx,
-		 uint32_t *g_esi, uint32_t *g_edi, uint32_t *g_ebp,
-		 uint32_t *h_ebx, uint32_t *h_ecx, uint32_t *h_edx,
-		 uint32_t *h_esi, uint32_t *h_edi, uint32_t *h_ebp);
+struct host_ctx h_ctx0;
 
 void
-svm_switch(struct vmcb *vmcb,
-	   uint32_t *g_ebx, uint32_t *g_ecx, uint32_t *g_edx,
-	   uint32_t *g_esi, uint32_t *g_edi, uint32_t *g_ebp)
+save_hctx(void)
 {
-	struct host_ctx *hctx = &h_ctx0;
+}
 
-	enter_guest(vmcb, g_ebx, g_ecx, g_edx, g_esi, g_edi, g_ebp,
-		    &hctx->ebx, &hctx->ecx, &hctx->edx, &hctx->esi, &hctx->edi,
-		    &hctx->ebp);
+void
+restore_hctx(void)
+{
 }

@@ -1,3 +1,4 @@
+#include <preinit/lib/debug.h>
 #include "MALInit.h"
 
 #define PAGESIZE	4096
@@ -6,12 +7,14 @@
 #define VM_USERLO_PI	(VM_USERLO / PAGESIZE)
 #define VM_USERHI_PI	(VM_USERHI / PAGESIZE)
 
+extern void preinit(unsigned int);
+
 void
 mem_init(unsigned int mbi_addr)
 {
 	unsigned int i, j, isnorm, nps, maxs, size, flag;
 	unsigned int s, l;
-	pmmap_init(mbi_addr);
+	preinit(mbi_addr);
 	i = 0;
 	size = pmmap_entries_nr();
 	nps = 0;
@@ -76,6 +79,9 @@ palloc(void)
 		}
 		palloc_index ++;
 	}
+
+	if (palloc_index == tnps)
+		KERN_PANIC("Not enough memory!\n");
 
 	at_set(palloc_index - 1, 1);
 	return palloc_index;

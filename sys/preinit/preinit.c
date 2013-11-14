@@ -9,10 +9,12 @@
 #include <preinit/dev/tsc.h>
 #include <preinit/dev/svm_drv.h>
 
+#include <preinit/lib/mboot.h>
 #include <preinit/lib/seg.h>
+#include <preinit/lib/x86.h>
 
 void
-preinit(void)
+preinit(uintptr_t mbi_addr)
 {
 	seg_init();
 	enable_sse();
@@ -26,4 +28,6 @@ preinit(void)
 	intr_enable(IRQ_TIMER);
 	intr_enable(IRQ_KBD);
 	intr_enable(IRQ_SERIAL13);
+
+	pmmap_init(mbi_addr);
 }

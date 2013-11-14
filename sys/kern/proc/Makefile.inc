@@ -3,10 +3,15 @@
 OBJDIRS		+= $(KERN_OBJDIR)/kern/proc
 
 KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/cswitch.S
-KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/kstack.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/kctx.c
-KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/context.c
+KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/kctx_new.c
+KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/thread_intro.c
+KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/thread_init.c
+KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/queue_intro.c
+KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/queue_init.c
+KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/cur_id.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/thread.c
+KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/uctx.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/proc.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/elf.c
 

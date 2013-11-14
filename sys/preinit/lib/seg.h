@@ -124,6 +124,7 @@ struct taskgate {
 	uint16_t	ts_padding10;
 	uint16_t	ts_trap;
 	uint16_t	ts_iomb;
+	uint8_t		ts_iopm[129];
 } tss_t;
 
 typedef
@@ -175,7 +176,8 @@ struct gatedesc {
 	(gate).gd_off_31_16 = (uint32_t) (off) >> 16;		\
 }
 
-segdesc_t gdt[CPU_GDT_NDESC];
+segdesc_t	gdt[CPU_GDT_NDESC];
+tss_t		tss[64];
 
 void seg_init(void);
 

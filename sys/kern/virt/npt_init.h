@@ -3,10 +3,40 @@
 
 #ifdef _KERN_
 
-#include <lib/types.h>
+/*
+ * Primitives defined by this layer.
+ */
 
-void npt_init(void);
-void npt_insert(uint32_t gpa, uint32_t hpa);
+void npt_init(unsigned int mbi_addr);
+void npt_insert(unsigned int gpa, unsigned int hpa);
+
+/*
+ * Primitives derived from lower layers.
+ */
+
+unsigned int palloc(void);
+void pfree(unsigned int idx);
+
+unsigned int pt_read(unsigned int pid, unsigned int va);
+void pt_resv(unsigned int pid, unsigned int vaddr, unsigned int perm);
+
+unsigned int pt_copyin(unsigned int pmap_id,
+		       unsigned int uva, char *kva, unsigned int len);
+unsigned int pt_copyout(char *kva,
+			unsigned int pmap_id, unsigned int uva, unsigned int len);
+unsigned int pt_memset(unsigned int pmap_id,
+		       unsigned int va, char c, unsigned int len);
+
+unsigned int get_curid(void);
+
+void thread_kill(unsigned int pid, unsigned chid);
+
+void thread_wakeup(unsigned int chid);
+void thread_sleep(void);
+void thread_yield(void);
+
+void uctx_set(unsigned int pid, unsigned int idx, unsigned int val);
+unsigned int uctx_get(unsigned int pid, unsigned int idx);
 
 #endif /* _KERN_ */
 

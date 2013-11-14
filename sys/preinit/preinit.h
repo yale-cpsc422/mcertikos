@@ -3,7 +3,9 @@
 
 #ifdef _KERN_
 
-void preinit(void);
+#include <lib/types.h>
+
+void preinit(uintptr_t mbi_addr);
 
 #endif /* _KERN_ */
 

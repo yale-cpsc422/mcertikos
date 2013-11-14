@@ -58,7 +58,14 @@ vserial_read_ioport(void *dev, uint16_t port, data_sz_t width, void *val)
 		return 0;
 	}
 
-	return sys_read_ioport(port, width, val);
+	if (width == SZ8)
+		*(uint8_t *) val = inb(port);
+	else if (width == SZ16)
+		*(uint16_t *) val = inw(port);
+	else
+		*(uint32_t *) val = inl(port);
+
+	return 0;
 }
 
 static int
@@ -66,7 +73,15 @@ vserial_write_ioport(void *dev, uint16_t port, data_sz_t width, uint32_t val)
 {
 	if (!(0x3f8 <= port && port <= 0x3ff))
 		return -1;
-	return sys_write_ioport(port, width, val);
+
+	if (width == SZ8)
+		outb(port, (uint8_t) val);
+	else if (width == SZ16)
+		outb(port, (uint16_t) val);
+	else
+		outb(port, val);
+
+	return 0;
 }
 
 static int
@@ -86,15 +101,12 @@ vserial_update(void *dev)
 	/* 	return 0; */
 	/* } */
 
-	if (sys_read_ioport(COM1+COM_IIR, SZ8, &iir))
-		return -2;
+	iir = inb(COM1 + COM_IIR);
 
 	if (iir & COM_IIR_NOINT)
 		return 0;
 
-	if (sys_read_ioport(COM1+COM_IER, SZ8, &ier))
-		return -2;
-
+	ier = inb(COM1 + COM_IER);
 	intr = iir & COM_IIR_MASK;
 
 	if (((intr & COM_IIR_MSI) && (ier & COM_IER_MSI)) ||

@@ -1,70 +1,45 @@
 #include <preinit/lib/debug.h>
-#include <preinit/dev/intr.h>
-
-#include <lib/seg.h>
 #include <lib/types.h>
-#include <lib/x86.h>
 
-#include <dev/ide.h>
-
-#include <preinit/preinit.h>
-
-#include <mm/export.h>
-#include <proc/export.h>
-#include <virt/export.h>
+#define NUM_CHAN		64
+#define TD_STATE_RUN		1
 
 extern uint8_t _binary___obj_user_vmm_vmm_start[];
 extern uint8_t _binary___obj_user_idle_idle_start[];
 
+extern void vmcb_init(unsigned int mbi_addr);
+extern unsigned int proc_create(void *elf_addr);
+extern void set_curid(unsigned int curid);
+extern void tdq_remove(unsigned int chid, unsigned int pid);
+extern void tcb_set_state(unsigned int pid, unsigned int state);
+extern void kctx_switch(unsigned int from_pid, unsigned int to_pid);
+
 static void
 kern_main(void)
 {
-	struct proc *idle_proc, *guest_proc;
+	unsigned int idle_pid, guest_pid;
 
-	idle_proc = proc_create((uintptr_t) _binary___obj_user_idle_idle_start);
-	if (idle_proc == NULL)
-		KERN_PANIC("Cannot create the idle process.\n");
+	idle_pid = proc_create(_binary___obj_user_idle_idle_start);
+	KERN_DEBUG("idle process %d is created.\n", idle_pid);
 
-	KERN_DEBUG("idle process %d is created.\n", idle_proc->pid);
-
-	guest_proc = proc_create((uintptr_t) _binary___obj_user_vmm_vmm_start);
-	if (guest_proc == NULL)
-		KERN_PANIC("Cannot create the VMM process.\n");
-
-	KERN_DEBUG("vmm process %d is created.\n", guest_proc->pid);
+	guest_pid = proc_create(_binary___obj_user_vmm_vmm_start);
+	KERN_DEBUG("vmm process %d is created.\n", guest_pid);
 
 	KERN_INFO("Start user-space ... \n");
 
-	thread_sched();
+	tdq_remove(NUM_CHAN, idle_pid);
+	tcb_set_state(idle_pid, TD_STATE_RUN);
+	set_curid(idle_pid);
+	kctx_switch(0, idle_pid);
 
 	KERN_PANIC("kern_main() should never be here.\n");
 }
 
+
+
 void
 kern_init(uintptr_t mbi_addr)
 {
-	preinit();
-
-	/*
-	 * Initialize the virtual memory.
-	 */
-	KERN_INFO("Initialize memory management module ... ");
-	pmap_init(mbi_addr);
-	KERN_INFO("done.\n");
-
-	/*
-	 * Initialize the process management.
-	 */
-	KERN_INFO("Initialize process management module ... ");
-	proc_init();
-	KERN_INFO("done.\n");
-
-	/*
-	 * Initialize the hardware virtualization driver.
-	 */
-	KERN_INFO("Initialize virtualization module ... ");
-	svm_init();
-	KERN_INFO("done.\n");
-
+	vmcb_init(mbi_addr);
 	kern_main();
 }

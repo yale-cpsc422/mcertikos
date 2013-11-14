@@ -3,186 +3,84 @@
 
 #ifdef _KERN_
 
-#include <lib/gcc.h>
-#include <lib/types.h>
+void svm_set_intercept_intwin(unsigned int enable);
 
-#include "common.h"
+void svm_set_reg(unsigned int reg, unsigned int val);
 
-struct svm {
-	uint32_t	g_rbx, g_rcx, g_rdx, g_rsi, g_rdi, g_rbp;
-	exit_reason_t	exit_reason;
-	exit_info_t	exit_info;
-	bool		synced;
-};
+unsigned int svm_get_reg(unsigned int reg);
+unsigned int svm_get_exit_reason(void);
+unsigned int svm_get_exit_io_port(void);
+unsigned int svm_get_exit_io_width(void);
+unsigned int svm_get_exit_io_write(void);
+unsigned int svm_get_exit_io_rep(void);
+unsigned int svm_get_exit_io_str(void);
+unsigned int svm_get_exit_io_neip(void);
+unsigned int svm_get_exit_fault_addr(void);
 
-/*
- * Initialize SVM.
- */
-void svm_init(void);
-
-/*
- * Initialize a SVM structure.
- */
-void svm_init_vm(void);
-
-/*
- * Switch to the guest mode. svm_run_vm() returns when encountering an VMEXIT,
- * or an error.
- */
+void svm_sync(void);
 void svm_run_vm(void);
 
 /*
- * Synchronize svm0 with VMCB.
+ * Primitives derived from lower layers.
  */
-void svm_sync(void);
 
-/*
- * Enable/Disable intercepting the virtual interrupts.
- */
-void svm_set_intercept_vint(void);
-void svm_clear_intercept_vint(void);
+unsigned int palloc(void);
+void pfree(unsigned int idx);
 
-/*
- * Get the value of a guest register (one of eax, ebx, ecx, edx, esi, edi,
- * ebp, esp, eip, eflags, cr0, cr2, cr3, cr4).
- *
- * @param reg the guest register
- *
- * @return the 32-bit value of the guest register if it's one of eax, ebx, ecx,
- *         edx, esi, edi, ebp, esp, eip, eflags, cr0, cr2, cr3, cr4; otherwise,
- *         the returned value is undefined.
- */
-uint32_t svm_get_reg(guest_reg_t reg);
+unsigned int pt_read(unsigned int pid, unsigned int va);
+void pt_resv(unsigned int pid, unsigned int vaddr, unsigned int perm);
 
-/*
- * Set the value of a guset register (one of eax, ebx, ecx, edx, esi, edi,
- * ebp, esp, eip, eflags, cr0, cr2, cr3, cr4).
- *
- * @param reg the guest register
- * @param val the 32-bit value of the register
- */
-void svm_set_reg(guest_reg_t reg, uint32_t val);
+unsigned int pt_copyin(unsigned int pmap_id,
+		       unsigned int uva, char *kva, unsigned int len);
+unsigned int pt_copyout(char *kva,
+			unsigned int pmap_id, unsigned int uva, unsigned int len);
 
-/*
- * Set the content of a guest segment (one of cs, ds, es, fs, gs ,ss,
- * ldt, tss, gdt, idt).
- *
- * @param seg  the guest segment
- * @param sel  the selector of the segment
- * @param base the lower 32-bit of the base address of the segment
- * @param lim  the limitation of the segment
- * @param ar   the attributes of the segment
- */
-void svm_set_seg(guest_seg_t seg,
-		 uint16_t sel, uint32_t base, uint32_t lim, uint32_t ar);
+unsigned int get_curid(void);
 
-/*
- * Map a guest physical page to a host physical page in NPT.
- *
- * @param gpa  the guest physical address of the guest page; it must be aligned
- *             to 4096 bytes
- * @param hpa  the host physical address of the host page; it must be aligned to
- *             4096 bytes
- */
-void svm_set_mmap(uintptr_t gpa, uintptr_t hpa);
+void thread_kill(unsigned int pid, unsigned int chid);
 
-/*
- * Inject a vector event (one of external interrupt, NMI, exception, software
- * interrupt) to the guest.
- *
- * @param type    the event type (one of EVENT_EXTINT, EVENT_NMI,
- *                EVENT_EXCEPTION,, EVENT_SWINT)
- * @param vector  the vector number of the event
- * @param errcode the error code; it's ignored if ev == FALSE
- * @param ev      whether errcode is valid
- *
- * @return 0 if successful; otherwise, return a non-zero value.
- */
-void svm_inject_event(guest_event_t type, uint8_t vector,
-		      uint32_t errcode, bool ev);
+void thread_wakeup(unsigned int chid);
+void thread_sleep(void);
+void thread_yield(void);
 
-/*
- * Get the address of the next instruction.
- *
- * @return the address of the next instruction
- */
-uint32_t svm_get_next_eip(void);
+enum {
+	U_EDI,
+	U_ESI,
+	U_EBP,
+	U_OLD_ESP,
+	U_EBX,
+	U_EDX,
+	U_ECX,
+	U_EAX,
+	U_ES,
+	U_DS,
+	U_TRAPNO,
+	U_ERRNO,
+	U_EIP,
+	U_CS,
+	U_EFLAGS,
+	U_ESP,
+	U_SS
+};
 
-/*
- * Is there a pending vector event?
- *
- * @return TRUE if there is a pending event; otherwise, return FALSE.
- */
-bool svm_check_pending_event(void);
+void uctx_set(unsigned int pid, unsigned int idx, unsigned int val);
+unsigned int uctx_get(unsigned int pid, unsigned int idx);
 
-/*
- * Is the guest in the interrupt shadow?
- *
- * @return TRUE if the guest is in the interrupt shadow; otherwsie, return FALSE.
- */
-bool svm_check_int_shadow(void);
+unsigned int proc_create(void *elf_addr);
+void proc_start_user(void);
 
-/*
- * Get the reason of VMEXIT.
- *
- * @return the reason of VMEXIT
- */
-exit_reason_t svm_get_exit_reason(void);
+void npt_insert(unsigned int gpa, unsigned int hpa);
 
-/*
- * Get the I/O port of the last VMEXIT caused by accessing I/O port.
- *
- * @return the I/O port if there was at least one VMEXIT caused by accessing I/O
- *         port; otherwise, the returned value is undefined.
- */
-uint16_t svm_get_exit_io_port(void);
+void vmcb_init(unsigned int mbi_addr);
 
-/*
- * Get the data width of the last VMEXIT caused by accessing I/O port.
- *
- * @return the data width if there was at least one VMEXIT caused by accessing
- *         I/O port; otherwise, the returned value is undefined.
- */
-data_sz_t svm_get_exit_io_width(void);
-
-/*
- * Is the last VMEXIT caused by accessing I/O port a write operation?
- *
- * @return TRUE/FALSE if there was at least one VMEXIT caused by accessing I/O
- *         port; otherwise, the returned value is undefined.
- */
-bool svm_get_exit_io_write(void);
-
-/*
- * Does the last VMEXIT caused by accessing I/O port have a prefix "rep"?
- *
- * @return TRUE/FALSE if there was at least one VMEXIT caused by accessing I/O
- *         port; otherwise, the returned value is undefined.
- */
-bool svm_get_exit_io_rep(void);
-
-/*
- * Is the last VMEXIT caused by accessing I/O port a string operation?
- *
- * @return TRUE/FALSE if there was at least one VMEXIT caused by accessing I/O
- *         port; otherwise, the returned value is undefined.
- */
-bool svm_get_exit_io_str(void);
-
-/*
- * Get the address of the instruction next to the I/O instruction.
- *
- * @return the address of the isntruction next to the I/O instruction
- */
-uint32_t svm_get_exit_io_neip(void);
-
-/*
- * Get the fault address of the last VMEXIT caused by NPT faults.
- *
- * @return the fault address if there was at least one VMEXIT caused by NPT
- *         faults; otherwise, the returned value is undefined.
- */
-uintptr_t svm_get_exit_fault_addr(void);
+void vmcb_set_intercept_vint(unsigned int enable);
+void vmcb_inject_event(unsigned int type, unsigned int vector,
+		       unsigned int errcode, unsigned int ev);
+unsigned int vmcb_check_int_shadow(void);
+unsigned int vmcb_check_pending_event(void);
+unsigned int vmcb_get_next_eip(void);
+void vmcb_set_seg(unsigned int seg, unsigned int sel,
+		  unsigned int base, unsigned int lim, unsigned int ar);
 
 #endif /* _KERN_ */
 

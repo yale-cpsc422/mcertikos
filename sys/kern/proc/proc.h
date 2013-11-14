@@ -1,90 +1,45 @@
-#ifndef _KERN_PROC_H_
-#define _KERN_PROC_H_
+#ifndef _KERN_PROC_PROC_H_
+#define _KERN_PROC_PROC_H_
 
 #ifdef _KERN_
 
-#include <lib/types.h>
-
-#include "context.h"
-#include "thread.h"
-
-#define PAGESIZE	4096
-#define MAX_PROC	MAX_THREAD
-
-typedef int		pid_t;
-
-struct proc {
-	pid_t		pid;
-	struct thread	*td;
-	int		pmap_id;
-	struct context	uctx;
-	char		sysbuf[PAGESIZE];
-	bool		inuse;
-};
-
 /*
- * Initialize the process module.
+ * Primitives defined by this layer.
  */
-void proc_init(void);
 
-/*
- * Create a new process and load an ELF image to its userspace.
- *
- * @param elf_addr the address of the ELF image
- *
- * @return a pointer to the process structure if successful; otherwise, return
- *         NULL
- */
-struct proc *proc_create(uintptr_t elf_addr);
-
-/*
- * Yield to other processes.
- */
-void proc_yield(void);
-
-/*
- * XXX: Not implemetned yet!!!
- */
-int proc_exit(void);
-
-/*
- * XXX: Not implemented yet!!!
- */
-int proc_terminate(struct proc *p);
-
-/*
- * Make the current process sleeping on a specified sleep queue.
- *
- * @param p    the process to sleep
- * @param slpq the sleep queue
- */
-void proc_sleep(struct threadq *slpq);
-
-/*
- * Wake up all processes sleeping on a specified sleep queue.
- *
- * @param slpq the sleep queue
- */
-void proc_wakeup(struct threadq *slpq);
-
-/*
- * Get the current process.
- */
-struct proc *proc_cur(void);
-
-/*
- * Save the trapframe in the user context of the specified process.
- *
- * @param p  the process
- * @param tf the trapfram to save
- */
-void proc_save_uctx(struct proc *p, tf_t *tf);
-
-/*
- * Start the user-space of the current process.
- */
+unsigned int proc_create(void *elf_addr);
 void proc_start_user(void);
+
+/*
+ * Primitives derived from lower layers.
+ */
+
+unsigned int palloc(void);
+void pfree(unsigned int idx);
+
+unsigned int pt_read(unsigned int pid, unsigned int va);
+void pt_resv(unsigned int pid, unsigned int vaddr, unsigned int perm);
+
+unsigned int pt_copyin(unsigned int pmap_id,
+		       unsigned int uva, char *kva, unsigned int len);
+unsigned int pt_copyout(char *kva,
+			unsigned int pmap_id, unsigned int uva, unsigned int len);
+unsigned int pt_memset(unsigned int pmap_id,
+		       unsigned int va, char c, unsigned int len);
+
+unsigned int get_curid(void);
+
+void sched_init(unsigned int mbi_addr);
+
+void thread_kill(unsigned int pid, unsigned chid);
+
+void thread_wakeup(unsigned int chid);
+void thread_sleep(void);
+void thread_yield(void);
+
+void uctx_set(unsigned int pid, unsigned int idx, unsigned int val);
+unsigned int uctx_get(unsigned int pid, unsigned int idx);
 
 #endif /* _KERN_ */
 
-#endif /* !_KERN_PROC_H_ */
+#endif /* !_KERN_PROC_PROC_H_ */

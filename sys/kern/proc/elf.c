@@ -74,14 +74,22 @@ typedef struct sechdr {
 
 #define PAGESIZE		4096
 
+extern unsigned int pt_copyout(char *kva, unsigned int pmap_id,
+			       unsigned int uva, unsigned int len);
+extern unsigned int pt_memset(unsigned int pmap_id,
+			      unsigned int va, char c, unsigned int len);
+extern void pt_resv(unsigned int pid, unsigned int vaddr, unsigned int perm);
+
 void
-elf_load(uintptr_t exe, int pmap_id)
+elf_load(void *exe_ptr, int pmap_id)
 {
 	elfhdr *eh;
 	proghdr *ph, *eph;
 	sechdr *sh, *esh;
 	char *strtab;
 	uintptr_t bss_base, bss_size;
+	uintptr_t exe = (uintptr_t) exe_ptr;
+
 
 	eh = (elfhdr *) exe;
 
@@ -145,8 +153,9 @@ elf_load(uintptr_t exe, int pmap_id)
 }
 
 uintptr_t
-elf_entry(uintptr_t exe)
+elf_entry(void *exe_ptr)
 {
+	uintptr_t exe = (uintptr_t) exe_ptr;
 	elfhdr *eh = (elfhdr *) exe;
 	KERN_ASSERT(eh->e_magic == ELF_MAGIC);
 	return (uintptr_t) eh->e_entry;

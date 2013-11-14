@@ -31,6 +31,7 @@
 #include <string.h>
 #include <syscall.h>
 #include <types.h>
+#include <x86.h>
 
 #include "kbd.h"
 #include "ps2.h"
@@ -478,11 +479,10 @@ vkbd_update_kbd(void *opaque)
 
 	/* synchronize the state of physical i8042 to virtualized i8042 */
 	while (1) {
-		if (sys_read_ioport(KBSTATP, SZ8, &status))
-			break;
+		status = inb(KBSTATP);
 		if (!(status & KBD_STAT_OBF))
 			break;
-		sys_read_ioport(KBDATAP, SZ8, &c);
+		c = inb(KBDATAP);
 		vkbd_queue(vkbd, c, 0);
 	}
 

@@ -1,13 +1,16 @@
 #include <lib/gcc.h>
 #include <lib/string.h>
 #include <lib/types.h>
-#include <lib/x86.h>
+
+#include <preinit/lib/x86.h>
 
 #include "seg.h"
 
-static tss_t		tss;
-
+static tss_t		tss0;
 uint8_t			bsp_kstack[4096] gcc_aligned(4096);
+extern char		STACK_LOC[64][4096] gcc_aligned(4096);
+
+#define offsetof(type, member)	__builtin_offsetof(type, member)
 
 void
 seg_init(void)
@@ -33,11 +36,11 @@ seg_init(void)
 		SEGDESC32(STA_W, 0x00000000, 0xffffffff, 3);
 
 	/* setup TSS */
-	tss.ts_esp0 = (uint32_t) bsp_kstack + 4096;
-	tss.ts_ss0 = CPU_GDT_KDATA;
+	tss0.ts_esp0 = (uint32_t) bsp_kstack + 4096;
+	tss0.ts_ss0 = CPU_GDT_KDATA;
 	gdt[CPU_GDT_TSS >> 3] =
 		SEGDESC16(STS_T32A,
-			  (uint32_t) (&tss), sizeof(tss_t) - 1, 0);
+			  (uint32_t) (&tss0), sizeof(tss_t) - 1, 0);
 	gdt[CPU_GDT_TSS >> 3].sd_s = 0;
 
 	pseudodesc_t gdt_desc = {
@@ -68,4 +71,18 @@ seg_init(void)
 	 */
 	extern pseudodesc_t idt_pd;
         asm volatile("lidt %0" : : "m" (idt_pd));
+
+	/*
+	 * Initialize all TSS structures for processes.
+	 */
+	unsigned int pid;
+	memzero(tss, sizeof(tss_t) * 64);
+	memzero(STACK_LOC, sizeof(char) * 64 * 4096);
+	for (pid = 0; pid < 64; pid++) {
+		tss[pid].ts_esp0 = (uint32_t) STACK_LOC[pid] + 4096;
+		tss[pid].ts_ss0 = CPU_GDT_KDATA;
+		tss[pid].ts_iomb = offsetof(tss_t, ts_iopm);
+		memzero(tss[pid].ts_iopm, sizeof(uint8_t) * 128);
+		tss[pid].ts_iopm[128] = 0xff;
+	}
 }

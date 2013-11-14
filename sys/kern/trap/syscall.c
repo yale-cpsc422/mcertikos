@@ -1,28 +1,45 @@
-#include <dev/ide.h>
-
 #include <preinit/lib/debug.h>
-#include <lib/types.h>
-#include <lib/x86.h>
-
-#include <mm/export.h>
-#include <proc/export.h>
-#include <virt/export.h>
-
+#include <dev/ide.h>
+#include <virt/svm.h>
+#include "syscall_args.h"
 #include "syscall.h"
 
-#define VM_USERHI	0xf0000000
-#define VM_USERLO	0x40000000
+#define PAGESIZE			4096
 
-#define PTE_P		0x001	/* Present */
-#define PTE_W		0x002	/* Writeable */
-#define PTE_U		0x004	/* User-accessible */
+#define NUM_PROC			64
 
+#define VM_USERHI			0xf0000000
+#define VM_USERLO			0x40000000
 
+#define PTE_P				0x001	/* Present */
+#define PTE_W				0x002	/* Writeable */
+#define PTE_U				0x004	/* User-accessible */
+
+#define VMEXIT_IOIO			0x07b
+#define VMEXIT_NPF			0x400
+
+#define VMCB_EVENTINJ_TYPE_INTR		0
+#define VMCB_EVENTINJ_TYPE_EXCPT	2
+
+#define ATA_SECTOR_SIZE			512
+
+/*
+ * Simulate adding an unsigned 64-bit integer (a) to an unsigned 32-bit integer
+ * (b) and return an unsigned 64-bit integer (c). CompCert doesn't support
+ * 64-bit integers.
+ *
+ * @param a_lo the lower 32-bit of the operand a
+ * @param a_hi the higher 32-bit of the operand a
+ * @param b    the operand b
+ *
+ * @return c_lo the lower 32-bit of the result c
+ * @return c_hi the higher 32-bit of the result c
+ */
 #define u64_add_u32(a_lo, a_hi, b, c_lo, c_hi) do {	\
-		uint32_t __a_lo = (a_lo);		\
-		uint32_t __a_hi = (a_hi);		\
-		uint32_t __b = (b);			\
-		uint32_t __delta;			\
+		unsigned int __a_lo = (a_lo);		\
+		unsigned int __a_hi = (a_hi);		\
+		unsigned int __b = (b);			\
+		unsigned int __delta;			\
 		if (0xffffffff - __a_lo < __b) {	\
 			__delta = 0xffffffff - __a_lo;	\
 			(c_lo) = __b - __delta -1;	\
@@ -33,64 +50,88 @@
 		}					\
 	} while (0)
 
-static int
-sys_puts(uintptr_t str_la, size_t len)
-{
-	if (!(VM_USERLO <= str_la && str_la + len <= VM_USERHI))
-		return E_INVAL_ADDR;
+static char sys_buf[NUM_PROC][PAGESIZE];
+static void *elf_list[1];
 
-	struct proc *p = proc_cur();
-	size_t remain = len;
-	uintptr_t cur_pos = str_la;
+void
+sys_puts(void)
+{
+	unsigned int cur_pid;
+	unsigned int str_uva, str_len;
+	unsigned int remain, cur_pos, nbytes;
+
+	cur_pid = get_curid();
+	str_uva = syscall_get_arg2();
+	str_len = syscall_get_arg3();
+
+	if (!(VM_USERLO <= str_uva && str_uva + str_len <= VM_USERHI)) {
+		syscall_set_errno(E_INVAL_ADDR);
+		return;
+	}
+
+	remain = str_len;
+	cur_pos = str_uva;
 
 	while (remain) {
-		size_t nbytes = min(remain, PAGESIZE-1);
+		if (remain < PAGESIZE - 1)
+			nbytes = remain;
+		else
+			nbytes = PAGESIZE - 1;
 
-		if (pt_copyin(p->pmap_id, cur_pos, p->sysbuf, nbytes) != nbytes)
-			return E_MEM;
+		if (pt_copyin(cur_pid,
+			      cur_pos, sys_buf[cur_pid], nbytes) != nbytes) {
+			syscall_set_errno(E_MEM);
+			return;
+		}
 
-		p->sysbuf[nbytes] = 0;
-		KERN_INFO("%s", (char *) p->sysbuf);
+		sys_buf[cur_pid][nbytes] = '\0';
+		KERN_INFO("%s", sys_buf[cur_pid]);
 
 		remain -= nbytes;
 		cur_pos += nbytes;
 	}
 
-	return E_SUCC;
+	syscall_set_errno(E_SUCC);
 }
 
-static int
-sys_spawn(struct context *ctx, uintptr_t uelf_addr)
+void
+sys_spawn(void)
 {
-	if (!(VM_USERLO <= uelf_addr && uelf_addr < VM_USERHI))
-		return E_INVAL_ADDR;
+	unsigned int cur_pid;
+	unsigned int new_pid;
+	unsigned int elf_id;
 
-	struct proc *p;
+	cur_pid = get_curid();
+	elf_id = syscall_get_arg2();
+	new_pid = proc_create(elf_list[elf_id]);
 
-	if ((p = proc_create(uelf_addr)) == NULL)
-		return E_INVAL_PID;
-
-	ctx_set_retval1(ctx, p->pid);
-
-	return E_SUCC;
+	if (new_pid == NUM_PROC) {
+		syscall_set_errno(E_INVAL_PID);
+		syscall_set_retval1(NUM_PROC);
+	} else {
+		syscall_set_errno(E_SUCC);
+		syscall_set_retval1(new_pid);
+	}
 }
 
-static int
+void
 sys_yield(void)
 {
-	proc_yield();
-	return E_SUCC;
+	thread_yield();
+	syscall_set_errno(E_SUCC);
 }
 
 static int
-__sys_disk_read(uint32_t lba_lo, uint32_t lba_hi, uint32_t nsectors,
-		uintptr_t buf)
+__sys_disk_read(unsigned int lba_lo, unsigned int lba_hi, unsigned int nsectors,
+		unsigned int buf)
 {
-	uint32_t cur_lba_lo, cur_lba_hi;
-	uint32_t remaining;
-	uintptr_t cur_la;
+	unsigned int cur_lba_lo, cur_lba_hi;
+	unsigned int remaining;
+	unsigned int cur_la;
+	unsigned int cur_pid;
+	unsigned int n;
 
-	struct proc *p = proc_cur();
+	cur_pid = get_curid();
 
 	cur_lba_lo = lba_lo;
 	cur_lba_hi = lba_hi;
@@ -98,11 +139,14 @@ __sys_disk_read(uint32_t lba_lo, uint32_t lba_hi, uint32_t nsectors,
 	cur_la = buf;
 
 	while (remaining > 0) {
-		uint32_t n = min(remaining, PAGESIZE / ATA_SECTOR_SIZE);
+		if (remaining < PAGESIZE / ATA_SECTOR_SIZE)
+			n = remaining;
+		else
+			n = PAGESIZE / ATA_SECTOR_SIZE;
 
-		if (ide_disk_read(cur_lba_lo, cur_lba_hi, p->sysbuf, n))
+		if (ide_disk_read(cur_lba_lo, cur_lba_hi, sys_buf[cur_pid], n))
 			return E_DISK_OP;
-		if (pt_copyout(p->sysbuf, p->pmap_id, cur_la,
+		if (pt_copyout(sys_buf[cur_pid], cur_pid, cur_la,
 			       n * ATA_SECTOR_SIZE) != n * ATA_SECTOR_SIZE)
 			return E_MEM;
 
@@ -115,14 +159,16 @@ __sys_disk_read(uint32_t lba_lo, uint32_t lba_hi, uint32_t nsectors,
 }
 
 static int
-__sys_disk_write(uint32_t lba_lo, uint32_t lba_hi, uint32_t nsectors,
-		 uintptr_t buf)
+__sys_disk_write(unsigned int lba_lo, unsigned int lba_hi, unsigned int nsectors,
+		 unsigned int buf)
 {
-	uint32_t cur_lba_lo, cur_lba_hi;
-	uint32_t remaining;
-	uintptr_t cur_la;
+	unsigned int cur_lba_lo, cur_lba_hi;
+	unsigned int remaining;
+	unsigned int cur_la;
+	unsigned int cur_pid;
+	unsigned int n;
 
-	struct proc *p = proc_cur();
+	cur_pid = get_curid();
 
 	cur_lba_lo = lba_lo;
 	cur_lba_hi = lba_hi;
@@ -130,12 +176,15 @@ __sys_disk_write(uint32_t lba_lo, uint32_t lba_hi, uint32_t nsectors,
 	cur_la = buf;
 
 	while (remaining > 0) {
-		uint32_t n = min(remaining, PAGESIZE / ATA_SECTOR_SIZE);
+		if (remaining < PAGESIZE / ATA_SECTOR_SIZE)
+			n = remaining;
+		else
+			n = PAGESIZE / ATA_SECTOR_SIZE;
 
-		if (pt_copyin(p->pmap_id, cur_la, p->sysbuf,
+		if (pt_copyin(cur_pid, cur_la, sys_buf[cur_pid],
 			      n * ATA_SECTOR_SIZE) != n * ATA_SECTOR_SIZE)
 			return E_MEM;
-		if (ide_disk_write(cur_lba_lo, cur_lba_hi, p->sysbuf, n))
+		if (ide_disk_write(cur_lba_lo, cur_lba_hi, sys_buf[cur_pid], n))
 			return E_DISK_OP;
 
 		u64_add_u32(cur_lba_lo, cur_lba_hi, n, cur_lba_lo, cur_lba_hi);
@@ -146,626 +195,248 @@ __sys_disk_write(uint32_t lba_lo, uint32_t lba_hi, uint32_t nsectors,
 	return E_SUCC;
 }
 
-static int
-sys_disk_op(int op, uint32_t lba_lo, uint32_t lba_hi, uint32_t nsects,
-	    uintptr_t buf_la)
+void
+sys_disk_op(void)
 {
-	int rc = 0;
+	unsigned int op;
+	unsigned int lba_lo;
+	unsigned int lba_hi;
+	unsigned int nsects;
+	unsigned int buf_uva;
+	unsigned int rc;
 
-	if (!(VM_USERLO <= buf_la &&
-	      buf_la + nsects * ATA_SECTOR_SIZE <= VM_USERHI))
-		return E_INVAL_ADDR;
+	op = syscall_get_arg2();
+	lba_lo = syscall_get_arg3();
+	lba_hi = syscall_get_arg4();
+	nsects = syscall_get_arg5();
+	buf_uva = syscall_get_arg6();
 
-	switch (op) {
-	case DISK_READ:
-		rc = __sys_disk_read(lba_lo, lba_hi, nsects, buf_la);
-		break;
-	case DISK_WRITE:
-		rc = __sys_disk_write(lba_lo, lba_hi, nsects, buf_la);
-		break;
-	default:
-		rc = 1;
+	if (!(VM_USERLO <= buf_uva &&
+	      buf_uva + nsects * ATA_SECTOR_SIZE <= VM_USERHI)) {
+		syscall_set_errno(E_INVAL_ADDR);
+		return;
 	}
 
-	if (rc)
-		return E_DISK_OP;
+	if (op == DISK_READ)
+		rc = __sys_disk_read(lba_lo, lba_hi, nsects, buf_uva);
+	else if (op == DISK_WRITE)
+		rc = __sys_disk_write(lba_lo, lba_hi, nsects, buf_uva);
+	else
+		rc = 1;
 
-	return E_SUCC;
+	if (rc)
+		syscall_set_errno(E_DISK_OP);
+	else
+		syscall_set_errno(E_SUCC);
 }
 
-static int
-sys_disk_cap(struct context *ctx)
+void
+sys_disk_cap(void)
 {
-	uint32_t cap_lo, cap_hi;
+	unsigned int cap_lo, cap_hi;
 
 	cap_lo = ide_disk_size_lo();
 	cap_hi = ide_disk_size_hi();
 
-	ctx_set_retval1(ctx, cap_lo);
-	ctx_set_retval2(ctx, cap_hi);
-
-	return E_SUCC;
+	syscall_set_retval1(cap_lo);
+	syscall_set_retval2(cap_hi);
+	syscall_set_errno(E_SUCC);
 }
 
-static int
-sys_hvm_create_vm(struct context *ctx)
+void
+sys_hvm_run_vm(void)
 {
-	svm_init_vm();
-
-	ctx_set_retval1(ctx, 0);
-
-	return E_SUCC;
-}
-
-static int
-sys_hvm_run_vm(struct context *ctx, int vmid)
-{
-	ctx_set_errno(ctx, (vmid == 0) ? E_SUCC : E_INVAL_VMID);
 	svm_run_vm();
-	return E_SUCC;
-}
-
-static int
-sys_hvm_get_exitinfo(struct context *ctx, int vmid)
-{
-	if (vmid != 0)
-		return E_INVAL_VMID;
-
 	svm_sync();
 
-	exit_reason_t reason = svm_get_exit_reason();
-	uint32_t flags = 0;
+	syscall_set_errno(E_SUCC);
+}
 
-	ctx_set_retval1(ctx, reason);
+void
+sys_hvm_get_exitinfo(void)
+{
+	unsigned int reason;
+	unsigned int flags;
 
-	if (reason == EXIT_REASON_IOPORT) {
-		ctx_set_retval2(ctx, svm_get_exit_io_port());
-		ctx_set_retval3(ctx, svm_get_exit_io_width());
+	reason = svm_get_exit_reason();
+	flags = 0;
+
+	syscall_set_retval1(reason);
+
+	if (reason == VMEXIT_IOIO) {
+		syscall_set_retval2(svm_get_exit_io_port());
+		syscall_set_retval3(svm_get_exit_io_width());
 		if (svm_get_exit_io_write())
 			flags |= (1 << 0);
 		if (svm_get_exit_io_rep())
 			flags |= (1 << 1);
 		if (svm_get_exit_io_str())
 			flags |= (1 << 2);
-		ctx_set_retval4(ctx, flags);
-	} else if (reason == EXIT_REASON_PGFLT) {
-		ctx_set_retval2(ctx, svm_get_exit_fault_addr());
+		syscall_set_retval4(flags);
+	} else if (reason == VMEXIT_NPF) {
+		syscall_set_retval2(svm_get_exit_fault_addr());
 	}
 
-	return E_SUCC;
+	syscall_set_errno(E_SUCC);
 }
 
-static int
-sys_hvm_set_mmap(int vmid, uint32_t gpa, uint32_t hva)
+void
+sys_hvm_mmap(void)
 {
-	uint32_t hpa;
+	unsigned int cur_pid;
+	unsigned int gpa;
+	unsigned int hva;
+	unsigned int hpa;
 
-	if (vmid != 0)
-		return E_INVAL_VMID;
+	cur_pid = get_curid();
+	gpa = syscall_get_arg2();
+	hva = syscall_get_arg3();
 
-	if (gpa % PAGESIZE != 0 || hva % PAGESIZE != 0 ||
-	    !(VM_USERLO <= hva && hva + PAGESIZE <= VM_USERHI))
-		return E_INVAL_ADDR;
+	if (hva % PAGESIZE != 0 || gpa % PAGESIZE != 0 ||
+	    !(VM_USERLO <= hva && hva + PAGESIZE <= VM_USERHI)) {
+		syscall_set_errno(E_INVAL_ADDR);
+		return;
+	}
 
-	hpa = pt_read(proc_cur()->pmap_id, hva);
+	hpa = pt_read(cur_pid, hva);
 
 	if ((hpa & PTE_P) == 0) {
-		pt_resv(proc_cur()->pmap_id, hva, PTE_P | PTE_U | PTE_W);
-		hpa = pt_read(proc_cur()->pmap_id, hva);
+		pt_resv(cur_pid, hva, PTE_P | PTE_U | PTE_W);
+		hpa = pt_read(cur_pid, hva);
 	}
 
 	hpa = (hpa & 0xfffff000) + (hva % PAGESIZE);
 
-	svm_sync();
-	svm_set_mmap(gpa, hpa);
+	npt_insert(gpa, hpa);
 
-	return E_SUCC;
-}
-
-static int
-sys_hvm_set_reg(int vmid, guest_reg_t reg, uint32_t val)
-{
-	if (vmid != 0)
-		return E_INVAL_VMID;
-
-	if (!(GUEST_EAX <= reg && reg < GUEST_MAX_REG))
-		return E_INVAL_REG;
-
-	svm_sync();
-	svm_set_reg(reg, val);
-
-	return E_SUCC;
-}
-
-static int
-sys_hvm_get_reg(struct context *ctx, int vmid, guest_reg_t reg)
-{
-	if (vmid != 0)
-		return E_INVAL_VMID;
-
-	if (!(GUEST_EAX <= reg && reg < GUEST_MAX_REG))
-		return E_INVAL_REG;
-
-	svm_sync();
-
-	ctx_set_retval1(ctx, svm_get_reg(reg));
-
-	return E_SUCC;
-}
-
-static int
-sys_hvm_set_seg(int vmid, guest_seg_t seg, uintptr_t desc_la)
-{
-	if (vmid != 0)
-		return E_INVAL_VMID;
-
-	struct guest_seg_desc desc;
-
-	if (!(GUEST_CS <= seg && seg < GUEST_MAX_SEG_DESC))
-		return E_INVAL_SEG;
-
-	if (!(VM_USERLO <= desc_la && desc_la + sizeof(desc) <= VM_USERHI))
-		return E_INVAL_ADDR;
-
-	if (pt_copyin(proc_cur()->pmap_id, desc_la, (char *) &desc,
-		      sizeof(desc)) != sizeof(desc))
-		return E_MEM;
-
-	svm_sync();
-	svm_set_seg(seg, desc.sel, desc.base, desc.lim, desc.ar);
-
-	return E_SUCC;
-}
-
-static int
-sys_hvm_get_next_eip(struct context *ctx, int vmid, guest_instr_t instr)
-{
-	if (vmid != 0)
-		return E_INVAL_VMID;
-
-	svm_sync();
-
-	exit_reason_t reason = svm_get_exit_reason();
-
-	if (reason == EXIT_REASON_IOPORT)
-		ctx_set_retval1(ctx, svm_get_exit_io_neip());
-	else
-		ctx_set_retval1(ctx, svm_get_next_eip());
-
-	return E_SUCC;
-}
-
-static int
-sys_hvm_inject_event(int vmid, guest_event_t ev_type, uint8_t vector,
-		     uint32_t errcode, bool ev)
-{
-	if (vmid != 0)
-		return E_INVAL_VMID;
-
-	if (ev_type != EVENT_EXTINT && ev_type != EVENT_EXCEPTION)
-		return E_INVAL_EVENT;
-
-	svm_sync();
-	svm_inject_event(ev_type, vector, errcode, ev);
-
-	return E_SUCC;
-}
-
-static int
-sys_hvm_pending_event(struct context *ctx, int vmid)
-{
-	if (vmid != 0)
-		return E_INVAL_VMID;
-
-	svm_sync();
-	ctx_set_retval1(ctx, svm_check_pending_event());
-
-	return E_SUCC;
-}
-
-static int
-sys_hvm_intr_shadow(struct context *ctx, int vmid)
-{
-	if (vmid != 0)
-		return E_INVAL_VMID;
-
-	svm_sync();
-	ctx_set_retval1(ctx, svm_check_int_shadow());
-
-	return E_SUCC;
-}
-
-static int
-sys_hvm_intercept_intr_window(int vmid, bool enable)
-{
-	if (vmid != 0)
-		return E_INVAL_VMID;
-
-	svm_sync();
-
-	if (enable == TRUE)
-		svm_set_intercept_vint();
-	else
-		svm_clear_intercept_vint();
-
-	return E_SUCC;
-}
-
-static int
-sys_read_ioport(struct context *ctx, uint16_t port, data_sz_t width)
-{
-	uint32_t data;
-
-	if (width == SZ8)
-		data = inb(port);
-	else if (width == SZ16)
-		data = inw(port);
-	else if (width == SZ32)
-		data = inl(port);
-	else
-		return E_INVAL_PORT;
-
-	ctx_set_retval1(ctx, data);
-
-	return E_SUCC;
-}
-
-static int
-sys_write_ioport(uint16_t port, data_sz_t width, uint32_t data)
-{
-	if (width == SZ8)
-		outb(port, (uint8_t) data);
-	else if (width == SZ16)
-		outw(port, (uint16_t) data);
-	else if (width == SZ32)
-		outl(port, data);
-	else
-		return E_INVAL_PORT;
-	return E_SUCC;
+	syscall_set_errno(E_SUCC);
 }
 
 void
-syscall_handler(void)
+sys_hvm_set_reg(void)
 {
-	struct context *ctx = &proc_cur()->uctx;
-	uint32_t nr = ctx_arg1(ctx);
+	unsigned int reg;
+	unsigned int val;
 
-	uint32_t a[5];
-	a[0] = ctx_arg2(ctx);
-	a[1] = ctx_arg3(ctx);
-	a[2] = ctx_arg4(ctx);
-	a[3] = ctx_arg5(ctx);
-	a[4] = ctx_arg6(ctx);
+	reg = syscall_get_arg2();
+	val = syscall_get_arg3();
 
-	uint32_t errno;
-
-	switch (nr) {
-	case SYS_puts:
-		/*
-		 * Output a string to the screen.
-		 *
-		 * Parameters:
-		 *   a[0]: the linear address where the string is
-		 *   a[1]: the length of the string
-		 *
-		 * Return:
-		 *   None.
-		 *
-		 * Error:
-		 *   E_MEM
-		 */
-		errno = sys_puts((uintptr_t) a[0], (size_t) a[1]);
-		break;
-	case SYS_spawn:
-		/*
-		 * Create a new process.
-		 *
-		 * Parameters:
-		 *   a[0]: the identifier of the ELF image
-		 *
-		 * Return:
-		 *   the process ID of the process
-		 *
-		 * Error:
-		 *   E_INVAL_ADDR, E_INVAL_PID
-		 */
-		errno = sys_spawn(ctx, (int) a[0]);
-		break;
-	case SYS_yield:
-		/*
-		 * Called by a process to abandon its CPU slice.
-		 *
-		 * Parameters:
-		 *   None.
-		 *
-		 * Return:
-		 *   None.
-		 *
-		 * Error:
-		 *   None.
-		 */
-		errno = sys_yield();
-		break;
-	case SYS_disk_op:
-		/*
-		 * Disk operation. The operation information must be provided in
-		 * an object of type struct user_disk_op by the caller.
-		 *
-		 * Parameters:
-		 *   a[0]: the type of the disk operation: 0 read, 1 write
-		 *   a[1]: the lower 32-bit of LBA
-		 *   a[2]: the higher 32-bit of LBA
-		 *   a[3]: the number of sectors
-		 *   a[4]: the user linear address of the buffer
-		 *
-		 * Return:
-		 *   None.
-		 *
-		 * Error:
-		 *   E_INVAL_ADDR, E_DISK_NODRV, E_MEM, E_DISK_OP
-		 */
-		errno = sys_disk_op((int) a[0], (uint32_t) a[1], (uint32_t) a[2],
-				    (uint32_t) a[3], (uintptr_t) a[4]);
-#ifdef DEBUG_DISK
-		if (errno)
-			KERN_DEBUG("sys_disk_op() failed. (errno %d)\n", errno);
-#endif
-		break;
-	case SYS_disk_cap:
-		/*
-		 * Get the capability of the disk for the virtual machine.
-		 *
-		 * Parameters:
-		 *   None.
-		 *
-		 * Return:
-		 *   1st: the lower 32-bit of the capability
-		 *   2nd: the higher 32-bit of the capability
-		 *
-		 * Error:
-		 *   E_DISK_NONDRV
-		 */
-		errno = sys_disk_cap(ctx);
-#ifdef DEBUG_DISK
-		if (errno)
-			KERN_DEBUG("sys_disk_cap() failed. (errno %d)\n", errno);
-#endif
-		break;
-	case SYS_hvm_create_vm:
-		/*
-		 * Create a new virtual machine descriptor.
-		 *
-		 * Parameters:
-		 *
-		 * Return:
-		 *   the virtual machine ID of the new virtual machine
-		 *
-		 * Error:
-		 *   E_INVAL_VMID
-		 */
-		errno = sys_hvm_create_vm(ctx);
-		break;
-	case SYS_hvm_run_vm:
-		/*
-		 * Run a virtual machine and returns when a VMEXIT or an error
-		 * happens.
-		 *
-		 * Parameters:
-		 *   a[0]: the virtual machine descriptor
-		 *
-		 * Return:
-		 *   None.
-		 *
-		 * Error:
-		 *   E_INVAL_VMID
-		 *
-		 */
-		errno = sys_hvm_run_vm(ctx, (int) a[0]);
-		break;
-	case SYS_hvm_get_exitinfo:
-		/*
-		 * Get the information of the latest VMEXIT.
-		 *
-		 * Parameters:
-		 *   a[0]: the virtual machine descriptor
-		 *
-		 * Return:
-		 *
-		 * Error:
-		 *
-		 */
-		errno = sys_hvm_get_exitinfo(ctx, (int) a[0]);
-		break;
-	case SYS_hvm_set_mmap:
-		/*
-		 * Map guest physical pages to a host virtual pages.
-		 *
-		 * Parameters:
-		 *   a[0]: the virtual machine descriptor
-		 *   a[1]: the guest physical address
-		 *   a[2]: the host virtual address
-		 *
-		 * Return:
-		 *   None.
-		 *
-		 * Error:
-		 *   E_INVAL_VMID, E_INVAL_ADDR, E_INVAL_CACHE_TYPE, E_HVM_MMAP
-		 */
-		errno = sys_hvm_set_mmap((int) a[0],
-					 (uintptr_t) a[1], (uintptr_t) a[2]);
-		break;
-	case SYS_hvm_set_reg:
-		/*
-		 * Set the register of a virtual machine.
-		 *
-		 * Parameters:
-		 *   a[0]: the virtual machine descriptor
-		 *   a[1]: the guest register
-		 *   a[2]: the value of the register
-		 *
-		 * Return:
-		 *   None.
-		 *
-		 * Error:
-		 *   E_INVAL_VMID, E_INVAL_REG, E_HVM_REG
-		 */
-		errno = sys_hvm_set_reg((int) a[0],
-					(guest_reg_t) a[1], (uint32_t) a[2]);
-		break;
-	case SYS_hvm_get_reg:
-		/*
-		 * Get the value of the register of a virtual machine.
-		 *
-		 * Parameters:
-		 *   a[0]: the virtual machine descriptor
-		 *   a[1]: the guest register
-		 *
-		 * Return:
-		 *   the value of the registers
-		 *
-		 * Error:
-		 *   E_INVAL_VMID, E_INVAL_REG, E_HVM_REG
-		 */
-		errno = sys_hvm_get_reg(ctx, (int) a[0], (guest_reg_t) a[1]);
-		break;
-	case SYS_hvm_set_seg:
-		/*
-		 * Set the segment descriptor of a virtual machine.
-		 *
-		 * Parameters:
-		 *   a[0]: the virtual machine descriptor
-		 *   a[1]: the guest segment
-		 *   a[2]: the linear address of the descriptor information
-		 *
-		 * Return:
-		 *   None.
-		 *
-		 * Error:
-		 *   E_INVAL_VMID, E_INVAL_SEG, E_INVAL_ADDR, E_MEM, E_HVM_SEG
-		 */
-		errno = sys_hvm_set_seg((int) a[0],
-					(guest_seg_t) a[1], (uintptr_t) a[2]);
-		break;
-	case SYS_hvm_get_next_eip:
-		/*
-		 * Get guest EIP of the next instruction in the virtual machine.
-		 *
-		 * Parameters:
-		 *   a[0]: the virtual machine descriptor
-		 *   a[1]: the guest instruction
-		 *
-		 * Return:
-		 *   the guest physical address of the next instruction
-		 *
-		 * Error:
-		 *   E_INVAL_VMID
-		 */
-		errno = sys_hvm_get_next_eip(ctx,
-					     (int) a[0], (guest_instr_t) a[1]);
-		break;
-	case SYS_hvm_inject_event:
-		/*
-		 * Inject an event to the virtual machine.
-		 *
-		 * Parameters:
-		 *   a[0]: the virtual machine descriptor
-		 *   a[1]: the event type
-		 *   a[2]: the vector number
-		 *   a[3]: the error code
-		 *   a[4]: is the error code valid
-		 *
-		 * Return:
-		 *   None.
-		 *
-		 * Error:
-		 *   E_INVAL_VMID, E_INVAL_EVENT, E_HVM_INJECT
-		 */
-		errno = sys_hvm_inject_event((int) a[0], (guest_event_t) a[1],
-					     (uint8_t) a[2], (uint32_t) a[3],
-					     (bool) a[4]);
-		break;
-	case SYS_hvm_pending_event:
-		/*
-		 * Check whether the virtual machine have pending events.
-		 *
-		 * Parameters:
-		 *   a[0]: the virtual machine descriptor
-		 *
-		 * Return:
-		 *   1, if existing pending events; 0, if not
-		 *
-		 *
-		 * Error:
-		 *   E_INVAL_VMID
-		 */
-		errno = sys_hvm_pending_event(ctx, (int) a[0]);
-		break;
-	case SYS_hvm_intr_shadow:
-		/*
-		 * Check whether the virtual machine is in the interrupt shadow.
-		 *
-		 * Parameters:
-		 *   a[0]: the virtual machine descriptor
-		 *
-		 * Return:
-		 *   1, if in the interrupt shadow; 0, if not
-		 *
-		 * Error:
-		 *   E_INVAL_VMID
-		 */
-		errno = sys_hvm_intr_shadow(ctx, (int) a[0]);
-		break;
-	case SYS_hvm_intercept_intr_window:
-		/*
-		 * Enable/Disable intercepting the interrupt windows.
-		 *
-		 * Parameters:
-		 *   a[0]: the virtual machine descriptor
-		 *   a[1]: TRUE - enable; FALSE - disable
-		 *
-		 * Return:
-		 *   None
-		 *
-		 * Error:
-		 *   E_INVAL_VMID
-		 */
-		errno = sys_hvm_intercept_intr_window((int) a[0], (bool) a[1]);
-		break;
-	case SYS_read_ioport:
-		/*
-		 * Read the host I/O port.
-		 *
-		 * Parameters:
-		 *   a[0]: the I/O port
-		 *   a[1]: the data width
-		 *
-		 * Return:
-		 *   the read data
-		 *
-		 * Error:
-		 */
-		errno = sys_read_ioport(ctx, (uint16_t) a[0], (data_sz_t) a[1]);
-		break;
-	case SYS_write_ioport:
-		/*
-		 * Write the host I/O port.
-		 *
-		 * Parameters:
-		 *   a[0]: the I/O port
-		 *   a[1]: the data width
-		 *   a[2]: the data
-		 *
-		 * Return:
-		 *   None
-		 *
-		 * Error:
-		 */
-		errno = sys_write_ioport((uint16_t) a[0], (data_sz_t) a[1],
-					 (uint32_t) a[2]);
-		break;
-	default:
-		errno = E_INVAL_CALLNR;
+	if (!(GUEST_EAX <= reg && reg < GUEST_MAX_REG)) {
+		syscall_set_errno(E_INVAL_REG);
+		return;
 	}
 
-	ctx_set_errno(ctx, errno);
+	svm_set_reg(reg, val);
+
+	syscall_set_errno(E_SUCC);
+}
+
+void
+sys_hvm_get_reg(void)
+{
+	unsigned int reg;
+
+	reg = syscall_get_arg2();
+
+	if (!(GUEST_EAX <= reg && reg < GUEST_MAX_REG)) {
+		syscall_set_errno(E_INVAL_REG);
+		return;
+	}
+
+	syscall_set_errno(E_SUCC);
+	syscall_set_retval1(svm_get_reg(reg));
+}
+
+void
+sys_hvm_set_seg(void)
+{
+	unsigned int seg;
+	unsigned int sel;
+	unsigned int base;
+	unsigned int lim;
+	unsigned int ar;
+
+	seg = syscall_get_arg2();
+	sel = syscall_get_arg3();
+	base = syscall_get_arg4();
+	lim = syscall_get_arg5();
+	ar = syscall_get_arg6();
+
+	if (!(GUEST_CS <= seg && seg < GUEST_MAX_SEG_DESC)) {
+		syscall_set_errno(E_INVAL_SEG);
+		return;
+	}
+
+	vmcb_set_seg(seg, sel, base, lim, ar);
+
+	syscall_set_errno(E_SUCC);
+}
+
+void
+sys_hvm_get_next_eip(void)
+{
+	unsigned int reason;
+
+	reason = svm_get_exit_reason();
+
+	if (reason == VMEXIT_IOIO)
+		syscall_set_retval1(svm_get_exit_io_neip());
+	else
+		syscall_set_retval1(vmcb_get_next_eip());
+
+	syscall_set_errno(E_SUCC);
+}
+
+void
+sys_hvm_inject_event(void)
+{
+	unsigned int ev_type;
+	unsigned int vector;
+	unsigned int errcode;
+	unsigned int ev;
+
+	ev_type = syscall_get_arg2();
+	vector = syscall_get_arg3();
+	errcode = syscall_get_arg4();
+	ev = syscall_get_arg5();
+
+	if (!(0 <= vector && vector < 256)) {
+		KERN_DEBUG("Invalid vector number %d.\n", vector);
+		syscall_set_errno(E_INVAL_EVENT);
+		return;
+	}
+
+	if (ev_type != VMCB_EVENTINJ_TYPE_INTR &&
+	    ev_type != VMCB_EVENTINJ_TYPE_EXCPT) {
+		KERN_DEBUG("Invalid event type %d.\n", ev_type);
+		syscall_set_errno(E_INVAL_EVENT);
+		return;
+	}
+
+	vmcb_inject_event(ev_type, vector, errcode, ev);
+
+	syscall_set_errno(E_SUCC);
+}
+
+void
+sys_hvm_check_pending_event(void)
+{
+	syscall_set_errno(E_SUCC);
+	syscall_set_retval1(vmcb_check_pending_event());
+}
+
+void
+sys_hvm_check_int_shadow(void)
+{
+	syscall_set_errno(E_SUCC);
+	syscall_set_retval1(vmcb_check_int_shadow());
+}
+
+void
+sys_hvm_intercept_int_window(void)
+{
+	unsigned int enable;
+	enable = syscall_get_arg2();
+	svm_set_intercept_intwin(enable);
+	syscall_set_errno(E_SUCC);
 }

@@ -1,4 +1,5 @@
 #include <debug.h>
+#include <hvm.h>
 #include <string.h>
 #include <syscall.h>
 #include <types.h>
@@ -226,7 +227,8 @@ vmm_handle_pgflt(struct vm *vm)
 	if (fault_pa >= 0xf0000000)
 		memzero((uint8_t *) host_va, PAGESIZE);
 
-	if ((sys_hvm_set_mmap(vm->vmid, fault_pa, host_va, PAT_WRITE_BACK))) {
+	if ((sys_hvm_mmap(vm->vmid, ROUNDDOWN(fault_pa, PAGESIZE),
+			  host_va, PAT_WRITE_BACK))) {
 		PANIC("EPT/NPT fault @ 0x%08x: cannot be mapped to "
 		      "HVA 0x%08x.\n", fault_pa, host_va);
 		return 3;
@@ -415,7 +417,7 @@ vmm_intr_assist(struct vm *vm)
 		return 0;
 	}
 
-	if (sys_hvm_pending_event(vm->vmid) == TRUE) {
+	if (sys_hvm_check_pending_event(vm->vmid) == TRUE) {
 #if defined (DEBUG_GUEST_INTR) || defined (DEBUG_GUEST_INJECT)
 		DEBUG("Found pending event.\n");
 #endif
@@ -432,7 +434,7 @@ vmm_intr_assist(struct vm *vm)
 		blocked = 1;
 		goto after_check;
 	}
-	if (sys_hvm_intr_shadow(vm->vmid) == TRUE) {
+	if (sys_hvm_check_intr_shadow(vm->vmid) == TRUE) {
 #if defined (DEBUG_GUEST_INTR) || defined (DEBUG_GUEST_INJECT)
 		DEBUG("Guest in interrupt shadow.\n");
 #endif
@@ -497,11 +499,7 @@ vmm_init_vm(struct vm *vm, uint64_t cpufreq, size_t memsize)
 	if (vm == NULL)
 		return -1;
 
-	if ((vm->vmid = sys_hvm_create_vm()) == -1) {
-		VMM_DEBUG("sys_hvm_create_vm() failed.\n");
-		return -3;
-	}
-
+	vm->vmid = 0;
 	vm->cpufreq = cpufreq;
 	vm->memsize = memsize;
 	vm->tsc = 0;
@@ -693,8 +691,8 @@ vmm_translate_gp2hv(struct vm *vm, uintptr_t gpa)
 			(uintptr_t) &vm->memory[pfn * PAGESIZE];
 		if (gpa >= 0xf000000)
 			memzero((void *) hva, PAGESIZE);
-		if (sys_hvm_set_mmap(vm->vmid,
-				     pfn * PAGESIZE, hva, PAT_WRITE_BACK))
+		if (sys_hvm_mmap(vm->vmid,
+				 pfn * PAGESIZE, hva, PAT_WRITE_BACK))
 			PANIC("Cannot map GPA 0x%08x to HVA 0x%08x.\n",
 			      pfn * PAGESIZE, hva);
 		vm->mmap_bitmap[line] |= (1UL << row);

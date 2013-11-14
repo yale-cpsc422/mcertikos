@@ -1,218 +1,85 @@
-#include <lib/string.h>
-#include <lib/types.h>
+#include "cur_id.h"
 
-#include "kctx.h"
-#include "kstack.h"
-#include "thread.h"
+#define TD_STATE_READY		0
+#define TD_STATE_RUN		1
+#define TD_STATE_SLEEP		2
+#define TD_STATE_DEAD		3
 
-static bool		thread_inited = FALSE;
-static struct thread	all_threads[MAX_THREAD];
-static struct threadq	rdyq;
-static struct thread	*cur_thread;
+#define NUM_PROC		64
+#define NUM_CHAN		64
 
-static struct kctx	kctx0;
-
-static int
-enqueue(struct threadq *q, struct thread *td)
+void
+sched_init(unsigned int mbi_addr)
 {
-	if (q == NULL || td == NULL)
-		return -1;
+	tdqueue_init(mbi_addr);
 
-	td->td_prev = q->tail;
-	if (q->tail != NULL)
-		q->tail->td_next = td;
-	q->tail = td;
-	if (q->head == NULL)
-		q->head = td;
-
-	return 0;
+	set_curid(0);
+	tcb_set_state(0, TD_STATE_RUN);
 }
 
-static struct thread *
-dequeue(struct threadq *q)
+unsigned int
+thread_spawn(void *entry)
 {
-	if (q == NULL || q->head == NULL)
-		return NULL;
+	unsigned int pid;
 
-	struct thread *td;
+	pid = kctx_new(entry);
+	tcb_set_state(pid, TD_STATE_READY);
+	tdq_enqueue(NUM_CHAN, pid);
 
-	td = q->head;
-	if (q->head->td_next != NULL)
-		q->head->td_next->td_prev = NULL;
-	q->head = q->head->td_next;
-
-	return td;
-}
-
-static int
-queue_remove(struct threadq *q, struct thread *td)
-{
-	if (q == NULL || td == NULL)
-		return -1;
-
-	if (td->td_prev)
-		td->td_prev->td_next = td->td_next;
-	if (td->td_next)
-		td->td_next->td_prev = td->td_prev;
-
-	if (q->head == td)
-		q->head = td->td_next;
-	if (q->tail == td)
-		q->tail = td->td_prev;
-
-	return 0;
-}
-
-static struct thread *
-thread_alloc(void)
-{
-	struct thread *td;
-	int i;
-
-	for (i = 0; i < MAX_THREAD; i++)
-		if (all_threads[i].inuse == FALSE)
-			break;
-
-	if (i == MAX_THREAD)
-		return NULL;
-
-	td = &all_threads[i];
-	td->inuse = TRUE;
-
-	return td;
-}
-
-static int
-thread_free(struct thread *td)
-{
-	if (td == NULL)
-		return -1;
-
-	td->inuse = FALSE;
-
-	return 0;
+	return pid;
 }
 
 void
-thread_init(void)
+thread_kill(unsigned int pid, unsigned int chid)
 {
-	if (thread_inited == TRUE)
-		return;
-
-	kstack_init();
-
-	memzero(all_threads, sizeof(struct thread) * MAX_THREAD);
-	rdyq.head = rdyq.tail = NULL;
-	cur_thread = NULL;
-
-	thread_inited = TRUE;
+	tcb_set_state(pid, TD_STATE_DEAD);
+	tdq_remove(chid, pid);
+	thread_free(pid);
 }
 
 void
-thread_sched(void)
+thread_wakeup(unsigned int chid)
 {
-	struct thread *from, *to;
+	unsigned int pid;
 
-	from = cur_thread;
-	to = dequeue(&rdyq);
+	pid = tdq_dequeue(chid);
 
-	if (to == NULL)
-		return;
-
-	cur_thread = to;
-
-	cswitch(from ? from->td_kctx : &kctx0, to->td_kctx);
-}
-
-struct thread *
-thread_spawn(void (*f)(void))
-{
-	struct kstack *ks;
-	struct kctx *kctx;
-	struct thread *td;
-
-	if ((ks = kstack_new()) == NULL) {
-		return NULL;
+	if (pid != NUM_PROC) {
+		tcb_set_state(pid, TD_STATE_READY);
+		tdq_enqueue(NUM_CHAN, pid);
 	}
-
-	if ((kctx = kctx_new(f, ks->tss.ts_esp0)) == NULL) {
-		kstack_free(ks);
-		return NULL;
-	}
-
-	if ((td = thread_alloc()) == NULL) {
-		kstack_free(ks);
-		kctx_free(kctx);
-		return NULL;
-	}
-
-	td->td_kstack = ks;
-	td->td_kctx = kctx;
-	td->td_prev = td->td_next = NULL;
-	td->td_state = TDS_READY;
-	td->td_proc = NULL;
-
-	enqueue(&rdyq, td);
-
-	return td;
-}
-
-int
-thread_kill(struct thread *td)
-{
-	if (td == NULL || td == cur_thread)
-		return -1;
-
-	if (td->td_state == TDS_READY)
-		queue_remove(&rdyq, td);
-	else if (td->td_state == TDS_RUN)
-		queue_remove(td->td_slpq, td);
-	else
-		return -2;
-
-	td->td_state = TDS_DEAD;
-
-	return thread_free(td);
-}
-
-void
-thread_exit(void)
-{
-	cur_thread->td_state = TDS_DEAD;
-	thread_sched();
 }
 
 void
 thread_yield(void)
 {
-	cur_thread->td_state = TDS_DEAD;
-	enqueue(&rdyq, cur_thread);
-	thread_sched();
-	cur_thread->td_state = TDS_RUN;
+	unsigned int old_cur_pid;
+	unsigned int new_cur_pid;
+
+	old_cur_pid = get_curid();
+	tcb_set_state(old_cur_pid, TD_STATE_READY);
+	tdq_enqueue(NUM_CHAN, old_cur_pid);
+
+	new_cur_pid = tdq_dequeue(NUM_CHAN);
+	tcb_set_state(new_cur_pid, TD_STATE_RUN);
+	set_curid(new_cur_pid);
+
+	kctx_switch(old_cur_pid, new_cur_pid);
 }
 
 void
-thread_sleep(struct threadq *slpq)
+thread_sleep(unsigned int chid)
 {
-	cur_thread->td_state = TDS_SLEEP;
-	enqueue(slpq, cur_thread);
-	thread_sched();
-	cur_thread->td_state = TDS_RUN;
-}
+	unsigned int old_cur_pid;
+	unsigned int new_cur_pid;
 
-void
-thread_wakeup(struct threadq *slpq)
-{
-	struct thread *td;
+	old_cur_pid = get_curid();
+	tcb_set_state(old_cur_pid, TD_STATE_SLEEP);
+	tdq_enqueue(chid, old_cur_pid);
 
-	while ((td = dequeue(slpq))) {
-		td->td_state = TDS_READY;
-		enqueue(slpq, td);
-	}
-}
+	new_cur_pid = tdq_dequeue(NUM_CHAN);
+	tcb_set_state(new_cur_pid, TD_STATE_RUN);
+	set_curid(new_cur_pid);
 
-struct thread *
-current_thread(void)
-{
-	return cur_thread;
+	kctx_switch(old_cur_pid, new_cur_pid);
 }

@@ -1,30 +1,22 @@
-#include <lib/types.h>
-
 #include "npt_intro.h"
 
-uint32_t npt_lv1[1024] gcc_aligned(4096);
-uint32_t npt_lv2[1024][1024] gcc_aligned(4096);
+#define PTE_P		0x001	/* Present */
+#define PTE_W		0x002	/* Writeable */
+#define PTE_U		0x004	/* User-accessible */
+#define PTE_G		0x100	/* Global */
+#define NPDEPERM	(PTE_P | PTE_W | PTE_U | PTE_G)
+#define NPTEPERM	(PTE_P | PTE_W | PTE_U)
+
+struct NPTStruct NPT_LOC gcc_aligned(PAGESIZE);
 
 void
-npt_set_pde(int pdx)
+set_NPDE(unsigned int pdx)
 {
-	if (!(0 <= pdx && pdx < 1024))
-		return;
-
-	npt_lv1[pdx] = ((uint32_t) npt_lv2[pdx]) | PTE_P | PTE_W | PTE_U;
+	NPT_LOC.pdir[pdx] = ((char *) NPT_LOC.pt[pdx]) + NPDEPERM;
 }
 
 void
-npt_set_pte(int pdx, int ptx, uint32_t hpa)
+set_NPTE(unsigned int pdx, unsigned int ptx, unsigned int paddr)
 {
-	if (!(0 <= pdx && pdx < 1024))
-		return;
-
-	if (!(0 <= ptx && ptx < 1024))
-		return;
-
-	if (hpa % 4096)
-		return;
-
-	npt_lv2[pdx][ptx] = hpa | PTE_P | PTE_W | PTE_U | PTE_G;
+	NPT_LOC.pt[pdx][ptx] = paddr + NPTEPERM;
 }

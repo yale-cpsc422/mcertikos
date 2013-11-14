@@ -83,4 +83,4 @@ __exit_guest:
 
 	stgi
 
-	jmp	proc_start_user
+	ret

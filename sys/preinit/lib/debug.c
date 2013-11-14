@@ -3,9 +3,9 @@
 #include <preinit/lib/debug.h>
 #include <preinit/lib/gcc.h>
 #include <preinit/lib/stdarg.h>
+#include <preinit/lib/x86.h>
 
 #include <lib/types.h>
-#include <lib/x86.h>
 
 void
 debug_info(const char *fmt, ...)

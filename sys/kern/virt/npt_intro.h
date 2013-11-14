@@ -4,24 +4,50 @@
 #ifdef _KERN_
 
 #include <lib/gcc.h>
-#include <lib/types.h>
 
-extern uint32_t npt_lv1[1024] gcc_aligned(4096);
-extern uint32_t npt_lv2[1024][1024] gcc_aligned(4096);
+#define PAGESIZE	4096
 
-#define PTXSHIFT	12
-#define PDXSHIFT	22
+struct NPTStruct {
+	char		*pdir[1024]	gcc_aligned(PAGESIZE);
+	unsigned int	pt[1024][1024]	gcc_aligned(PAGESIZE);
+};
 
-#define PDX(la)		((((uintptr_t) (la)) >> PDXSHIFT) & 0x3FF)
-#define PTX(la)		((((uintptr_t) (la)) >> PTXSHIFT) & 0x3FF)
+/*
+ * Primitives defined by this layer.
+ */
 
-#define PTE_P		0x001	/* Present */
-#define PTE_W		0x002	/* Writeable */
-#define PTE_U		0x004	/* User-accessible */
-#define PTE_G		0x100
+void set_NPDE(unsigned int pdx);
+void set_NPTE(unsigned int pdx, unsigned int ptx, unsigned int paddr);
 
-void npt_set_pde(int pdx);
-void npt_set_pte(int pdx, int ptx, uint32_t hpa);
+/*
+ * Primitives derived from lower layers.
+ */
+
+unsigned int palloc(void);
+void pfree(unsigned int idx);
+
+unsigned int pt_read(unsigned int pid, unsigned int va);
+void pt_resv(unsigned int pid, unsigned int vaddr, unsigned int perm);
+
+unsigned int pt_copyin(unsigned int pmap_id,
+		       unsigned int uva, char *kva, unsigned int len);
+unsigned int pt_copyout(char *kva,
+			unsigned int pmap_id, unsigned int uva, unsigned int len);
+unsigned int pt_memset(unsigned int pmap_id,
+		       unsigned int va, char c, unsigned int len);
+
+unsigned int get_curid(void);
+
+void sched_init(unsigned int mbi_addr);
+
+void thread_kill(unsigned int pid, unsigned chid);
+
+void thread_wakeup(unsigned int chid);
+void thread_sleep(void);
+void thread_yield(void);
+
+void uctx_set(unsigned int pid, unsigned int idx, unsigned int val);
+unsigned int uctx_get(unsigned int pid, unsigned int idx);
 
 #endif /* _KERN_ */
 

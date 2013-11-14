@@ -1,7 +1,7 @@
 #include <lib/types.h>
-#include <lib/x86.h>
 
 #include <preinit/lib/debug.h>
+#include <preinit/lib/x86.h>
 
 #include "timer.h"
 #include "tsc.h"

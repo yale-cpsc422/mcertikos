@@ -24,9 +24,6 @@
 #define MSR_EFER	0xc0000080
 # define MSR_EFER_SVME	(1<<12)		/* for AMD processors */
 
-uint32_t read_ebp(void);
-void lldt(uint16_t sel);
-uint16_t rldt(void);
 void ltr(uint16_t sel);
 void lcr0(uint32_t val);
 uint32_t rcr0(void);
@@ -34,25 +31,10 @@ uint32_t rcr2(void);
 void lcr3(uint32_t val);
 void lcr4(uint32_t val);
 uint32_t rcr4(void);
-void cpuid(uint32_t info,
-	   uint32_t *eaxp, uint32_t *ebxp, uint32_t *ecxp, uint32_t *edxp);
-void cli(void);
-void sti(void);
-uint64_t rdmsr(uint32_t msr);
-void wrmsr(uint32_t msr, uint64_t newval);
-void cld(void);
 uint8_t inb(int port);
-uint16_t inw(int port);
-uint32_t inl(int port);
 void insl(int port, void *addr, int cnt);
 void outb(int port, uint8_t data);
-void outw(int port, uint16_t data);
 void outsw(int port, const void *addr, int cnt);
-void outl(int port, uint32_t dat);
-void halt(void);
-void pause(void);
-uint64_t rdtsc(void);
-void enable_sse(void);
 
 #endif /* _KERN_ */
 

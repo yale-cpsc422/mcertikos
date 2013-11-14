@@ -1,50 +1,34 @@
-#include <lib/string.h>
-#include <lib/types.h>
+#include <mm/MPMap.h>
 
-#include "kctx.h"
+#define NUM_PROC	64
 
-static bool		kctx_inited = FALSE;
-static struct kctx	all_kctx[MAX_KCTX];
+struct kctx {
+	void	*esp;
+	void	*edi;
+	void	*esi;
+	void	*ebx;
+	void	*ebp;
+	void	*eip;
+};
+
+struct kctx kctx_pool[NUM_PROC];
 
 void
-kctx_init(void)
+kctx_set_esp(unsigned int pid, void *esp)
 {
-	if (kctx_inited == TRUE)
-		return;
-	memzero(all_kctx, sizeof(struct kctx) * MAX_KCTX);
-	kctx_inited = TRUE;
+	kctx_pool[pid].esp = esp;
 }
 
-struct kctx *
-kctx_new(void (*f)(void), uintptr_t stack_top)
+void
+kctx_set_eip(unsigned int pid, void *eip)
 {
-	struct kctx *kctx;
-	int i;
-
-	for (i = 0; i < MAX_KCTX; i++)
-		if (all_kctx[i].inuse == FALSE)
-			break;
-
-	if (i == MAX_KCTX)
-		return NULL;
-
-	kctx = &all_kctx[i];
-
-	kctx->esp = (uint32_t) stack_top - sizeof(uint32_t);
-	*(uint32_t *) kctx->esp = 0;
-	kctx->eip = (uintptr_t) f;
-	kctx->inuse = TRUE;
-
-	return kctx;
+	kctx_pool[pid].eip = eip;
 }
 
-int
-kctx_free(struct kctx *kctx)
+extern void cswitch(struct kctx *from_kctx, struct kctx *to_kctx);
+
+void
+kctx_switch(unsigned int from_pid, unsigned int to_pid)
 {
-	if (kctx == NULL)
-		return -1;
-
-	kctx->inuse = FALSE;
-
-	return 0;
+	cswitch(&kctx_pool[from_pid], &kctx_pool[to_pid]);
 }
