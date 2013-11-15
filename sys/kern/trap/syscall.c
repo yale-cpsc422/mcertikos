@@ -51,7 +51,6 @@
 	} while (0)
 
 static char sys_buf[NUM_PROC][PAGESIZE];
-static void *elf_list[1];
 
 void
 sys_puts(void)
@@ -94,16 +93,34 @@ sys_puts(void)
 	syscall_set_errno(E_SUCC);
 }
 
+extern uint8_t _binary___obj_user_vmm_vmm_start[];
+extern uint8_t _binary___obj_user_pingpong_ping_start[];
+extern uint8_t _binary___obj_user_pingpong_pong_start[];
+
 void
 sys_spawn(void)
 {
 	unsigned int cur_pid;
 	unsigned int new_pid;
 	unsigned int elf_id;
+	void *elf_addr;
 
 	cur_pid = get_curid();
 	elf_id = syscall_get_arg2();
-	new_pid = proc_create(elf_list[elf_id]);
+
+	if (elf_id == 0) {
+		elf_addr = _binary___obj_user_vmm_vmm_start;
+	} else if (elf_id == 1) {
+		elf_addr = _binary___obj_user_pingpong_ping_start;
+	} else if (elf_id == 2) {
+		elf_addr = _binary___obj_user_pingpong_pong_start;
+	} else {
+		syscall_set_errno(E_INVAL_PID);
+		syscall_set_retval1(NUM_PROC);
+		return;
+	}
+
+	new_pid = proc_create(elf_addr);
 
 	if (new_pid == NUM_PROC) {
 		syscall_set_errno(E_INVAL_PID);

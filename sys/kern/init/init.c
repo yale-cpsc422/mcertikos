@@ -4,7 +4,6 @@
 #define NUM_CHAN		64
 #define TD_STATE_RUN		1
 
-extern uint8_t _binary___obj_user_vmm_vmm_start[];
 extern uint8_t _binary___obj_user_idle_idle_start[];
 
 extern void vmcb_init(unsigned int mbi_addr);
@@ -17,13 +16,10 @@ extern void kctx_switch(unsigned int from_pid, unsigned int to_pid);
 static void
 kern_main(void)
 {
-	unsigned int idle_pid, guest_pid;
+	unsigned int idle_pid;
 
 	idle_pid = proc_create(_binary___obj_user_idle_idle_start);
 	KERN_DEBUG("idle process %d is created.\n", idle_pid);
-
-	guest_pid = proc_create(_binary___obj_user_vmm_vmm_start);
-	KERN_DEBUG("vmm process %d is created.\n", guest_pid);
 
 	KERN_INFO("Start user-space ... \n");
 
@@ -34,8 +30,6 @@ kern_main(void)
 
 	KERN_PANIC("kern_main() should never be here.\n");
 }
-
-
 
 void
 kern_init(uintptr_t mbi_addr)
