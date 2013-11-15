@@ -19,7 +19,6 @@
 void
 proc_start_user(void)
 {
-	extern char STACK_LOC[NUM_PROC][PAGESIZE] gcc_aligned(PAGESIZE);
 	extern unsigned int UCTX_LOC[NUM_PROC][UCTX_SIZE];
 
 	unsigned int cur_pid = get_curid();

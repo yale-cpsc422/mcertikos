@@ -1,4 +1,3 @@
-#include <preinit/lib/debug.h>
 #include <lib/string.h>
 #include <lib/trap.h>
 #include "interrupt.h"
