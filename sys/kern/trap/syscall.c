@@ -7,6 +7,7 @@
 #define PAGESIZE			4096
 
 #define NUM_PROC			64
+#define NUM_CHAN			64
 
 #define VM_USERHI			0xf0000000
 #define VM_USERLO			0x40000000
@@ -455,5 +456,64 @@ sys_hvm_intercept_int_window(void)
 	unsigned int enable;
 	enable = syscall_get_arg2();
 	svm_set_intercept_intwin(enable);
+	syscall_set_errno(E_SUCC);
+}
+
+extern unsigned int is_chan_ready(void);
+extern unsigned int send(unsigned int chid, unsigned int content);
+extern unsigned int recv(void);
+extern void thread_sleep(unsigned int chid);
+
+void
+sys_is_chan_ready(void)
+{
+	syscall_set_retval1(is_chan_ready());
+	syscall_set_errno(E_SUCC);
+}
+
+void
+sys_send(void)
+{
+	unsigned int chid;
+	unsigned int content;
+	unsigned int val;
+
+	chid = syscall_get_arg2();
+
+	if (!(0 <= chid && chid < NUM_CHAN)) {
+		syscall_set_errno(E_INVAL_CHID);
+		return;
+	}
+
+	content = syscall_get_arg3();
+
+	if (content == 0) {
+		syscall_set_errno(E_INVAL_CHID);
+		return;
+	}
+
+	val = send(chid, content);
+
+	if (val == 1)
+		syscall_set_errno(E_SUCC);
+	else
+		syscall_set_errno(E_IPC);
+}
+
+void
+sys_recv(void)
+{
+	unsigned int val;
+	val = recv();
+	syscall_set_retval1(val);
+	syscall_set_errno(E_SUCC);
+}
+
+void
+sys_sleep(void)
+{
+	unsigned int chid;
+	chid = syscall_get_arg2();
+	thread_sleep(chid);
 	syscall_set_errno(E_SUCC);
 }

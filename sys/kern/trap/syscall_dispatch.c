@@ -270,6 +270,18 @@ syscall_dispatch(void)
 		 */
 		sys_hvm_intercept_int_window();
 		break;
+	case SYS_is_chan_ready:
+		sys_is_chan_ready();
+		break;
+	case SYS_send:
+		sys_send();
+		break;
+	case SYS_recv:
+		sys_recv();
+		break;
+	case SYS_sleep:
+		sys_sleep();
+		break;
 	default:
 		syscall_set_errno(E_INVAL_CALLNR);
 	}

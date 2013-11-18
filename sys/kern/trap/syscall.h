@@ -34,8 +34,12 @@ enum __syscall_nr {
 	SYS_puts = 0,	/* output a string to the screen */
 	SYS_spawn,	/* create a new process */
 	SYS_yield,	/* yield to another process */
+	SYS_sleep,
 	SYS_disk_op,	/* perform a disk operation */
 	SYS_disk_cap,	/* get the capacity of a disk in bytes */
+	SYS_is_chan_ready,
+	SYS_send,
+	SYS_recv,
 	/*
 	 * HVM system calls
 	 */
@@ -56,6 +60,7 @@ enum __syscall_nr {
 enum __error_nr {
 	E_SUCC,		/* no errors */
 	E_MEM,		/* memory failure */
+	E_IPC,
 	E_INVAL_CALLNR,	/* invalid syscall number */
 	E_INVAL_ADDR,	/* invalid address */
 	E_INVAL_PID,	/* invalid process ID */
@@ -64,6 +69,7 @@ enum __error_nr {
 	E_INVAL_EVENT,
 	E_INVAL_PORT,
 	E_INVAL_HVM,
+	E_INVAL_CHID,
 	E_DISK_OP,	/* disk operation failure */
 	E_HVM_VMRUN,
 	E_HVM_MMAP,
@@ -111,6 +117,10 @@ void sys_hvm_inject_event(void);
 void sys_hvm_check_pending_event(void);
 void sys_hvm_check_int_shadow(void);
 void sys_hvm_intercept_int_window(void);
+void sys_is_chan_ready(void);
+void sys_send(void);
+void sys_recv(void);
+void sys_sleep(void);
 
 /*
  * Primitives derived from lower layers.

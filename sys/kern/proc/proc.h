@@ -34,7 +34,7 @@ void sched_init(unsigned int mbi_addr);
 void thread_kill(unsigned int pid, unsigned chid);
 
 void thread_wakeup(unsigned int chid);
-void thread_sleep(void);
+void thread_sleep(unsigned int chid);
 void thread_yield(void);
 
 void uctx_set(unsigned int pid, unsigned int idx, unsigned int val);

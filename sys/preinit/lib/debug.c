@@ -10,10 +10,12 @@
 void
 debug_info(const char *fmt, ...)
 {
+#ifdef DEBUG_MSG
 	va_list ap;
 	va_start(ap, fmt);
 	vdprintf(fmt, ap);
 	va_end(ap);
+#endif
 }
 
 #ifdef DEBUG_MSG

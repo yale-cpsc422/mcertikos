@@ -307,4 +307,68 @@ sys_hvm_intercept_intr_window(int vmid, bool enable)
 	return errno;
 }
 
+static gcc_inline int
+sys_send(uint32_t chid, uint32_t val)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_send),
+		       "b" (chid),
+		       "c" (val)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_recv(uint32_t *val)
+{
+	int errno;
+	uint32_t ret_val;
+
+	asm volatile("int %2"
+		     : "=a" (errno),
+		       "=b" (ret_val)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_recv)
+		     : "cc", "memory");
+
+	if (errno == E_SUCC)
+		*val = ret_val;
+
+	return errno;
+}
+
+static gcc_inline int
+sys_is_chan_ready(void)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_is_chan_ready)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_sleep(unsigned int chid)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_sleep),
+		       "b" (chid)
+		     : "cc", "memory");
+
+	return errno;
+}
+
 #endif /* !_USER_SYSCALL_H_ */

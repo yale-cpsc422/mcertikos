@@ -40,7 +40,7 @@ unsigned int get_curid(void);
 void thread_kill(unsigned int pid, unsigned int chid);
 
 void thread_wakeup(unsigned int chid);
-void thread_sleep(void);
+void thread_sleep(unsigned int chid);
 void thread_yield(void);
 
 enum {

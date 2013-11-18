@@ -6,7 +6,7 @@
 
 extern uint8_t _binary___obj_user_idle_idle_start[];
 
-extern void vmcb_init(unsigned int mbi_addr);
+extern void proc_init(unsigned int mbi_addr);
 extern unsigned int proc_create(void *elf_addr);
 extern void set_curid(unsigned int curid);
 extern void tdq_remove(unsigned int chid, unsigned int pid);
@@ -34,6 +34,6 @@ kern_main(void)
 void
 kern_init(uintptr_t mbi_addr)
 {
-	vmcb_init(mbi_addr);
+	proc_init(mbi_addr);
 	kern_main();
 }
