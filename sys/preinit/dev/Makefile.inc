@@ -9,6 +9,8 @@ KERN_SRCFILES	+= $(KERN_DIR)/preinit/dev/tsc.c
 KERN_SRCFILES	+= $(KERN_DIR)/preinit/dev/timer.c
 KERN_SRCFILES	+= $(KERN_DIR)/preinit/dev/intr.c
 KERN_SRCFILES	+= $(KERN_DIR)/preinit/dev/svm_drv.c
+KERN_SRCFILES	+= $(KERN_DIR)/preinit/dev/ide.c
+
 
 $(KERN_OBJDIR)/preinit/dev/%.o: $(KERN_DIR)/preinit/dev/%.c
 	@echo + cc[PREINIT/dev] $<

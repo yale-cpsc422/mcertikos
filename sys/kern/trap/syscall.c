@@ -1,5 +1,5 @@
 #include <preinit/lib/debug.h>
-#include <dev/ide.h>
+#include <preinit/dev/ide.h>
 #include <virt/svm.h>
 #include "syscall_args.h"
 #include "syscall.h"

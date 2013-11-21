@@ -3,7 +3,6 @@
 OBJDIRS		+= $(KERN_OBJDIR)/dev
 
 KERN_SRCFILES	+= $(KERN_DIR)/dev/tsc.c
-KERN_SRCFILES	+= $(KERN_DIR)/dev/ide.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/svm_asm.S
 KERN_SRCFILES	+= $(KERN_DIR)/dev/pmap.c
 
