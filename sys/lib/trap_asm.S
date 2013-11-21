@@ -2,7 +2,7 @@
 /* See COPYRIGHT for copyright information. */
 
 #include <preinit/lib/seg.h>
-#include "trap.h"
+#include <lib/trap.h>
 
 
 /* The TRAPHANDLER macro defines a globally-visible function for handling
@@ -73,9 +73,6 @@ TRAPHANDLER_NOEC(Xirq_ide2,	T_IRQ0 + IRQ_IDE2)
 
 /* syscall */
 TRAPHANDLER_NOEC(Xsyscall,	T_SYSCALL)
-
-/* local APIC interrupts */
-TRAPHANDLER_NOEC(Xlerror,	T_LERROR)
 
 /* default ? */
 TRAPHANDLER     (Xdefault,	T_DEFAULT)

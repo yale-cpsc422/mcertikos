@@ -49,24 +49,8 @@
 /* (48) reserved for system call */
 #define T_SYSCALL	48	/* System call */
 
-/* (49 ~ 54) reserved for local interrupts of local APIC */
-#define T_CMCI		49	/* CMCI */
-#define T_LINT0		50	/* LINT0 */
-#define T_LINT1		51	/* LINT1 */
-#define T_LERROR	52	/* Local APIC error interrupt */
-#define T_PERFCTR	53	/* Performance counter overflow interrupt */
-#define T_LTHERMAL	54	/* Thermal sensor interrupt */
-
-/* (55 ~ 63) reserved for IPI */
-#define T_IPI0		55
-
-/* (64 ~ 253) reserved for others */
-#define T_MSI0		64
-
 /* (254) Default ? */
 #define T_DEFAULT	254
-
-#define T_MAX		256
 
 #ifndef __ASSEMBLER__
 

@@ -6,9 +6,10 @@
 
 #include <preinit/lib/debug.h>
 #include <preinit/lib/stdarg.h>
+#include <preinit/lib/string.h>
+#include <preinit/lib/types.h>
 
 #include <lib/string.h>
-#include <preinit/lib/types.h>
 
 typedef void (*putch_t)(int, void *);
 

@@ -1,8 +1,9 @@
 #include <lib/gcc.h>
 #include <lib/string.h>
-#include <preinit/lib/types.h>
 
 #include <preinit/lib/debug.h>
+#include <preinit/lib/string.h>
+#include <preinit/lib/types.h>
 #include <preinit/lib/x86.h>
 
 #include <preinit/dev/svm_drv.h>

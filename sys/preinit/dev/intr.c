@@ -81,9 +81,6 @@ intr_init_idt(void)
 	// by the user process (with "int $T_SYSCALL").
 	SETGATE(idt[T_SYSCALL],           0, CPU_GDT_KCODE, &Xsyscall,      3);
 
-	/* interrupt gates for local APIC interrupts */
-	SETGATE(idt[T_LERROR],            0, CPU_GDT_KCODE, &Xlerror,       0);
-
 	/* default */
 	SETGATE(idt[T_DEFAULT],           0, CPU_GDT_KCODE, &Xdefault,      0);
 
