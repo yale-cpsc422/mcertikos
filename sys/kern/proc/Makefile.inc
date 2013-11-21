@@ -13,7 +13,6 @@ KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/cur_id.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/thread.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/uctx.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/proc.c
-KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/elf.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/ipc_intro.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/ipc.c
 

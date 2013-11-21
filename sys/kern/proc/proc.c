@@ -1,8 +1,8 @@
 #include <lib/gcc.h>
+#include <lib/elf.h>
 #include <lib/seg.h>
 #include <lib/trap.h>
 
-#include "elf.h"
 #include "uctx.h"
 
 #define PAGESIZE	4096
