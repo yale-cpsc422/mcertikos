@@ -1,5 +1,4 @@
 #include "ipc_intro.h"
-#include "vmcb_op.h"
 
 #define NUM_CHAN	64
 

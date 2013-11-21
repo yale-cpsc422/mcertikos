@@ -11,8 +11,6 @@ KERN_SRCFILES	+= $(KERN_DIR)/kern/virt/vmcb_init.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/virt/svm_intro.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/virt/vmcb_op.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/virt/svm.c
-KERN_SRCFILES	+= $(KERN_DIR)/kern/virt/ipc_intro.c
-KERN_SRCFILES	+= $(KERN_DIR)/kern/virt/ipc.c
 
 $(KERN_OBJDIR)/kern/virt/%.o: $(KERN_DIR)/kern/virt/%.c
 	@echo + ccomp[KERN/kern] $<

@@ -14,6 +14,8 @@ KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/thread.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/uctx.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/proc.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/elf.c
+KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/ipc_intro.c
+KERN_SRCFILES	+= $(KERN_DIR)/kern/proc/ipc.c
 
 $(KERN_OBJDIR)/kern/proc/kctx.o: $(KERN_DIR)/kern/proc/kctx.c
 	@echo + ccomp[KERN/kern] $<
