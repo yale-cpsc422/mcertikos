@@ -1,5 +1,5 @@
 #include <lib/string.h>
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 
 #include "console.h"
 #include "serial.h"

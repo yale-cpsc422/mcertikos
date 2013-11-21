@@ -8,7 +8,7 @@
 #include <preinit/lib/stdarg.h>
 
 #include <lib/string.h>
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 
 typedef void (*putch_t)(int, void *);
 

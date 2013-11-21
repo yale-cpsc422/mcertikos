@@ -1,4 +1,4 @@
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 
 #include <preinit/lib/debug.h>
 #include <preinit/lib/x86.h>

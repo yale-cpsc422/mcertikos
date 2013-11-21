@@ -71,7 +71,7 @@
 #ifndef __ASSEMBLER__
 
 #include <lib/gcc.h>
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 
 typedef
 struct pushregs {

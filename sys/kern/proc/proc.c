@@ -1,5 +1,5 @@
+#include <preinit/lib/elf.h>
 #include <lib/gcc.h>
-#include <lib/elf.h>
 #include <lib/seg.h>
 #include <lib/trap.h>
 

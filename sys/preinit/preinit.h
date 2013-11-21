@@ -3,7 +3,7 @@
 
 #ifdef _KERN_
 
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 
 void preinit(uintptr_t mbi_addr);
 

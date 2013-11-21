@@ -3,7 +3,7 @@
 
 #ifdef _KERN_
 
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 
 void intr_init(void);
 void intr_enable(uint8_t irq);

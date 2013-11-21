@@ -1,4 +1,4 @@
-#include "types.h"
+#include <preinit/lib/types.h>
 #include "x86.h"
 
 void

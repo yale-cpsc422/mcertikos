@@ -1,7 +1,7 @@
 #include <lib/gcc.h>
 #include <lib/string.h>
-#include <lib/types.h>
 
+#include <preinit/lib/types.h>
 #include <preinit/lib/x86.h>
 
 #include "seg.h"

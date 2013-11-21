@@ -3,7 +3,7 @@
 #include <preinit/lib/mboot.h>
 #include <preinit/lib/queue.h>
 
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 
 #define PAGESIZE		4096
 

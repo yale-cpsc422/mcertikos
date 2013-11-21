@@ -3,7 +3,7 @@
  * which generates interrupts on IRQ 0.
  */
 
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 #include <lib/x86.h>
 
 #include "timer.h"

@@ -3,7 +3,7 @@
 
 #ifdef _KERN_
 
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 
 int svm_hw_init(void);
 

@@ -7,6 +7,9 @@ KERN_SRCFILES	+= $(KERN_DIR)/preinit/lib/dprintf.c
 KERN_SRCFILES	+= $(KERN_DIR)/preinit/lib/debug.c
 KERN_SRCFILES	+= $(KERN_DIR)/preinit/lib/mboot.c
 KERN_SRCFILES	+= $(KERN_DIR)/preinit/lib/seg.c
+KERN_SRCFILES	+= $(KERN_DIR)/preinit/lib/types.c
+KERN_SRCFILES	+= $(KERN_DIR)/preinit/lib/string.c
+KERN_SRCFILES	+= $(KERN_DIR)/preinit/lib/elf.c
 
 $(KERN_OBJDIR)/preinit/lib/%.o: $(KERN_DIR)/preinit/lib/%.c
 	@echo + cc[PREINIT/lib] $<

@@ -3,7 +3,7 @@
 
 #ifdef _KERN_
 
-#include "types.h"
+#include <preinit/lib/types.h>
 
 /* CR0 */
 #define CR0_PE		0x00000001	/* Protection Enable */

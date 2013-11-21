@@ -1,6 +1,5 @@
-#include <lib/types.h>
-
 #include <preinit/dev/tsc.h>
+#include <preinit/lib/types.h>
 
 uint32_t
 tsc_freq_lo(void)

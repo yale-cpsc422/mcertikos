@@ -4,7 +4,7 @@
 #ifdef _KERN_
 
 #include <lib/trap.h>
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 
 #define PAGESIZE	4096
 

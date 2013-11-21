@@ -1,4 +1,4 @@
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 #include <lib/x86.h>
 
 #include "ide.h"

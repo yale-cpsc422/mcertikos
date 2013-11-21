@@ -1,5 +1,5 @@
 #include <preinit/lib/debug.h>
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 
 #define NUM_CHAN		64
 #define TD_STATE_RUN		1

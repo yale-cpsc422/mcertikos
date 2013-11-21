@@ -4,7 +4,7 @@
 #ifdef _KERN_
 
 #include <preinit/lib/gcc.h>
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 #include <lib/x86.h>
 
 static gcc_inline uint32_t

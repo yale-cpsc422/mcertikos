@@ -1,6 +1,6 @@
 #include <preinit/lib/debug.h>
 #include <lib/string.h>
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 
 #include <mm/export.h>
 

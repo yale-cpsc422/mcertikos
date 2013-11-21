@@ -3,7 +3,7 @@
 
 #ifdef _KERN_
 
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 
 volatile uint64_t tsc_per_ms;	/* TSC ticks per microsecond */
 

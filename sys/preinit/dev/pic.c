@@ -9,7 +9,7 @@
  */
 
 #include <lib/trap.h>
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 #include <lib/x86.h>
 
 #include "pic.h"

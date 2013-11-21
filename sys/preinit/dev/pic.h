@@ -15,7 +15,7 @@
 
 #ifndef __ASSEMBLER__
 
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 
 void pic_init(void);
 void pic_setmask(uint16_t mask);

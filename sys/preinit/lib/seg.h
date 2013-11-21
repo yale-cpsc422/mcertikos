@@ -6,7 +6,7 @@
 #ifndef __ASSEMBLER__
 
 #include <lib/gcc.h>
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 
 /* Segment Descriptors */
 typedef
@@ -83,7 +83,7 @@ struct pseudodesc {
 
 #ifndef __ASSEMBLER__
 
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 
 typedef
 struct taskgate {

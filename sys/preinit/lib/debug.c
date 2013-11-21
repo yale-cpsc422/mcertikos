@@ -5,7 +5,7 @@
 #include <preinit/lib/stdarg.h>
 #include <preinit/lib/x86.h>
 
-#include <lib/types.h>
+#include <preinit/lib/types.h>
 
 void
 debug_info(const char *fmt, ...)
