@@ -2,7 +2,7 @@
 
 #define VMCB_SIZE		4096
 
-unsigned int VMCB_LOC[VMCB_SIZE] gcc_aligned(VMCB_SIZE);
+unsigned int VMCB_LOC[VMCB_SIZE/4] gcc_aligned(VMCB_SIZE);
 
 unsigned int
 vmcb_read_z(unsigned int ofs)

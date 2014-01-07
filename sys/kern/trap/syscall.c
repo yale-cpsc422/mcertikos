@@ -20,7 +20,7 @@
 #define VMEXIT_NPF			0x400
 
 #define VMCB_EVENTINJ_TYPE_INTR		0
-#define VMCB_EVENTINJ_TYPE_EXCPT	2
+#define VMCB_EVENTINJ_TYPE_EXCPT	3
 
 #define ATA_SECTOR_SIZE			512
 
@@ -361,8 +361,8 @@ sys_hvm_get_reg(void)
 		return;
 	}
 
-	syscall_set_errno(E_SUCC);
 	syscall_set_retval1(svm_get_reg(reg));
+	syscall_set_errno(E_SUCC);
 }
 
 void

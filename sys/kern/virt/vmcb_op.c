@@ -243,5 +243,7 @@ vmcb_get_reg(unsigned int reg)
 	else
 		offset = VMCB_V_CR4_LO_OFFSET;
 
-	return vmcb_read_v(offset);
+	offset = vmcb_read_v(offset);
+
+	return offset;
 }

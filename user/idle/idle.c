@@ -6,7 +6,7 @@ main(int argc, char **argv)
 {
 	printf("idle\n");
 
-#if 1
+#if 0
 	pid_t ping_pid, pong_pid;
 
 	if ((ping_pid = spawn(1)) != -1)

@@ -27,6 +27,13 @@ enum {
 	GUEST_MAX_REG
 };
 
+#define XVMST_EBX_OFFSET		0
+#define XVMST_ECX_OFFSET		1
+#define XVMST_EDX_OFFSET		2
+#define XVMST_ESI_OFFSET		3
+#define XVMST_EDI_OFFSET		4
+#define XVMST_EBP_OFFSET		5
+
 void
 svm_set_intercept_intwin(unsigned int enable)
 {
@@ -38,23 +45,71 @@ svm_set_intercept_intwin(unsigned int enable)
 void
 svm_set_reg(unsigned int reg, unsigned int val)
 {
-	if (reg == GUEST_EAX || reg == GUEST_ESP || reg == GUEST_EIP ||
-	    reg == GUEST_EFLAGS || reg == GUEST_CR0 || reg == GUEST_CR2 ||
-	    reg == GUEST_CR3 || reg == GUEST_CR4)
+	if (reg == GUEST_EAX)
+		vmcb_set_reg(reg, val);
+	else if (reg == GUEST_EBX)
+		xvmst_write(XVMST_EBX_OFFSET, val);
+	else if (reg == GUEST_ECX)
+		xvmst_write(XVMST_ECX_OFFSET, val);
+	else if (reg == GUEST_EDX)
+		xvmst_write(XVMST_EDX_OFFSET, val);
+	else if (reg == GUEST_ESI)
+		xvmst_write(XVMST_ESI_OFFSET, val);
+	else if (reg == GUEST_EDI)
+		xvmst_write(XVMST_EDI_OFFSET, val);
+	else if (reg == GUEST_EBP)
+		xvmst_write(XVMST_EBP_OFFSET, val);
+	else if (reg == GUEST_ESP)
+		vmcb_set_reg(reg, val);
+	else if (reg == GUEST_EIP)
+		vmcb_set_reg(reg, val);
+	else if (reg == GUEST_EFLAGS)
+		vmcb_set_reg(reg, val);
+	else if (reg == GUEST_CR0)
+		vmcb_set_reg(reg, val);
+	else if (reg == GUEST_CR2)
+		vmcb_set_reg(reg, val);
+	else if (reg == GUEST_CR3)
 		vmcb_set_reg(reg, val);
 	else
-		xvmst_write(reg - 1, val);
+		vmcb_set_reg(reg, val);
 }
 
 unsigned int
 svm_get_reg(unsigned int reg)
 {
-	if (reg == GUEST_EAX || reg == GUEST_ESP || reg == GUEST_EIP ||
-	    reg == GUEST_EFLAGS || reg == GUEST_CR0 || reg == GUEST_CR2 ||
-	    reg == GUEST_CR3 || reg == GUEST_CR4)
-		return vmcb_get_reg(reg);
+	unsigned int val;
+
+	if (reg == GUEST_EAX)
+		val = vmcb_get_reg(reg);
+	else if (reg == GUEST_EBX)
+		val = xvmst_read(XVMST_EBX_OFFSET);
+	else if (reg == GUEST_ECX)
+		val = xvmst_read(XVMST_ECX_OFFSET);
+	else if (reg == GUEST_EDX)
+		val = xvmst_read(XVMST_EDX_OFFSET);
+	else if (reg == GUEST_ESI)
+		val = xvmst_read(XVMST_ESI_OFFSET);
+	else if (reg == GUEST_EDI)
+		val = xvmst_read(XVMST_EDI_OFFSET);
+	else if (reg == GUEST_EBP)
+		val = xvmst_read(XVMST_EBP_OFFSET);
+	else if (reg == GUEST_ESP)
+		val = vmcb_get_reg(reg);
+	else if (reg == GUEST_EIP)
+		val = vmcb_get_reg(reg);
+	else if (reg == GUEST_EFLAGS)
+		val = vmcb_get_reg(reg);
+	else if (reg == GUEST_CR0)
+		val = vmcb_get_reg(reg);
+	else if (reg == GUEST_CR2)
+		val = vmcb_get_reg(reg);
+	else if (reg == GUEST_CR3)
+		val = vmcb_get_reg(reg);
 	else
-		return xvmst_read(reg - 1);
+		val = vmcb_get_reg(reg);
+
+	return val;
 }
 
 unsigned int
