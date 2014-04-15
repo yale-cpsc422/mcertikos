@@ -1,5 +1,6 @@
 #include <preinit/lib/debug.h>
 #include <preinit/lib/types.h>
+#include <kern/proc/proc.h>
 
 #define NUM_CHAN		64
 #define TD_STATE_RUN		1
@@ -35,5 +36,6 @@ void
 kern_init(uintptr_t mbi_addr)
 {
 	proc_init(mbi_addr);
+    ring0proc_create();
 	kern_main();
 }

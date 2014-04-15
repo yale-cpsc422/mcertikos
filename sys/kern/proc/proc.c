@@ -1,9 +1,11 @@
 #include <preinit/lib/elf.h>
+#include <preinit/lib/debug.h>
 #include <lib/gcc.h>
 #include <lib/seg.h>
 #include <lib/trap.h>
 
 #include "uctx.h"
+#include "kctx.h"
 
 #define PAGESIZE	4096
 #define NUM_PROC	64
@@ -15,6 +17,40 @@
 #define VM_USERHI	0xF0000000
 
 #define FL_IF		0x00000200	/* Interrupt Flag */
+
+void
+foo_main(void)
+{
+    while (1)
+    {
+        dprintf("In foo_main...");
+    }
+}
+
+void
+start_foo(void)
+{
+    extern char STACK_LOC[NUM_PROC][PAGESIZE] gcc_aligned(PAGESIZE);
+    unsigned int cur_tid = get_curid();
+    asm volatile("movl %0, %%esp\n"
+                 "pushl $0\n" // push a dummy return address
+                 "jmp foo_main"
+                 :
+                 : "m" (STACK_LOC[cur_tid+1][0])
+                );
+}
+
+unsigned int
+ring0proc_create(void)
+{
+    unsigned int pid;
+    unsigned int cur_pid;
+    pid = thread_spawn((void *) start_foo);
+	cur_pid = get_curid();
+    kctx_switch(cur_pid, pid);
+
+    return pid;
+}
 
 void
 proc_start_user(void)
