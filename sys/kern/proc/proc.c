@@ -3,10 +3,9 @@
 #include <lib/gcc.h>
 #include <lib/seg.h>
 #include <lib/trap.h>
+#include <kern/ring0proc/ring0proc.h>
 
 #include "uctx.h"
-#include "kctx.h"
-#include "thread.h"
 
 #define PAGESIZE	4096
 #define NUM_PROC	64
@@ -24,32 +23,12 @@ typedef void (*ring0_proc_entry_func_t)(void);
 ring0_proc_entry_func_t ring0_proc_entries[NUM_PROC];
 
 void
-ring0_proc1(void)
-{
-    while (1)
-    {
-        dprintf("In ring0 process 1...\n");
-        thread_yield();
-    }
-}
-
-void
-ring0_proc2(void)
-{
-    while (1)
-    {
-        dprintf("In ring0 process 2...\n");
-        thread_yield();
-    }
-}
-
-void
 proc_start_ring0(void)
 {
     extern char STACK_LOC[NUM_PROC][PAGESIZE] gcc_aligned(PAGESIZE);
     unsigned int cur_tid = get_curid();
     unsigned int stack_top = (unsigned int) STACK_LOC[cur_tid + 1];
-    KERN_DEBUG("In proc_start_ring0.\n");
+    //KERN_DEBUG("In proc_start_ring0.\n");
     asm volatile("movl %0, %%esp\n"
                  "pushl $0\n" // push a dummy return address
                  "jmp *%1"
@@ -63,7 +42,7 @@ ring0proc_create(unsigned int id)
 {
     unsigned int pid;
 
-    KERN_DEBUG("id is %d.\n", id);
+    //KERN_DEBUG("id is %d.\n", id);
 
     if (id != 1 && id != 2)
         KERN_PANIC("Wrong ring0 process id!\n");
