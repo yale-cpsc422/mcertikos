@@ -23,7 +23,7 @@ cswitch:
         movl    12(%edx), %ebx
         movl    16(%edx), %ebp
         movl    20(%edx), %ecx
-	pushl	%ecx
+	movl	%ecx, 0(%esp)
 
         xor     %eax, %eax
 	ret
