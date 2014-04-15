@@ -10,6 +10,15 @@
 #include <types.h>
 
 static gcc_inline void
+sys_ring0_spawn()
+{
+    asm volatile("int %0" :
+             : "i" (T_SYSCALL),
+               "a" (SYS_ring0_spawn)
+             : "cc", "memory");
+}
+
+static gcc_inline void
 sys_puts(const char *s, size_t len)
 {
 	asm volatile("int %0" :

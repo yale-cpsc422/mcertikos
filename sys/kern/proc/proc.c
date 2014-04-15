@@ -6,6 +6,7 @@
 
 #include "uctx.h"
 #include "kctx.h"
+#include "thread.h"
 
 #define PAGESIZE	4096
 #define NUM_PROC	64
@@ -24,6 +25,7 @@ foo_main(void)
     while (1)
     {
         dprintf("In foo_main...\n");
+        thread_yield();
     }
 }
 

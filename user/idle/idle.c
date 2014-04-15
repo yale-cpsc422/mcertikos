@@ -1,5 +1,6 @@
 #include <proc.h>
 #include <stdio.h>
+#include <syscall.h>
 
 int
 main(int argc, char **argv)
@@ -18,6 +19,8 @@ main(int argc, char **argv)
 		printf("pong in process %d.\n", pong_pid);
 	else
 		printf("Failed to launch pong.\n");
+
+    sys_ring0_spawn(); 
 #else
 	pid_t vmm_pid;
 

@@ -1,3 +1,4 @@
+#include <kern/proc/proc.h>
 #include "syscall.h"
 
 void
@@ -23,6 +24,19 @@ syscall_dispatch(void)
 		 *   E_MEM
 		 */
 		sys_puts();
+		break;
+    case SYS_ring0_spawn:
+        /*
+		 * Create a new ring0 process.
+		 *
+		 * Parameters:
+		 *
+		 * Return:
+		 *   the process ID of the process
+		 *
+		 * Error:
+		 */
+        ring0proc_create();
 		break;
 	case SYS_spawn:
 		/*

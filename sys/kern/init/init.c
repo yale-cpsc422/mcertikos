@@ -36,6 +36,5 @@ void
 kern_init(uintptr_t mbi_addr)
 {
 	proc_init(mbi_addr);
-    ring0proc_create();
 	kern_main();
 }
