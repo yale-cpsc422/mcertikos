@@ -23,7 +23,7 @@ foo_main(void)
 {
     while (1)
     {
-        dprintf("In foo_main...");
+        dprintf("In foo_main...\n");
     }
 }
 
