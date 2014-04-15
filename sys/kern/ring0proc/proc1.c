@@ -3,10 +3,12 @@
 void
 ring0_proc1(void)
 {
+    dprintf("Ring0 process 1 started.\n");
     while (1)
     {
-        dprintf("In ring0 process 1...\n");
+        dprintf("Ring0 process 1 yielding.\n");
         thread_yield();
+        dprintf("Ring0 process 1 resumed.\n");
     }
 }
 
