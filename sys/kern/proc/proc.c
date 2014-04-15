@@ -49,7 +49,7 @@ proc_start_ring0(void)
     KERN_DEBUG("In proc_start_ring0.\n");
     asm volatile("movl %0, %%esp\n"
                  "pushl $0\n" // push a dummy return address
-                 "jmp %1"
+                 "jmp *%1"
                  :
                  : "m" (STACK_LOC[cur_tid+1][0]), "r" (ring0_proc_addr)
                 );
@@ -60,7 +60,7 @@ ring0proc_create(unsigned int id)
 {
     unsigned int pid;
     unsigned int cur_pid;
-    
+
     KERN_DEBUG("id is %d.\n", id);
     if (id == 1)
         ring0_proc_addr = (void *) ring0_proc1;
