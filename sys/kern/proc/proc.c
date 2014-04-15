@@ -24,7 +24,7 @@ void * ring0_proc_addr;
 void
 ring0_proc1(void)
 {
-    //while (1)
+    while (1)
     {
         dprintf("In ring0 process 1...\n");
         thread_yield();
@@ -34,7 +34,7 @@ ring0_proc1(void)
 void
 ring0_proc2(void)
 {
-    //while (1)
+    while (1)
     {
         dprintf("In ring0 process 2...\n");
         thread_yield();
