@@ -8,7 +8,7 @@
  */
 
 unsigned int proc_create(void *elf_addr);
-unsigned int ring0proc_create(void);
+unsigned int ring0proc_create(unsigned int);
 void proc_start_user(void);
 
 /*

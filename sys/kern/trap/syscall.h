@@ -104,6 +104,7 @@ typedef enum {
 
 void sys_puts(void);
 void sys_spawn(void);
+void sys_ring0_spawn(void);
 void sys_yield(void);
 void sys_disk_op(void);
 void sys_disk_cap(void);

@@ -19,35 +19,57 @@
 
 #define FL_IF		0x00000200	/* Interrupt Flag */
 
+void * ring0_proc_addr;
+
 void
-foo_main(void)
+ring0_proc1(void)
 {
-    while (1)
+    //while (1)
     {
-        dprintf("In foo_main...\n");
+        dprintf("In ring0 process 1...\n");
         thread_yield();
     }
 }
 
 void
-start_foo(void)
+ring0_proc2(void)
+{
+    //while (1)
+    {
+        dprintf("In ring0 process 2...\n");
+        thread_yield();
+    }
+}
+
+void
+proc_start_ring0(void)
 {
     extern char STACK_LOC[NUM_PROC][PAGESIZE] gcc_aligned(PAGESIZE);
     unsigned int cur_tid = get_curid();
+    KERN_DEBUG("In proc_start_ring0.\n");
     asm volatile("movl %0, %%esp\n"
                  "pushl $0\n" // push a dummy return address
-                 "jmp foo_main"
+                 "jmp %1"
                  :
-                 : "m" (STACK_LOC[cur_tid+1][0])
+                 : "m" (STACK_LOC[cur_tid+1][0]), "r" (ring0_proc_addr)
                 );
 }
 
 unsigned int
-ring0proc_create(void)
+ring0proc_create(unsigned int id)
 {
     unsigned int pid;
     unsigned int cur_pid;
-    pid = thread_spawn((void *) start_foo);
+    
+    KERN_DEBUG("id is %d.\n", id);
+    if (id == 1)
+        ring0_proc_addr = (void *) ring0_proc1;
+    else if (id == 2)
+        ring0_proc_addr = (void *) ring0_proc2;
+    else
+        KERN_PANIC("Wrong ring0 process id!\n");
+
+    pid = thread_spawn((void *) proc_start_ring0);
 	cur_pid = get_curid();
     kctx_switch(cur_pid, pid);
 

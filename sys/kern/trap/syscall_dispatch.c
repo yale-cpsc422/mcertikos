@@ -1,4 +1,3 @@
-#include <kern/proc/proc.h>
 #include "syscall.h"
 
 void
@@ -36,7 +35,7 @@ syscall_dispatch(void)
 		 *
 		 * Error:
 		 */
-        ring0proc_create();
+        sys_ring0_spawn();
 		break;
 	case SYS_spawn:
 		/*

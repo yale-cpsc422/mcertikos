@@ -1,3 +1,4 @@
+#include <kern/proc/proc.h>
 #include <preinit/lib/debug.h>
 #include <preinit/dev/ide.h>
 #include <virt/svm.h>
@@ -92,6 +93,24 @@ sys_puts(void)
 	}
 
 	syscall_set_errno(E_SUCC);
+}
+
+void
+sys_ring0_spawn(void)
+{
+    unsigned int id;
+    unsigned int new_pid;
+
+    id = syscall_get_arg2();
+    new_pid = ring0proc_create(id);
+	
+    if (new_pid == NUM_PROC) {
+		syscall_set_errno(E_INVAL_PID);
+		syscall_set_retval1(NUM_PROC);
+	} else {
+		syscall_set_errno(E_SUCC);
+		syscall_set_retval1(new_pid);
+	}
 }
 
 extern uint8_t _binary___obj_user_vmm_vmm_start[];

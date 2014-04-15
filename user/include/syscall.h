@@ -9,13 +9,21 @@
 #include <proc.h>
 #include <types.h>
 
-static gcc_inline void
-sys_ring0_spawn()
+static gcc_inline unsigned int
+sys_ring0_spawn(unsigned int id)
 {
-    asm volatile("int %0" :
+	int errno;
+	pid_t pid;
+
+    asm volatile("int %2" 
+		     : "=a" (errno),
+		       "=b" (pid)
              : "i" (T_SYSCALL),
-               "a" (SYS_ring0_spawn)
+               "a" (SYS_ring0_spawn),
+               "b" (id)
              : "cc", "memory");
+
+	return errno ? -1 : pid;
 }
 
 static gcc_inline void
