@@ -19,7 +19,9 @@
 
 #define FL_IF		0x00000200	/* Interrupt Flag */
 
-void * ring0_proc_addr;
+typedef void (*ring0_proc_entry_func_t)(void);
+
+ring0_proc_entry_func_t ring0_proc_entries[NUM_PROC];
 
 void
 ring0_proc1(void)
@@ -52,7 +54,7 @@ proc_start_ring0(void)
                  "pushl $0\n" // push a dummy return address
                  "jmp *%1"
                  :
-                 : "m" (stack_top), "r" (ring0_proc_addr)
+		 : "m" (stack_top), "r" (ring0_proc_entries[cur_tid])
                 );
 }
 
@@ -60,19 +62,18 @@ unsigned int
 ring0proc_create(unsigned int id)
 {
     unsigned int pid;
-    unsigned int cur_pid;
 
     KERN_DEBUG("id is %d.\n", id);
-    if (id == 1)
-        ring0_proc_addr = (void *) ring0_proc1;
-    else if (id == 2)
-        ring0_proc_addr = (void *) ring0_proc2;
-    else
+
+    if (id != 1 && id != 2)
         KERN_PANIC("Wrong ring0 process id!\n");
 
     pid = thread_spawn((void *) proc_start_ring0);
-	cur_pid = get_curid();
-    kctx_switch(cur_pid, pid);
+
+    if (id == 1)
+        ring0_proc_entries[pid] = ring0_proc1;
+    else if (id == 2)
+        ring0_proc_entries[pid] = ring0_proc2;
 
     return pid;
 }
