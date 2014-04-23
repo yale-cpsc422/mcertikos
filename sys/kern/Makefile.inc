@@ -7,3 +7,4 @@ include $(KERN_DIR)/kern/proc/Makefile.inc
 include $(KERN_DIR)/kern/virt/Makefile.inc
 include $(KERN_DIR)/kern/trap/Makefile.inc
 include $(KERN_DIR)/kern/init/Makefile.inc
+include $(KERN_DIR)/kern/ring0proc/Makefile.inc

@@ -24,6 +24,19 @@ syscall_dispatch(void)
 		 */
 		sys_puts();
 		break;
+    case SYS_ring0_spawn:
+        /*
+		 * Create a new ring0 process.
+		 *
+		 * Parameters:
+		 *
+		 * Return:
+		 *   the process ID of the process
+		 *
+		 * Error:
+		 */
+        sys_ring0_spawn();
+		break;
 	case SYS_spawn:
 		/*
 		 * Create a new process.

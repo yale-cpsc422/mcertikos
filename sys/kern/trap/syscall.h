@@ -32,6 +32,7 @@ enum __syscall_nr {
 	 * common system calls
 	 */
 	SYS_puts = 0,	/* output a string to the screen */
+    SYS_ring0_spawn, /* create a new ring0 process */
 	SYS_spawn,	/* create a new process */
 	SYS_yield,	/* yield to another process */
 	SYS_sleep,
@@ -103,6 +104,7 @@ typedef enum {
 
 void sys_puts(void);
 void sys_spawn(void);
+void sys_ring0_spawn(void);
 void sys_yield(void);
 void sys_disk_op(void);
 void sys_disk_cap(void);

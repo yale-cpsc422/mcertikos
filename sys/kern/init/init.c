@@ -8,6 +8,7 @@ extern uint8_t _binary___obj_user_idle_idle_start[];
 
 extern void proc_init(unsigned int mbi_addr);
 extern unsigned int proc_create(void *elf_addr);
+extern unsigned int ring0proc_create(void);
 extern void set_curid(unsigned int curid);
 extern void tdq_remove(unsigned int chid, unsigned int pid);
 extern void tcb_set_state(unsigned int pid, unsigned int state);

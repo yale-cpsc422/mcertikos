@@ -83,6 +83,6 @@ palloc(void)
 	if (palloc_index == tnps)
 		KERN_PANIC("Not enough memory!\n");
 
-	at_set(palloc_index - 1, 1);
-	return palloc_index;
+	at_set(palloc_free_index, 1);
+	return palloc_free_index;
 }
