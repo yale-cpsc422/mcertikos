@@ -1,7 +1,7 @@
 #include <kern/proc/proc.h>
 #include <preinit/lib/debug.h>
 #include <preinit/dev/ide.h>
-#include <virt/svm.h>
+#include <virt/svm/svm.h>
 #include "syscall_args.h"
 #include "syscall.h"
 

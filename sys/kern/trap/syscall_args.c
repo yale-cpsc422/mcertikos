@@ -1,4 +1,4 @@
-#include <virt/svm.h>
+#include <virt/svm/svm.h>
 
 unsigned int
 syscall_get_arg1(void)
