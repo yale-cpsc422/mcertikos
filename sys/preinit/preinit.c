@@ -12,16 +12,31 @@
 #include <preinit/lib/seg.h>
 #include <preinit/lib/x86.h>
 
+#include <preinit/lib/debug.h>
+
 void
 preinit(uintptr_t mbi_addr)
 {
 	seg_init();
+    KERN_DEBUG("seg initialized.");
+
 	enable_sse();
+    KERN_DEBUG("sse enabled.");
+
 	cons_init();
+    KERN_DEBUG("cons initialized.");
+
 	tsc_init();
+    KERN_DEBUG("tsc initialized.");
+
 	intr_init();
+    KERN_DEBUG("intr initialized.");
+
 	ide_init();
-	svm_hw_init();
+    KERN_DEBUG("ide initialized.");
+
+	//svm_hw_init();
+    //KERN_DEBUG("svm hw initialized.");
 
 	/* enable interrupts */
 	intr_enable(IRQ_TIMER);
