@@ -8,7 +8,7 @@
 
 #include <preinit/dev/svm_drv.h>
 
-#include <kern/virt/npt_intro.h>
+#include <kern/virt/svm/npt_intro.h>
 
 
 #define PAGESIZE		4096
