@@ -37,7 +37,6 @@
 
 #include "ept.h"
 #include "vmx.h"
-#include "vmx_msr.h"
 #include "x86.h"
 
 #ifdef DEBUG_EPT

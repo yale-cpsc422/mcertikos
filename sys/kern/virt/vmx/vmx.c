@@ -42,7 +42,6 @@
 #include "vmcs.h"
 #include "vmx.h"
 #include "vmx_controls.h"
-#include "vmx_msr.h"
 #include "x86.h"
 
 #define PAGESIZE 4096
@@ -111,78 +110,6 @@ vmx_intercept_all_ioports(bool enable)
 	else
 		memzero(bitmap, PAGESIZE * 2);
 
-
-	return 0;
-}
-
-static void
-vmx_intercept_msr_helper(uint32_t msr, bool write, bool enable)
-{
-	uint32_t *msr_bitmap;
-	uint32_t offset;
-	int entry, bit;
-
-	msr_bitmap = (uint32_t *)
-		((uintptr_t) vmx.msr_bitmap + ((write == TRUE) ? 0 : 2048));
-
-	if (msr <= 0x00001fff) {
-		offset = msr - 0x00000000;
-	} else {
-		msr_bitmap = (uint32_t *) ((uintptr_t) msr_bitmap + 1024);
-		offset = msr - 0xc0000000;
-	}
-
-	entry = offset / 32;
-	bit = offset - entry * 32;
-
-	if (enable == TRUE)
-		msr_bitmap[entry] |= (1 << bit);
-	else
-		msr_bitmap[entry] &= ~(1 << bit);
-}
-
-static int
-vmx_intercept_msr(uint32_t msr, int rw)
-{
-
-#ifdef DEBUG_GUEST_MSR
-	VMX_DEBUG("%s intercepting rdmsr 0x%08x, "
-		  "%s intercepting wrmsr 0x%08x.\n",
-		  (rw & 0x1) ? "Enable" : "Disable", msr,
-		  (rw & 0x2) ? "Enable" : "Disable", msr);
-#endif
-
-	if (!((msr <= 0x00001fff) ||
-	      (0xc0000000 <= msr && msr <= 0xc0001fff))) {
-#ifdef DEBUG_GUEST_MSR
-		VMX_DEBUG("MSR 0x%08x out of range.\n", msr);
-#endif
-		return 1;
-	}
-
-	vmx_intercept_msr_helper(msr, FALSE, (rw & 0x1) ? TRUE : FALSE);
-	vmx_intercept_msr_helper(msr, TRUE, (rw & 0x2) ? TRUE : FALSE);
-
-	return 0;
-}
-
-static int
-vmx_intercept_all_msrs(int rw)
-{
-
-#ifdef DEBUG_GUEST_MSR
-	VMX_DEBUG("%s intercepting reading all guest MSRs, "
-		  "%s intercepting writing all guest MSRs.\n",
-		  (rw & 0x1) ? "Enable" : "Disable",
-		  (rw & 0x2) ? "Enable" : "Disable");
-#endif
-
-	char *msr_bitmap = vmx.msr_bitmap;
-	char *rdmsr_bitmap = msr_bitmap;
-	char *wrmsr_bitmap = (char *) ((uintptr_t) msr_bitmap + 0x800);
-
-	memset(rdmsr_bitmap, (rw & 0x1) ? 0xf : 0x0, 2048);
-	memset(wrmsr_bitmap, (rw & 0x2) ? 0xf : 0x0, 2048);
 
 	return 0;
 }
@@ -304,38 +231,6 @@ vmx_set_reg(guest_reg_t reg, uint32_t val)
 	default:
 		return 1;
 	}
-
-	return 0;
-}
-
-static int
-vmx_get_msr(uint32_t msr, uint64_t *val)
-{
-	KERN_ASSERT(val != NULL);
-
-	if (!(msr <= 0x00001fff || (0xc0000000 <= msr && msr <= 0xc0001fff)))
-		return 1;
-
-	*val = rdmsr(msr);
-
-#ifdef DEBUG_GUEST_MSR
-	VMX_DEBUG("Guest rdmsr 0x%08x = 0x%llx.\n", msr, *val);
-#endif
-
-	return 0;
-}
-
-static int
-vmx_set_msr(uint32_t msr, uint64_t val)
-{
-	if (!(msr <= 0x00001fff || (0xc0000000 <= msr && msr <= 0xc0001fff)))
-		return 1;
-
-	wrmsr(msr, val);
-
-#ifdef DEBUG_GUEST_MSR
-	VMX_DEBUG("Guest wrmsr 0x%08x, 0x%llx.\n", msr, val);
-#endif
 
 	return 0;
 }
