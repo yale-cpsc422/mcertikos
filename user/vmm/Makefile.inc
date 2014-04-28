@@ -8,6 +8,7 @@ USER_VMM_SRC	+= $(USER_DIR)/vmm/main.c
 
 include $(USER_DIR)/vmm/dev/Makefile.inc
 include $(USER_DIR)/vmm/svm/Makefile.inc
+include $(USER_DIR)/vmm/vmx/Makefile.inc
 
 USER_VMM_OBJ	:= $(patsubst %.c, $(OBJDIR)/%.o, $(USER_VMM_SRC))
 USER_VMM_OBJ	:= $(patsubst %.S, $(OBJDIR)/%.o, $(USER_VMM_OBJ))
