@@ -3,6 +3,7 @@
 
 #include <gcc.h>
 #include <types.h>
+#include <string.h>
 
 #define PAGESIZE		4096
 
@@ -322,6 +323,28 @@ cpuid(uint32_t info,
 		*ecxp = ecx;
 	if (edxp)
 		*edxp = edx;
+}
+
+typedef enum { UNKNOWN_CPU, INTEL, AMD } cpu_vendor;
+
+static gcc_inline cpu_vendor
+vendor()
+{
+    uint32_t eax, ebx, ecx, edx;
+    char vendor[13];
+
+    cpuid(0x0, &eax, &ebx, &ecx, &edx);
+    ((uint32_t *) vendor)[0] = ebx;
+    ((uint32_t *) vendor)[1] = edx;
+    ((uint32_t *) vendor)[2] = ecx;
+    vendor[12] = '\0';
+
+    if (strncmp(vendor, "GenuineIntel", 20) == 0)
+        return INTEL;
+    else if (strncmp(vendor, "AuthenticAMD", 20) == 0)
+        return AMD;
+    else
+        return UNKNOWN_CPU;
 }
 
 static gcc_inline void
