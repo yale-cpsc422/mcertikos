@@ -492,6 +492,7 @@ vmm_load_bios(struct vm *vm)
 }
 
 extern struct vmm_ops vmm_ops_amd;
+extern struct vmm_ops vmm_ops_intel;
 
 int
 vmm_init_vm(struct vm *vm, uint64_t cpufreq, size_t memsize)
@@ -507,7 +508,15 @@ vmm_init_vm(struct vm *vm, uint64_t cpufreq, size_t memsize)
 	vm->exit_reason = EXIT_REASON_NONE;
 	vm->exit_handled = TRUE;
 
-	vm->ops = &vmm_ops_amd;
+    cpu_vendor vendor = vendor();
+    if (vendor == AMD)
+	    vm->ops = &vmm_ops_amd;
+    else if (vendor == INTEL)
+        vm->ops = &vmm_ops_intel;
+    else {
+        VMM_DEBUG("Cannot recognize the vendor.\n");
+        return -7
+    }
 
 	if (vmm_init_mmap(vm)) {
 		VMM_DEBUG("Cannot initialize EPT/NPT.\n");
