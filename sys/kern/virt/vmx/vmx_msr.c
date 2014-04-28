@@ -31,13 +31,17 @@
  * $FreeBSD$
  */
 
-#include <sys/debug.h>
-#include <sys/string.h>
-#include <sys/types.h>
-#include <sys/x86.h>
+#include <preinit/lib/debug.h>
+#include <preinit/lib/string.h>
+#include <preinit/lib/types.h>
+#include <preinit/lib/x86.h>
 
 #include "vmx.h"
 #include "vmx_msr.h"
+
+#define PAGE_SIZE 4096
+
+extern void *memset(void *v, unsigned int c, unsigned int n);
 
 static bool
 vmx_ctl_allows_one_setting(uint64_t msr_val, int bitpos)

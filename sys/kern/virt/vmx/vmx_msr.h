@@ -36,7 +36,7 @@
 
 #ifdef _KERN_
 
-#include <sys/types.h>
+#include <preinit/lib/types.h>
 
 #define	MSR_VMX_BASIC			0x480
 #define	MSR_VMX_EPT_VPID_CAP		0x48C

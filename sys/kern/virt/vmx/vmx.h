@@ -3,8 +3,10 @@
 
 #ifdef _KERN_
 
-#include <sys/gcc.h>
-#include <sys/types.h>
+#include <preinit/lib/gcc.h>
+#include <preinit/lib/types.h>
+#include <preinit/lib/x86.h>
+#include <preinit/lib/string.h>
 
 #include "vmcs.h"
 
@@ -37,6 +39,38 @@ struct vmx {
         uint64_t        guest_tsc_total;
         uint64_t        last_exit_tsc;
 #endif
+};
+
+typedef enum {
+        GUEST_EAX, GUEST_EBX, GUEST_ECX, GUEST_EDX, GUEST_ESI, GUEST_EDI,
+            GUEST_EBP, GUEST_ESP, GUEST_EIP, GUEST_EFLAGS,
+                GUEST_CR0, GUEST_CR2, GUEST_CR3, GUEST_CR4,
+                    GUEST_MAX_REG
+} guest_reg_t;
+
+typedef enum {
+        GUEST_CS, GUEST_DS, GUEST_ES, GUEST_FS, GUEST_GS, GUEST_SS,
+            GUEST_LDTR, GUEST_TR, GUEST_GDTR, GUEST_IDTR,
+                GUEST_MAX_SEG_DESC
+} guest_seg_t;
+
+typedef enum {
+        EVENT_EXTINT,       /* external interrupt */
+        EVENT_NMI,      /* non-maskable interrupt */
+        EVENT_EXCEPTION,    /* exception */
+        EVENT_SWINT     /* software interrupt */
+} guest_event_t;
+
+typedef enum {
+        INSTR_IN, INSTR_OUT, INSTR_RDMSR, INSTR_WRMSR, INSTR_CPUID, INSTR_RDTSC,
+            INSTR_HYPERCALL
+} instr_t;
+
+struct guest_seg_desc {
+        uint16_t    sel;
+        uint64_t    base;
+        uint32_t    lim;
+        uint32_t    ar;
 };
 
 #ifdef DEBUG_VMX

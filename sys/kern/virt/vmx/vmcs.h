@@ -38,14 +38,15 @@
 
 #ifdef _KERN_
 
-#include <sys/gcc.h>
-#include <sys/mmu.h>
-#include <sys/types.h>
+#include <preinit/lib/gcc.h>
+#include <preinit/lib/types.h>
+
+#define PGSIZE 4096
 
 struct vmcs {
 	uint32_t	identifier;
 	uint32_t	abort_code;
-	char		_impl_specific[PAGE_SIZE - sizeof(uint32_t) * 2];
+	char		_impl_specific[PGSIZE - sizeof(uint32_t) * 2];
 };
 
 /* MSR save region is composed of an array of 'struct msr_entry' */
@@ -62,17 +63,6 @@ uint64_t vmcs_read64(uint32_t encoding);
 void vmcs_write16(uint32_t encoding, uint16_t val);
 void vmcs_write32(uint32_t encoding, uint32_t val);
 void vmcs_write64(uint32_t encoding, uint64_t val);
-
-void vmcs_set_defaults(struct vmcs *,
-		       uint64_t *pml4ept,       uint32_t pinbased_ctls,
-		       uint32_t procbased_ctls, uint32_t procbased_ctls2,
-		       uint32_t exit_ctls,      uint32_t entry_ctls,
-		       char *msr_bitmap,
-		       char *io_bitmap_a,       char *io_bitmap_b,
-		       uint16_t vpid,
-		       uint64_t cr0_ones_mask,  uint64_t cr0_zeros_mask,
-		       uint64_t cr4_ones_mask,  uint64_t cr4_zeros_mask,
-		       uintptr_t host_rip);
 
 #define	VMCS_INITIAL			0xffffffffffffffff
 

@@ -36,23 +36,45 @@
 
 #ifdef _KERN_
 
-#include <sys/mem.h>
-#include <sys/types.h>
-
-#include <sys/virt/vmm.h>
+#include <preinit/lib/types.h>
+#include <lib/gcc.h>
 
 #define	EPT_PWLEVELS	4		/* page walk levels */
+#define PAT_WRITE_BACK      0x06
 #define	EPTP(pml4)	((pml4) | (EPT_PWLEVELS - 1) << 3 | PAT_WRITE_BACK)
+
+/* Round down to the nearest multiple of n */
+#define ROUNDDOWN(a, n)             \
+        ({                  \
+                 typeof(a) _a = (a);     \
+                 typeof(n) _n = (n);     \
+                 (typeof(a)) (_a - _a % _n); \
+             })
+
+/* Round up to the nearest multiple of n */
+#define ROUNDUP(_a, _n)                     \
+        ({                          \
+                 typeof(_a) __a = (_a);              \
+                 typeof(_n) __n = (_n);              \
+                 (typeof(_a)) (ROUNDDOWN(__a + __n - 1, __n));   \
+             })
+
+#define PAGESIZE 4096
+
+struct eptStruct {
+    uint64_t pml4 gcc_aligned(PAGESIZE);
+    uint64_t pdpt[4] gcc_aligned(PAGESIZE);
+    uint64_t pdt[4][512] gcc_aligned(PAGESIZE);
+    uint64_t ptab[4][512][512] gcc_aligned(PAGESIZE);
+} ept;
 
 int       ept_init(void);
 int       ept_create_mappings(uint64_t *pml4ept, size_t);
-int       ept_add_mapping(uint64_t *pml4ept, uintptr_t gpa, paddr_t hpa,
-			  uint8_t mem_type, bool superpage);
+int       ept_add_mapping(uintptr_t gpa, uint64_t hpa, uint8_t mem_type);
 void      ept_invalidate_mappings(uint64_t);
-paddr_t   ept_gpa_to_hpa(uint64_t *pml4ept, uintptr_t gpa);
-int       ept_set_permission(uint64_t *pml4ept, uintptr_t gpa, uint8_t perm);
-int       ept_mmap(struct vm *, uintptr_t gpa, paddr_t hpa, uint8_t mem_type);
-int       ept_unmmap(struct vm *, uintptr_t gpa);
+uint64_t  ept_gpa_to_hpa(uintptr_t gpa);
+int       ept_set_permission(uintptr_t gpa, uint8_t perm);
+int       ept_mmap(uintptr_t gpa, uint64_t hpa, uint8_t mem_type);
 
 #endif /* _KERN_ */
 

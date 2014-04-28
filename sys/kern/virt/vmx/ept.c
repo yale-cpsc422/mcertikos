@@ -31,14 +31,9 @@
  * $FreeBSD$
  */
 
-#include <sys/debug.h>
-#include <sys/mem.h>
-#include <sys/mmu.h>
-#include <sys/string.h>
-#include <sys/types.h>
-#include <sys/x86.h>
-
-#include <sys/virt/vmm.h>
+#include <preinit/lib/debug.h>
+#include <preinit/lib/types.h>
+#include <preinit/lib/x86.h>
 
 #include "ept.h"
 #include "vmx.h"
@@ -94,34 +89,9 @@
 #define EPT_PAGE_OFFSET(gpa)		((gpa) & EPT_ADDR_OFFSET_MASK)
 #define EPT_2M_PAGE_OFFSET(gpa)		((gpa) & EPT_2M_ADDR_OFFSET_MASK)
 
+#define PAGESHIFT 12
+
 static uint64_t page_sizes_mask;
-
-static void
-ept_free_mappings_helper(uint64_t *table, uint8_t dep)
-{
-	int i;
-
-	KERN_ASSERT(table != NULL);
-	KERN_ASSERT(dep < 4);
-
-	for (i = 0; i < 512; i++) {
-		if (table[i] & (EPT_PG_EX | EPT_PG_WR | EPT_PG_RD)) {
-			uintptr_t addr = (uintptr_t) (table[i] & EPT_ADDR_MASK);
-			if (dep < 3)
-				ept_free_mappings_helper((uint64_t *) addr,
-							 dep+1);
-			else
-				mem_page_free(mem_phys2pi(addr));
-		}
-	}
-}
-
-static void
-ept_free_mappings(uint64_t *pml4ept)
-{
-	KERN_ASSERT(pml4ept != NULL);
-	ept_free_mappings_helper(pml4ept, 0);
-}
 
 /*
  * Initialzie EPT.
@@ -132,37 +102,23 @@ ept_free_mappings(uint64_t *pml4ept)
 int
 ept_init(void)
 {
-	int page_shift;
-	uint64_t cap;
+    unsigned int i, j;
 
-	cap = rdmsr(MSR_VMX_EPT_VPID_CAP);
+	page_sizes_mask = 1UL << PAGESHIFT;		/* 4KB page */
 
-	/*
-	 * Verify that:
-	 * - page walk length is 4 steps
-	 * - extended page tables can be laid out in write-back memory
-	 * - invvpid instruction with all possible types is supported
-	 * - invept instruction with all possible types is supported
-	 */
-	if (!EPT_PWL4(cap) ||
-	    !EPT_MEMORY_TYPE_WB(cap) ||
-	    !INVVPID_SUPPORTED(cap) ||
-	    !INVVPID_ALL_TYPES_SUPPORTED(cap) ||
-	    !INVEPT_SUPPORTED(cap) ||
-	    !INVEPT_ALL_TYPES_SUPPORTED(cap))
-		return 1;
-
-	/* Set bits in 'page_sizes_mask' for each valid page size */
-	page_shift = PAGESHIFT;
-	page_sizes_mask = 1UL << page_shift;		/* 4KB page */
-
-	page_shift += 9;
-	if (EPT_PDE_SUPERPAGE(cap))
-		page_sizes_mask |= 1UL << page_shift;	/* 2MB superpage */
-
-	page_shift += 9;
-	if (EPT_PDPTE_SUPERPAGE(cap))
-		page_sizes_mask |= 1UL << page_shift;	/* 1GB superpage */
+    //initilize the static ept data structure.
+    ept.pml4 = ((uintptr_t) ept.pdpt & EPT_ADDR_MASK) |
+                    EPT_PG_EX | EPT_PG_WR | EPT_PG_RD; 
+    for(i = 0; i < 4; i++)
+    {
+        ept.pdpt[i] = ((uintptr_t) ept.pdt[i] & EPT_ADDR_MASK) |
+                        EPT_PG_EX | EPT_PG_WR | EPT_PG_RD;
+        for(j = 0; j < 512; j++)
+        {
+            ept.pdt[i][j] = ((uintptr_t) ept.ptab[i][j] & EPT_ADDR_MASK) |
+                                EPT_PG_EX | EPT_PG_WR | EPT_PG_RD;
+        }
+    }
 
 	return 0;
 }
@@ -178,192 +134,73 @@ ept_invalidate_mappings(uint64_t pml4ept)
 
 /*
  * Add page structures which map the guest physical address gpa to the host
- * physical address hpa. If superpage is TRUE, 2MB EPT pages are used;
- * otherwise, 4KB pages are used.
+ * physical address hpa. 
  */
 int
-ept_add_mapping(uint64_t *pml4ept, uintptr_t gpa, paddr_t hpa,
-		uint8_t mem_type, bool superpage)
+ept_add_mapping(uintptr_t gpa, uint64_t hpa, uint8_t mem_type)
 {
-	KERN_ASSERT(pml4ept != NULL);
-
-	uint64_t *pml4e, *pdpte, *pde, *pte;
-	uint64_t *pdpt, *pdt, *ptab;
-	pageinfo_t *pi;
-
-	pml4e = &pml4ept[EPT_PML4_INDEX(gpa)];
-	if (!(*pml4e & (EPT_PG_RD | EPT_PG_WR | EPT_PG_EX))) {
-		EPT_DEBUG("Create PDPT for gpa 0x%08x.", gpa);
-
-		pi = mem_page_alloc();
-		if (pi == NULL)
-			return 1;
-
-		pdpt = mem_pi2ptr(pi);
-		memset(pdpt, 0, PAGESIZE);
-
-		*pml4e = ((uintptr_t) pdpt & EPT_ADDR_MASK) |
-			EPT_PG_EX | EPT_PG_WR | EPT_PG_RD;
-	} else {
-		pdpt = (uint64_t *)(uintptr_t) (*pml4e & EPT_ADDR_MASK);
-	}
-
-	pdpte = &pdpt[EPT_PDPT_INDEX(gpa)];
-	if (!(*pdpte & (EPT_PG_RD | EPT_PG_WR | EPT_PG_EX))) {
-		EPT_DEBUG("Create PDT for gpa 0x%08x.\n", gpa);
-
-		pi = mem_page_alloc();
-		if (pi == NULL)
-			return 1;
-
-		pdt = mem_pi2ptr(pi);
-		memset(pdt, 0, PAGESIZE);
-
-		*pdpte = ((uintptr_t) pdt & EPT_ADDR_MASK) |
-			EPT_PG_EX | EPT_PG_WR | EPT_PG_RD;
-	} else {
-		pdt = (uint64_t *)(uintptr_t) (*pdpte & EPT_ADDR_MASK);
-	}
-
-	pde = &pdt[EPT_PDIR_INDEX(gpa)];
-	if (!(*pde & (EPT_PG_RD | EPT_PG_WR | EPT_PG_EX))) {
-		if (superpage == TRUE) {
-			/* use 2MB EPT pages */
-			*pde = (hpa & EPT_2M_ADDR_MASK) |
-				EPT_PG_SUPERPAGE | EPT_PG_IGNORE_PAT |
-				EPT_PG_EX | EPT_PG_WR | EPT_PG_RD |
-				EPT_PG_MEMORY_TYPE(mem_type);
-
-			EPT_DEBUG("Add 2MB mapping: "
-				  "gpa 0x%08x ==> hpa 0x%llx.\n", gpa, hpa);
-		} else {
-			/* use 4KB EPT pages */
-			EPT_DEBUG("Create page table for gpa 0x%08x.\n", gpa);
-
-			pi = mem_page_alloc();
-
-			if (pi == NULL)
-				return 1;
-
-			ptab = mem_pi2ptr(pi);
-			memset(ptab, 0, PAGESIZE);
-
-			*pde = ((uintptr_t) ptab & EPT_ADDR_MASK) |
-				EPT_PG_EX | EPT_PG_WR | EPT_PG_RD;
-		}
-	} else {
-		if (superpage == TRUE) {
-			KERN_DEBUG("gpa 0x%08x is already mapped to hpa 0x%08x.\n",
-				  gpa, (uintptr_t) pde & EPT_ADDR_MASK);
-			return 1;
-		} else {
-			ptab = (uint64_t *)(uintptr_t) (*pde & EPT_ADDR_MASK);
-		}
-	}
-
-	if (superpage == TRUE)
-		return 0;
-
-	pte = &ptab[EPT_PTAB_INDEX(gpa)];
-	if (!(*pte & (EPT_PG_RD | EPT_PG_WR | EPT_PG_EX))) {
-		*pte = (hpa & EPT_ADDR_MASK) |
+    ept.ptab[EPT_PDPT_INDEX(gpa)][EPT_PDIR_INDEX(gpa)][EPT_PTAB_INDEX(gpa)] = (hpa & EPT_ADDR_MASK) |
 			EPT_PG_IGNORE_PAT | EPT_PG_EX | EPT_PG_WR | EPT_PG_RD |
 			EPT_PG_MEMORY_TYPE(mem_type);
 
-		EPT_DEBUG("Add 4KB mapping: gpa 0x%08x ==> hpa 0x%llx.\n",
-			  gpa, hpa);
-	} else {
-		KERN_DEBUG("gpa 0x%08x is already mapped to hpa 0x%llx.\n",
-			  gpa, *pte & EPT_ADDR_MASK);
-		return 1;
-	}
+    EPT_DEBUG("Add 4KB mapping: gpa 0x%08x ==> hpa 0x%llx.\n", gpa, hpa);
 
 	return 0;
 }
 
 /*
  * Get the last level's EPT page structure entry for the guest address gpa.
- *
- * If 4KB EPT page is used, return the page table entry; if 2MB EPT page is
- * used, return the page directory entry.
  */
-static gcc_inline uint64_t *
-ept_get_page_entry(uint64_t *pml4ept, uintptr_t gpa)
+static gcc_inline uint64_t 
+ept_get_page_entry(uintptr_t gpa)
 {
-	uint64_t pml4e, pdpte, pde;
-	uint64_t *pdpt, *pdir, *ptab;
+	return ept.ptab[EPT_PDPT_INDEX(gpa)][EPT_PDIR_INDEX(gpa)][EPT_PTAB_INDEX(gpa)];
+}
 
-	pml4e = pml4ept[EPT_PML4_INDEX(gpa)];
-	if (!(pml4e & (EPT_PG_RD | EPT_PG_WR | EPT_PG_EX)))
-		return NULL;
-	pdpt = (uint64_t *)(uintptr_t) (pml4e & EPT_ADDR_MASK);
-
-	pdpte = pdpt[EPT_PDPT_INDEX(gpa)];
-	if (!(pdpte & (EPT_PG_RD | EPT_PG_WR | EPT_PG_EX)))
-		return NULL;
-	pdir = (uint64_t *)(uintptr_t) (pdpte & EPT_ADDR_MASK);
-
-	pde = pdir[EPT_PDIR_INDEX(gpa)];
-
-	if (pde & EPT_PG_SUPERPAGE)
-		/* 2MB EPT pages */
-		return &pdir[EPT_PDIR_INDEX(gpa)];
-
-	if (!(pde & (EPT_PG_RD | EPT_PG_WR | EPT_PG_EX)))
-		return NULL;
-	ptab = (uint64_t *)(uintptr_t) (pde & EPT_ADDR_MASK);
-
-	return &ptab[EPT_PTAB_INDEX(gpa)];
+/*
+ * Set the last level's EPT page structure entry for the guest address gpa.
+ */
+static gcc_inline void 
+ept_set_page_entry(uintptr_t gpa, uint64_t val)
+{
+	ept.ptab[EPT_PDPT_INDEX(gpa)][EPT_PDIR_INDEX(gpa)][EPT_PTAB_INDEX(gpa)] = val;
 }
 
 /*
  * Convert the guest physical address to the host physical address.
  */
-paddr_t
-ept_gpa_to_hpa(uint64_t *pml4ept, uintptr_t gpa)
+uint64_t
+ept_gpa_to_hpa(uintptr_t gpa)
 {
-	KERN_ASSERT(pml4ept != NULL);
+    uint64_t entry;
 
-	uint64_t *entry;
+    entry = ept_get_page_entry(gpa);
 
-	if ((entry = ept_get_page_entry(pml4ept, gpa)) == NULL)
-		return 0;
+    if (!(entry & (EPT_PG_RD | EPT_PG_WR | EPT_PG_EX)))
+        return 0;
 
-	if (!(*entry & (EPT_PG_RD | EPT_PG_WR | EPT_PG_EX)))
-		return 0;
-
-	if (*entry & EPT_PG_SUPERPAGE)
-		return ((*entry & EPT_2M_ADDR_MASK) | EPT_2M_PAGE_OFFSET(gpa));
-	else
-		return ((*entry & EPT_ADDR_MASK) | EPT_PAGE_OFFSET(gpa));
+    return ((entry & EPT_ADDR_MASK) | EPT_PAGE_OFFSET(gpa));
 }
 
 /*
  * Set the access permission of the guest physical address gpa.
  */
 int
-ept_set_permission(uint64_t *pml4ept, uintptr_t gpa, uint8_t perm)
+ept_set_permission(uintptr_t gpa, uint8_t perm)
 {
-	KERN_ASSERT(pml4ept != NULL);
+	uint64_t entry;
 
-	uint64_t *entry;
+	entry = ept_get_page_entry(gpa);
 
-	if ((entry = ept_get_page_entry(pml4ept, gpa)) == NULL)
-		return 1;
-
-	*entry = (*entry & ~(uint64_t) 0x7) | (perm & 0x7);
+	ept_set_page_entry(gpa, (entry & ~(uint64_t) 0x7) | (perm & 0x7));
 
 	return 0;
 }
 
 int
-ept_mmap(struct vm *vm, uintptr_t gpa, paddr_t hpa, uint8_t mem_type)
+ept_mmap(uintptr_t gpa, uint64_t hpa, uint8_t mem_type)
 {
-	KERN_ASSERT(vm != NULL);
-
-	struct vmx *vmx;
-	uint64_t *pml4ept;
-	uint64_t *pg_entry;
+	uint64_t pg_entry;
 
 	/*
 	 * XXX: ASSUME 4KB pages are used in both the EPT and the host page
@@ -372,42 +209,15 @@ ept_mmap(struct vm *vm, uintptr_t gpa, paddr_t hpa, uint8_t mem_type)
 	KERN_ASSERT(gpa == ROUNDDOWN(gpa, PAGESIZE));
 	KERN_ASSERT(hpa == ROUNDDOWN(hpa, PAGESIZE));
 
-	vmx = (struct vmx *) vm->cookie;
-	pml4ept = vmx->pml4ept;
+	pg_entry = ept_get_page_entry(gpa);
 
-	pg_entry = ept_get_page_entry(pml4ept, gpa);
-
-	if (((*pg_entry) & (EPT_PG_RD | EPT_PG_WR | EPT_PG_EX)))
+	if (((pg_entry) & (EPT_PG_RD | EPT_PG_WR | EPT_PG_EX)))
 	{
 		KERN_WARN("Guest page 0x%08x is already mapped to 0x%llx.\n",
-			  gpa, (*pg_entry & EPT_ADDR_MASK));
+			  gpa, (pg_entry & EPT_ADDR_MASK));
 		return 1;
 	}
 
-	return ept_add_mapping(pml4ept, gpa, hpa, mem_type, FALSE);
+	return ept_add_mapping(gpa, hpa, mem_type);
 }
 
-int
-ept_unmmap(struct vm *vm, uintptr_t gpa)
-{
-	KERN_ASSERT(vm != NULL);
-
-	struct vmx *vmx;
-	uint64_t *pml4ept;
-	uint64_t *pg_entry;
-	uintptr_t gpa1;
-
-	vmx = (struct vmx *) vm->cookie;
-	pml4ept = vmx->pml4ept;
-
-	/* XXX: ASSUME 4KB EPT pages are used. */
-	gpa1 = ROUNDDOWN(gpa, PAGESIZE);
-
-	if ((pg_entry = ept_get_page_entry(pml4ept, gpa1)) == NULL)
-		return 1;
-	*pg_entry &= ~(uint64_t) (EPT_PG_RD | EPT_PG_WR | EPT_PG_EX);
-
-	EPT_DEBUG("ept_unmmap,gpa1:%x,gpa:%x\n",gpa1,gpa);
-
-	return 0;
-}

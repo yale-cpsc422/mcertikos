@@ -38,9 +38,9 @@
 
 #ifdef _KERN_
 
-#include <sys/debug.h>
-#include <sys/gcc.h>
-#include <sys/types.h>
+#include <preinit/lib/debug.h>
+#include <preinit/lib/gcc.h>
+#include <preinit/lib/types.h>
 
 #include "vmcs.h"
 
