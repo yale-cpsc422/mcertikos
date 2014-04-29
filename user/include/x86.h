@@ -331,17 +331,17 @@ static gcc_inline cpu_vendor
 vendor()
 {
     uint32_t eax, ebx, ecx, edx;
-    char vendor[13];
+    char cpuvendor[13];
 
     cpuid(0x0, &eax, &ebx, &ecx, &edx);
-    ((uint32_t *) vendor)[0] = ebx;
-    ((uint32_t *) vendor)[1] = edx;
-    ((uint32_t *) vendor)[2] = ecx;
-    vendor[12] = '\0';
+    ((uint32_t *) cpuvendor)[0] = ebx;
+    ((uint32_t *) cpuvendor)[1] = edx;
+    ((uint32_t *) cpuvendor)[2] = ecx;
+    cpuvendor[12] = '\0';
 
-    if (strncmp(vendor, "GenuineIntel", 20) == 0)
+    if (strncmp(cpuvendor, "GenuineIntel", 20) == 0)
         return INTEL;
-    else if (strncmp(vendor, "AuthenticAMD", 20) == 0)
+    else if (strncmp(cpuvendor, "AuthenticAMD", 20) == 0)
         return AMD;
     else
         return UNKNOWN_CPU;

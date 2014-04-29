@@ -32,45 +32,22 @@ struct vmx {
 
 	int		launched;
 	int		failed;
-
-#ifdef DEBUG_SWITCH_COST
-        int64_t         exit_counter;
-        uint64_t        host_tsc_total;
-        uint64_t        guest_tsc_total;
-        uint64_t        last_exit_tsc;
-#endif
 };
 
-typedef enum {
-        GUEST_EAX, GUEST_EBX, GUEST_ECX, GUEST_EDX, GUEST_ESI, GUEST_EDI,
-            GUEST_EBP, GUEST_ESP, GUEST_EIP, GUEST_EFLAGS,
-                GUEST_CR0, GUEST_CR2, GUEST_CR3, GUEST_CR4,
-                    GUEST_MAX_REG
-} guest_reg_t;
-
-typedef enum {
-        GUEST_CS, GUEST_DS, GUEST_ES, GUEST_FS, GUEST_GS, GUEST_SS,
-            GUEST_LDTR, GUEST_TR, GUEST_GDTR, GUEST_IDTR,
-                GUEST_MAX_SEG_DESC
-} guest_seg_t;
-
-typedef enum {
-        EVENT_EXTINT,       /* external interrupt */
-        EVENT_NMI,      /* non-maskable interrupt */
-        EVENT_EXCEPTION,    /* exception */
-        EVENT_SWINT     /* software interrupt */
-} guest_event_t;
-
-typedef enum {
-        INSTR_IN, INSTR_OUT, INSTR_RDMSR, INSTR_WRMSR, INSTR_CPUID, INSTR_RDTSC,
-            INSTR_HYPERCALL
-} instr_t;
-
-struct guest_seg_desc {
-        uint16_t    sel;
-        uint64_t    base;
-        uint32_t    lim;
-        uint32_t    ar;
+enum {
+        EXIT_NONE = 0,      /* no VMEXIT */
+        EXIT_FOR_EXCEPTION,     /* exit for the exception*/
+        EXIT_FOR_EXTINT,    /* exit for the external interrupt */
+        EXIT_FOR_INTWIN,    /* exit for the interrupt window */
+        EXIT_FOR_IOPORT,    /* exit for accessing an I/O port */
+        EXIT_FOR_PGFLT,     /* exit for the page fault */
+        EXIT_FOR_RDMSR,     /* exit for the rdmsr instruction */
+        EXIT_FOR_WRMSR,     /* exit for the wrmsr instruction */
+        EXIT_FOR_CPUID,     /* exit for the cpuid instruction */
+        EXIT_FOR_RDTSC,     /* exit for the rdtsc/rdtscp instruction */
+        EXIT_FOR_HYPERCALL, /* exit for the hypercall */
+        EXIT_FOR_INVAL_INSTR,   /* exit for the invalid instruction */
+        EXIT_INVAL      /* invalid exit */
 };
 
 #ifdef DEBUG_VMX

@@ -508,14 +508,14 @@ vmm_init_vm(struct vm *vm, uint64_t cpufreq, size_t memsize)
 	vm->exit_reason = EXIT_REASON_NONE;
 	vm->exit_handled = TRUE;
 
-    cpu_vendor vendor = vendor();
-    if (vendor == AMD)
+    cpu_vendor cpuvendor = vendor();
+    if (cpuvendor == AMD)
 	    vm->ops = &vmm_ops_amd;
-    else if (vendor == INTEL)
+    else if (cpuvendor == INTEL)
         vm->ops = &vmm_ops_intel;
     else {
         VMM_DEBUG("Cannot recognize the vendor.\n");
-        return -7
+        return -7;
     }
 
 	if (vmm_init_mmap(vm)) {
