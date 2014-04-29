@@ -92,6 +92,8 @@
 
 static uint64_t page_sizes_mask;
 
+struct eptStruct ept gcc_aligned(PAGESIZE);
+
 /*
  * Initialzie EPT.
  *

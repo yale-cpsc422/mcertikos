@@ -3,11 +3,13 @@
 
 #ifdef _KERN_
 
-#include <preinit/lib/gcc.h>
+#include <lib/gcc.h>
 #include <preinit/lib/types.h>
 #include <preinit/lib/string.h>
 
 #include "vmcs.h"
+
+#define PAGESIZE 4096
 
 struct vmx {
 	/*
@@ -33,6 +35,17 @@ struct vmx {
 	int		failed;
 };
 
+struct vmx_info {
+    bool        vmx_enabled;
+    uint32_t    pinbased_ctls;
+    uint32_t    procbased_ctls, procbased_ctls2;
+    uint32_t    exit_ctls, entry_ctls;
+    uint64_t    cr0_ones_mask, cr0_zeros_mask;
+    uint64_t    cr4_ones_mask, cr4_zeros_mask;
+
+    uint32_t    vmx_region[1024] gcc_aligned(PAGESIZE);
+};
+
 enum {
         EXIT_NONE = 0,      /* no VMEXIT */
         EXIT_FOR_EXCEPTION,     /* exit for the exception*/
@@ -50,6 +63,7 @@ enum {
 };
 
 #define offsetof(type, member)  __builtin_offsetof(type, member)
+#define MSR_VMX_BASIC           0x480
 
 void vmx_set_intercept_intwin(unsigned int enable);
 void vmx_set_reg(unsigned int reg, unsigned int val);
@@ -71,6 +85,7 @@ unsigned int vmx_check_int_shadow(void);
 unsigned int vmx_get_next_eip(void);
 void vmx_run_vm(void);
 
+int vmx_set_ctlreg(int, int, uint32_t, uint32_t, uint32_t *);
 
 #ifdef DEBUG_VMX
 

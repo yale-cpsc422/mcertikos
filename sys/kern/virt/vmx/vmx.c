@@ -33,23 +33,27 @@
 
 #include <preinit/lib/debug.h>
 #include <preinit/lib/types.h>
+#include <preinit/lib/x86.h>
+#include <preinit/dev/pic.h>
+
 #include <lib/x86.h>
 #include <sys/dev/tsc.h>
 
-#include <preinit/dev/pic.h>
-
 #include <kern/virt/vmm.h>
+
 #include "ept.h"
 #include "vmcs.h"
 #include "vmx.h"
 #include "vmx_controls.h"
 #include "x86.h"
 
-#define PAGESIZE 4096
-
 extern void *memset(void *v, unsigned int c, unsigned int n);
 
-struct vmx vmx;
+struct vmx vmx gcc_aligned(PAGESIZE);
+
+struct vmx_info vmx_info;
+char msr_bitmap[PAGESIZE];
+char io_bitmap[PAGESIZE * 2];
 
 void
 vmx_set_intercept_intwin(unsigned int enable)
@@ -518,6 +522,128 @@ vmx_run_vm()
     vmx.launched = 1;
 }
 
+extern struct vmcs vmcs;
+extern struct eptStruct ept;
+extern void npt_init(unsigned int);
+extern void vmcs_set_defaults(struct vmcs *, uint64_t *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, char *, char *, char *, uint16_t, uint64_t, uint64_t, uint64_t, uint64_t, uintptr_t);
 
+void
+vmx_init(unsigned int mbi_addr)
+{
+    extern uint8_t vmx_return_from_guest[];
 
+	npt_init(mbi_addr);
 
+    vmx.vmcs = &vmcs;
+    vmx.pml4ept = &ept.pml4;
+    vmx.msr_bitmap = msr_bitmap;
+    vmx.io_bitmap = io_bitmap;
+    vmx.vmcs->identifier = rdmsr(MSR_VMX_BASIC) & 0xffffffff;
+    vmx.g_rip = 0xfff0;
+    vmcs_set_defaults
+        (vmx.vmcs, vmx.pml4ept, vmx_info.pinbased_ctls,
+         vmx_info.procbased_ctls, vmx_info.procbased_ctls2,
+         vmx_info.exit_ctls, vmx_info.entry_ctls, vmx.msr_bitmap,
+         vmx.io_bitmap, (char *) ((uintptr_t) vmx.io_bitmap+PAGESIZE),
+         1,
+         vmx_info.cr0_ones_mask, vmx_info.cr0_zeros_mask,
+         vmx_info.cr4_ones_mask, vmx_info.cr4_zeros_mask,
+         (uintptr_t) vmx_return_from_guest);
+    vmx.vpid = 1;
+    vmx.g_cr2 = 0;
+    vmx.g_dr0 = vmx.g_dr1 = vmx.g_dr2 = vmx.g_dr3 = 0;
+    vmx.g_dr6 = 0xffff0ff0;
+
+}
+
+static bool
+vmx_ctl_allows_one_setting(uint64_t msr_val, int bitpos)
+{
+
+    if (msr_val & (1ULL << (bitpos + 32)))
+        return (TRUE);
+    else
+        return (FALSE);
+}
+
+static bool
+vmx_ctl_allows_zero_setting(uint64_t msr_val, int bitpos)
+{
+
+    if ((msr_val & (1ULL << bitpos)) == 0)
+        return (TRUE);
+    else
+        return (FALSE);
+}
+
+int
+vmx_set_ctlreg(int ctl_reg, int true_ctl_reg, uint32_t ones_mask,
+           uint32_t zeros_mask, uint32_t *retval)
+{
+    int i;
+    uint64_t val, trueval;
+    bool true_ctls_avail, one_allowed, zero_allowed;
+
+    /* We cannot ask the same bit to be set to both '1' and '0' */
+    if ((ones_mask ^ zeros_mask) != (ones_mask | zeros_mask)) {
+#ifdef DEBUG_GUEST_MSR
+        VMX_DEBUG("0's mask 0x%08x and 1's mask 0x%08x are "
+              "overlapped.\n", zeros_mask, ones_mask);
+#endif
+        return 1;
+    }
+
+    if (rdmsr(MSR_VMX_BASIC) & (1ULL << 55))
+        true_ctls_avail = TRUE;
+    else
+        true_ctls_avail = FALSE;
+
+    val = rdmsr(ctl_reg);
+    if (true_ctls_avail)
+        trueval = rdmsr(true_ctl_reg);      /* step c */
+    else
+        trueval = val;              /* step a */
+
+    for (i = 0; i < 32; i++) {
+        one_allowed = vmx_ctl_allows_one_setting(trueval, i);
+        zero_allowed = vmx_ctl_allows_zero_setting(trueval, i);
+
+        KERN_ASSERT(one_allowed || zero_allowed);
+
+        if (zero_allowed && !one_allowed) {     /* b(i),c(i) */
+            if (ones_mask & (1 << i)) {
+#ifdef DEBUG_GUEST_MSR
+                VMX_DEBUG("Cannot set bit %d to zero.\n", i);
+#endif
+                return 1;
+            }
+            *retval &= ~(1 << i);
+        } else if (one_allowed && !zero_allowed) {  /* b(i),c(i) */
+            if (zeros_mask & (1 << i)) {
+#ifdef DEBUG_GUEST_MSR
+                VMX_DEBUG("Cannot set bit %d to one.\n", i);
+#endif
+                return 2;
+            }
+            *retval |= 1 << i;
+        } else {
+            if (zeros_mask & (1 << i))  /* b(ii),c(ii) */
+                *retval &= ~(1 << i);
+            else if (ones_mask & (1 << i)) /* b(ii), c(ii) */
+                *retval |= 1 << i;
+            else if (!true_ctls_avail)
+                *retval &= ~(1 << i);   /* b(iii) */
+            else if (vmx_ctl_allows_zero_setting(val, i))/* c(iii)*/
+                *retval &= ~(1 << i);
+            else if (vmx_ctl_allows_one_setting(val, i)) /* c(iv) */
+                *retval |= 1 << i;
+            else {
+                KERN_PANIC("Cannot determine the value of bit %d "
+                       "of MSR 0x%08x and true MSR 0x%08x.\n",
+                       i, ctl_reg, true_ctl_reg);
+            }
+        }
+    }
+
+    return (0);
+}

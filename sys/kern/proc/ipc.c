@@ -1,10 +1,13 @@
+#include <preinit/lib/types.h>
+
 #include "ipc_intro.h"
 
 #define NUM_CHAN	64
 
 extern unsigned int get_curid(void);
-extern void thread_wakeup(unsigned int chid);
-extern void vmcb_init(unsigned int mbi_addr);
+extern void thread_wakeup(unsigned int);
+extern void vmcb_init(unsigned int);
+extern void vmx_init(unsigned int);
 
 unsigned int
 is_chan_ready(void)
@@ -58,11 +61,19 @@ recv(void)
 	}
 }
 
+extern cpu_vendor cpuvendor;
+
 void
 proc_init(unsigned int mbi_addr)
 {
 	unsigned int i;
-	vmcb_init(mbi_addr);
+    if (cpuvendor == AMD) {
+    	vmcb_init(mbi_addr);
+    }
+    else if(cpuvendor == INTEL) {
+        vmx_init(mbi_addr);
+    }
+
 	i = 0;
 	while (i < NUM_CHAN) {
 		init_chan(i, 0, 0);

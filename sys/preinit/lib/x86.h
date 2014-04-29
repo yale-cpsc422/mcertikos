@@ -113,6 +113,14 @@ vendor()
         return UNKNOWN_CPU;
 }
 
+static gcc_inline uint32_t
+rcr3(void)
+{
+    uint32_t val;
+    __asm __volatile("movl %%cr3,%0" : "=r" (val));
+    return val;
+}
+
 #endif /* _KERN_ */
 
 #endif /* !_PREINIT_LIB_X86_H_ */

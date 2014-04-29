@@ -344,6 +344,12 @@ void vmcs_write64(uint32_t encoding, uint64_t val);
 #define EXIT_QUAL_IO_IMM(q)	(((q) >> 6) & 1)
 #define EXIT_QUAL_IO_PORT(q)	((uint16_t) (((q) >> 16) & 0xffff))
 
+#define MSR_IA32_SYSENTER_CS        0x174
+#define MSR_IA32_SYSENTER_ESP       0x175
+#define MSR_IA32_SYSENTER_EIP       0x176
+#define MSR_PAT             0x277
+#define MSR_IA32_PERF_GLOBAL_CTRL   0x38f
+
 #endif /* _KERN_ */
 
 #endif /* !_VIRT_VMX_VMCS_H_ */
