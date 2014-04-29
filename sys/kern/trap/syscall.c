@@ -324,10 +324,12 @@ sys_hvm_mmap(void)
 	unsigned int gpa;
 	unsigned int hva;
 	unsigned int hpa;
+    unsigned int mem_type;
 
 	cur_pid = get_curid();
 	gpa = syscall_get_arg2();
 	hva = syscall_get_arg3();
+    mem_type = syscall_get_arg4();
 
 	if (hva % PAGESIZE != 0 || gpa % PAGESIZE != 0 ||
 	    !(VM_USERLO <= hva && hva + PAGESIZE <= VM_USERHI)) {

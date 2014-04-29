@@ -182,7 +182,8 @@ sys_hvm_mmap(int vmid, uintptr_t gpa, uintptr_t hva, int type)
 		     : "i" (T_SYSCALL),
 		       "a" (SYS_hvm_mmap),
 		       "b" (gpa),
-		       "c" (hva)
+		       "c" (hva),
+               "d" (type)
 		     : "cc", "memory");
 
 	return errno;
