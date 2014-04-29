@@ -50,6 +50,8 @@ enum {
         EXIT_INVAL      /* invalid exit */
 };
 
+#define offsetof(type, member)  __builtin_offsetof(type, member)
+
 #ifdef DEBUG_VMX
 
 #define VMX_DEBUG(fmt, ...)				\

@@ -398,3 +398,144 @@ vmx_get_exit_fault_addr(void)
     return (uintptr_t) vmcs_read64(VMCS_GUEST_PHYSICAL_ADDRESS);
 }
 
+void
+vmx_run_vm()
+{
+    vmptrld(vmx.vmcs);
+
+    vmcs_write32(VMCS_GUEST_RIP, vmx.g_rip);
+
+    /* the address of vmx is stored in %ecx */
+    __asm __volatile(
+             /* save host registers */
+             "pushl %%ebp;"
+             "pushl %%edi;"
+             /* save the address of vmx on the stack */
+             "pushl %%ecx;"         /* placeholder */
+             "pushl %%ecx;"         /* address of vmx */
+             "movl %1, %%edi;"
+             "vmwrite %%esp, %%edi;"
+             /* save entry TSC */
+             "pushl %%ecx;"
+             "rdtscp;"
+             "popl %%ecx;"
+             "movl %%eax, %c[enter_tsc_lo](%0);"
+             "movl %%edx, %c[enter_tsc_hi](%0);"
+             /* load guest registers */
+             "movl %c[g_cr2](%0), %%edi;"   /* guest %cr2 */
+             "movl %%edi, %%cr2;"
+             "movl %c[g_dr0](%0), %%edi;"   /* guest %dr0 */
+             "movl %%edi, %%dr0;"
+             "movl %c[g_dr1](%0), %%edi;"   /* guest %dr1 */
+             "movl %%edi, %%dr1;"
+             "movl %c[g_dr2](%0), %%edi;"   /* guest %dr2 */
+             "movl %%edi, %%dr2;"
+             "movl %c[g_dr3](%0), %%edi;"   /* guest %dr3 */
+             "movl %%edi, %%dr3;"
+             "movl %c[g_dr6](%0), %%edi;"   /* guest %dr6 */
+             /* "movl %%edi, %%dr6;" */
+             "movl %c[g_rax](%0), %%eax;"   /* guest %eax */
+             "movl %c[g_rbx](%0), %%ebx;"   /* guest %ebx */
+             "movl %c[g_rdx](%0), %%edx;"   /* guest %edx */
+             "movl %c[g_rsi](%0), %%esi;"   /* guest %esi */
+             "movl %c[g_rdi](%0), %%edi;"   /* guest %edi */
+             "movl %c[g_rbp](%0), %%ebp;"   /* guest %ebp */
+             /* launch/resume the guest */
+             "cmpl $0, %c[launched](%0); jz .Lvmx_launch;"
+             "movl %c[g_rcx](%0), %%ecx;"   /* guest %ecx */
+             "vmresume; jmp vmx_return_from_guest;"
+             ".Lvmx_launch:;"
+             "movl %c[g_rcx](%0), %%ecx;"   /* guest %ecx */
+             "vmlaunch;"
+             "vmx_return_from_guest:"
+             /* save guest registers */
+             "movl %%ecx, 4(%%esp);"    /* temporally save guest
+                               %ecx in placeholder*/
+             "popl %%ecx;"          /* reload vmx */
+             /* check error first */
+             "jnc 1f;"
+             "movl $1, %c[failed](%0);" /* CF: error = 1 */
+             "jmp 3f;"
+             "1: jnz 2f;"
+             "movl $2, %c[failed](%0);" /* ZF: error = 2 */
+             "jmp 3f;"
+             "2: movl $0, %c[failed](%0);"
+             "3: nop;"
+             /* save guest */
+             "movl %%edi, %c[g_rdi](%0);"   /* guest %edi */
+             "movl %%cr2, %%edi;"       /* guest %cr2 */
+             "movl %%edi, %c[g_cr2](%0);"
+             "movl %%dr0, %%edi;"       /* guest %dr0 */
+             "movl %%edi, %c[g_dr0](%0);"
+             "movl %%dr1, %%edi;"       /* guest %dr1 */
+             "movl %%edi, %c[g_dr1](%0);"
+             "movl %%dr2, %%edi;"       /* guest %dr2 */
+             "movl %%edi, %c[g_dr1](%0);"
+             "movl %%dr3, %%edi;"       /* guest %dr3 */
+             "movl %%edi, %c[g_dr3](%0);"
+             "movl %%dr6, %%edi;"       /* guest %dr6 */
+             "movl %%edi, %c[g_dr6](%0);"
+             "movl %%eax, %c[g_rax](%0);"   /* guest %eax */
+             "movl %%ebx, %c[g_rbx](%0);"   /* guest %ebx */
+             "popl %%edi;"          /* guest %ecx */
+             "movl %%edi, %c[g_rcx](%0);"
+             "movl %%edx, %c[g_rdx](%0);"   /* guest %edx */
+             "movl %%esi, %c[g_rsi](%0);"   /* guest %esi */
+             "movl %%ebp, %c[g_rbp](%0);"   /* guest %ebp */
+             /* save exit TSC */
+             "pushl %%ecx;"
+             "rdtscp;"
+             "popl %%ecx;"
+             "movl %%eax, %c[exit_tsc_lo](%0);"
+             "movl %%edx, %c[exit_tsc_hi](%0);"
+             /* load host registers */
+             "popl %%edi;"
+             "popl %%ebp;"
+             : : "c" (&vmx), "i" (VMCS_HOST_RSP),
+             [g_rax] "i" (offsetof(struct vmx, g_rax)),
+             [g_rbx] "i" (offsetof(struct vmx, g_rbx)),
+             [g_rcx] "i" (offsetof(struct vmx, g_rcx)),
+             [g_rdx] "i" (offsetof(struct vmx, g_rdx)),
+             [g_rsi] "i" (offsetof(struct vmx, g_rsi)),
+             [g_rdi] "i" (offsetof(struct vmx, g_rdi)),
+             [g_rbp] "i" (offsetof(struct vmx, g_rbp)),
+             [g_cr2] "i" (offsetof(struct vmx, g_cr2)),
+             [g_dr0] "i" (offsetof(struct vmx, g_dr0)),
+             [g_dr1] "i" (offsetof(struct vmx, g_dr1)),
+             [g_dr2] "i" (offsetof(struct vmx, g_dr2)),
+             [g_dr3] "i" (offsetof(struct vmx, g_dr3)),
+             [g_dr6] "i" (offsetof(struct vmx, g_dr6)),
+             [launched] "i" (offsetof(struct vmx, launched)),
+             [failed] "i" (offsetof(struct vmx, failed)),
+             [enter_tsc_lo] "i" (offsetof(struct vmx, enter_tsc[0])),
+             [enter_tsc_hi] "i" (offsetof(struct vmx, enter_tsc[1])),
+             [exit_tsc_lo] "i" (offsetof(struct vmx, exit_tsc[0])),
+             [exit_tsc_hi] "i" (offsetof(struct vmx, exit_tsc[1]))
+             : "cc", "memory", "eax", "ebx", "edx", "esi", "edi");
+
+    if (unlikely(vmx.failed == 1)) {
+        KERN_DEBUG("vmlaunch/vmresume failed: error %d.\n",
+               vmx.failed);
+        return;
+    } else if (unlikely(vmx.failed == 2)) {
+        KERN_DEBUG("vmlaunch/vmresume failed: error %d, code 0x%08x.\n",
+               vmx.failed, vmcs_read32(VMCS_INSTRUCTION_ERROR));
+        return;
+    }
+
+    vmx.g_rip = vmcs_read32(VMCS_GUEST_RIP);
+    vmx.exit_reason = vmcs_read32(VMCS_EXIT_REASON);
+    vmx.exit_qualification = vmcs_read32(VMCS_EXIT_QUALIFICATION);
+
+    if (unlikely(vmx.exit_reason & EXIT_REASON_ENTRY_FAIL)) {
+        KERN_DEBUG("VM-entry failure: reason %d.\n",
+               vmx.exit_reason & 0x0000ffff);
+        return;
+    }
+
+    vmx.launched = 1;
+}
+
+
+
+
