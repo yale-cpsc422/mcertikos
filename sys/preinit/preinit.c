@@ -21,35 +21,37 @@ void
 preinit(uintptr_t mbi_addr)
 {
 	seg_init();
-    KERN_DEBUG("seg initialized.");
+    KERN_DEBUG("seg initialized.\n");
 
 	enable_sse();
-    KERN_DEBUG("sse enabled.");
+    KERN_DEBUG("sse enabled.\n");
 
 	cons_init();
-    KERN_DEBUG("cons initialized.");
+    KERN_DEBUG("cons initialized.\n");
 
 	tsc_init();
-    KERN_DEBUG("tsc initialized.");
+    KERN_DEBUG("tsc initialized.\n");
 
 	intr_init();
-    KERN_DEBUG("intr initialized.");
+    KERN_DEBUG("intr initialized.\n");
 
 	ide_init();
-    KERN_DEBUG("ide initialized.");
+    KERN_DEBUG("ide initialized.\n");
 
     cpuvendor = vendor();
 
     if (cpuvendor == AMD) {
+        KERN_DEBUG("vendor detected: AMD.\n");
 	    svm_hw_init();
-        KERN_DEBUG("svm hw initialized.");
+        KERN_DEBUG("svm hw initialized.\n");
     }
     else if (cpuvendor == INTEL) {
+        KERN_DEBUG("vendor detected: INTEL.\n");
         vmx_hw_init();
-        KERN_DEBUG("vmx hw initialized.");
+        KERN_DEBUG("vmx hw initialized.\n");
     }
     else {
-        KERN_PANIC("unknown cpu vendor.");
+        KERN_PANIC("unknown cpu vendor.\n");
     }
 
 	/* enable interrupts */

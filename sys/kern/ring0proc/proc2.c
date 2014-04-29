@@ -9,6 +9,11 @@ ring0_proc2(void)
         dprintf("Ring0 process 2 yielding.\n");
         thread_yield();
         dprintf("Ring0 process 2 resumed.\n");
+        break;
+    }
+    while (1)
+    {
+        thread_yield();
     }
 }
 
