@@ -6,6 +6,7 @@
 #include <preinit/dev/intr.h>
 #include <preinit/dev/tsc.h>
 #include <preinit/dev/svm_drv.h>
+#include <preinit/dev/vmx_drv.h>
 
 #include <preinit/lib/mboot.h>
 #include <preinit/lib/seg.h>
@@ -44,7 +45,8 @@ preinit(uintptr_t mbi_addr)
         KERN_DEBUG("svm hw initialized.");
     }
     else if (cpuvendor == INTEL) {
-        KERN_DEBUG("intel hw initialization not implemented yet.");
+        vmx_hw_init();
+        KERN_DEBUG("vmx hw initialized.");
     }
     else {
         KERN_PANIC("unknown cpu vendor.");

@@ -51,24 +51,6 @@ extern void *memset(void *v, unsigned int c, unsigned int n);
 
 struct vmx vmx;
 
-/*
-static struct {
-	struct vmx	vmx[MAX_VMID];
-	bool		used[MAX_VMID];
-} vmx_pool;
-*/
-
-struct vmx_info {
-	bool		vmx_enabled;
-	uint32_t	pinbased_ctls;
-	uint32_t	procbased_ctls, procbased_ctls2;
-	uint32_t	exit_ctls, entry_ctls;
-	uint64_t	cr0_ones_mask, cr0_zeros_mask;
-	uint64_t	cr4_ones_mask, cr4_zeros_mask;
-
-	void		*vmx_region;
-} vmx_cpu_info;
-
 void
 vmx_set_intercept_intwin(unsigned int enable)
 {
