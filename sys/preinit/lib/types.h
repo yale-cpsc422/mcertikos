@@ -34,4 +34,6 @@ uint32_t min(uint32_t a, uint32_t b);
 uint32_t rounddown(uint32_t a, uint32_t n);
 uint32_t roundup(uint32_t b, uint32_t n);
 
+typedef enum { UNKNOWN_CPU, INTEL, AMD } cpu_vendor;
+
 #endif /* !_LIB_TYPES_H_ */

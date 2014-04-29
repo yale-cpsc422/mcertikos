@@ -2,6 +2,7 @@
 #include <preinit/lib/debug.h>
 #include <preinit/dev/ide.h>
 #include <virt/svm/svm.h>
+#include <virt/vmx/vmx.h>
 #include "syscall_args.h"
 #include "syscall.h"
 

@@ -5,6 +5,7 @@
 
 #include <preinit/lib/gcc.h>
 #include <preinit/lib/types.h>
+#include <preinit/lib/string.h>
 #include <lib/x86.h>
 
 static gcc_inline uint32_t
@@ -72,6 +73,44 @@ enable_sse(void)
 
 	cr0 = rcr0() | CR0_MP;
 	cr0 &= ~ (CR0_EM | CR0_TS);
+}
+
+static gcc_inline void
+cpuid(uint32_t info,
+      uint32_t *eaxp, uint32_t *ebxp, uint32_t *ecxp, uint32_t *edxp)
+{
+	uint32_t eax, ebx, ecx, edx;
+	__asm __volatile("cpuid"
+			 : "=a" (eax), "=b" (ebx), "=c" (ecx), "=d" (edx)
+			 : "a" (info));
+	if (eaxp)
+		*eaxp = eax;
+	if (ebxp)
+		*ebxp = ebx;
+	if (ecxp)
+		*ecxp = ecx;
+	if (edxp)
+		*edxp = edx;
+}
+
+static gcc_inline cpu_vendor
+vendor()
+{
+    uint32_t eax, ebx, ecx, edx;
+    char cpuvendor[13];
+
+    cpuid(0x0, &eax, &ebx, &ecx, &edx);
+    ((uint32_t *) cpuvendor)[0] = ebx;
+    ((uint32_t *) cpuvendor)[1] = edx;
+    ((uint32_t *) cpuvendor)[2] = ecx;
+    cpuvendor[12] = '\0';
+
+    if (strncmp(cpuvendor, "GenuineIntel", 20) == 0)
+        return INTEL;
+    else if (strncmp(cpuvendor, "AuthenticAMD", 20) == 0)
+        return AMD;
+    else
+        return UNKNOWN_CPU;
 }
 
 #endif /* _KERN_ */

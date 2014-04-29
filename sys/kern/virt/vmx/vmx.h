@@ -5,7 +5,6 @@
 
 #include <preinit/lib/gcc.h>
 #include <preinit/lib/types.h>
-#include <preinit/lib/x86.h>
 #include <preinit/lib/string.h>
 
 #include "vmcs.h"
@@ -51,6 +50,20 @@ enum {
 };
 
 #define offsetof(type, member)  __builtin_offsetof(type, member)
+
+void vmx_set_intercept_intwin(unsigned int enable);
+void vmx_set_reg(unsigned int reg, unsigned int val);
+unsigned int vmx_get_reg(unsigned int reg);
+unsigned int vmx_get_exit_reason(void);
+unsigned int vmx_get_exit_io_port(void);
+unsigned int vmx_get_exit_io_width(void);
+unsigned int vmx_get_exit_io_write(void);
+unsigned int vmx_get_exit_io_rep(void);
+unsigned int vmx_get_exit_io_str(void);
+unsigned int vmx_get_exit_io_neip(void);
+unsigned int vmx_get_exit_fault_addr(void);
+void vmx_run_vm(void);
+
 
 #ifdef DEBUG_VMX
 

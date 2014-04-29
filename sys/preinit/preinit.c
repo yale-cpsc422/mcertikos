@@ -1,5 +1,4 @@
 #include <lib/trap.h>
-#include <preinit/lib/types.h>
 #include <lib/x86.h>
 
 #include <preinit/dev/console.h>
@@ -11,8 +10,11 @@
 #include <preinit/lib/mboot.h>
 #include <preinit/lib/seg.h>
 #include <preinit/lib/x86.h>
+#include <preinit/lib/types.h>
 
 #include <preinit/lib/debug.h>
+
+cpu_vendor cpuvendor;
 
 void
 preinit(uintptr_t mbi_addr)
@@ -35,8 +37,18 @@ preinit(uintptr_t mbi_addr)
 	ide_init();
     KERN_DEBUG("ide initialized.");
 
-	//svm_hw_init();
-    //KERN_DEBUG("svm hw initialized.");
+    cpuvendor = vendor();
+
+    if (cpuvendor == AMD) {
+	    svm_hw_init();
+        KERN_DEBUG("svm hw initialized.");
+    }
+    else if (cpuvendor == INTEL) {
+        KERN_DEBUG("intel hw initialization not implemented yet.");
+    }
+    else {
+        KERN_PANIC("unknown cpu vendor.");
+    }
 
 	/* enable interrupts */
 	intr_enable(IRQ_TIMER);
