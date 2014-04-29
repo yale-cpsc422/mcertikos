@@ -9,7 +9,7 @@ ring0_proc1(void)
         dprintf("Ring0 process 1 yielding.\n");
         thread_yield();
         dprintf("Ring0 process 1 resumed.\n");
-        break;
+        //break;
     }
     while (1)
     {

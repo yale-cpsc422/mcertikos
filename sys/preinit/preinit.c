@@ -20,6 +20,8 @@ cpu_vendor cpuvendor;
 void
 preinit(uintptr_t mbi_addr)
 {
+    KERN_DEBUG("In preinit.\n");
+
 	seg_init();
     KERN_DEBUG("seg initialized.\n");
 
@@ -47,8 +49,6 @@ preinit(uintptr_t mbi_addr)
     }
     else if (cpuvendor == INTEL) {
         KERN_DEBUG("vendor detected: INTEL.\n");
-        vmx_hw_init();
-        KERN_DEBUG("vmx hw initialized.\n");
     }
     else {
         KERN_PANIC("unknown cpu vendor.\n");

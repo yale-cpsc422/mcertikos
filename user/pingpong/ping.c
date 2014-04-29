@@ -13,7 +13,7 @@ main(int argc, char **argv)
 		if (sys_send(3, ball++) == E_IPC)
 			sys_sleep(3);
 		/* sys_yield(); */
-        break;
+        //break;
 	}
 	return 0;
 }

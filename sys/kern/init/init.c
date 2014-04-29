@@ -35,6 +35,8 @@ kern_main(void)
 void
 kern_init(uintptr_t mbi_addr)
 {
+    KERN_DEBUG("In kern_init.\n");
+
 	proc_init(mbi_addr);
 	kern_main();
 }

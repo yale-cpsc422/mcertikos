@@ -35,6 +35,7 @@
 #include <preinit/lib/types.h>
 #include <preinit/lib/x86.h>
 #include <preinit/dev/pic.h>
+#include <preinit/dev/vmx_drv.h>
 
 #include <lib/x86.h>
 #include <sys/dev/tsc.h>
@@ -532,7 +533,12 @@ vmx_init(unsigned int mbi_addr)
 {
     extern uint8_t vmx_return_from_guest[];
 
+    KERN_DEBUG("In vmx init.\n");
+
 	npt_init(mbi_addr);
+
+    vmx_hw_init();
+    KERN_DEBUG("vmx hw initialized.\n");
 
     vmx.vmcs = &vmcs;
     vmx.pml4ept = &ept.pml4;

@@ -31,12 +31,14 @@ main(int argc, char **argv)
 	else
 		printf("Failed to launch the second ring0 process.\n");
 
+    /*
 	pid_t vmm_pid;
 
 	if ((vmm_pid = spawn(0)) != -1)
 		printf("VMM in process %d.\n", vmm_pid);
 	else
 		printf("Failed to launch VMM.\n");
+    */
 
 	while (1)
 		yield();
