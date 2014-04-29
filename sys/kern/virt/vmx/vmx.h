@@ -62,6 +62,13 @@ unsigned int vmx_get_exit_io_rep(void);
 unsigned int vmx_get_exit_io_str(void);
 unsigned int vmx_get_exit_io_neip(void);
 unsigned int vmx_get_exit_fault_addr(void);
+void vmx_set_mmap(unsigned int, unsigned int, unsigned int);
+void vmx_set_desc(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
+void vmx_inject_event(unsigned int, unsigned int, unsigned int, unsigned int);
+void vmx_set_intercept_intwin(unsigned int);
+unsigned int vmx_check_pending_event(void);
+unsigned int vmx_check_int_shadow(void);
+unsigned int vmx_get_next_eip(void);
 void vmx_run_vm(void);
 
 

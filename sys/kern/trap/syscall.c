@@ -1,5 +1,6 @@
 #include <kern/proc/proc.h>
 #include <preinit/lib/debug.h>
+#include <preinit/lib/types.h>
 #include <preinit/dev/ide.h>
 #include <virt/svm/svm.h>
 #include <virt/vmx/vmx.h>
@@ -52,6 +53,8 @@
 			(c_lo) = __a_lo + __b;		\
 		}					\
 	} while (0)
+
+extern cpu_vendor cpuvendor;
 
 static char sys_buf[NUM_PROC][PAGESIZE];
 
@@ -284,8 +287,13 @@ sys_disk_cap(void)
 void
 sys_hvm_run_vm(void)
 {
-	svm_run_vm();
-	svm_sync();
+    if (cpuvendor == AMD) {
+	    svm_run_vm();
+	    svm_sync();
+    }
+    else if (cpuvendor == INTEL) {
+        vmx_run_vm();
+    }
 
 	syscall_set_errno(E_SUCC);
 }
@@ -294,25 +302,54 @@ void
 sys_hvm_get_exitinfo(void)
 {
 	unsigned int reason;
+	unsigned int port;
+	unsigned int width;
+	unsigned int write;
+	unsigned int rep;
+	unsigned int str;
+	unsigned int fault_addr;
 	unsigned int flags;
-
-	reason = svm_get_exit_reason();
+    unsigned int reason_io;
+    unsigned int reason_fault;
 	flags = 0;
+
+    if (cpuvendor == AMD) {
+	    reason = svm_get_exit_reason();
+        port = svm_get_exit_io_port();
+        width = svm_get_exit_io_width();
+        write = svm_get_exit_io_write();
+        rep = svm_get_exit_io_rep();
+        str = svm_get_exit_io_str();
+        fault_addr = svm_get_exit_fault_addr();
+        reason_io = VMEXIT_IOIO;
+        reason_fault = VMEXIT_NPF;
+    }
+    else if (cpuvendor == INTEL) {
+	    reason = vmx_get_exit_reason();
+        port = vmx_get_exit_io_port();
+        width = vmx_get_exit_io_width();
+        write = vmx_get_exit_io_write();
+        rep = vmx_get_exit_io_rep();
+        str = vmx_get_exit_io_str();
+        fault_addr = vmx_get_exit_fault_addr();
+        reason_io = EXIT_REASON_INOUT;
+        reason_fault = EXIT_REASON_EPT_FAULT;
+    }
 
 	syscall_set_retval1(reason);
 
-	if (reason == VMEXIT_IOIO) {
-		syscall_set_retval2(svm_get_exit_io_port());
-		syscall_set_retval3(svm_get_exit_io_width());
-		if (svm_get_exit_io_write())
+	if (reason == reason_io) {
+		syscall_set_retval2(port);
+		syscall_set_retval3(width);
+		if (write)
 			flags |= (1 << 0);
-		if (svm_get_exit_io_rep())
+		if (rep)
 			flags |= (1 << 1);
-		if (svm_get_exit_io_str())
+		if (str)
 			flags |= (1 << 2);
 		syscall_set_retval4(flags);
-	} else if (reason == VMEXIT_NPF) {
-		syscall_set_retval2(svm_get_exit_fault_addr());
+	} else if (reason == reason_fault) {
+		syscall_set_retval2(fault_addr);
 	}
 
 	syscall_set_errno(E_SUCC);
@@ -338,16 +375,21 @@ sys_hvm_mmap(void)
 		return;
 	}
 
-	hpa = pt_read(cur_pid, hva);
+    if (cpuvendor == AMD) {
+        hpa = pt_read(cur_pid, hva);
 
-	if ((hpa & PTE_P) == 0) {
-		pt_resv(cur_pid, hva, PTE_P | PTE_U | PTE_W);
-		hpa = pt_read(cur_pid, hva);
-	}
+        if ((hpa & PTE_P) == 0) {
+            pt_resv(cur_pid, hva, PTE_P | PTE_U | PTE_W);
+            hpa = pt_read(cur_pid, hva);
+        }
 
-	hpa = (hpa & 0xfffff000) + (hva % PAGESIZE);
+        hpa = (hpa & 0xfffff000) + (hva % PAGESIZE);
 
-	npt_insert(gpa, hpa);
+        npt_insert(gpa, hpa);
+    }
+    else if (cpuvendor == INTEL) {
+        vmx_set_mmap(gpa, hpa, mem_type);
+    }
 
 	syscall_set_errno(E_SUCC);
 }
@@ -366,7 +408,12 @@ sys_hvm_set_reg(void)
 		return;
 	}
 
-	svm_set_reg(reg, val);
+    if (cpuvendor == AMD) {
+	    svm_set_reg(reg, val);
+    }
+    else if (cpuvendor == INTEL) {
+        vmx_set_reg(reg, val);
+    }
 
 	syscall_set_errno(E_SUCC);
 }
@@ -383,7 +430,14 @@ sys_hvm_get_reg(void)
 		return;
 	}
 
-	syscall_set_retval1(svm_get_reg(reg));
+    if (cpuvendor == AMD) {
+        reg = svm_get_reg(reg);
+    }
+    else if (cpuvendor == INTEL) {
+        reg = vmx_get_reg(reg);
+    }
+
+	syscall_set_retval1(reg);
 	syscall_set_errno(E_SUCC);
 }
 
@@ -407,7 +461,12 @@ sys_hvm_set_seg(void)
 		return;
 	}
 
-	vmcb_set_seg(seg, sel, base, lim, ar);
+    if (cpuvendor == AMD) {
+	    vmcb_set_seg(seg, sel, base, lim, ar);
+    }
+    else if (cpuvendor == INTEL) {
+        vmx_set_desc(seg, sel, base, lim, ar);
+    }
 
 	syscall_set_errno(E_SUCC);
 }
@@ -416,13 +475,21 @@ void
 sys_hvm_get_next_eip(void)
 {
 	unsigned int reason;
+    unsigned int neip;
 
-	reason = svm_get_exit_reason();
+    if (cpuvendor == AMD) {
+	    reason = svm_get_exit_reason();
 
-	if (reason == VMEXIT_IOIO)
-		syscall_set_retval1(svm_get_exit_io_neip());
-	else
-		syscall_set_retval1(vmcb_get_next_eip());
+    	if (reason == VMEXIT_IOIO)
+	    	neip = svm_get_exit_io_neip();
+	    else
+		    neip = vmcb_get_next_eip();
+    }
+    else if (cpuvendor == INTEL) {
+        neip = vmx_get_next_eip();
+    }
+    
+    syscall_set_retval1(neip);
 
 	syscall_set_errno(E_SUCC);
 }
@@ -453,7 +520,12 @@ sys_hvm_inject_event(void)
 		return;
 	}
 
-	vmcb_inject_event(ev_type, vector, errcode, ev);
+    if (cpuvendor == AMD) {
+	    vmcb_inject_event(ev_type, vector, errcode, ev);
+    }
+    else if (cpuvendor == INTEL) {
+        vmx_inject_event(ev_type, vector, errcode, ev);
+    }
 
 	syscall_set_errno(E_SUCC);
 }
@@ -461,15 +533,35 @@ sys_hvm_inject_event(void)
 void
 sys_hvm_check_pending_event(void)
 {
+    unsigned int event;
+
+    if (cpuvendor == AMD) {
+        event = vmcb_check_pending_event();
+    }
+    else if (cpuvendor == INTEL) {
+        event = vmx_check_pending_event();
+    }
+
+	syscall_set_retval1(event);
+
 	syscall_set_errno(E_SUCC);
-	syscall_set_retval1(vmcb_check_pending_event());
 }
 
 void
 sys_hvm_check_int_shadow(void)
 {
+    unsigned int shadow;
+
+    if (cpuvendor == AMD) {
+        shadow = vmcb_check_int_shadow();
+    }
+    else if (cpuvendor == INTEL) {
+        shadow = vmx_check_int_shadow();
+    }
+
+	syscall_set_retval1(shadow);
+
 	syscall_set_errno(E_SUCC);
-	syscall_set_retval1(vmcb_check_int_shadow());
 }
 
 void
@@ -477,7 +569,14 @@ sys_hvm_intercept_int_window(void)
 {
 	unsigned int enable;
 	enable = syscall_get_arg2();
-	svm_set_intercept_intwin(enable);
+
+    if (cpuvendor == AMD) {
+	    svm_set_intercept_intwin(enable);
+    }
+    else if (cpuvendor == INTEL) {
+        vmx_set_intercept_intwin(enable);
+    }
+
 	syscall_set_errno(E_SUCC);
 }
 

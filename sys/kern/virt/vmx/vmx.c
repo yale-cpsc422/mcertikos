@@ -70,7 +70,7 @@ struct vmx_info {
 } vmx_cpu_info;
 
 void
-vmx_intercept_intr_window(unsigned int enable)
+vmx_set_intercept_intwin(unsigned int enable)
 {
 	unsigned int procbased_ctls = vmcs_read32(VMCS_PRI_PROC_BASED_CTLS);
 	if (enable == 1)
@@ -263,14 +263,14 @@ vmx_get_next_eip()
 }
 
 unsigned int
-vmx_pending_event()
+vmx_check_pending_event()
 {
 	return (vmcs_read32(VMCS_ENTRY_INTR_INFO) &
 		VMCS_INTERRUPTION_INFO_VALID) ? 1 : 0;
 }
 
 unsigned int
-vmx_intr_shadow()
+vmx_check_int_shadow()
 {
 	return (vmcs_read32(VMCS_GUEST_INTERRUPTIBILITY) &
 		(VMCS_INTERRUPTIBILITY_STI_BLOCKING |
