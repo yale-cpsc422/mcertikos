@@ -26,13 +26,9 @@ set_vendor()
 void
 preinit(uintptr_t mbi_addr)
 {
-    KERN_DEBUG("In preinit.\n");
-
 	seg_init();
-    KERN_DEBUG("seg initialized.\n");
 
 	enable_sse();
-    KERN_DEBUG("sse enabled.\n");
 
 	cons_init();
     KERN_DEBUG("cons initialized.\n");

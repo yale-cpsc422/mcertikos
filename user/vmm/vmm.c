@@ -618,8 +618,6 @@ vmm_run_vm(struct vm *vm)
 		/* post-handling of the interrupts from the virtual machine */
 		if (injected == 0)
 			vmm_intr_assist(vm);
-
-        break;
 	}
 
 	if (rc)
@@ -649,10 +647,12 @@ vmm_rw_guest_memory(struct vm *vm, uintptr_t gpa, uintptr_t hva, size_t size,
 		return 1;
 	}
 
+    /*
 	VMM_DEBUG("%s guest physical address 0x%08x %s "
 		   "host linear address 0x%08x, size %d bytes.\n",
 		   write ? "Write" : "Read", gpa, write ? "from" : "to",
 		   hva, size);
+    */
 
 	remaining = size;
 	from = write ? hva : gpa;

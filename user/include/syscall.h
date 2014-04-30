@@ -8,6 +8,8 @@
 #include <hvm.h>
 #include <proc.h>
 #include <types.h>
+#include <x86.h>
+#include <hvm.h>
 
 static gcc_inline unsigned int
 sys_ring0_spawn(unsigned int id)
@@ -152,21 +154,27 @@ sys_hvm_get_exitinfo(int vmid, exit_reason_t *reason, exit_info_t *info)
 	if (errno)
 		return errno;
 
-	*reason = svm_to_hvm_exit_reason(exit_reason);
+    cpu_vendor cpuvendor = vendor();
+    if (cpuvendor == AMD) {
+	    *reason = svm_to_hvm_exit_reason(exit_reason);
+    }
+    else if (cpuvendor == INTEL) {
+        *reason = exit_reason;
+    }
 
-	switch (exit_reason) {
-	case SVM_EXIT_IOIO:
-		info->ioport.port = (uint16_t) exit_info[0];
-		info->ioport.dw = (data_sz_t) exit_info[1];
-		info->ioport.write = (exit_info[2] & 0x1) ? 1 : 0;
-		info->ioport.rep = (exit_info[2] & 0x2) ? 1 : 0;
-		info->ioport.str = (exit_info[2] & 0x4) ? 1 : 0;
-		break;
-	case SVM_EXIT_NPF:
-		info->pgflt.addr = exit_info[0];
-		break;
-	default:
-		break;
+	switch (*reason) {
+        case EXIT_REASON_IOPORT:
+            info->ioport.port = (uint16_t) exit_info[0];
+            info->ioport.dw = (data_sz_t) exit_info[1];
+            info->ioport.write = (exit_info[2] & 0x1) ? 1 : 0;
+            info->ioport.rep = (exit_info[2] & 0x2) ? 1 : 0;
+            info->ioport.str = (exit_info[2] & 0x4) ? 1 : 0;
+            break;
+        case EXIT_REASON_PGFLT:
+            info->pgflt.addr = exit_info[0];
+            break;
+        default:
+            break;
 	}
 
 	return 0;

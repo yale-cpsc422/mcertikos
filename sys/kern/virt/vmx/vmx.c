@@ -581,10 +581,6 @@ vmx_run_vm()
 {
     vmptrld(vmx.vmcs);
 
-    KERN_DEBUG("In vm run...\n");
-    vmx_dump_info();
-    KERN_DEBUG("\n\n\n");
-
     vmcs_write32(VMCS_GUEST_RIP, vmx.g_rip);
 
     /* the address of vmx is stored in %ecx */
@@ -737,6 +733,7 @@ vmx_init(unsigned int mbi_addr)
     vmx_hw_init();
     KERN_DEBUG("vmx hw initialized.\n");
 
+    memset(&vmcs, 0, sizeof(vmcs));
     vmx.vmcs = &vmcs;
     vmx.pml4ept = &ept.pml4;
     vmx.msr_bitmap = msr_bitmap;
