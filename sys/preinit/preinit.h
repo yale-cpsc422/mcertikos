@@ -5,7 +5,9 @@
 
 #include <preinit/lib/types.h>
 
-void preinit(uintptr_t mbi_addr);
+void set_vendor(void);
+
+void preinit(uintptr_t);
 
 #endif /* _KERN_ */
 

@@ -1,5 +1,6 @@
 #include <preinit/lib/types.h>
 #include <preinit/lib/debug.h>
+#include <preinit/preinit.h>
 
 #include "ipc_intro.h"
 
@@ -68,7 +69,9 @@ void
 proc_init(unsigned int mbi_addr)
 {
 	unsigned int i;
-    KERN_DEBUG("In proc init.\n");
+    
+    set_vendor(); //sets the cpu vendor bit.
+
     if (cpuvendor == AMD) {
     	vmcb_init(mbi_addr);
     }

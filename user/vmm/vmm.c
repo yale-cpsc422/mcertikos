@@ -551,11 +551,13 @@ vmm_init_vm(struct vm *vm, uint64_t cpufreq, size_t memsize)
 	sys_hvm_set_reg(vm->vmid, GUEST_EIP, 0x0000fff0);
 	sys_hvm_set_reg(vm->vmid, GUEST_EFLAGS, 0x00000002);
 
-	/* setup the control registers */
-	sys_hvm_set_reg(vm->vmid, GUEST_CR0, 0x60000010);
-	sys_hvm_set_reg(vm->vmid, GUEST_CR2, 0);
-	sys_hvm_set_reg(vm->vmid, GUEST_CR3, 0);
-	sys_hvm_set_reg(vm->vmid, GUEST_CR4, 0);
+    if (cpuvendor == AMD) { 
+        /* setup the control registers */
+        sys_hvm_set_reg(vm->vmid, GUEST_CR0, 0x60000010);
+        sys_hvm_set_reg(vm->vmid, GUEST_CR2, 0);
+        sys_hvm_set_reg(vm->vmid, GUEST_CR3, 0);
+        sys_hvm_set_reg(vm->vmid, GUEST_CR4, 0);
+    }
 
 	/* load BIOS */
 	vmm_load_bios(vm);
@@ -616,6 +618,8 @@ vmm_run_vm(struct vm *vm)
 		/* post-handling of the interrupts from the virtual machine */
 		if (injected == 0)
 			vmm_intr_assist(vm);
+
+        break;
 	}
 
 	if (rc)

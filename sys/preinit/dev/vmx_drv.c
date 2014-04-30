@@ -164,14 +164,18 @@ vmx_hw_init(void)
     /* check fixed bits of CR0 */
     fixed0 = rdmsr(MSR_VMX_CR0_FIXED0);
     fixed1 = rdmsr(MSR_VMX_CR0_FIXED1);
+    vmx_info.cr0_ones_mask = (fixed0 & fixed1) & ~(CR0_PG | CR0_PE);
+    vmx_info.cr0_zeros_mask = (CR0_NW | CR0_CD) | (~fixed0 & ~fixed1);
     VMX_DEBUG("CR0 1s mask 0x%llx, 0s mask 0x%llx.\n",
-          (fixed0 & fixed1) & ~(CR0_PG | CR0_PE), (CR0_NW | CR0_CD) | (~fixed0 & ~fixed1));
+          vmx_info.cr0_ones_mask, vmx_info.cr0_zeros_mask);
 
     /* check fixed bits of CR4 */
     fixed0 = rdmsr(MSR_VMX_CR4_FIXED0);
     fixed1 = rdmsr(MSR_VMX_CR4_FIXED1);
+    vmx_info.cr4_ones_mask = fixed0 & fixed1;
+    vmx_info.cr4_zeros_mask = ~fixed0 & ~fixed1;
     VMX_DEBUG("CR4 1s mask 0x%llx, 0s mask 0x%llx.\n",
-          fixed0 & fixed1, ~fixed0 & ~fixed1);
+          vmx_info.cr4_ones_mask, vmx_info.cr4_zeros_mask);
 
     /* enable VMX */
     error = vmx_enable();

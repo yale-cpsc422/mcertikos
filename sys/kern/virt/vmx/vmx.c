@@ -56,6 +56,193 @@ struct vmx_info vmx_info;
 char msr_bitmap[PAGESIZE];
 char io_bitmap[PAGESIZE * 2];
 
+static gcc_inline uint32_t
+read_esp(void)
+{
+    uint32_t esp;
+    __asm __volatile("movl %%esp,%0" : "=rm" (esp));
+    return esp;
+}
+
+static gcc_inline uint32_t
+read_eax(void)
+{
+    uint32_t val;
+    __asm __volatile("movl %%eax,%0" : "=rm" (val));
+    return val;
+}
+
+static gcc_inline uint32_t
+read_ebx(void)
+{
+    uint32_t val;
+    __asm __volatile("movl %%ebx,%0" : "=rm" (val));
+    return val;
+}
+
+static gcc_inline uint32_t
+read_ecx(void)
+{
+    uint32_t val;
+    __asm __volatile("movl %%ecx,%0" : "=rm" (val));
+    return val;
+}
+
+static gcc_inline uint32_t
+read_edx(void)
+{
+    uint32_t val;
+    __asm __volatile("movl %%edx,%0" : "=rm" (val));
+    return val;
+}
+
+static gcc_inline uint32_t
+read_esi(void)
+{
+    uint32_t val;
+    __asm __volatile("movl %%esi,%0" : "=rm" (val));
+    return val;
+}
+
+static gcc_inline uint32_t
+read_edi(void)
+{
+    uint32_t val;
+    __asm __volatile("movl %%edi,%0" : "=rm" (val));
+    return val;
+}
+
+static gcc_inline uint32_t
+read_eflags(void)
+{
+        uint32_t flags;
+
+        __asm __volatile("pushfl; popl %0" : "=r" (flags));
+        return flags;
+}
+
+static void
+vmx_dump_info()
+{
+#ifdef DEBUG_VMX
+    uintptr_t vmcs_ptr;
+
+    vmptrst(&vmcs_ptr);
+    VMX_DEBUG("VMCS @ 0x%08x\n", vmcs_ptr);
+    KERN_ASSERT(vmcs_ptr == (uintptr_t) vmx.vmcs);
+    vmptrld(vmx.vmcs);
+
+    dprintf("Guest:\n"
+        "    eax 0x%08x    ebx 0x%08x    ecx 0x%08x    edx 0x%08x\n"
+        "    esi 0x%08x    edi 0x%08x    ebp 0x%08x    esp 0x%08x\n"
+        "    eip 0x%08x    eflags 0x%08x\n"
+        "    CR0 0x%08x    CR2 0x%08x    CR3 0x%08x    CR4 0x%08x\n"
+        "    DR0 0x%08x    DR1 0x%08x    DR2 0x%08x    DR3 0x%08x\n"
+        "    DR6 0x%08x    DR7 0x%08x\n"
+        "    CS   sel=0x%04x base=0x%08x limit=0x%04x attr=0x%08x\n"
+        "    DS   sel=0x%04x base=0x%08x limit=0x%04x attr=0x%08x\n"
+        "    ES   sel=0x%04x base=0x%08x limit=0x%04x attr=0x%08x\n"
+        "    FS   sel=0x%04x base=0x%08x limit=0x%04x attr=0x%08x\n"
+        "    GS   sel=0x%04x base=0x%08x limit=0x%04x attr=0x%08x\n"
+        "    SS   sel=0x%04x base=0x%08x limit=0x%04x attr=0x%08x\n"
+        "    LDTR sel=0x%04x base=0x%08x limit=0x%04x attr=0x%08x\n"
+        "    TR   sel=0x%04x base=0x%08x limit=0x%04x attr=0x%08x\n"
+        "    GDTR            base=0x%08x limit=0x%04x\n"
+        "    IDTR            base=0x%08x limit=0x%04x\n"
+        "    VPID %d         EPT 0x%llx\n"
+        "Host:\n"
+        "    eax 0x%08x    ebx 0x%08x    ecx 0x%08x    edx 0x%08x\n"
+        "    esi 0x%08x    edi 0x%08x    ebp 0x%08x    esp 0x%08x\n"
+        "    eip 0x%08x    eflags 0x%08x\n"
+        "    CR0 0x%08x    CR3 0x%08x    CR4 0x%08x\n"
+        "    CS   sel=0x%04x\n"
+        "    DS   sel=0x%04x\n"
+        "    ES   sel=0x%04x\n"
+        "    FS   sel=0x%04x base=0x%08x\n"
+        "    GS   sel=0x%04x base=0x%08x\n"
+        "    SS   sel=0x%04x\n"
+        "    TR   sel=0x%04x base=0x%08x\n"
+        "    GDTR            base=0x%08x\n"
+        "    IDTR            base=0x%08x\n"
+        "    MSR_IA32_PAT  0x%llx\n"
+        "    MSR_IA32_EFER 0x%llx\n",
+        (uintptr_t) vmx.g_rax, (uintptr_t) vmx.g_rbx,
+        (uintptr_t) vmx.g_rcx, (uintptr_t) vmx.g_rdx,
+        (uintptr_t) vmx.g_rsi, (uintptr_t) vmx.g_rdi,
+        (uintptr_t) vmx.g_rbp, (uintptr_t) vmcs_read32(VMCS_GUEST_RSP),
+        (uintptr_t) vmcs_read32(VMCS_GUEST_RIP),
+        (uintptr_t) vmcs_read32(VMCS_GUEST_RFLAGS),
+        (uintptr_t) vmcs_read32(VMCS_GUEST_CR0),
+        (uintptr_t) vmx.g_cr2,
+        (uintptr_t) vmcs_read32(VMCS_GUEST_CR3),
+        (uintptr_t) vmcs_read32(VMCS_GUEST_CR4),
+        (uintptr_t) vmx.g_dr0, (uintptr_t) vmx.g_dr1,
+        (uintptr_t) vmx.g_dr2, (uintptr_t) vmx.g_dr2,
+        (uintptr_t) vmx.g_dr6, (uintptr_t) vmcs_read32(VMCS_GUEST_DR7),
+        (uint16_t) vmcs_read16(VMCS_GUEST_CS_SELECTOR),
+        (uintptr_t) vmcs_read32(VMCS_GUEST_CS_BASE),
+        (uint16_t) vmcs_read32(VMCS_GUEST_CS_LIMIT),
+        (uint32_t) vmcs_read32(VMCS_GUEST_CS_ACCESS_RIGHTS),
+        (uint16_t) vmcs_read16(VMCS_GUEST_DS_SELECTOR),
+        (uintptr_t) vmcs_read32(VMCS_GUEST_DS_BASE),
+        (uint16_t) vmcs_read32(VMCS_GUEST_DS_LIMIT),
+        (uint32_t) vmcs_read32(VMCS_GUEST_DS_ACCESS_RIGHTS),
+        (uint16_t) vmcs_read16(VMCS_GUEST_ES_SELECTOR),
+        (uintptr_t) vmcs_read32(VMCS_GUEST_ES_BASE),
+        (uint16_t) vmcs_read32(VMCS_GUEST_ES_LIMIT),
+        (uint32_t) vmcs_read32(VMCS_GUEST_ES_ACCESS_RIGHTS),
+        (uint16_t) vmcs_read16(VMCS_GUEST_FS_SELECTOR),
+        (uintptr_t) vmcs_read32(VMCS_GUEST_FS_BASE),
+        (uint16_t) vmcs_read32(VMCS_GUEST_FS_LIMIT),
+        (uint32_t) vmcs_read32(VMCS_GUEST_FS_ACCESS_RIGHTS),
+        (uint16_t) vmcs_read16(VMCS_GUEST_GS_SELECTOR),
+        (uintptr_t) vmcs_read32(VMCS_GUEST_GS_BASE),
+        (uint16_t) vmcs_read32(VMCS_GUEST_GS_LIMIT),
+        (uint32_t) vmcs_read32(VMCS_GUEST_GS_ACCESS_RIGHTS),
+        (uint16_t) vmcs_read16(VMCS_GUEST_SS_SELECTOR),
+        (uintptr_t) vmcs_read32(VMCS_GUEST_SS_BASE),
+        (uint16_t) vmcs_read32(VMCS_GUEST_SS_LIMIT),
+        (uint32_t) vmcs_read32(VMCS_GUEST_SS_ACCESS_RIGHTS),
+        (uint16_t) vmcs_read16(VMCS_GUEST_LDTR_SELECTOR),
+        (uintptr_t) vmcs_read32(VMCS_GUEST_LDTR_BASE),
+        (uint16_t) vmcs_read32(VMCS_GUEST_LDTR_LIMIT),
+        (uint32_t) vmcs_read32(VMCS_GUEST_LDTR_ACCESS_RIGHTS),
+        (uint16_t) vmcs_read16(VMCS_GUEST_TR_SELECTOR),
+        (uintptr_t) vmcs_read32(VMCS_GUEST_TR_BASE),
+        (uint16_t) vmcs_read32(VMCS_GUEST_TR_LIMIT),
+        (uint32_t) vmcs_read32(VMCS_GUEST_TR_ACCESS_RIGHTS),
+        (uintptr_t) vmcs_read32(VMCS_GUEST_GDTR_BASE),
+        (uint16_t) vmcs_read32(VMCS_GUEST_GDTR_LIMIT),
+        (uintptr_t) vmcs_read32(VMCS_GUEST_IDTR_BASE),
+        (uint16_t) vmcs_read32(VMCS_GUEST_IDTR_LIMIT),
+        (uint32_t) vmcs_read16(VMCS_VPID),
+        vmcs_read64(VMCS_EPTP),
+        read_eax(), read_ebx(), read_ecx(), read_edx(),
+        read_esi(), read_edi(), read_ebp(),
+        /* (uintptr_t) vmcs_read(VMCS_HOST_RSP), */
+        read_esp(),
+        (uintptr_t) vmcs_read32(VMCS_HOST_RIP),
+        read_eflags(),
+        (uintptr_t) vmcs_read32(VMCS_HOST_CR0),
+        (uintptr_t) vmcs_read32(VMCS_HOST_CR3),
+        (uintptr_t) vmcs_read32(VMCS_HOST_CR4),
+        (uint16_t) vmcs_read16(VMCS_HOST_CS_SELECTOR),
+        (uint16_t) vmcs_read16(VMCS_HOST_DS_SELECTOR),
+        (uint16_t) vmcs_read16(VMCS_HOST_ES_SELECTOR),
+        (uint16_t) vmcs_read16(VMCS_HOST_FS_SELECTOR),
+        (uintptr_t) vmcs_read32(VMCS_HOST_FS_BASE),
+        (uint16_t) vmcs_read16(VMCS_HOST_GS_SELECTOR),
+        (uintptr_t) vmcs_read32(VMCS_HOST_GS_BASE),
+        (uint16_t) vmcs_read16(VMCS_HOST_SS_SELECTOR),
+        (uint16_t) vmcs_read16(VMCS_HOST_TR_SELECTOR),
+        (uintptr_t) vmcs_read32(VMCS_HOST_TR_BASE),
+        (uintptr_t) vmcs_read32(VMCS_HOST_GDTR_BASE),
+        (uintptr_t) vmcs_read32(VMCS_HOST_IDTR_BASE),
+        vmcs_read64(VMCS_HOST_IA32_PAT),
+        vmcs_read64(VMCS_HOST_IA32_EFER));
+#endif
+}
+
 void
 vmx_set_intercept_intwin(unsigned int enable)
 {
@@ -233,6 +420,8 @@ vmx_inject_event(unsigned int type,
 	unsigned int intr_info = vmcs_read32(VMCS_ENTRY_INTR_INFO);
 	if (intr_info & VMCS_INTERRUPTION_INFO_VALID) {
         KERN_DEBUG("intr_info & VMCS_INTERRUPTION_INFO_VALID is nonzero.\n");
+        vmx_dump_info();
+        KERN_DEBUG("end of vmx_inject_event error.\n\n\n\n\n\n\n");
 		return;
     }
 
@@ -269,7 +458,9 @@ vmx_get_exit_reason()
 {
     unsigned int exit_reason;
 
-    switch (vmx.exit_reason & EXIT_REASON_MASK) {
+    exit_reason = vmcs_read32(VMCS_EXIT_REASON);
+
+    switch (exit_reason & EXIT_REASON_MASK) {
         case EXIT_REASON_EXCEPTION:
             exit_reason = EXIT_FOR_EXCEPTION;
             break;
@@ -389,6 +580,10 @@ void
 vmx_run_vm()
 {
     vmptrld(vmx.vmcs);
+
+    KERN_DEBUG("In vm run...\n");
+    vmx_dump_info();
+    KERN_DEBUG("\n\n\n");
 
     vmcs_write32(VMCS_GUEST_RIP, vmx.g_rip);
 
@@ -515,8 +710,10 @@ vmx_run_vm()
     vmx.exit_qualification = vmcs_read32(VMCS_EXIT_QUALIFICATION);
 
     if (unlikely(vmx.exit_reason & EXIT_REASON_ENTRY_FAIL)) {
-        KERN_DEBUG("VM-entry failure: reason %d.\n",
+        KERN_DEBUG("VM-entry failure: reason %d, qualification %d.\n",
                vmx.exit_reason & 0x0000ffff);
+        vmx_dump_info();
+        KERN_DEBUG("end of vmx_entry error.\n\n\n\n\n\n\n");
         return;
     }
 

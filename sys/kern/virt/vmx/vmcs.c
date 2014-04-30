@@ -67,6 +67,7 @@ vmcs_set_defaults(struct vmcs *vmcs, uint64_t *pml4ept, uint32_t pinbased_ctls,
     /*
      * Make sure we have a "current" VMCS to work with.
      */
+    KERN_DEBUG("the vmcs pointer in vmcs_set_defaults: 0x%08x.\n", (uint32_t) vmcs);
     vmptrld(vmcs);
 
     /*
@@ -126,9 +127,16 @@ vmcs_set_defaults(struct vmcs *vmcs, uint64_t *pml4ept, uint32_t pinbased_ctls,
      * Sec 9.1)
      */
     /* guest control registers */
+
+    KERN_DEBUG("writing guest cr0 with the value 0x%08x.\n", 0x60000010 | CR0_NE);
     vmcs_write32(VMCS_GUEST_CR0, 0x60000010 | CR0_NE);
+    KERN_DEBUG("after initialization, guest cr0 is 0x%08x.\n", vmcs_read32(VMCS_GUEST_CR0));
+
     vmcs_write32(VMCS_GUEST_CR3, 0);
+    
+    KERN_DEBUG("writing guest cr4 with the value 0x%08x.\n", CR4_VMXE);
     vmcs_write32(VMCS_GUEST_CR4, CR4_VMXE);
+    KERN_DEBUG("after initialization, guest cr4 is 0x%08x.\n", vmcs_read32(VMCS_GUEST_CR4));
 
     /* guest debug registers */
     vmcs_write32(VMCS_GUEST_DR7, 0x00000400);

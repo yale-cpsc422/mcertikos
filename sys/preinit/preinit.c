@@ -18,6 +18,12 @@
 cpu_vendor cpuvendor;
 
 void
+set_vendor()
+{
+    cpuvendor = vendor();
+}
+
+void
 preinit(uintptr_t mbi_addr)
 {
     KERN_DEBUG("In preinit.\n");
@@ -40,8 +46,7 @@ preinit(uintptr_t mbi_addr)
 	ide_init();
     KERN_DEBUG("ide initialized.\n");
 
-    cpuvendor = vendor();
-
+    set_vendor();
     if (cpuvendor == AMD) {
         KERN_DEBUG("vendor detected: AMD.\n");
 	    svm_hw_init();
