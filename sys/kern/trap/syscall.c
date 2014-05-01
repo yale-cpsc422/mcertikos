@@ -1,9 +1,11 @@
 #include <kern/proc/proc.h>
 #include <preinit/lib/debug.h>
 #include <preinit/lib/types.h>
+#include <preinit/lib/x86.h>
 #include <preinit/dev/ide.h>
 #include <virt/svm/svm.h>
 #include <virt/vmx/vmx.h>
+#include <lib/trap.h>
 #include "syscall_args.h"
 #include "syscall.h"
 
@@ -124,12 +126,10 @@ extern uint8_t _binary___obj_user_pingpong_pong_start[];
 void
 sys_spawn(void)
 {
-	unsigned int cur_pid;
 	unsigned int new_pid;
 	unsigned int elf_id;
 	void *elf_addr;
 
-	cur_pid = get_curid();
 	elf_id = syscall_get_arg2();
 
 	if (elf_id == 0) {
@@ -375,7 +375,6 @@ sys_hvm_mmap(void)
 		return;
 	}
 
-    if (cpuvendor == AMD) {
         hpa = pt_read(cur_pid, hva);
 
         if ((hpa & PTE_P) == 0) {
@@ -385,6 +384,7 @@ sys_hvm_mmap(void)
 
         hpa = (hpa & 0xfffff000) + (hva % PAGESIZE);
 
+    if (cpuvendor == AMD) {
         npt_insert(gpa, hpa);
     }
     else if (cpuvendor == INTEL) {
@@ -579,6 +579,127 @@ sys_hvm_intercept_int_window(void)
 
 	syscall_set_errno(E_SUCC);
 }
+
+/*
+ * Arch-independent inject event type
+ */
+
+typedef enum {
+    EVENT_EXTINT,       /* external interrupt */
+    EVENT_EXCEPTION     /* exception */
+} guest_event_t;
+
+/*
+ * Instruction type
+ */
+
+typedef enum {
+    INSTR_IN, INSTR_OUT, INSTR_RDMSR, INSTR_WRMSR, INSTR_CPUID, INSTR_RDTSC,
+    INSTR_HYPERCALL
+} guest_instr_t;
+
+
+static int
+vmx_get_msr(uint32_t msr, uint64_t *val)
+{
+    KERN_ASSERT(val != NULL);
+
+    /*
+    if (!(msr <= 0x00001fff || (0xc0000000 <= msr && msr <= 0xc0001fff)))
+        return 1;
+    */
+
+    *val = rdmsr(msr);
+
+#ifdef DEBUG_GUEST_MSR
+    KERN_DEBUG("Guest rdmsr 0x%08x = 0x%llx.\n", msr, *val);
+#endif
+
+    return 0;
+}
+
+
+static int
+vmx_set_msr(uint32_t msr, uint64_t val)
+{
+    /*
+    if (!(msr <= 0x00001fff || (0xc0000000 <= msr && msr <= 0xc0001fff)))
+        return 1;
+    */
+
+    wrmsr(msr, val);
+
+#ifdef DEBUG_GUEST_MSR
+    KERN_DEBUG("Guest wrmsr 0x%08x, 0x%llx.\n", msr, val);
+#endif
+
+    return 0;
+}
+
+void
+sys_hvm_handle_rdmsr(void)
+{
+    uint32_t msr, next_eip;
+    uint64_t val;
+
+    msr = vmx_get_reg(GUEST_EAX);
+
+    /*
+     * XXX: I/O permission check is not necessary when using HVM.
+     */
+    if (vmx_get_msr(msr, &val)) {
+#ifdef DEBUG_GUEST_MSR
+        KERN_DEBUG("Guest rdmsr failed: invalid MSR 0x%llx.\n", msr);
+#endif
+        vmx_inject_event(EVENT_EXCEPTION, T_GPFLT, 0, TRUE);
+    }
+    else {
+#ifdef DEBUG_GUEST_MSR
+        KERN_DEBUG("Guest rdmsr 0x%08x = 0x%llx.\n", msr, val);
+#endif
+
+        vmx_set_reg(GUEST_EAX, val & 0xffffffff);
+        vmx_set_reg(GUEST_EDX, (val >> 32) & 0xffffffff);
+
+        next_eip = vmx_get_next_eip();
+        vmx_set_reg(GUEST_EIP, next_eip);
+    }
+
+	syscall_set_errno(E_SUCC);
+}
+
+void
+sys_hvm_handle_wrmsr(void)
+{
+	uint32_t msr, next_eip, eax, edx;
+	uint64_t val;
+
+	msr = vmx_get_reg(GUEST_ECX);
+	eax = vmx_get_reg(GUEST_EAX);
+	edx = vmx_get_reg(GUEST_EDX);
+	val = ((uint64_t) edx << 32) | (uint64_t) eax;
+
+	/*
+	 * XXX: I/O permission check is not necessary when using HVM.
+	 */
+	if (vmx_set_msr(msr, val)) {
+#ifdef DEBUG_GUEST_MSR
+		KERN_DEBUG("Guest wrmsr failed: invalid MSR 0x%llx.\n", msr);
+#endif
+		vmx_inject_event(EVENT_EXCEPTION, T_GPFLT, 0, TRUE);
+	}
+    else {
+#ifdef DEBUG_GUEST_MSR
+	    KERN_DEBUG("Guest wrmsr 0x%08x, 0x%llx.\n", msr, val);
+#endif
+    	next_eip = vmx_get_next_eip();
+	    vmx_set_reg(GUEST_EIP, next_eip);
+    }
+
+	syscall_set_errno(E_SUCC);
+}
+
+
 
 extern unsigned int is_chan_ready(void);
 extern unsigned int send(unsigned int chid, unsigned int content);

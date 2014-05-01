@@ -92,7 +92,7 @@
 
 static uint64_t page_sizes_mask;
 
-struct eptStruct ept gcc_aligned(PAGESIZE);
+struct eptStruct ept;
 
 extern void *memset(void *v, unsigned int c, unsigned int n);
 
@@ -112,7 +112,7 @@ ept_init(void)
     memset(&ept, 0, sizeof(ept));
 
     //initilize the static ept data structure.
-    ept.pml4 = ((uintptr_t) ept.pdpt & EPT_ADDR_MASK) |
+    ept.pml4[0] = ((uintptr_t) ept.pdpt & EPT_ADDR_MASK) |
                     EPT_PG_EX | EPT_PG_WR | EPT_PG_RD; 
     for(i = 0; i < 4; i++)
     {

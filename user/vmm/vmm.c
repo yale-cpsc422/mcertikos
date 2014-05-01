@@ -207,7 +207,7 @@ vmm_handle_pgflt(struct vm *vm)
 	int pfn, line, row;
 
 	if (vm->memsize <= fault_pa && fault_pa < 0xf0000000) {
-		PANIC("EPT/NPT fault @ 0x%08x: out of range.\n", fault_pa);
+		PANIC("EPT/NPT fault @ 0x%08x: out of range. VM mem size: 0x%08x\n", fault_pa, vm->memsize);
 		return 1;
 	}
 
@@ -341,14 +341,18 @@ vmm_handle_exit(struct vm *vm)
 #if defined (DEBUG_VMEXIT) || defined (DEBUG_GUEST_MSR)
 		DEBUG("VMEXIT for rdmsr.\n");
 #endif
-		rc = vmm_handle_rdmsr(vm);
+		//rc = vmm_handle_rdmsr(vm);
+        sys_hvm_handle_rdmsr(vm->vmid);
+        rc = 0;
 		break;
 
 	case EXIT_REASON_WRMSR:
 #if defined (DEBUG_VMEXIT) || defined (DEBUG_GUEST_MSR)
 		DEBUG("VMEXIT for wrmsr.\n");
 #endif
-		rc = vmm_handle_wrmsr(vm);
+		//rc = vmm_handle_wrmsr(vm);
+        sys_hvm_handle_wrmsr(vm->vmid);
+        rc = 0;
 		break;
 
 	case EXIT_REASON_PGFLT:

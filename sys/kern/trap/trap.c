@@ -11,7 +11,6 @@ void
 trap(tf_t *tf)
 {
 	unsigned int cur_pid;
-	unsigned int trapno;
 
 	cur_pid = get_curid();
 	memcpy(UCTX_LOC[cur_pid], tf, sizeof(tf_t));

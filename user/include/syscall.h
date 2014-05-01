@@ -334,6 +334,34 @@ sys_hvm_intercept_intr_window(int vmid, bool enable)
 }
 
 static gcc_inline int
+sys_hvm_handle_rdmsr(int vmid)
+{
+    int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_handle_rdmsr)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_hvm_handle_wrmsr(int vmid)
+{
+    int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_handle_wrmsr)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
 sys_send(uint32_t chid, uint32_t val)
 {
 	int errno;

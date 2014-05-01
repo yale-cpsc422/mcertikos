@@ -722,20 +722,56 @@ extern void npt_init(unsigned int);
 extern void vmcs_set_defaults(struct vmcs *, uint64_t *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, char *, char *, char *, uint16_t, uint64_t, uint64_t, uint64_t, uint64_t, uintptr_t);
 
 void
+dump_vmx_info(void)
+{
+    VMX_DEBUG("pin-based ctls 0x%08x\n", vmx_info.pinbased_ctls);
+    VMX_DEBUG("primary processor-based ctls 0x%08x\n",
+                      vmx_info.procbased_ctls);
+    VMX_DEBUG("secondary processor-based ctls 0x%08x\n",
+                      vmx_info.procbased_ctls2);
+    VMX_DEBUG("exit ctls 0x%08x\n", vmx_info.exit_ctls);
+    VMX_DEBUG("entry ctls 0x%08x\n", vmx_info.entry_ctls);
+    VMX_DEBUG("CR0 1s mask 0x%llx, 0s mask 0x%llx.\n",
+                      vmx_info.cr0_ones_mask, vmx_info.cr0_zeros_mask);
+    VMX_DEBUG("CR4 1s mask 0x%llx, 0s mask 0x%llx.\n",
+                      vmx_info.cr4_ones_mask, vmx_info.cr4_zeros_mask);
+}
+
+void
 vmx_init(unsigned int mbi_addr)
 {
     extern uint8_t vmx_return_from_guest[];
+    int rw;
 
     KERN_DEBUG("In vmx init.\n");
 
 	npt_init(mbi_addr);
 
+    VMX_DEBUG("Before vmx_hw_init.\n");
+    dump_vmx_info();
     vmx_hw_init();
+    VMX_DEBUG("\n\nAfter vmx_hw_init.\n");
+    dump_vmx_info();
     KERN_DEBUG("vmx hw initialized.\n");
 
     memset(&vmcs, 0, sizeof(vmcs));
+    memset(msr_bitmap, 0, sizeof(msr_bitmap));
+    memset(io_bitmap, 0, sizeof(io_bitmap));
+
+    // intercept all io ports
+    uint32_t *bitmap = (uint32_t *) io_bitmap;
+    memset(bitmap, 0xff, PAGESIZE * 2);
+
+    // intercept all msrs
+    rw = 0;
+    char *rdmsr_bitmap = msr_bitmap;
+    char *wrmsr_bitmap = (char *) ((uintptr_t) msr_bitmap + 0x800);
+
+    memset(rdmsr_bitmap, (rw & 0x1) ? 0xf : 0x0, 2048);
+    memset(wrmsr_bitmap, (rw & 0x2) ? 0xf : 0x0, 2048);
+
     vmx.vmcs = &vmcs;
-    vmx.pml4ept = &ept.pml4;
+    vmx.pml4ept = ept.pml4;
     vmx.msr_bitmap = msr_bitmap;
     vmx.io_bitmap = io_bitmap;
     vmx.vmcs->identifier = rdmsr(MSR_VMX_BASIC) & 0xffffffff;

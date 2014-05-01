@@ -62,8 +62,8 @@
 #define PAGESIZE 4096
 
 struct eptStruct {
-    uint64_t pml4 gcc_aligned(PAGESIZE);
-    uint64_t pdpt[4] gcc_aligned(PAGESIZE);
+    uint64_t pml4[512] gcc_aligned(PAGESIZE);
+    uint64_t pdpt[512] gcc_aligned(PAGESIZE);
     uint64_t pdt[4][512] gcc_aligned(PAGESIZE);
     uint64_t ptab[4][512][512] gcc_aligned(PAGESIZE);
 };

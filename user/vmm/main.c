@@ -14,7 +14,7 @@
 #include "dev/virtio/pci.h"
 #include "dev/virtio/virtio_blk.h"
 
-#define VM_MEMSIZE	(256UL * 1024 * 1024)
+#define VM_MEMSIZE	(256UL * 1024 * 1024 * 4)
 #define VM_CPUFREQ	(800ULL * 1000 * 1000)
 
 static uint8_t vm_memory[VM_MEMSIZE] gcc_aligned(PAGESIZE);

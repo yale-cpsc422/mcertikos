@@ -1,19 +1,20 @@
 #include <types.h>
 #include <x86.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "../vmm.h"
 
 static int
 vmx_get_msr(struct vm *vm, uint32_t msr, uint64_t *val)
 {
-	return -1;
+    return -1;
 }
 
 static int
 vmx_set_msr(struct vm *vm, uint32_t msr, uint64_t val)
 {
-	return -1;
+    return -1;
 }
 
 static int

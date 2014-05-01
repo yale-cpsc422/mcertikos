@@ -283,6 +283,12 @@ syscall_dispatch(void)
 		 */
 		sys_hvm_intercept_int_window();
 		break;
+    case SYS_hvm_handle_rdmsr:
+        sys_hvm_handle_rdmsr();
+        break;
+    case SYS_hvm_handle_wrmsr:
+        sys_hvm_handle_wrmsr();
+        break;
 	case SYS_is_chan_ready:
 		sys_is_chan_ready();
 		break;
