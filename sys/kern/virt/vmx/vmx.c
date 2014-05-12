@@ -257,7 +257,7 @@ vmx_set_intercept_intwin(unsigned int enable)
 unsigned int
 vmx_get_reg(unsigned int reg)
 {
-    unsigned int val;
+	unsigned int val = 0;
 
 	switch (reg) {
 	case GUEST_EAX:
@@ -303,7 +303,7 @@ vmx_get_reg(unsigned int reg)
 		val = vmcs_read32(VMCS_GUEST_CR4);
 		break;
 	default:
-        break;
+		KERN_PANIC("Unrecognized register %d.\n", reg);
 	}
 
 	return val;

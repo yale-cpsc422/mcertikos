@@ -109,7 +109,7 @@ sys_ring0_spawn(void)
 
     id = syscall_get_arg2();
     new_pid = ring0proc_create(id);
-	
+
     if (new_pid == NUM_PROC) {
 		syscall_set_errno(E_INVAL_PID);
 		syscall_set_retval1(NUM_PROC);
@@ -301,16 +301,16 @@ sys_hvm_run_vm(void)
 void
 sys_hvm_get_exitinfo(void)
 {
-	unsigned int reason;
-	unsigned int port;
-	unsigned int width;
-	unsigned int write;
-	unsigned int rep;
-	unsigned int str;
-	unsigned int fault_addr;
+	unsigned int reason = 0;
+	unsigned int port = 0;
+	unsigned int width = 0;
+	unsigned int write = 0;
+	unsigned int rep = 0;
+	unsigned int str = 0;
+	unsigned int fault_addr = 0;
 	unsigned int flags;
-    unsigned int reason_io;
-    unsigned int reason_fault;
+	unsigned int reason_io = 0;
+	unsigned int reason_fault = 0;
 	flags = 0;
 
     if (cpuvendor == AMD) {
@@ -475,7 +475,7 @@ void
 sys_hvm_get_next_eip(void)
 {
 	unsigned int reason;
-    unsigned int neip;
+	unsigned int neip = 0;
 
     if (cpuvendor == AMD) {
 	    reason = svm_get_exit_reason();
@@ -488,7 +488,7 @@ sys_hvm_get_next_eip(void)
     else if (cpuvendor == INTEL) {
         neip = vmx_get_next_eip();
     }
-    
+
     syscall_set_retval1(neip);
 
 	syscall_set_errno(E_SUCC);
@@ -533,7 +533,7 @@ sys_hvm_inject_event(void)
 void
 sys_hvm_check_pending_event(void)
 {
-    unsigned int event;
+    unsigned int event = 0;
 
     if (cpuvendor == AMD) {
         event = vmcb_check_pending_event();
@@ -550,7 +550,7 @@ sys_hvm_check_pending_event(void)
 void
 sys_hvm_check_int_shadow(void)
 {
-    unsigned int shadow;
+    unsigned int shadow = 0;
 
     if (cpuvendor == AMD) {
         shadow = vmcb_check_int_shadow();
