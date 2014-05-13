@@ -121,6 +121,26 @@ rcr3(void)
     return val;
 }
 
+static gcc_inline void
+outl(int port, uint32_t data)
+{
+	__asm __volatile("outl %0,%w1" : : "a" (data), "d" (port));
+}
+
+static gcc_inline uint32_t
+inl(int port)
+{
+	uint32_t data;
+	__asm __volatile("inl %w1,%0" : "=a" (data) : "d" (port));
+	return data;
+}
+
+static gcc_inline void
+smp_wmb(void)
+{
+	__asm __volatile("":::"memory");
+}
+
 #endif /* _KERN_ */
 
 #endif /* !_PREINIT_LIB_X86_H_ */

@@ -2,8 +2,9 @@
 #include <lib/x86.h>
 
 #include <preinit/dev/console.h>
-#include <preinit/dev/ide.h>
+#include <preinit/dev/disk.h>
 #include <preinit/dev/intr.h>
+#include <preinit/dev/pci.h>
 #include <preinit/dev/tsc.h>
 #include <preinit/dev/svm_drv.h>
 #include <preinit/dev/vmx_drv.h>
@@ -39,8 +40,11 @@ preinit(uintptr_t mbi_addr)
 	intr_init();
     KERN_DEBUG("intr initialized.\n");
 
-	ide_init();
-    KERN_DEBUG("ide initialized.\n");
+    /* 	ide_init(); */
+    /* KERN_DEBUG("ide initialized.\n"); */
+
+	disk_init();
+	pci_init();
 
     set_vendor();
     if (cpuvendor == AMD) {

@@ -8,6 +8,8 @@
 int	strncmp(const char *p, const char *q, size_t n);
 int	strnlen(const char *s, size_t size);
 void	*memzero(void *dst, size_t len);
+void	*memcpy(void *dst, const void *src, size_t len);
+void	*memmove(void *dst, const void *src, size_t len);
 
 #endif /* _KERN_ */
 

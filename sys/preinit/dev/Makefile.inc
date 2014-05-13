@@ -11,6 +11,9 @@ KERN_SRCFILES	+= $(KERN_DIR)/preinit/dev/intr.c
 KERN_SRCFILES	+= $(KERN_DIR)/preinit/dev/svm_drv.c
 KERN_SRCFILES	+= $(KERN_DIR)/preinit/dev/vmx_drv.c
 KERN_SRCFILES	+= $(KERN_DIR)/preinit/dev/ide.c
+KERN_SRCFILES	+= $(KERN_DIR)/preinit/dev/pci.c
+KERN_SRCFILES	+= $(KERN_DIR)/preinit/dev/disk.c
+KERN_SRCFILES	+= $(KERN_DIR)/preinit/dev/ahci.c
 
 
 $(KERN_OBJDIR)/preinit/dev/%.o: $(KERN_DIR)/preinit/dev/%.c

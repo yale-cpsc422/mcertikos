@@ -1,5 +1,5 @@
 #include <preinit/lib/types.h>
-#include <lib/string.h>
+#include <sys/lib/string.h>
 
 int
 strncmp(const char *p, const char *q, size_t n)

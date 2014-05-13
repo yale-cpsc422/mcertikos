@@ -98,3 +98,14 @@ tsc_init(void)
 		return 0;
 	}
 }
+
+/*
+ * Wait for ms millisecond.
+ */
+void
+delay(uint32_t ms)
+{
+	volatile uint64_t ticks = tsc_per_ms * ms;
+	volatile uint64_t start = rdtsc();
+	while (rdtsc() < start + ticks);
+}
