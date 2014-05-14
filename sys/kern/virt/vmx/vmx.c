@@ -460,68 +460,7 @@ vmx_get_exit_reason()
 
     exit_reason = vmcs_read32(VMCS_EXIT_REASON);
 
-    switch (exit_reason & EXIT_REASON_MASK) {
-        case EXIT_REASON_EXCEPTION:
-            exit_reason = EXIT_FOR_EXCEPTION;
-            break;
-
-        case EXIT_REASON_EXT_INTR:
-            exit_reason = EXIT_FOR_EXTINT;
-            break;
-
-        case EXIT_REASON_INTR_WINDOW:
-            exit_reason = EXIT_FOR_INTWIN;
-            break;
-
-        case EXIT_REASON_INOUT:
-            exit_reason = EXIT_FOR_IOPORT;
-            break;
-
-        case EXIT_REASON_EPT_FAULT:
-            exit_reason = EXIT_FOR_PGFLT;
-            break;
-
-        case EXIT_REASON_CPUID:
-            exit_reason = EXIT_FOR_CPUID;
-            break;
-
-        case EXIT_REASON_RDTSC:
-            exit_reason = EXIT_FOR_RDTSC;
-            break;
-
-        case EXIT_REASON_RDMSR:
-            exit_reason = EXIT_FOR_RDMSR;
-            break;
-
-        case EXIT_REASON_WRMSR:
-            exit_reason = EXIT_FOR_WRMSR;
-            break;
-
-        case EXIT_REASON_VMCALL:
-            exit_reason = EXIT_FOR_HYPERCALL;
-            break;
-
-        case EXIT_REASON_RDTSCP:
-        case EXIT_REASON_HLT:
-        case EXIT_REASON_VMCLEAR:
-        case EXIT_REASON_VMLAUNCH:
-        case EXIT_REASON_VMPTRLD:
-        case EXIT_REASON_VMPTRST:
-        case EXIT_REASON_VMREAD:
-        case EXIT_REASON_VMRESUME:
-        case EXIT_REASON_VMWRITE:
-        case EXIT_REASON_VMXOFF:
-        case EXIT_REASON_VMXON:
-        case EXIT_REASON_MWAIT:
-        case EXIT_REASON_MONITOR:
-            exit_reason = EXIT_FOR_INVAL_INSTR;
-            break;
-
-        default:
-            exit_reason = EXIT_INVAL;
-    }
-
-    return exit_reason;
+    return (exit_reason & EXIT_REASON_MASK);
 }
 
 unsigned int

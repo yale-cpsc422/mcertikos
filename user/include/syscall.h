@@ -17,7 +17,7 @@ sys_ring0_spawn(unsigned int id)
 	int errno;
 	pid_t pid;
 
-    asm volatile("int %2" 
+    asm volatile("int %2"
 		     : "=a" (errno),
 		       "=b" (pid)
              : "i" (T_SYSCALL),
@@ -159,7 +159,7 @@ sys_hvm_get_exitinfo(int vmid, exit_reason_t *reason, exit_info_t *info)
 	    *reason = svm_to_hvm_exit_reason(exit_reason);
     }
     else if (cpuvendor == INTEL) {
-        *reason = exit_reason;
+	    *reason = vmx_to_hvm_exit_reason(exit_reason);
     }
 
 	switch (*reason) {

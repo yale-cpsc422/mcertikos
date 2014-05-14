@@ -46,22 +46,6 @@ struct vmx_info {
     uint32_t    vmx_region[1024] gcc_aligned(PAGESIZE);
 };
 
-enum {
-        EXIT_NONE = 0,      /* no VMEXIT */
-        EXIT_FOR_EXCEPTION,     /* exit for the exception*/
-        EXIT_FOR_EXTINT,    /* exit for the external interrupt */
-        EXIT_FOR_INTWIN,    /* exit for the interrupt window */
-        EXIT_FOR_IOPORT,    /* exit for accessing an I/O port */
-        EXIT_FOR_PGFLT,     /* exit for the page fault */
-        EXIT_FOR_RDMSR,     /* exit for the rdmsr instruction */
-        EXIT_FOR_WRMSR,     /* exit for the wrmsr instruction */
-        EXIT_FOR_CPUID,     /* exit for the cpuid instruction */
-        EXIT_FOR_RDTSC,     /* exit for the rdtsc/rdtscp instruction */
-        EXIT_FOR_HYPERCALL, /* exit for the hypercall */
-        EXIT_FOR_INVAL_INSTR,   /* exit for the invalid instruction */
-        EXIT_INVAL      /* invalid exit */
-};
-
 #define offsetof(type, member)  __builtin_offsetof(type, member)
 #define MSR_VMX_BASIC           0x480
 
