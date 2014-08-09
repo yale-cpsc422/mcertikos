@@ -41,6 +41,7 @@ enum __syscall_nr {
 	SYS_is_chan_ready,
 	SYS_send,
 	SYS_recv,
+  SYS_get_tsc_per_ms,
 	/*
 	 * HVM system calls
 	 */
@@ -114,6 +115,7 @@ void sys_ring0_spawn(void);
 void sys_yield(void);
 void sys_disk_op(void);
 void sys_disk_cap(void);
+void sys_get_tsc_per_ms(void);
 void sys_hvm_run_vm(void);
 void sys_hvm_get_exitinfo(void);
 void sys_hvm_mmap(void);

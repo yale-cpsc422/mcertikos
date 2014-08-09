@@ -3,6 +3,7 @@
 #include <preinit/lib/types.h>
 #include <preinit/lib/x86.h>
 #include <preinit/dev/disk.h>
+#include <preinit/dev/tsc.h>
 #include <virt/svm/svm.h>
 #include <virt/vmx/vmx.h>
 #include <lib/trap.h>
@@ -298,6 +299,14 @@ sys_disk_cap(void)
 
 	syscall_set_retval1(cap & 0xffffffff);
 	syscall_set_retval2(cap >> 32);
+	syscall_set_errno(E_SUCC);
+}
+
+void
+sys_get_tsc_per_ms(void)
+{
+	syscall_set_retval1(tsc_per_ms >> 32);
+	syscall_set_retval2(tsc_per_ms & 0xffffffff);
 	syscall_set_errno(E_SUCC);
 }
 
@@ -608,7 +617,8 @@ sys_hvm_get_tsc_offset(void)
     tsc_offset = vmx_get_tsc_offset();
   }
 
-  syscall_set_retval1(tsc_offset);
+  syscall_set_retval1(tsc_offset >> 32);
+  syscall_set_retval2(tsc_offset & 0xffffffff);
 
   syscall_set_errno(E_SUCC);
 }
@@ -616,8 +626,11 @@ sys_hvm_get_tsc_offset(void)
 void
 sys_hvm_set_tsc_offset(void)
 {
+  unsigned int tsc_offset_high, tsc_offset_low;
   uint64_t tsc_offset;
-  tsc_offset = syscall_get_arg2();
+  tsc_offset_high = syscall_get_arg2();
+  tsc_offset_low = syscall_get_arg3();
+  tsc_offset = (uint64_t)tsc_offset_high << 32 | tsc_offset_low;
 
   if (cpuvendor == AMD) {
     svm_set_tsc_offset(tsc_offset);

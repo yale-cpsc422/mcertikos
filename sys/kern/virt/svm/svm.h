@@ -17,6 +17,9 @@ unsigned int svm_get_exit_io_str(void);
 unsigned int svm_get_exit_io_neip(void);
 unsigned int svm_get_exit_fault_addr(void);
 
+unsigned long long svm_get_tsc_offset(void);
+void svm_set_tsc_offset(unsigned long long);
+
 void svm_sync(void);
 void svm_run_vm(void);
 

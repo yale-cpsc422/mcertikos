@@ -212,12 +212,12 @@ svm_sync(void)
 }
 
 void
-svm_set_tsc_offset(uint64_t tsc_offset)
+svm_set_tsc_offset(unsigned long long tsc_offset)
 {
   return;
 }
 
-uint64_t
+unsigned long long
 svm_get_tsc_offset(void)
 {
   return 0;

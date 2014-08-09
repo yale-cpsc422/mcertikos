@@ -7,7 +7,6 @@
 
 #include "vmm.h"
 #include "vmm_dev.h"
-#include "dev/tsc/tsc.h"
 
 #ifdef DEBUG_VMM
 
@@ -63,6 +62,8 @@ vmm_init_mmap(struct vm *vm)
 static void
 vmm_update_guest_tsc(struct vm *vm, uint64_t last_h_tsc, uint64_t cur_h_tsc)
 {
+  uint64_t tsc_per_ms = sys_get_tsc_per_ms(vm->vmid);
+  ASSERT(tsc_per_ms != -1);
   ASSERT(vm != NULL);
   ASSERT(cur_h_tsc >= last_h_tsc);
   uint64_t delta = cur_h_tsc - last_h_tsc;
@@ -507,11 +508,14 @@ extern struct vmm_ops vmm_ops_intel;
 int
 vmm_init_vm(struct vm *vm, uint64_t cpufreq, size_t memsize)
 {
+  uint64_t tsc_per_ms = sys_get_tsc_per_ms(vm->vmid);
+  ASSERT(tsc_per_ms != -1);
+
 	if (vm == NULL)
 		return -1;
 
   if (cpufreq >= tsc_per_ms * 1000) {
-    VIRT_DEBUG("Guest CPU frequency cannot be higher than the host "
+    VMM_DEBUG("Guest CPU frequency cannot be higher than the host "
          "CPU frequency.\n");
     return -1;
   }
@@ -593,11 +597,11 @@ vmm_run_vm(struct vm *vm)
 	if (vm == NULL)
 		return -1;
 
-	uint64_t host_cpu_freq;
+	//uint64_t host_cpu_freq;
 	uint64_t start_tsc, exit_tsc;
 	int rc, injected;
 
-	host_cpu_freq = 1000000000ULL;
+	//host_cpu_freq = 1000000000ULL;
 
 	VMM_DEBUG("Start running VM ... \n");
 

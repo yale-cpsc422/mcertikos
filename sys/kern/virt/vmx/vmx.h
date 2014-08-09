@@ -69,6 +69,9 @@ unsigned int vmx_check_int_shadow(void);
 unsigned int vmx_get_next_eip(void);
 void vmx_run_vm(void);
 
+uint64_t vmx_get_tsc_offset(void);
+void vmx_set_tsc_offset(uint64_t);
+
 int vmx_set_ctlreg(int, int, uint32_t, uint32_t, uint32_t *);
 
 #ifdef DEBUG_VMX

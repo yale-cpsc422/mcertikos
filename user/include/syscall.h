@@ -120,6 +120,25 @@ sys_disk_capacity(void)
 	return errno ? 0 : ((uint64_t) size_hi << 32 | size_lo);
 }
 
+static gcc_inline uint64_t
+sys_get_tsc_per_ms(int vmid)
+{
+	int errno, tsc_per_ms_high, tsc_per_ms_low;
+  uint64_t tsc_per_ms;
+
+	asm volatile("int %3"
+		     : "=a" (errno),
+		       "=b" (tsc_per_ms_high),
+		       "=c" (tsc_per_ms_low)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_get_tsc_per_ms)
+		     : "cc", "memory");
+
+	tsc_per_ms = (uint64_t)tsc_per_ms_high << 32 | tsc_per_ms_low;
+
+	return errno ? -1 : tsc_per_ms;
+}
+
 static gcc_inline int
 sys_hvm_run_vm(int vmid)
 {
@@ -328,6 +347,42 @@ sys_hvm_intercept_intr_window(int vmid, bool enable)
 		     : "i" (T_SYSCALL),
 		       "a" (SYS_hvm_intercept_int_window),
 		       "b" (enable)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline uint64_t
+sys_hvm_get_tsc_offset(int vmid)
+{
+	int errno;
+  unsigned int tsc_offset_high, tsc_offset_low;
+  uint64_t tsc_offset;
+
+	asm volatile("int %3"
+		     : "=a" (errno),
+		       "=b" (tsc_offset_high),
+           "=c" (tsc_offset_low)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_get_tsc_offset)
+		     : "cc", "memory");
+
+  tsc_offset = (uint64_t)tsc_offset_high << 32 | tsc_offset_low;
+
+	return errno ? -1 : tsc_offset;
+}
+
+static gcc_inline int
+sys_hvm_set_tsc_offset(int vmid, uint64_t tsc_offset)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_hvm_set_tsc_offset),
+		       "b" ((uint32_t)(tsc_offset >> 32)),
+		       "c" ((uint32_t)(tsc_offset & 0xffffffff))
 		     : "cc", "memory");
 
 	return errno;

@@ -13,6 +13,5 @@ include $(VDEV_SRCDIR)/nvram/Makefile.inc
 include $(VDEV_SRCDIR)/virtio/Makefile.inc
 include $(VDEV_SRCDIR)/i8259/Makefile.inc
 include $(VDEV_SRCDIR)/serial/Makefile.inc
-include $(VDEV_SRCDIR)/tsc/Makefile.inc
 
 USER_VMM_SRC	+= $(USER_VDEV_SRC)
