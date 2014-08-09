@@ -212,6 +212,18 @@ svm_sync(void)
 }
 
 void
+svm_set_tsc_offset(uint64_t tsc_offset)
+{
+  return;
+}
+
+uint64_t
+svm_get_tsc_offset(void)
+{
+  return 0;
+}
+
+void
 svm_run_vm(void)
 {
 	switch_to_guest();

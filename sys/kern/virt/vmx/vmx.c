@@ -516,6 +516,18 @@ vmx_get_exit_fault_addr(void)
 }
 
 void
+vmx_set_tsc_offset(uint64_t tsc_offset)
+{
+   vmcs_write64(VMCS_TSC_OFFSET, tsc_offset);
+}
+
+uint64_t
+vmx_get_tsc_offset(void)
+{
+   return vmcs_read64(VMCS_TSC_OFFSET);
+}
+
+void
 vmx_run_vm()
 {
     vmptrld(vmx.vmcs);

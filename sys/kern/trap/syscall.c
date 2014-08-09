@@ -597,6 +597,38 @@ sys_hvm_intercept_int_window(void)
 	syscall_set_errno(E_SUCC);
 }
 
+void
+sys_hvm_get_tsc_offset(void)
+{
+  uint64_t tsc_offset = 0;
+  if (cpuvendor == AMD) {
+    tsc_offset = svm_get_tsc_offset();
+  }
+  else if (cpuvendor == INTEL) {
+    tsc_offset = vmx_get_tsc_offset();
+  }
+
+  syscall_set_retval1(tsc_offset);
+
+  syscall_set_errno(E_SUCC);
+}
+
+void
+sys_hvm_set_tsc_offset(void)
+{
+  uint64_t tsc_offset;
+  tsc_offset = syscall_get_arg2();
+
+  if (cpuvendor == AMD) {
+    svm_set_tsc_offset(tsc_offset);
+  }
+  else if (cpuvendor == INTEL) {
+    vmx_set_tsc_offset(tsc_offset);
+  }
+
+  syscall_set_errno(E_SUCC);
+}
+
 /*
  * Arch-independent inject event type
  */

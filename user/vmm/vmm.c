@@ -7,6 +7,7 @@
 
 #include "vmm.h"
 #include "vmm_dev.h"
+#include "dev/tsc/tsc.h"
 
 #ifdef DEBUG_VMM
 
@@ -60,13 +61,18 @@ vmm_init_mmap(struct vm *vm)
 }
 
 static void
-vmm_update_guest_tsc(struct vm *vm, uint64_t last_h_tsc, uint64_t cur_h_tsc,
-		     uint64_t host_cpu_freq)
+vmm_update_guest_tsc(struct vm *vm, uint64_t last_h_tsc, uint64_t cur_h_tsc)
 {
-	ASSERT(vm != NULL);
-	ASSERT(cur_h_tsc >= last_h_tsc);
-	uint64_t delta = cur_h_tsc - last_h_tsc;
-	vm->tsc += (delta * vm->cpufreq) / host_cpu_freq;
+  ASSERT(vm != NULL);
+  ASSERT(cur_h_tsc >= last_h_tsc);
+  uint64_t delta = cur_h_tsc - last_h_tsc;
+  vm->tsc += (delta * vm->cpufreq) / (tsc_per_ms * 1000);
+}
+
+static void
+vmm_update_guest_tsc_offset(struct vm *vm, uint64_t cur_h_tsc)
+{
+  sys_hvm_set_tsc_offset(vm->vmid, (uint64_t)(vm->tsc - cur_h_tsc));
 }
 
 static int
@@ -504,6 +510,12 @@ vmm_init_vm(struct vm *vm, uint64_t cpufreq, size_t memsize)
 	if (vm == NULL)
 		return -1;
 
+  if (cpufreq >= tsc_per_ms * 1000) {
+    VIRT_DEBUG("Guest CPU frequency cannot be higher than the host "
+         "CPU frequency.\n");
+    return -1;
+  }
+
 	vm->vmid = 0;
 	vm->cpufreq = cpufreq;
 	vm->memsize = memsize;
@@ -596,11 +608,13 @@ vmm_run_vm(struct vm *vm)
 		injected = 0;
 		start_tsc = rdtscp();
 
+    vmm_update_guest_tsc_offset(vm, start_tsc);
+
 		if ((rc = sys_hvm_run_vm(vm->vmid)))
 			break;
 
 		exit_tsc = rdtscp();
-		vmm_update_guest_tsc(vm, start_tsc, exit_tsc, host_cpu_freq);
+		vmm_update_guest_tsc(vm, start_tsc, exit_tsc);
 
 		sys_hvm_get_exitinfo(vm->vmid,
 				     &vm->exit_reason, &vm->exit_info);

@@ -55,6 +55,8 @@ enum __syscall_nr {
 	SYS_hvm_check_int_shadow,
 	SYS_hvm_check_pending_event,
 	SYS_hvm_intercept_int_window,
+  SYS_hvm_get_tsc_offset,
+  SYS_hvm_set_tsc_offset,
 
     SYS_hvm_handle_rdmsr,
     SYS_hvm_handle_wrmsr,
@@ -123,6 +125,8 @@ void sys_hvm_inject_event(void);
 void sys_hvm_check_pending_event(void);
 void sys_hvm_check_int_shadow(void);
 void sys_hvm_intercept_int_window(void);
+void sys_hvm_get_tsc_offset(void);
+void sys_hvm_set_tsc_offset(void);
 void sys_is_chan_ready(void);
 void sys_send(void);
 void sys_recv(void);
