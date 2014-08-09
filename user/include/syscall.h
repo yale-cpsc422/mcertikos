@@ -135,6 +135,7 @@ sys_get_tsc_per_ms(int vmid)
 		     : "cc", "memory");
 
 	tsc_per_ms = (uint64_t)tsc_per_ms_high << 32 | tsc_per_ms_low;
+  //DEBUG("Errorno: %d, tsc per ms: %llu\n", errno, tsc_per_ms);
 
 	return errno ? -1 : tsc_per_ms;
 }

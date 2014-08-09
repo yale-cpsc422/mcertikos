@@ -103,6 +103,15 @@ syscall_dispatch(void)
 		 */
 		sys_disk_cap();
 		break;
+  case SYS_get_tsc_per_ms:
+    sys_get_tsc_per_ms();
+    break;
+  case SYS_hvm_get_tsc_offset:
+    sys_hvm_get_tsc_offset();
+    break;
+  case SYS_hvm_set_tsc_offset:
+    sys_hvm_set_tsc_offset();
+    break;
 	case SYS_hvm_run_vm:
 		/*
 		 * Run a virtual machine and returns when a VMEXIT or an error

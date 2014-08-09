@@ -305,6 +305,7 @@ sys_disk_cap(void)
 void
 sys_get_tsc_per_ms(void)
 {
+  //KERN_DEBUG("tsc per ms: %llu.\n", tsc_per_ms);
 	syscall_set_retval1(tsc_per_ms >> 32);
 	syscall_set_retval2(tsc_per_ms & 0xffffffff);
 	syscall_set_errno(E_SUCC);
