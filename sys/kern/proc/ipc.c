@@ -72,12 +72,14 @@ proc_init(unsigned int mbi_addr)
     
     set_vendor(); //sets the cpu vendor bit.
 
+    /*
     if (cpuvendor == AMD) {
     	vmcb_init(mbi_addr);
     }
     else if(cpuvendor == INTEL) {
         vmx_init(mbi_addr);
     }
+    */
 
 	i = 0;
 	while (i < NUM_CHAN) {

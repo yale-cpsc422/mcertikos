@@ -49,7 +49,7 @@ preinit(uintptr_t mbi_addr)
     set_vendor();
     if (cpuvendor == AMD) {
         KERN_DEBUG("vendor detected: AMD.\n");
-	    svm_hw_init();
+	      //svm_hw_init();
         KERN_DEBUG("svm hw initialized.\n");
     }
     else if (cpuvendor == INTEL) {
