@@ -41,6 +41,8 @@ enum __syscall_nr {
 	SYS_is_chan_ready,
 	SYS_send,
 	SYS_recv,
+  SYS_ssend,    /* synchronous ipc send */
+  SYS_srecv,    /* synchronous ipc recv */
   SYS_get_tsc_per_ms,
 	/*
 	 * HVM system calls
