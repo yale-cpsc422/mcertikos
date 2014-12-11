@@ -767,6 +767,8 @@ sys_hvm_handle_wrmsr(void)
 extern unsigned int is_chan_ready(void);
 extern unsigned int send(unsigned int chid, unsigned int content);
 extern unsigned int recv(void);
+extern unsigned int ssend(unsigned int chid, unsigned int content);
+extern unsigned int srecv(unsigned int pid);
 extern void thread_sleep(unsigned int chid);
 
 void
@@ -806,12 +808,55 @@ sys_send(void)
 }
 
 void
+sys_ssend(void)
+{
+  unsigned int chid;
+  unsigned int content;
+  unsigned int retval;
+
+  chid = syscall_get_arg2();
+
+  if (!(0 <= chid && chid < NUM_CHAN)) {
+    syscall_set_errno(E_INVAL_CHID);
+    return;
+  }
+
+  content = syscall_get_arg3();
+
+  if (content == 0) { // why?
+    syscall_set_errno(E_INVAL_CHID);
+    return;
+  }
+
+  retval = ssend(chid, content);
+
+  if (retval == 1)
+    syscall_set_errno(E_SUCC);
+  else
+    syscall_set_errno(E_IPC);
+}
+
+void
 sys_recv(void)
 {
 	unsigned int val;
 	val = recv();
 	syscall_set_retval1(val);
 	syscall_set_errno(E_SUCC);
+}
+
+void
+sys_srecv(void)
+{
+  unsigned int val;
+  unsigned int pid;
+
+  pid = syscall_get_arg2();
+
+  val = srecv(pid);
+
+  syscall_set_retval1(val);
+  syscall_set_errno(E_SUCC);
 }
 
 void

@@ -10,8 +10,8 @@ main(int argc, char **argv)
 	while (1) 
   {
 		printf("ping %d!\n", ball);
-		if (sys_send(3, ball++) == E_IPC)
-			sys_sleep(3);
+		if (sys_ssend(3, ball++) == E_IPC)
+      printf("Error occured in ping\n");
 		sys_yield();
 	}
 	return 0;

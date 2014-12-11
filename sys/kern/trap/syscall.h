@@ -134,6 +134,8 @@ void sys_hvm_set_tsc_offset(void);
 void sys_is_chan_ready(void);
 void sys_send(void);
 void sys_recv(void);
+void sys_ssend(void);
+void sys_srecv(void);
 void sys_sleep(void);
 
 void sys_hvm_handle_rdmsr(void);

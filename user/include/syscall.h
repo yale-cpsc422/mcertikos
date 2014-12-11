@@ -469,7 +469,7 @@ sys_ssend(uint32_t chid, uint32_t val)
 }
 
 static gcc_inline int
-sys_srecv(uint32_t *val)
+sys_srecv(uint32_t pid, uint32_t *val)
 {
 	int errno;
 	uint32_t ret_val;
@@ -478,7 +478,8 @@ sys_srecv(uint32_t *val)
 		     : "=a" (errno),
 		       "=b" (ret_val)
 		     : "i" (T_SYSCALL),
-		       "a" (SYS_srecv)
+		       "a" (SYS_srecv),
+           "b" (pid)
 		     : "cc", "memory");
 
 	if (errno == E_SUCC)

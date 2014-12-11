@@ -304,9 +304,15 @@ syscall_dispatch(void)
 	case SYS_send:
 		sys_send();
 		break;
+  case SYS_ssend:
+    sys_ssend();
+    break;
 	case SYS_recv:
 		sys_recv();
 		break;
+  case SYS_srecv:
+    sys_srecv();
+    break;
 	case SYS_sleep:
 		sys_sleep();
 		break;

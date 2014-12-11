@@ -9,7 +9,7 @@ main(int argc, char **argv)
 
 	while (1) 
   {
-		sys_recv(&ball);
+		sys_srecv(2, &ball);
 		printf("pong %d!\n", ball);
 		yield();
 	}
