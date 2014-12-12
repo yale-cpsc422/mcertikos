@@ -3,39 +3,29 @@
 
 #ifdef _KERN_
 
-/*
- * In this header file, we have defined a new channel struct
- * for synchronous ipc. In this new interface, each process
- * gets assigned a chid (equal to their process id), and within
- * that channel, there are NUM_CHANN subchannels that each
- * process can write to without contention.
- *
- * TL;DR: chid is the proc you want to talk to, pid is your own
- * process id.
- */
+void
+init_ipc_node(unsigned int pid);
+
+void
+set_node_data(unsigned int pid, unsigned int data);
 
 unsigned int
-get_chan_info_for_proc(unsigned int chid, unsigned int pid);
+get_node_data(unsigned int pid);
 
 void
-set_chan_info_for_proc(unsigned int chid,
-                       unsigned int pid,
-                       unsigned int info);
+init_ipc_list(unsigned int listid);
+
+void
+append_node_to_list(unsigned int listid,
+                    unsigned int pid,
+                    unsigned int data);
+
+// returns 0 on failure, 1 on success
+unsigned int
+remove_node_from_list(unsigned int listid, unsigned int pid);
 
 unsigned int
-get_chan_content_for_proc(unsigned int chid, unsigned int pid);
-
-void
-set_chan_content_for_proc(unsigned int chid,
-                          unsigned int pid,
-                          unsigned int content);
-
-void
-init_chan_for_proc(unsigned int chid,
-                   unsigned int pid,
-                   unsigned int info,
-                   unsigned int content);
-
+is_node_in_list(unsigned int listid, unsigned int pid);
 
 #endif
 

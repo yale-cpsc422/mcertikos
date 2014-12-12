@@ -10,15 +10,15 @@ main(int argc, char **argv)
 	while (1) 
   {
 		printf("ping %d!\n", ball);
-    unsigned int status = sys_ssend(5, ball++);
+    unsigned int status = sys_ssend(3, ball++);
 		if (status == E_IPC) {
       printf("Error occured in ping\n");
       break;
     } else if (status == E_INVAL_PID) {
       printf("Trying to send to a dead process in ping\n");
       break;
-    } else {
-      printf("Unknown error in ping");
+    } else if (status != E_SUCC) {
+      printf("Unknown error in ping: %d\n", status);
       break;
     }
 		sys_yield();

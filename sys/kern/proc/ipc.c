@@ -52,20 +52,13 @@ send(unsigned int chid, unsigned int content)
 unsigned int
 ssend(unsigned int chid, unsigned int content)
 {
-  unsigned int info;
   unsigned int myid = get_curid();
 
   KERN_ASSERT(0 <= myid && myid < NUM_CHAN);
 
   if (0 <= chid && chid < NUM_CHAN) {
-    info = get_chan_info(chid); 
-    // In synchronous IPC, no one
-    // else should be able to write
-    // to my designated channel except myself.
-    KERN_ASSERT(info == 0);
 
-    set_chan_info_for_proc(chid, myid, 1);
-    set_chan_content_for_proc(chid, myid, content);
+    append_node_to_list(chid, myid, content);
 
     unsigned int chidstate = tcb_get_state(chid);
     if (chidstate != 3) { // chid is not dead
@@ -109,11 +102,11 @@ srecv(unsigned int pid)
 
 retry:
   chid = get_curid();
-  info = get_chan_info_for_proc(chid, pid);
+  info = is_node_in_list(chid, pid);
 
   if (info == 1) {
-    content = get_chan_content_for_proc(chid, pid);
-    set_chan_info_for_proc(chid, pid, 0);
+    content = get_node_data(pid);
+    remove_node_from_list(chid, pid);
     unsigned int chidstate = tcb_get_state(pid);
     if (chidstate != 3) { // only wake it up if it's not dead
       thread_wakeup2(pid);
@@ -150,10 +143,8 @@ proc_init(unsigned int mbi_addr)
 	while (i < NUM_CHAN) {
 		init_chan(i, 0, 0);
     // Init synchronous channels
-    unsigned int j;
-    for (j = 0; j < NUM_CHAN; j++) {
-      init_chan_for_proc(i, j, 0, 0);
-    }
+    init_ipc_node(i);
+    init_ipc_list(i);
 		i++;
 	}
 }
