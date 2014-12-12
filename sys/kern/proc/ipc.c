@@ -13,6 +13,7 @@ extern void thread_wakeup2(unsigned int);
 extern void thread_sleep(unsigned int);
 extern void thread_sleep2(void);
 extern void sched_init(unsigned int);
+extern unsigned int tcb_get_state(unsigned int);
 //extern void vmcb_init(unsigned int);
 //extern void vmx_init(unsigned int);
 
@@ -65,11 +66,17 @@ ssend(unsigned int chid, unsigned int content)
 
     set_chan_info_for_proc(chid, myid, 1);
     set_chan_content_for_proc(chid, myid, content);
-    thread_wakeup2(chid);
+
+    unsigned int chidstate = tcb_get_state(chid);
+    if (chidstate != 3) { // chid is not dead
+      thread_wakeup2(chid);
+    } else {
+      return 2; // An error code to tell the user that it was contacting a dead proc.
+    }
     thread_sleep2();
-    return 1;
+    return 1; // success
   } else {
-    return 0;
+    return 0; // bad chid
   }
 }
 
@@ -100,17 +107,22 @@ srecv(unsigned int pid)
   unsigned int info;
   unsigned int content;
 
+retry:
   chid = get_curid();
   info = get_chan_info_for_proc(chid, pid);
 
   if (info == 1) {
     content = get_chan_content_for_proc(chid, pid);
     set_chan_info_for_proc(chid, pid, 0);
-    thread_wakeup2(pid);
+    unsigned int chidstate = tcb_get_state(pid);
+    if (chidstate != 3) { // only wake it up if it's not dead
+      thread_wakeup2(pid);
+    }
     return content;
   } else {
     thread_sleep2();
-    return srecv(pid);
+    goto retry;
+    return 0;
   }
 }
 

@@ -123,6 +123,7 @@ sys_ring0_spawn(void)
 extern uint8_t _binary___obj_user_vmm_vmm_start[];
 extern uint8_t _binary___obj_user_pingpong_ping_start[];
 extern uint8_t _binary___obj_user_pingpong_pong_start[];
+extern uint8_t _binary___obj_user_pingpong_ding_start[];
 
 void
 sys_spawn(void)
@@ -139,7 +140,9 @@ sys_spawn(void)
 		elf_addr = _binary___obj_user_pingpong_ping_start;
 	} else if (elf_id == 2) {
 		elf_addr = _binary___obj_user_pingpong_pong_start;
-	} else {
+	} else if (elf_id == 3) {
+    elf_addr = _binary___obj_user_pingpong_ding_start;
+  } else {
 		syscall_set_errno(E_INVAL_PID);
 		syscall_set_retval1(NUM_PROC);
 		return;
@@ -832,6 +835,8 @@ sys_ssend(void)
 
   if (retval == 1)
     syscall_set_errno(E_SUCC);
+  else if (retval == 2)
+    syscall_set_errno(E_INVAL_PID);
   else
     syscall_set_errno(E_IPC);
 }

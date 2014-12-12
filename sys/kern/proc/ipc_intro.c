@@ -33,7 +33,7 @@ set_chan_content(unsigned int chid, unsigned int content)
 	CHPOOL_LOC[chid].content = content;
 }
 
-unsigned int
+void
 init_chan(unsigned int chid, unsigned int info, unsigned int content)
 {
 	CHPOOL_LOC[chid].isbusy = info;
