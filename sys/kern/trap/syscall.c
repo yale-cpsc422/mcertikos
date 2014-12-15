@@ -770,8 +770,14 @@ sys_hvm_handle_wrmsr(void)
 extern unsigned int is_chan_ready(void);
 extern unsigned int send(unsigned int chid, unsigned int content);
 extern unsigned int recv(void);
-extern unsigned int ssend(unsigned int chid, unsigned int content);
-extern unsigned int srecv(unsigned int pid);
+extern unsigned int ssend(unsigned int chid,
+                          unsigned int vaddr,
+                          unsigned int scount,
+                          unsigned int actualsentva);
+extern unsigned int srecv(unsigned int pid,
+                          unsigned int vaddr,
+                          unsigned int rcount,
+                          unsigned int actualreceivedva);
 extern void thread_sleep(unsigned int chid);
 
 void
@@ -814,24 +820,28 @@ void
 sys_ssend(void)
 {
   unsigned int chid;
-  unsigned int content;
   unsigned int retval;
+  unsigned int sbufferva;
+  unsigned int scount;
+  unsigned int actualsentva;
 
-  chid = syscall_get_arg2();
+  chid      = syscall_get_arg2();
+  sbufferva = syscall_get_arg3();
+  scount    = syscall_get_arg4();
+  actualsentva = syscall_get_arg5();
+
+  KERN_DEBUG("Hi from sys_ssend.\n");
+  KERN_DEBUG("CHID: %u\n", chid);
+  KERN_DEBUG("SBUFVA: %08x\n", sbufferva);
+  KERN_DEBUG("SCOUNT: %u\n", scount);
+  KERN_DEBUG("ASENTVA: %08x\n", actualsentva);
 
   if (!(0 <= chid && chid < NUM_CHAN)) {
     syscall_set_errno(E_INVAL_CHID);
     return;
   }
 
-  content = syscall_get_arg3();
-
-  if (content == 0) { // why?
-    syscall_set_errno(E_INVAL_CHID);
-    return;
-  }
-
-  retval = ssend(chid, content);
+  retval = ssend(chid, sbufferva, scount, actualsentva);
 
   if (retval == 1)
     syscall_set_errno(E_SUCC);
@@ -855,13 +865,25 @@ sys_srecv(void)
 {
   unsigned int val;
   unsigned int pid;
+  unsigned int rbufferva;
+  unsigned int rcount;
+  unsigned int actualreceivedva;
 
   pid = syscall_get_arg2();
+  rbufferva = syscall_get_arg3();
+  rcount = syscall_get_arg4();
+  actualreceivedva = syscall_get_arg5();
 
-  val = srecv(pid);
+  KERN_DEBUG("CALLING SRECV\n");
+  val = srecv(pid, rbufferva, rcount, actualreceivedva);
+  KERN_DEBUG("FINISHED SRECV: %u\n", val);
 
-  syscall_set_retval1(val);
-  syscall_set_errno(E_SUCC);
+  if (val == 1)
+    syscall_set_errno(E_SUCC);
+  else if (val == 2)
+    syscall_set_errno(E_INVAL_PID);
+  else
+    syscall_set_errno(E_IPC);
 }
 
 void

@@ -7,25 +7,30 @@ void
 init_ipc_node(unsigned int pid);
 
 void
-set_node_data(unsigned int pid, unsigned int data);
+set_node_data(unsigned int pid,
+              unsigned int vaddr,
+              unsigned int count);
 
-unsigned int
-get_node_data(unsigned int pid);
+void
+get_node_data(unsigned int pid,
+              unsigned int *vaddr,
+              unsigned int *count);
 
 void
 init_ipc_list(unsigned int listid);
 
 void
 append_node_to_list(unsigned int listid,
-                    unsigned int pid,
-                    unsigned int data);
+                    unsigned int pid);
 
 // returns 0 on failure, 1 on success
 unsigned int
-remove_node_from_list(unsigned int listid, unsigned int pid);
+remove_node_from_list(unsigned int listid,
+                      unsigned int pid);
 
 unsigned int
-is_node_in_list(unsigned int listid, unsigned int pid);
+is_node_in_list(unsigned int listid,
+                unsigned int pid);
 
 #endif
 

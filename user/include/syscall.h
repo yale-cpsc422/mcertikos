@@ -453,7 +453,8 @@ sys_recv(uint32_t *val)
 }
 
 static gcc_inline int
-sys_ssend(uint32_t chid, uint32_t val)
+sys_ssend(uint32_t chid, uintptr_t buffer,
+          uint32_t scount, uintptr_t actualsent)
 {
 	int errno;
 
@@ -462,28 +463,29 @@ sys_ssend(uint32_t chid, uint32_t val)
 		     : "i" (T_SYSCALL),
 		       "a" (SYS_ssend),
 		       "b" (chid),
-		       "c" (val)
+		       "c" (buffer),
+           "d" (scount),
+           "S" (actualsent)
 		     : "cc", "memory");
 
 	return errno;
 }
 
 static gcc_inline int
-sys_srecv(uint32_t pid, uint32_t *val)
+sys_srecv(uint32_t pid, uintptr_t buffer,
+          uint32_t rcount, uintptr_t actualreceived)
 {
 	int errno;
-	uint32_t ret_val;
 
-	asm volatile("int %2"
-		     : "=a" (errno),
-		       "=b" (ret_val)
+	asm volatile("int %1"
+		     : "=a" (errno)
 		     : "i" (T_SYSCALL),
 		       "a" (SYS_srecv),
-           "b" (pid)
+           "b" (pid),
+           "c" (buffer),
+           "d" (rcount),
+           "S" (actualreceived)
 		     : "cc", "memory");
-
-	if (errno == E_SUCC)
-		*val = ret_val;
 
 	return errno;
 }

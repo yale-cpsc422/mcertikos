@@ -4,11 +4,12 @@
 #define NUM_CHAN 64
 
 struct SyncIPCStruct {
-  unsigned int data;
   unsigned int pid;
   unsigned int prev;
   unsigned int next;
   unsigned int listid;
+  unsigned int vaddr; // sender's virtual address of buffer
+  unsigned int count;
 };
 
 struct SyncIPCStruct IPCNode_Pool[NUM_CHAN];
@@ -17,7 +18,8 @@ unsigned int         IPCLists[NUM_CHAN];
 void
 init_ipc_node(unsigned int pid)
 {
-  IPCNode_Pool[pid].data = 0;
+  IPCNode_Pool[pid].vaddr = 0;
+  IPCNode_Pool[pid].count = 0;
   IPCNode_Pool[pid].pid  = pid;
   IPCNode_Pool[pid].next = NUM_CHAN;
   IPCNode_Pool[pid].prev = NUM_CHAN;
@@ -37,15 +39,17 @@ get_node_listid(unsigned int pid)
 }
 
 void
-set_node_data(unsigned int pid, unsigned int data)
+set_node_data(unsigned int pid, unsigned int vaddr, unsigned int count)
 {
-  IPCNode_Pool[pid].data = data;
+  IPCNode_Pool[pid].vaddr = vaddr;
+  IPCNode_Pool[pid].count = count;
 }
 
-unsigned int
-get_node_data(unsigned int pid)
+void
+get_node_data(unsigned int pid, unsigned int *vaddr, unsigned int *count)
 {
-  return IPCNode_Pool[pid].data;
+  *vaddr = IPCNode_Pool[pid].vaddr;
+  *count = IPCNode_Pool[pid].count;
 }
 
 void
@@ -85,11 +89,10 @@ is_list_empty(unsigned int listid)
 }
 
 void
-append_node_to_list(unsigned int listid, unsigned int pid, unsigned int data)
+append_node_to_list(unsigned int listid, unsigned int pid)
 {
   unsigned int isempty = is_list_empty(listid);
 
-  set_node_data(pid, data);
   set_node_listid(pid, listid);
 
   if (isempty) {

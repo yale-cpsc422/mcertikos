@@ -5,6 +5,7 @@
 int
 main(int argc, char **argv)
 {
+  /*
   uint32_t ball = 1;
 
   while (1)
@@ -13,5 +14,6 @@ main(int argc, char **argv)
       printf("Error occured in ding\n");
     sys_yield();
   }
+  */
   return 0;
 }
