@@ -8,6 +8,10 @@
 #define NUM_CHAN	   64
 #define MAX_BUFFSIZE 32 // At most 32 integer at a time
 
+#define PTE_P		0x001	/* Present */
+
+#define PAGESIZE			4096
+
 extern unsigned int get_curid(void);
 extern void thread_wakeup(unsigned int);
 extern void thread_wakeup2(unsigned int);
@@ -18,6 +22,15 @@ extern unsigned int tcb_get_state(unsigned int);
 extern unsigned int pt_read(unsigned int pid, unsigned int vaddr);
 //extern void vmcb_init(unsigned int);
 //extern void vmx_init(unsigned int);
+
+static inline
+unsigned int *
+getkernelpa(unsigned int chid, unsigned int kva)
+{
+  unsigned int kpa = pt_read(chid, kva);
+  kpa = (kpa & 0xfffff000) + (kva % PAGESIZE);
+  return (unsigned int *)kpa;
+}
 
 unsigned int
 is_chan_ready(void)
@@ -60,8 +73,8 @@ send(unsigned int chid, unsigned int content)
  *
  */
 unsigned int
-ssend(unsigned int chid, unsigned int vaddr,
-      unsigned int scount, unsigned int actualsentva)
+ssend(unsigned int chid, uintptr_t vaddr,
+      unsigned int scount, uintptr_t actualsentva)
 {
   unsigned int myid = get_curid();
 
@@ -74,13 +87,12 @@ ssend(unsigned int chid, unsigned int vaddr,
   if (chidstate == 3) return 2;
 
   if (0 <= chid && chid < NUM_CHAN) {
-    set_node_data(chid, vaddr, MIN(scount, MAX_BUFFSIZE));
-    unsigned int actualsentpa = pt_read(myid, actualsentva);
-    unsigned int *scountbuffer = (unsigned int *)actualsentpa;
-    *scountbuffer = MIN(scount, MAX_BUFFSIZE);
-    append_node_to_list(chid, myid);
+    // Set actual sent number
+    unsigned int *asentpa = getkernelpa(myid, actualsentva);
+    *asentpa = MIN(scount, MAX_BUFFSIZE);
 
-    KERN_DEBUG("SSEND GOING TO SLEEP.\n");
+    set_node_data(myid, vaddr, MIN(scount, MAX_BUFFSIZE));
+    append_node_to_list(chid, myid);
 
     thread_wakeup2(chid);
     thread_sleep2();
@@ -121,8 +133,8 @@ recv(void)
  *
  */
 unsigned int
-srecv(unsigned int pid, unsigned int vaddr,
-      unsigned int rcount, unsigned int actualreceivedva)
+srecv(unsigned int pid, uintptr_t vaddr,
+      unsigned int rcount, uintptr_t actualreceivedva)
 {
   unsigned int chid;
   unsigned int info;
@@ -138,29 +150,21 @@ retry:
   if (chidstate == 3) return 2;
 
   unsigned int senderva;
-  unsigned int senderpa;
   unsigned int scount;
-  unsigned int recvpa;
-
-  KERN_DEBUG("INFO: %u\n", info);
 
   if (info == 1) {
     get_node_data(pid, &senderva, &scount);
-    senderpa = pt_read(pid, senderva);
-    recvpa   = pt_read(chid, vaddr);
 
-    unsigned int actualreceivedpa = pt_read(chid, actualreceivedva);
-    unsigned int *rcountbuffer = (unsigned int *)actualreceivedpa;
-    *rcountbuffer = MIN(rcount, scount);
-
-    unsigned int *sbuffer = (unsigned int *)senderpa;
-    unsigned int *rbuffer = (unsigned int *)recvpa;
+    unsigned int *arecvpa = getkernelpa(chid, actualreceivedva);
+    *arecvpa = MIN(rcount, scount);
+  
     unsigned int i;
-
-    for (i = 0; i < *rcountbuffer; i++) {
-      KERN_DEBUG("SBUF[%u] = %u\n", i, sbuffer[i]);
-      rbuffer[i] = sbuffer[i];
+    unsigned int *rbuff = getkernelpa(chid, vaddr);
+    unsigned int *sbuff = getkernelpa(pid, senderva);
+    for (i = 0; i < *arecvpa; i++) {
+      rbuff[i] = sbuff[i];
     }
+
 
     remove_node_from_list(chid, pid);
 

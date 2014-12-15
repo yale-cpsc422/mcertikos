@@ -453,8 +453,8 @@ sys_recv(uint32_t *val)
 }
 
 static gcc_inline int
-sys_ssend(uint32_t chid, uintptr_t buffer,
-          uint32_t scount, uintptr_t actualsent)
+sys_ssend(uint32_t chid, unsigned int *buffer,
+          uint32_t scount, unsigned int *actualsent)
 {
 	int errno;
 
@@ -472,8 +472,8 @@ sys_ssend(uint32_t chid, uintptr_t buffer,
 }
 
 static gcc_inline int
-sys_srecv(uint32_t pid, uintptr_t buffer,
-          uint32_t rcount, uintptr_t actualreceived)
+sys_srecv(uint32_t pid, unsigned int *buffer,
+          uint32_t rcount, unsigned int *actualreceived)
 {
 	int errno;
 

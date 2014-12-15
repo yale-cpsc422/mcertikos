@@ -388,40 +388,40 @@ sys_hvm_get_exitinfo(void)
 void
 sys_hvm_mmap(void)
 {
-	unsigned int cur_pid;
-	unsigned int gpa;
-	unsigned int hva;
-	unsigned int hpa;
-    unsigned int mem_type;
+  unsigned int cur_pid;
+  unsigned int gpa;
+  unsigned int hva;
+  unsigned int hpa;
+  unsigned int mem_type;
 
-	cur_pid = get_curid();
-	gpa = syscall_get_arg2();
-	hva = syscall_get_arg3();
-    mem_type = syscall_get_arg4();
+  cur_pid = get_curid();
+  gpa = syscall_get_arg2();
+  hva = syscall_get_arg3();
+  mem_type = syscall_get_arg4();
 
-	if (hva % PAGESIZE != 0 || gpa % PAGESIZE != 0 ||
-	    !(VM_USERLO <= hva && hva + PAGESIZE <= VM_USERHI)) {
-		syscall_set_errno(E_INVAL_ADDR);
-		return;
-	}
+  if (hva % PAGESIZE != 0 || gpa % PAGESIZE != 0 ||
+      !(VM_USERLO <= hva && hva + PAGESIZE <= VM_USERHI)) {
+    syscall_set_errno(E_INVAL_ADDR);
+    return;
+  }
 
-        hpa = pt_read(cur_pid, hva);
+  hpa = pt_read(cur_pid, hva);
 
-        if ((hpa & PTE_P) == 0) {
-            pt_resv(cur_pid, hva, PTE_P | PTE_U | PTE_W);
-            hpa = pt_read(cur_pid, hva);
-        }
+  if ((hpa & PTE_P) == 0) {
+    pt_resv(cur_pid, hva, PTE_P | PTE_U | PTE_W);
+    hpa = pt_read(cur_pid, hva);
+  }
 
-        hpa = (hpa & 0xfffff000) + (hva % PAGESIZE);
+  hpa = (hpa & 0xfffff000) + (hva % PAGESIZE);
 
-    if (cpuvendor == AMD) {
-        npt_insert(gpa, hpa);
-    }
-    else if (cpuvendor == INTEL) {
-        vmx_set_mmap(gpa, hpa, mem_type);
-    }
+  if (cpuvendor == AMD) {
+    npt_insert(gpa, hpa);
+  }
+  else if (cpuvendor == INTEL) {
+    vmx_set_mmap(gpa, hpa, mem_type);
+  }
 
-	syscall_set_errno(E_SUCC);
+  syscall_set_errno(E_SUCC);
 }
 
 void
@@ -771,13 +771,13 @@ extern unsigned int is_chan_ready(void);
 extern unsigned int send(unsigned int chid, unsigned int content);
 extern unsigned int recv(void);
 extern unsigned int ssend(unsigned int chid,
-                          unsigned int vaddr,
+                          uintptr_t    vaddr,
                           unsigned int scount,
-                          unsigned int actualsentva);
+                          uintptr_t    actualsentva);
 extern unsigned int srecv(unsigned int pid,
-                          unsigned int vaddr,
+                          uintptr_t    vaddr,
                           unsigned int rcount,
-                          unsigned int actualreceivedva);
+                          uintptr_t    actualreceivedva);
 extern void thread_sleep(unsigned int chid);
 
 void
@@ -830,12 +830,6 @@ sys_ssend(void)
   scount    = syscall_get_arg4();
   actualsentva = syscall_get_arg5();
 
-  KERN_DEBUG("Hi from sys_ssend.\n");
-  KERN_DEBUG("CHID: %u\n", chid);
-  KERN_DEBUG("SBUFVA: %08x\n", sbufferva);
-  KERN_DEBUG("SCOUNT: %u\n", scount);
-  KERN_DEBUG("ASENTVA: %08x\n", actualsentva);
-
   if (!(0 <= chid && chid < NUM_CHAN)) {
     syscall_set_errno(E_INVAL_CHID);
     return;
@@ -874,9 +868,7 @@ sys_srecv(void)
   rcount = syscall_get_arg4();
   actualreceivedva = syscall_get_arg5();
 
-  KERN_DEBUG("CALLING SRECV\n");
   val = srecv(pid, rbufferva, rcount, actualreceivedva);
-  KERN_DEBUG("FINISHED SRECV: %u\n", val);
 
   if (val == 1)
     syscall_set_errno(E_SUCC);

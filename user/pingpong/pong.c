@@ -9,8 +9,10 @@ main(int argc, char **argv)
   unsigned int receivebuffer[32];
   unsigned int actualreceived;
 
+  printf("PONGRBUF = %08x\n", receivebuffer);
+
   unsigned int status =
-    sys_srecv(2, (uintptr_t)receivebuffer, 32, (uintptr_t)&actualreceived);
+    sys_srecv(2, receivebuffer, 32, &actualreceived);
 
   if (status == E_IPC)
     printf("Bad thing happened in pong.\n");

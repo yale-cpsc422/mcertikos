@@ -9,9 +9,9 @@ main(int argc, char **argv)
 
   printf("PINGSBUF: %08x\n", balls);
 
-  unsigned int actualsent = 10;
+  unsigned int actualsent;
   unsigned int status =
-      sys_ssend(3, (uintptr_t)balls, 9, (uintptr_t)&actualsent);
+      sys_ssend(3, balls, 9, &actualsent);
 
   if (status == E_IPC)
     printf("Bad thing happend in ping.\n");
