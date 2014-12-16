@@ -9,8 +9,6 @@ main(int argc, char **argv)
   unsigned int receivebuffer[32];
   unsigned int actualreceived;
 
-  printf("PONGRBUF = %08x\n", receivebuffer);
-
   unsigned int status =
     sys_srecv(2, receivebuffer, 32, &actualreceived);
 
@@ -27,14 +25,19 @@ main(int argc, char **argv)
     printf("ball[%d] = %d\n", i, receivebuffer[i]);
   }
 
+  sys_srecv(4, receivebuffer, 32, &actualreceived);
+  for (i = 0; i < actualreceived; i++) {
+    printf("ball[%d] = %d\n", i, receivebuffer[i]);
+  }
+
+//  printf("pong.\n");
 
   /*
-	while (1) 
-  {
-		sys_srecv(2, &ball);
-		printf("pong %d!\n", ball);
-		sys_yield();
-	}
+  while(1) {
+    //printf("pong yielding\n");
+    yield();
+  }
   */
+
 	return 0;
 }

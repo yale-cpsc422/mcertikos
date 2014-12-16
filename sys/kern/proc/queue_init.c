@@ -1,7 +1,10 @@
 #include "queue_intro.h"
+#include "sys/preinit/lib/debug.h"
 
 #define NUM_PROC	64
 #define NUM_CHAN	64
+
+extern void tcb_log_queue(unsigned int chid);
 
 void
 tdqueue_init(unsigned int mbi_addr)
@@ -38,6 +41,9 @@ tdq_enqueue(unsigned int chid, unsigned int pid)
 
 		tdq_set_tail(chid, pid);
 	}
+
+//  KERN_DEBUG("In Enqueue chid %d, pid %d\n", chid, pid);
+//  tcb_log_queue(chid);
 }
 
 unsigned int
@@ -60,6 +66,9 @@ tdq_dequeue(unsigned int chid)
 			tdq_set_head(chid, next);
 		}
 	}
+
+//  KERN_DEBUG("In Dequeue chid %d, pid %d\n", chid, pid);
+//  tcb_log_queue(chid);
 
 	return pid;
 }
@@ -90,4 +99,7 @@ tdq_remove(unsigned int chid, unsigned int pid)
 			tcb_set_prev(next, prev);
 		}
 	}
+
+//  KERN_DEBUG("In Remove chid %d, pid %d\n", chid, pid);
+//  tcb_log_queue(chid);
 }

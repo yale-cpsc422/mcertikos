@@ -5,15 +5,10 @@
 int
 main(int argc, char **argv)
 {
-  /*
-  uint32_t ball = 1;
-
-  while (1)
-  {
-    if (sys_ssend(3, ball++) == E_IPC)
-      printf("Error occured in ding\n");
-    sys_yield();
-  }
-  */
+  unsigned int balls[] = { 0, 1, 2 };
+  unsigned int actualsent;
+  unsigned int scount = 3;
+  sys_ssend(3, balls, scount, &actualsent);
+  printf("DING\n");
   return 0;
 }

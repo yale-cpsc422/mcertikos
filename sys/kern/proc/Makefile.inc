@@ -20,19 +20,19 @@ KERN_SRCFILES += $(KERN_DIR)/kern/proc/sync_ipc_intro.c
 $(KERN_OBJDIR)/kern/proc/kctx.o: $(KERN_DIR)/kern/proc/kctx.c
 	@echo + cc[KERN/kern] $<
 	@mkdir -p $(@D)
-	$(V)$(CC) $(KERN_CFLAGS) -c -o $@ $<
+	$(V)$(CC) $(KERN_CFLAGS) -g -c -o $@ $<
 
 $(KERN_OBJDIR)/kern/proc/proc.o: $(KERN_DIR)/kern/proc/proc.c
 	@echo + cc[KERN/kern] $<
 	@mkdir -p $(@D)
-	$(V)$(CC) $(KERN_CFLAGS) -c -o $@ $<
+	$(V)$(CC) $(KERN_CFLAGS) -g -c -o $@ $<
 
 $(KERN_OBJDIR)/kern/proc/%.o: $(KERN_DIR)/kern/proc/%.c
 	@echo + ccomp[KERN/kern] $<
 	@mkdir -p $(@D)
-	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
+	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -g -c -o $@ $<
 
 $(KERN_OBJDIR)/kern/proc/%.o: $(KERN_DIR)/kern/proc/%.S
 	@echo + as[KERN/kern] $<
 	@mkdir -p $(@D)
-	$(V)$(CC) $(KERN_CFLAGS) -c -o $@ $<
+	$(V)$(CC) $(KERN_CFLAGS) -g -c -o $@ $<

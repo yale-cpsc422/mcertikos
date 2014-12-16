@@ -10,7 +10,7 @@ main(int argc, char **argv)
 	printf("idle\n");
 
 	//pid_t ping_pid, pong_pid, ring0_id1, ring0_id2;
-	pid_t ping_pid, pong_pid/*, ding_pid*/;
+	pid_t ping_pid, pong_pid, ding_pid;
 
 	if ((ping_pid = spawn(1)) != NUM_PROC)
 		printf("ping in process %d.\n", ping_pid);
@@ -22,12 +22,10 @@ main(int argc, char **argv)
 	else
 		printf("Failed to launch pong.\n");
 
-  /*
   if ((ding_pid = spawn(3)) != NUM_PROC)
     printf("ding in process %d.\n", ding_pid);
   else
     printf("Failed to launch ding.\n");
-    */
 
     /*
     if ((ring0_id1 = sys_ring0_spawn(1)) != NUM_PROC)
