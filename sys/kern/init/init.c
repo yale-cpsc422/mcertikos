@@ -37,7 +37,7 @@ kern_init(uintptr_t mbi_addr)
 {
 	proc_init(mbi_addr);
 
-    KERN_DEBUG("Kernel initialized.\n");
+  KERN_DEBUG("Kernel initialized.\n");
 
 	kern_main();
 }

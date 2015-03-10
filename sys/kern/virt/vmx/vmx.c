@@ -669,7 +669,7 @@ vmx_run_vm()
 
 extern struct vmcs vmcs;
 extern struct eptStruct ept;
-extern void npt_init(unsigned int);
+extern void sched_init(unsigned int);
 extern void vmcs_set_defaults(struct vmcs *, uint64_t *, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, char *, char *, char *, uint16_t, uint64_t, uint64_t, uint64_t, uint64_t, uintptr_t);
 
 void
@@ -696,7 +696,7 @@ vmx_init(unsigned int mbi_addr)
 
     KERN_DEBUG("In vmx init.\n");
 
-	npt_init(mbi_addr);
+	  sched_init(mbi_addr);
 
     VMX_DEBUG("Before vmx_hw_init.\n");
     dump_vmx_info();

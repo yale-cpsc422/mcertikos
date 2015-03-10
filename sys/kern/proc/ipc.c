@@ -8,8 +8,9 @@
 
 extern unsigned int get_curid(void);
 extern void thread_wakeup(unsigned int);
-extern void vmcb_init(unsigned int);
-extern void vmx_init(unsigned int);
+extern void sched_init(unsigned int);
+//extern void vmcb_init(unsigned int);
+//extern void vmx_init(unsigned int);
 
 unsigned int
 is_chan_ready(void)
@@ -70,14 +71,17 @@ proc_init(unsigned int mbi_addr)
 {
 	unsigned int i;
     
-    set_vendor(); //sets the cpu vendor bit.
+  set_vendor(); //sets the cpu vendor bit.
 
-    if (cpuvendor == AMD) {
-    	vmcb_init(mbi_addr);
-    }
-    else if(cpuvendor == INTEL) {
-        vmx_init(mbi_addr);
-    }
+  sched_init(mbi_addr);
+  /*
+  if (cpuvendor == AMD) {
+    vmcb_init(mbi_addr);
+  }
+  else if(cpuvendor == INTEL) {
+    vmx_init(mbi_addr);
+  }
+  */
 
 	i = 0;
 	while (i < NUM_CHAN) {
