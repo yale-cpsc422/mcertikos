@@ -27,7 +27,6 @@ pt_resv(unsigned int proc_index, unsigned int vaddr, unsigned int perm)
       result = MagicNumber;
     else
       result = pt_insert(proc_index, vaddr, pi, perm);
-    KERN_DEBUG("In pt_resv: proc_index = %u, vaddr = %u, perm = %u, pi = %u, result = %u.\n", proc_index, vaddr, perm, pi, result);
     return result;
 }   
 

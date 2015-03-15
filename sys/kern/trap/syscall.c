@@ -110,7 +110,6 @@ sys_ring0_spawn(void)
 
     id = syscall_get_arg2();
     new_pid = ring0proc_create(id);
-    KERN_DEBUG("In sys_ring0_spawn: id = %u, new_pid = %u.\n", id, new_pid);
 
     if (new_pid == NUM_PROC) {
 		  syscall_set_errno(E_INVAL_PID);
@@ -133,7 +132,6 @@ sys_spawn(void)
 	void *elf_addr;
 
 	elf_id = syscall_get_arg2();
-  KERN_DEBUG("In sys_spawn: elf_id = %u.\n", elf_id);
 
 	if (elf_id == 0) {
 		elf_addr = _binary___obj_user_vmm_vmm_start;
@@ -148,7 +146,6 @@ sys_spawn(void)
 	}
 
 	new_pid = proc_create(elf_addr);
-  KERN_DEBUG("In sys_spawn: new_pid = %u.\n", new_pid);
 
 	if (new_pid == NUM_PROC) {
 		syscall_set_errno(E_INVAL_PID);
@@ -485,7 +482,6 @@ sys_hvm_set_seg(void)
 	base = syscall_get_arg4();
 	lim = syscall_get_arg5();
 	ar = syscall_get_arg6();
-  KERN_DEBUG("In sys_hvm_set_seg.\n");
 
 	if (!(GUEST_CS <= seg && seg < GUEST_MAX_SEG_DESC)) {
 		syscall_set_errno(E_INVAL_SEG);

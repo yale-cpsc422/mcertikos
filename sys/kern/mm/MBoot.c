@@ -8,7 +8,6 @@
 unsigned int
 fload(unsigned int addr)
 {
-    //KERN_DEBUG("fload called with %d.\n", addr * 4);
     return *((unsigned int *) (addr * 4));
     //return FlatMem_LOC[addr];
 }
@@ -16,7 +15,6 @@ fload(unsigned int addr)
 void
 fstore(unsigned int addr, unsigned int val)
 {
-    //KERN_DEBUG("fstore called with %d, %d.\n", addr * 4, val);
     *((unsigned int *) (addr * 4)) = val;
     //FlatMem_LOC[addr] = val;
 }

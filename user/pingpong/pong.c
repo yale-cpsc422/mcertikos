@@ -11,8 +11,8 @@ main(int argc, char **argv)
   {
 		sys_recv(&ball);
 		printf("pong %d!\n", ball);
-		yield();
-    //break;
+		//yield();
+    break;
 	}
 	return 0;
 }

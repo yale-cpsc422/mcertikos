@@ -28,7 +28,6 @@ proc_start_ring0(void)
     extern char STACK_LOC[NUM_PROC][PAGESIZE] gcc_aligned(PAGESIZE);
     unsigned int cur_tid = get_curid();
     unsigned int stack_top = (unsigned int) STACK_LOC[cur_tid + 1];
-    //KERN_DEBUG("In proc_start_ring0.\n");
     asm volatile("movl %0, %%esp\n"
                  "pushl $0\n" // push a dummy return address
                  "jmp *%1"
@@ -42,7 +41,6 @@ ring0proc_create(unsigned int id)
 {
     unsigned int pid;
 
-    //KERN_DEBUG("id is %d.\n", id);
 
     if (id != 1 && id != 2)
         KERN_PANIC("Wrong ring0 process id!\n");
@@ -74,12 +72,9 @@ proc_create(void *elf_addr)
 {
 	unsigned int pid;
 
-  KERN_DEBUG("In proc create...\n");
 	pid = thread_spawn((void *) proc_start_user);
-  KERN_DEBUG("Thread spawn with pid %u.\n", pid);
 
 	elf_load(elf_addr, pid);
-  KERN_DEBUG("ELF loaded.\n");
 
 	uctx_set(pid, U_ES, CPU_GDT_UDATA | 3);
 	uctx_set(pid, U_DS, CPU_GDT_UDATA | 3);
@@ -88,7 +83,6 @@ proc_create(void *elf_addr)
 	uctx_set(pid, U_ESP, VM_USERHI);
 	uctx_set(pid, U_EFLAGS, FL_IF);
 	uctx_set(pid, U_EIP, elf_entry(elf_addr));
-  KERN_DEBUG("User contexts set.\n");
 
 	return pid;
 }

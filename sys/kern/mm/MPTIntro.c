@@ -60,7 +60,6 @@ get_PTE(unsigned int proc_index, unsigned int pde_index, unsigned int vadr)
     unsigned int offset;
     offset = ((unsigned int)PTPool_LOC[proc_index][pde_index] - PT_PERM_PTU) / 4096;
     pte = fload(offset * 1024 + vadr);
-    //pte = pte / 4096;
     return pte;
 }
 
@@ -69,14 +68,12 @@ set_PTE(unsigned int proc_index, unsigned int pde_index, unsigned int vadr, unsi
 {   
     unsigned int offset;
     offset = ((unsigned int)PTPool_LOC[proc_index][pde_index] - PT_PERM_PTU) / 4096;
-    //KERN_DEBUG("In set_PTE: proc_index = %u, pde_index = %u, vadr = %u, padr = %u, perm = %u, offset = %u, addr = %u, val = %u.\n", proc_index, pde_index, vadr, padr, perm, offset, offset * 1024 + vadr, padr * 4096 + perm);
     fstore(offset * 1024 + vadr, padr * 4096 + perm);
 }   
 
 void
 rmv_PTE(unsigned int proc_index, unsigned int pde_index, unsigned int vadr)
 {
-    //KERN_DEBUG("In rmv_PTE...\n");
     unsigned int offset;
     offset = ((unsigned int)PTPool_LOC[proc_index][pde_index] - PT_PERM_PTU) / 4096;
     fstore(offset * 1024 + vadr, 0);
