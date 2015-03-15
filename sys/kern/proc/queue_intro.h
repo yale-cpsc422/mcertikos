@@ -25,7 +25,7 @@ void pfree(unsigned int idx);
 unsigned int pt_read(unsigned int pid, unsigned int va);
 void pt_resv(unsigned int pid, unsigned int vaddr, unsigned int perm);
 
-void set_PT(unsigned int idx);
+void set_pt(unsigned int idx);
 
 void pt_in(void);
 void pt_out(void);

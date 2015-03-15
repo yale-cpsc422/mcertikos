@@ -65,7 +65,7 @@ proc_start_user(void)
 	unsigned int cur_pid = get_curid();
 
 	tss_switch(cur_pid);
-	set_PT(cur_pid);
+	set_pt(cur_pid);
 	trap_return((void *) UCTX_LOC[cur_pid]);
 }
 
@@ -74,9 +74,12 @@ proc_create(void *elf_addr)
 {
 	unsigned int pid;
 
+  KERN_DEBUG("In proc create...\n");
 	pid = thread_spawn((void *) proc_start_user);
+  KERN_DEBUG("Thread spawn with pid %u.\n", pid);
 
 	elf_load(elf_addr, pid);
+  KERN_DEBUG("ELF loaded.\n");
 
 	uctx_set(pid, U_ES, CPU_GDT_UDATA | 3);
 	uctx_set(pid, U_DS, CPU_GDT_UDATA | 3);
@@ -85,6 +88,7 @@ proc_create(void *elf_addr)
 	uctx_set(pid, U_ESP, VM_USERHI);
 	uctx_set(pid, U_EFLAGS, FL_IF);
 	uctx_set(pid, U_EIP, elf_entry(elf_addr));
+  KERN_DEBUG("User contexts set.\n");
 
 	return pid;
 }

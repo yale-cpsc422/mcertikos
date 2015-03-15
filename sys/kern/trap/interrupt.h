@@ -3,7 +3,7 @@
 
 #ifdef _KERN_
 
-void set_PT(unsigned int pid);
+void set_pt(unsigned int pid);
 
 unsigned int get_curid(void);
 

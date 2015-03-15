@@ -9,7 +9,8 @@ main(int argc, char **argv)
 {
 	printf("idle\n");
 
-	pid_t ping_pid, pong_pid, ring0_id1, ring0_id2;
+	pid_t ping_pid, pong_pid;
+  //pid_t ring0_id1, ring0_id2;
 
 	if ((ping_pid = spawn(1)) != NUM_PROC)
 		printf("ping in process %d.\n", ping_pid);
@@ -21,15 +22,17 @@ main(int argc, char **argv)
 	else
 		printf("Failed to launch pong.\n");
 
-    if ((ring0_id1 = sys_ring0_spawn(1)) != NUM_PROC)
-        printf("The first ring0 process in process %d.\n", ring0_id1);
+  /*
+  if ((ring0_id1 = sys_ring0_spawn(1)) != NUM_PROC)
+    printf("The first ring0 process in process %d.\n", ring0_id1);
 	else
 		printf("Failed to launch the first ring0 process.\n");
 
-    if ((ring0_id2 = sys_ring0_spawn(2)) != NUM_PROC)
-        printf("The second ring0 process in process %d.\n", ring0_id2); 
+  if ((ring0_id2 = sys_ring0_spawn(2)) != NUM_PROC)
+    printf("The second ring0 process in process %d.\n", ring0_id2); 
 	else
 		printf("Failed to launch the second ring0 process.\n");
+  */
 
   /*
 	pid_t vmm_pid;

@@ -15,8 +15,10 @@ void pfree(unsigned int pfree_index);
  * Derived from lower layers.
  */
 
-void set_pe(void);
-void set_pt(unsigned int *);
+void set_pg(void);
+void set_cr3(char **);
+unsigned int fload(unsigned int);
+void fstore(unsigned int, unsigned int);
 
 #endif /* _KERN_ */
 

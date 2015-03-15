@@ -2,13 +2,13 @@
 #include <lib/x86.h>
 
 void
-set_pt(void *pdir)
+set_cr3(char **pdir)
 {
 	lcr3((uint32_t) pdir);
 }
 
 void
-set_pe(void)
+set_pg(void)
 {
 	/* enable global pages (Sec 4.10.2.4, Intel ASDM Vol3) */
 	uint32_t cr4 = rcr4();

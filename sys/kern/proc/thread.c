@@ -30,14 +30,6 @@ thread_spawn(void *entry)
 }
 
 void
-thread_kill(unsigned int pid, unsigned int chid)
-{
-	tcb_set_state(pid, TD_STATE_DEAD);
-	tdq_remove(chid, pid);
-	thread_free(pid);
-}
-
-void
 thread_wakeup(unsigned int chid)
 {
 	unsigned int pid;

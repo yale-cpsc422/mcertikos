@@ -14,6 +14,9 @@ kctx_new(void *entry)
 
 	pid = pt_new();
 
+  if (pid == NUM_PROC)
+    return NUM_PROC;
+
 	kctx_set_esp(pid, &STACK_LOC[pid][PAGESIZE-4]);
 	kctx_set_eip(pid, entry);
 

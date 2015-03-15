@@ -1,23 +1,58 @@
 #include "MPTComm.h"
 
-#define PAGESIZE	4096
-#define VM_USERLO	0x40000000
-#define VM_USERHI	0xF0000000
-#define VM_USERLO_PI	(VM_USERLO / PAGESIZE)
-#define VM_USERHI_PI	(VM_USERHI / PAGESIZE)
-
-#define PTE_P		0x001	/* Present */
-#define PTE_W		0x002	/* Writeable */
-#define PTE_USER	(PTE_P | PTE_W)
+#define MagicNumber 1048577
+#define PAGESIZE 4096
 
 void
-pt_init_kern(unsigned int mbi_addr)
+pt_init_kern(unsigned int mbi_adr)
 {
-	unsigned int i;
-	pt_init_comm(mbi_addr);
-	i = VM_USERLO;
-	while (i < VM_USERHI) {
-		pt_insert(0, i, i, PTE_USER);
-		i = i + PAGESIZE;
-	}
+    unsigned int i;
+    pt_init_comm(mbi_adr);
+    i = 256;
+    while(i < 960)
+    {
+        set_PDE(0, i);
+        i ++;
+    }
 }
+
+unsigned int
+pt_insert(unsigned int proc_index, unsigned int vadr, unsigned int padr, unsigned int perm)
+{   
+  unsigned int pi; 
+  unsigned int result;
+  unsigned int count;
+  pi = pt_read_pde(proc_index, vadr);
+  if (pi != 0)
+    result = 0;
+  else
+  {
+    result = pt_alloc_pde(proc_index, vadr);
+    if (result == 0)
+      result = MagicNumber;
+  }
+  if (result != MagicNumber)
+  {
+    pt_insert_aux(proc_index, vadr, padr, perm);
+    count = at_get_c(padr);
+    at_set_c(padr, count + 1);
+  }
+  return result;
+}
+
+unsigned int
+pt_rmv(unsigned int proc_index, unsigned int vadr)
+{
+  unsigned int padr;
+  unsigned int count;
+  padr = pt_read(proc_index, vadr);
+  if (padr != 0)
+  {
+    pt_rmv_aux(proc_index, vadr);
+    count = at_get_c(padr / PAGESIZE);
+    if (count > 0)
+      at_set_c(padr / PAGESIZE, count - 1);
+  }
+  return padr;
+}   
+

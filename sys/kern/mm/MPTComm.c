@@ -1,52 +1,59 @@
 #include "MPTOp.h"
 
-#define PAGESIZE	4096
-#define NPDENTRIES	1024	/* PDEs per page directory */
-#define NPTENTRIES	1024	/* PTEs per page table */
 
-#define VM_USERLO	0x40000000
-#define VM_USERHI	0xF0000000
-#define VM_USERLO_PI	(VM_USERLO / PAGESIZE)
-#define VM_USERHI_PI	(VM_USERHI / PAGESIZE)
-
-#define MAX_PAGE	0x100000
-
-#define PTE_P		0x001	/* Present */
-#define PTE_W		0x002	/* Writeable */
-#define PTE_U		0x004	/* User-accessible */
-#define PTE_G		0x100	/* Global */
-#define PTE_KERN	(PTE_P | PTE_W | PTE_G)
+#define num_proc 64
+#define one_k 1024
+#define PAGESIZE 4096
 
 void
-pt_init_comm(unsigned int mbi_addr)
+pt_init_comm(unsigned int mbi_adr)
 {
-	unsigned int i;
-	unsigned int j;
-	unsigned int last_vaddr;
+    unsigned int i, j;
+    idpde_init(mbi_adr);
+    i = 0;
+    while(i < num_proc)     
+    {
+        j = 0;
+        while(j < one_k)    
+        {
+            if (j < 256)    
+              set_PDE(i, j);
+            else if(j >= 960)
+              set_PDE(i, j);
+            else
+              rmv_PDE(i, j);
+            j++;
+        }
+        i++;
+    }
+}
 
-	mem_init(mbi_addr);
+unsigned int
+pt_alloc_pde(unsigned int proc_index, unsigned int vadr)
+{
+  unsigned int i;
+  unsigned int pi;
+  unsigned int pde_index;
+  pi = palloc();
+  if (pi != 0)
+  {
+    pt_insert_pde(proc_index, vadr, pi);
+    pde_index = vadr / (4096 * 1024);
+    i = 0;
+    while (i < 1024)        
+    {
+      rmv_PTE(proc_index, pde_index, i);
+      i ++;
+    }     
+  }       
+  return pi;
+}
 
-	i = 0;
-	while (i < 64) {
-		j = 0;
-		while (j < NPDENTRIES) {
-			set_PDX(i, j);
-			j++;
-		}
-
-		j = 0;
-		last_vaddr = (MAX_PAGE - 1) * PAGESIZE;
-
-		while (j < last_vaddr) {
-			if (j < VM_USERLO || j >= VM_USERHI)
-				pt_insert(i, j, j, PTE_KERN);
-			else
-				pt_rmv(i, j);
-
-			j = j + PAGESIZE;
-		}
-		pt_insert(i, last_vaddr, last_vaddr, PTE_KERN);
-
-		i++;
-	}
+void
+pt_free_pde(unsigned int proc_index, unsigned int vadr)
+{
+  unsigned int pi;
+  pi = pt_read_pde(proc_index, vadr);
+  pt_rmv_pde(proc_index, vadr);
+  pfree(pi / PAGESIZE);
 }

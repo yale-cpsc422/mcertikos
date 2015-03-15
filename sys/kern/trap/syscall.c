@@ -110,14 +110,15 @@ sys_ring0_spawn(void)
 
     id = syscall_get_arg2();
     new_pid = ring0proc_create(id);
+    KERN_DEBUG("In sys_ring0_spawn: id = %u, new_pid = %u.\n", id, new_pid);
 
     if (new_pid == NUM_PROC) {
-		syscall_set_errno(E_INVAL_PID);
-		syscall_set_retval1(NUM_PROC);
-	} else {
-		syscall_set_errno(E_SUCC);
-		syscall_set_retval1(new_pid);
-	}
+		  syscall_set_errno(E_INVAL_PID);
+		  syscall_set_retval1(NUM_PROC);
+	  } else {
+		  syscall_set_errno(E_SUCC);
+		  syscall_set_retval1(new_pid);
+	  }
 }
 
 extern uint8_t _binary___obj_user_vmm_vmm_start[];
@@ -132,6 +133,7 @@ sys_spawn(void)
 	void *elf_addr;
 
 	elf_id = syscall_get_arg2();
+  KERN_DEBUG("In sys_spawn: elf_id = %u.\n", elf_id);
 
 	if (elf_id == 0) {
 		elf_addr = _binary___obj_user_vmm_vmm_start;
@@ -146,6 +148,7 @@ sys_spawn(void)
 	}
 
 	new_pid = proc_create(elf_addr);
+  KERN_DEBUG("In sys_spawn: new_pid = %u.\n", new_pid);
 
 	if (new_pid == NUM_PROC) {
 		syscall_set_errno(E_INVAL_PID);
@@ -402,21 +405,21 @@ sys_hvm_mmap(void)
 		return;
 	}
 
-        hpa = pt_read(cur_pid, hva);
+  hpa = pt_read(cur_pid, hva);
 
-        if ((hpa & PTE_P) == 0) {
-            pt_resv(cur_pid, hva, PTE_P | PTE_U | PTE_W);
-            hpa = pt_read(cur_pid, hva);
-        }
+  if ((hpa & PTE_P) == 0) {
+      pt_resv(cur_pid, hva, PTE_P | PTE_U | PTE_W);
+      hpa = pt_read(cur_pid, hva);
+  }
 
-        hpa = (hpa & 0xfffff000) + (hva % PAGESIZE);
+  hpa = (hpa & 0xfffff000) + (hva % PAGESIZE);
 
-    if (cpuvendor == AMD) {
-        npt_insert(gpa, hpa);
-    }
-    else if (cpuvendor == INTEL) {
-        vmx_set_mmap(gpa, hpa, mem_type);
-    }
+  if (cpuvendor == AMD) {
+      npt_insert(gpa, hpa);
+  }
+  else if (cpuvendor == INTEL) {
+      vmx_set_mmap(gpa, hpa, mem_type);
+  }
 
 	syscall_set_errno(E_SUCC);
 }
@@ -482,18 +485,19 @@ sys_hvm_set_seg(void)
 	base = syscall_get_arg4();
 	lim = syscall_get_arg5();
 	ar = syscall_get_arg6();
+  KERN_DEBUG("In sys_hvm_set_seg.\n");
 
 	if (!(GUEST_CS <= seg && seg < GUEST_MAX_SEG_DESC)) {
 		syscall_set_errno(E_INVAL_SEG);
 		return;
 	}
 
-    if (cpuvendor == AMD) {
-	    vmcb_set_seg(seg, sel, base, lim, ar);
-    }
-    else if (cpuvendor == INTEL) {
-        vmx_set_desc(seg, sel, base, lim, ar);
-    }
+  if (cpuvendor == AMD) {
+	  vmcb_set_seg(seg, sel, base, lim, ar);
+  }
+  else if (cpuvendor == INTEL) {
+    vmx_set_desc(seg, sel, base, lim, ar);
+  }
 
 	syscall_set_errno(E_SUCC);
 }

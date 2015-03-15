@@ -15,10 +15,3 @@ thread_init(unsigned int mbi_addr)
 		pid++;
 	}
 }
-
-void
-thread_free(unsigned int pid)
-{
-	pt_free(pid);
-	tcb_init(pid);
-}

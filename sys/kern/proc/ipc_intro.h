@@ -9,7 +9,7 @@ void set_chan_info(unsigned int chid, unsigned int info);
 unsigned int get_chan_content(unsigned int chid);
 void set_chan_content(unsigned int chid, unsigned int content);
 
-unsigned int init_chan(unsigned int chid, unsigned int info, unsigned int content);
+void init_chan(unsigned int chid, unsigned int info, unsigned int content);
 
 #endif /* _KERN_ */
 

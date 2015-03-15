@@ -15,7 +15,7 @@ trap(tf_t *tf)
 	cur_pid = get_curid();
 	memcpy(UCTX_LOC[cur_pid], tf, sizeof(tf_t));
 
-	set_PT(0);
+	set_pt(0);
 
 	if (T_DIVIDE <= tf->trapno && tf->trapno <= T_SECEV)
 		exception_handler();

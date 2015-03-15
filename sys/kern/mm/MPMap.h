@@ -24,7 +24,7 @@ void pt_in(void);
 void pt_out(void);
 void pfree(unsigned int idx);
 unsigned int palloc(void);
-void set_PT(unsigned int idx);
+void set_pt(unsigned int idx);
 
 #endif /* !_KERN_ */
 

@@ -191,13 +191,13 @@ pmmap_init(uintptr_t mbi_addr)
 }
 
 int
-pmmap_entries_nr(void)
+get_size(void)
 {
 	return pmmap_nentries;
 }
 
 uint32_t
-pmmap_entry_start(int idx)
+get_mms(int idx)
 {
 	int i = 0;
 	struct pmmap *slot = NULL;
@@ -215,7 +215,7 @@ pmmap_entry_start(int idx)
 }
 
 uint32_t
-pmmap_entry_length(int idx)
+get_mml(int idx)
 {
 	int i = 0;
 	struct pmmap *slot = NULL;
@@ -233,7 +233,7 @@ pmmap_entry_length(int idx)
 }
 
 int
-pmmap_entry_usable(int idx)
+is_usable(int idx)
 {
 	int i = 0;
 	struct pmmap *slot = NULL;

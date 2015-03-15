@@ -1,15 +1,6 @@
 #include "MPTNew.h"
 
 #define PAGESIZE	4096
-
-void
-pt_resv(unsigned int proc_index, unsigned int vaddr, unsigned int perm)
-{
-	unsigned int paddr_index;
-	paddr_index = palloc();
-	pt_insert(proc_index, vaddr, paddr_index * PAGESIZE, perm);
-}
-
 #define PTE_P		0x001	/* Present */
 #define PTE_W		0x002	/* Writeable */
 #define PTE_U		0x004	/* User-accessible */

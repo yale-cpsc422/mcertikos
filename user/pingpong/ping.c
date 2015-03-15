@@ -12,8 +12,8 @@ main(int argc, char **argv)
 		printf("ping %d!\n", ball);
 		if (sys_send(3, ball++) == E_IPC)
 			sys_sleep(3);
-		/* sys_yield(); */
-    break;
+		yield();
+    //break;
 	}
 	return 0;
 }
