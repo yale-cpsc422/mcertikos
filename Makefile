@@ -40,7 +40,7 @@ LDFLAGS		:= -nostdlib
 
 ifdef ENABLE_CCOMP
 CCOMP		:= ccomp
-CCOMP_CFLAGS	:= -finline-asm -fpacked-structs -flonglong -fno-sse
+CCOMP_CFLAGS	:= -finline-asm -fpacked-structs -fno-sse
 
 CLIGHTGEN	:= clightgen
 CLIGHTGEN_FLAGS	:= -fall

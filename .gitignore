@@ -12,3 +12,7 @@ misc/iso
 misc/iso/*
 *.v
 Icon*
+.cproject
+.project
+.settings/
+make.sh

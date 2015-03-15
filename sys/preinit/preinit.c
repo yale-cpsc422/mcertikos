@@ -40,24 +40,24 @@ preinit(uintptr_t mbi_addr)
 	intr_init();
     KERN_DEBUG("intr initialized.\n");
 
-    /* 	ide_init(); */
-    /* KERN_DEBUG("ide initialized.\n"); */
+  /* 	ide_init(); */
+  /* KERN_DEBUG("ide initialized.\n"); */
 
 	disk_init();
 	pci_init();
 
-    set_vendor();
-    if (cpuvendor == AMD) {
-        KERN_DEBUG("vendor detected: AMD.\n");
-	    svm_hw_init();
-        KERN_DEBUG("svm hw initialized.\n");
-    }
-    else if (cpuvendor == INTEL) {
-        KERN_DEBUG("vendor detected: INTEL.\n");
-    }
-    else {
-        KERN_PANIC("unknown cpu vendor.\n");
-    }
+  set_vendor();
+  if (cpuvendor == AMD) {
+    KERN_DEBUG("vendor detected: AMD.\n");
+	  svm_hw_init();
+    KERN_DEBUG("svm hw initialized.\n");
+  }
+  else if (cpuvendor == INTEL) {
+    KERN_DEBUG("vendor detected: INTEL.\n");
+  }
+  else {
+    KERN_PANIC("unknown cpu vendor.\n");
+  }
 
 	/* enable interrupts */
 	intr_enable(IRQ_TIMER);
