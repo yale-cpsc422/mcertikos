@@ -2,6 +2,7 @@
 #include <string.h>
 #include <syscall.h>
 #include <types.h>
+#include <debug.h>
 
 #include "vmm.h"
 #include "vmm_dev.h"
@@ -9,8 +10,8 @@
 int
 vdev_init(struct vdev *vdev, struct vm *vm)
 {
-	if (vdev == NULL)
-		return -1;
+    ASSERT(vdev != NULL);
+
 	memzero(vdev, sizeof(struct vdev));
 	vdev->vm = vm;
 	return 0;

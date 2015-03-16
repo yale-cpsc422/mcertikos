@@ -31,13 +31,13 @@ pt_out(void)
 void
 set_PT(unsigned int index)
 {
-	set_pt(PTPool_LOC[index].pdir);
+	set_pt((unsigned int *) PTPool_LOC[index].pdir);
 }
 
 void
 set_PDX(unsigned int pid, unsigned int pdx)
 {
-	PTPool_LOC[pid].pdir[pdx] = (char *) PTPool_LOC[pid].pt[pdx] + PDXPERM;
+	PTPool_LOC[pid].pdir[pdx] = (unsigned int _Alignas(4096)) PTPool_LOC[pid].pt[pdx] + PDXPERM;
 }
 
 void

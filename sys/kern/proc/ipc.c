@@ -76,7 +76,7 @@ proc_init(unsigned int mbi_addr)
     
   set_vendor(); //sets the cpu vendor bit.
 
-  sched_init(mbi_addr);
+//  sched_init(mbi_addr);
 
   if (cpuvendor == AMD) {
     vmcb_init(mbi_addr);

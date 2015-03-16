@@ -16,3 +16,4 @@ Icon*
 .project
 .settings/
 make.sh
+*.cerr
