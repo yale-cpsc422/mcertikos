@@ -59,6 +59,8 @@ pfree(unsigned int pfree_index)
 	at_set(pfree_index, 0);
 }
 
+static unsigned int last_palloc_index = 0;
+
 unsigned int
 palloc(void)
 {
@@ -68,7 +70,7 @@ palloc(void)
 	unsigned int palloc_is_norm;
 	unsigned int palloc_free_index;
 	tnps = get_nps();
-	palloc_index = 0;
+	palloc_index = last_palloc_index + 1;
 	palloc_free_index = tnps;
 	while (palloc_index < tnps && palloc_free_index == tnps) {
 		palloc_is_norm = is_norm(palloc_index);
@@ -84,5 +86,6 @@ palloc(void)
 		KERN_PANIC("Not enough memory!\n");
 
 	at_set(palloc_free_index, 1);
+  last_palloc_index = palloc_free_index;
 	return palloc_free_index;
 }

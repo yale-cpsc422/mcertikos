@@ -696,7 +696,7 @@ vmx_init(unsigned int mbi_addr)
 
     KERN_DEBUG("In vmx init.\n");
 
-    sched_init(mbi_addr);
+	  sched_init(mbi_addr);
 
     VMX_DEBUG("Before vmx_hw_init.\n");
     dump_vmx_info();

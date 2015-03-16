@@ -66,17 +66,13 @@ recv(void)
 
 extern cpu_vendor cpuvendor;
 
-extern void vmcb_init(unsigned int mbi_addr);
-extern void vmx_init(unsigned int mbi_addr);
-
 void
 proc_init(unsigned int mbi_addr)
 {
 	unsigned int i;
     
-  set_vendor(); //sets the cpu vendor bit.
+    set_vendor(); //sets the cpu vendor bit.
 
-//  sched_init(mbi_addr);
 
   if (cpuvendor == AMD) {
     vmcb_init(mbi_addr);
