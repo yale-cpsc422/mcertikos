@@ -109,8 +109,8 @@ vmm_handle_ioport(struct vm *vm)
 	if (exit_info->ioport.write == TRUE) {
 		sys_hvm_get_reg(vm->vmid, GUEST_EAX, &eax);
 #ifdef DEBUG_GUEST_IOPORT
-		DEBUG("Write guest I/O port 0x%x, width %d bytes, "
-		      "val 0x%08x.\n", port, 1 << width, eax);
+		//DEBUG("Write guest I/O port 0x%x, width %d bytes, "
+		//      "val 0x%08x.\n", port, 1 << width, eax);
 #endif
 		vdev_write_guest_ioport(&vm->vdev, port, width, eax);
 		sys_hvm_get_next_eip(vm->vmid, INSTR_OUT, &next_eip);
@@ -119,8 +119,8 @@ vmm_handle_ioport(struct vm *vm)
 		sys_hvm_set_reg(vm->vmid, GUEST_EAX, eax);
 		sys_hvm_get_next_eip(vm->vmid, INSTR_IN, &next_eip);
 #ifdef DEBUG_GUEST_IOPORT
-		DEBUG("Read guest I/O port 0x%x, width %d bytes, "
-		      "val 0x%08x.\n", port, 1 << width, eax);
+		//DEBUG("Read guest I/O port 0x%x, width %d bytes, "
+		//      "val 0x%08x.\n", port, 1 << width, eax);
 #endif
 	}
 
@@ -339,7 +339,7 @@ vmm_handle_exit(struct vm *vm)
 
 	case EXIT_REASON_IOPORT:
 #if defined (DEBUG_VMEXIT) || defined (DEBUG_GUEST_IOPORT)
-		DEBUG("VMEXIT for I/O port.\n");
+		//DEBUG("VMEXIT for I/O port.\n");
 #endif
 		rc = vmm_handle_ioport(vm);
 		break;
@@ -423,7 +423,7 @@ vmm_intr_assist(struct vm *vm)
 	/* no interrupt needs to be injected */
 	if ((vector = vdev_peep_intout(&vm->vdev)) == -1) {
 #if defined (DEBUG_GUEST_INTR) || defined (DEBUG_GUEST_INJECT)
-		DEBUG("Found no interrupt.\n");
+		//DEBUG("Found no interrupt.\n");
 #endif
 		return 0;
 	}

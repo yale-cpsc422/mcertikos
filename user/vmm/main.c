@@ -72,8 +72,10 @@ main(int argc, char **argv)
 
 	printf("Starting virtual machine ... \n");
 
-	if (vmm_run_vm(&vm))
+	if (vmm_run_vm(&vm)) {
+    printf("Failed to run the vm.\n");
 		return -3;
+  }
 
 	return 0;
 }

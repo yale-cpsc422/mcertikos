@@ -9,6 +9,7 @@ main(int argc, char **argv)
 {
 	printf("idle\n");
 
+  /*
 	pid_t ping_pid, pong_pid;
   pid_t ring0_id1, ring0_id2;
 
@@ -31,15 +32,14 @@ main(int argc, char **argv)
     printf("The second ring0 process in process %d.\n", ring0_id2); 
 	else
 		printf("Failed to launch the second ring0 process.\n");
+  */
 
-  /*
 	pid_t vmm_pid;
 
 	if ((vmm_pid = spawn(0)) != -1)
 		printf("VMM in process %d.\n", vmm_pid);
 	else
 		printf("Failed to launch VMM.\n");
-  */
 
 	while (1)
 		yield();

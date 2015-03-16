@@ -11,7 +11,11 @@ pt_read(unsigned int proc_index, unsigned int vaddr)
     unsigned int pdx_index;
     unsigned int vaddrl;
     unsigned int paddr;
+    unsigned int pde;
     pdx_index = vaddr / (4096 * 1024);
+    pde = get_PDE(proc_index, pdx_index);
+    if (pde == 0)
+      return 0;
     vaddrl = (vaddr / 4096) % 1024;
     paddr = get_PTE(proc_index, pdx_index, vaddrl);
     return paddr;

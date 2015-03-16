@@ -305,7 +305,6 @@ sys_disk_cap(void)
 void
 sys_get_tsc_per_ms(void)
 {
-  //KERN_DEBUG("tsc per ms: %llu.\n", tsc_per_ms);
 	syscall_set_retval1(tsc_per_ms >> 32);
 	syscall_set_retval2(tsc_per_ms & 0xffffffff);
 	syscall_set_errno(E_SUCC);
@@ -394,7 +393,7 @@ sys_hvm_mmap(void)
 	cur_pid = get_curid();
 	gpa = syscall_get_arg2();
 	hva = syscall_get_arg3();
-    mem_type = syscall_get_arg4();
+  mem_type = syscall_get_arg4();
 
 	if (hva % PAGESIZE != 0 || gpa % PAGESIZE != 0 ||
 	    !(VM_USERLO <= hva && hva + PAGESIZE <= VM_USERHI)) {

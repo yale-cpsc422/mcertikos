@@ -21,16 +21,12 @@ kern_main(void)
 
   KERN_DEBUG("In kernel main.\n");
 	idle_pid = proc_create(_binary___obj_user_idle_idle_start);
-	KERN_DEBUG("idle process %d is created.\n", idle_pid);
 
 	KERN_INFO("Start user-space ... \n");
 
 	tdq_remove(NUM_CHAN, idle_pid);
-  KERN_DEBUG("idle_pid removed from the ready queue.\n");
 	tcb_set_state(idle_pid, TD_STATE_RUN);
-  KERN_DEBUG("the state of idle process set to TD_STATE_RUN.\n");
 	set_curid(idle_pid);
-  KERN_DEBUG("the cur_id set to the idle_pid.\n");
 	kctx_switch(0, idle_pid);
 
 	KERN_PANIC("kern_main() should never be here.\n");
