@@ -57,6 +57,8 @@ pfree(unsigned int pfree_index)
 	at_set(pfree_index, 0);
 }
 
+static unsigned int last_palloc_index = 0;
+
 unsigned int
 palloc()
 {
@@ -66,7 +68,7 @@ palloc()
     unsigned int palloc_is_norm;
     unsigned int palloc_free_index;
     tnps = get_nps();
-    palloc_index = 1;
+    palloc_index = last_palloc_index + 1;
     palloc_free_index = tnps;
     while( palloc_index < tnps && palloc_free_index == tnps )
     {
@@ -86,6 +88,7 @@ palloc()
       at_set(palloc_free_index, 1);
       at_set_c(palloc_free_index, 0);
     }
+    last_palloc_index = palloc_free_index;
     return palloc_free_index;
 } 
 
