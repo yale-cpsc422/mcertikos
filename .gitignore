@@ -15,6 +15,5 @@ Icon*
 .cproject
 .project
 .settings/
-make.sh
 eject.sh
 *.cerr
