@@ -16,6 +16,8 @@
  * appropriate count to generate a frequency of freq hz.
  */
 #define TIMER_DIV(x)	((TIMER_FREQ+(x)/2)/(x))
+#define FREQ    50
+#define LATCH   TIMER_DIV(FREQ)
 
 /*
  * Macros for specifying values to be written into a mode register.
@@ -31,6 +33,6 @@ void
 timer_hw_init(void)
 {
 	outb(TIMER_MODE, TIMER_SEL0 | TIMER_RATEGEN | TIMER_16BIT);
-	outb(IO_TIMER1, TIMER_DIV(100) % 256);
-	outb(IO_TIMER1, TIMER_DIV(100) / 256);
+	outb(IO_TIMER1, LATCH % 256);
+	outb(IO_TIMER1, LATCH / 256);
 }

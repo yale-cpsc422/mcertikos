@@ -5,10 +5,11 @@
 
 #include <preinit/lib/types.h>
 
-volatile uint64_t tsc_per_ms;	/* TSC ticks per microsecond */
+volatile uint64_t tsc_per_ms;	/* TSC ticks per millisecond */
 
 int tsc_init(void);
 void delay(uint32_t);
+void udelay(uint32_t);
 
 #endif /* _KERN_ */
 

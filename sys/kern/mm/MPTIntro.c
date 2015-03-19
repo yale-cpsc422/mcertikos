@@ -11,7 +11,7 @@
 #define PDXPERM		(PTE_P | PTE_W | PTE_U)
 
 struct PTStruct {
-	unsigned int pdir[NPDENTRIES]		gcc_aligned(PAGESIZE);
+	char * pdir[NPDENTRIES]		gcc_aligned(PAGESIZE);
 	unsigned int pt[NPDENTRIES][NPTENTRIES]	gcc_aligned(PAGESIZE);
 };
 
@@ -37,7 +37,7 @@ set_PT(unsigned int index)
 void
 set_PDX(unsigned int pid, unsigned int pdx)
 {
-	PTPool_LOC[pid].pdir[pdx] = (unsigned int _Alignas(4096)) PTPool_LOC[pid].pt[pdx] + PDXPERM;
+	PTPool_LOC[pid].pdir[pdx] = ((char *) PTPool_LOC[pid].pt[pdx]) + PDXPERM;
 }
 
 void

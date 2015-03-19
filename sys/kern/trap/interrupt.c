@@ -1,5 +1,6 @@
 #include <preinit/dev/intr.h>
 #include <lib/trap.h>
+#include <preinit/lib/debug.h>
 
 #include "exception.h"
 
@@ -15,10 +16,26 @@ spurious_intr_handler(void)
 	return 0;
 }
 
+static unsigned long long jiffies = 0ull;
+#define PERIOD  1000
+
+static void
+periodic (void)
+{
+    jiffies ++;
+    if (jiffies % PERIOD == 0)
+    {
+        vprintf(".");
+    }
+}
+
 static int
 timer_intr_handler(void)
 {
 	intr_eoi();
+
+	//    periodic();
+
 	return 0;
 }
 

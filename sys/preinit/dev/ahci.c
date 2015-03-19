@@ -93,27 +93,27 @@ static int ahci_port_poll_complete(int port);
 	do {							\
 		uint64_t time;					\
 		for (time = 0; time < (n) && !(cond); time++) 	\
-			delay(1);				\
+			udelay(100);				\
 	} while (0)
 
 static gcc_inline uint8_t
 ahci_readb(uintptr_t offset)
 {
-	volatile uint8_t val = *(volatile uint8_t *) (hba.ghc + offset);
+	uint8_t val = *(volatile uint8_t *) (hba.ghc + offset);
 	return (uint8_t) val;
 }
 
 static gcc_inline uint16_t
 ahci_readw(uintptr_t offset)
 {
-	volatile uint16_t val = *(volatile uint16_t *) (hba.ghc + offset);
+	uint16_t val = *(volatile uint16_t *) (hba.ghc + offset);
 	return (uint16_t) val;
 }
 
 static gcc_inline uint32_t
 ahci_readl(uintptr_t offset)
 {
-	volatile uint32_t val = *(volatile uint32_t *) (hba.ghc + offset);
+	uint32_t val = *(volatile uint32_t *) (hba.ghc + offset);
 	return (uint32_t) val;
 }
 
@@ -502,7 +502,7 @@ ahci_wait_command(int port)
 #endif
 	struct ahci_r_fis *rfis = ports[port].rfis;
 
-	for (i = 0; i < 3100; i++) {
+	for (i = 0; 1; i++) {
 		is = ahci_readl(AHCI_P_IS(port));
 
 		if (is) {
@@ -537,10 +537,10 @@ ahci_wait_command(int port)
 			}
 		}
 
-		delay(10);
+		udelay(1);
 	}
 
-	if (i == 3100) {
+	if (i > 6200000) {
 		AHCI_DEBUG("Command timeout on port %d: PxIS = 0x%08x.\n",
 			   port, is);
 		return 1;
@@ -778,6 +778,11 @@ ahci_port_poll_complete(int port)
 	/* transfer succeeds */
 	KERN_ASSERT(ports[port].status == PORT_XFERRING);
 	do {
+//	    asm volatile (
+//	            "1: dec %%ecx\n"
+//	            "   jnz 1b\n"
+//	            : : "c" (1000)
+//	    );
 		ci = ahci_readl(AHCI_P_CI(port));
 	} while (ci);
 	if (ci == 0 && ports[port].status == PORT_XFERRING)

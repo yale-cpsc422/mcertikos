@@ -109,3 +109,14 @@ delay(uint32_t ms)
 	volatile uint64_t start = rdtsc();
 	while (rdtsc() < start + ticks);
 }
+
+/*
+ * Wait for us microsecond.
+ */
+void
+udelay(uint32_t us)
+{
+    volatile uint64_t ticks = tsc_per_ms / 1000 * us;
+    volatile uint64_t start = rdtsc();
+    while (rdtsc() < start + ticks);
+}

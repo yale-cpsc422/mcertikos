@@ -9,7 +9,7 @@
 #define VM_USERLO_PI	(VM_USERLO / PAGESIZE)
 #define VM_USERHI_PI	(VM_USERHI / PAGESIZE)
 
-#define MAX_PAGE	0x100000
+#define MAX_PAGE	0x100000u
 
 #define PTE_P		0x001	/* Present */
 #define PTE_W		0x002	/* Writeable */

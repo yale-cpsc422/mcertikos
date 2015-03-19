@@ -35,25 +35,25 @@ OBJDIRS		:=
 # Compiler and Linker
 CC		:= $(GCCPREFIX)gcc
 LD		:= $(GCCPREFIX)ld
-CFLAGS		:= -MD -Wall -Werror -Wno-strict-aliasing -Wno-unused-function -pipe -fno-builtin -nostdinc -fno-stack-protector
+CFLAGS		:= -MD -Wall -Werror -Wno-strict-aliasing -Wno-unused-function -pipe -fno-builtin -nostdinc -fno-stack-protector -O2 -g
 LDFLAGS		:= -nostdlib
 
 ifdef ENABLE_CCOMP
-CCOMP		:= ccomp
-CCOMP_CFLAGS	:= -finline-asm -fpacked-structs -fno-sse
+#CCOMP		:= ccomp
+#CCOMP_CFLAGS	:= -finline-asm -fpacked-structs -fno-sse
 
-CLIGHTGEN	:= clightgen
-CLIGHTGEN_FLAGS	:= -fall
+#CLIGHTGEN	:= clightgen
+#CLIGHTGEN_FLAGS	:= -fall
 
-ifeq ($(V),)
-CCOMP_CFLAGS	+= -v
-endif
+#ifeq ($(V),)
+#CCOMP_CFLAGS	+= -v
+#endif
 
 # Uncomment following two lines when you suspect differences between gcc and
 # compcert cause problems.
 
-#CCOMP		:= gcc
-#CCOMP_CFLAGS	:= -MD -Wall -Werror -Wno-strict-aliasing -Wno-unused-function -pipe -fno-builtin -nostdinc -fno-stack-protector -m32 -D__COMPCERT__
+CCOMP		:= gcc
+CCOMP_CFLAGS	:= -MD -Wall -Werror -Wno-strict-aliasing -Wno-unused-function -pipe -fno-builtin -nostdinc -fno-stack-protector -O2 -g -m32 -D__COMPCERT__
 endif
 
 # other tools

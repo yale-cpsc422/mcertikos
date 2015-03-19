@@ -9,8 +9,8 @@
 extern unsigned int get_curid(void);
 extern void thread_wakeup(unsigned int);
 extern void sched_init(unsigned int);
-//extern void vmcb_init(unsigned int);
-//extern void vmx_init(unsigned int);
+extern void vmcb_init(unsigned int);
+extern void vmx_init(unsigned int);
 
 unsigned int
 is_chan_ready(void)

@@ -4,6 +4,7 @@
 #include <syscall.h>
 #include <types.h>
 #include <x86.h>
+#include <hypercall_vmx.h>
 
 #include "vmm.h"
 #include "vmm_dev.h"
@@ -315,6 +316,63 @@ vmm_handle_rdtsc (struct vm *vm)
     return 0;
 }
 
+static int inline
+vmm_hypercall_get_tsc_khz (struct vm *vm, uint32_t * a0, uint32_t * a1)
+{
+    ASSERT (vm != NULL);
+    ASSERT (a0 != NULL);
+    ASSERT (a1 != NULL);
+    ASSERT (1);
+
+    uint64_t khz = sys_get_tsc_per_ms (vm->vmid);
+    *a0 = khz >> 32;
+    *a1 = khz & 0xffffffffull;
+
+    return HYPERCALL_SUCCESSFUL;
+}
+
+static int
+vmm_handle_hypercall (struct vm *vm)
+{
+    ASSERT (vm != NULL);
+    ASSERT (vm->exit_reason == EXIT_REASON_HYPERCALL);
+
+    uint32_t call_nr, a0, a1, a2, a3;
+    sys_hvm_get_reg (vm->vmid, GUEST_EAX, &call_nr);
+    sys_hvm_get_reg (vm->vmid, GUEST_EBX, &a0);
+    sys_hvm_get_reg (vm->vmid, GUEST_ECX, &a1);
+    sys_hvm_get_reg (vm->vmid, GUEST_EDX, &a2);
+    sys_hvm_get_reg (vm->vmid, GUEST_ESI, &a3);
+
+    uint32_t ret = 0;
+
+    switch (call_nr)
+    {
+    case HYPERCALL_GET_TSC_KHZ:
+        ret = vmm_hypercall_get_tsc_khz (vm, &a0, &a1);
+        break;
+    default:
+#ifdef DEBUG_HYPERCALL
+        KERN_DEBUG("Invalid hypercall: nr=%llx.\n", call_nr);
+#endif
+        ret = 1;
+        break;
+    }
+
+    sys_hvm_set_reg (vm->vmid, GUEST_EAX, ret);
+    sys_hvm_set_reg (vm->vmid, GUEST_EBX, a0);
+    sys_hvm_set_reg (vm->vmid, GUEST_ECX, a1);
+    sys_hvm_set_reg (vm->vmid, GUEST_EDX, a2);
+    sys_hvm_set_reg (vm->vmid, GUEST_ESI, a3);
+
+    uint32_t next_eip;
+
+    sys_hvm_get_next_eip (vm->vmid, INSTR_HYPERCALL, &next_eip);
+    sys_hvm_set_reg (vm->vmid, GUEST_EIP, next_eip);
+
+    return 0;
+}
+
 static int
 vmm_handle_invalid_instr (struct vm *vm)
 {
@@ -397,12 +455,12 @@ vmm_handle_exit (struct vm *vm)
         rc = vmm_handle_rdtsc (vm);
         break;
 
-        /* 	case EXIT_REASON_HYPERCALL: */
-        /* #if defined (DEBUG_VMEXIT) || defined (DEBUG_HYPERCALL) */
-        /* 		DEBUG("VMEXIT for hypercall.\n"); */
-        /* #endif */
-        /* 		rc = vmm_handle_hypercall(vm); */
-        /* 		break; */
+    case EXIT_REASON_HYPERCALL:
+#if defined (DEBUG_VMEXIT) || defined (DEBUG_HYPERCALL)
+        DEBUG("VMEXIT for hypercall.\n");
+#endif
+        rc = vmm_handle_hypercall (vm);
+        break;
 
     case EXIT_REASON_INVAL_INSTR:
 #ifdef DEBUG_VMEXIT
@@ -501,8 +559,7 @@ vmm_load_bios (struct vm *vm)
     ASSERT(vm != NULL);
 
     extern uint8_t _binary___misc_bios_bin_start[],
-            _binary___misc_bios_bin_size[],
-            _binary___misc_vgabios_bin_start[],
+            _binary___misc_bios_bin_size[], _binary___misc_vgabios_bin_start[],
             _binary___misc_vgabios_bin_size[];
 
     /* load BIOS ROM */
