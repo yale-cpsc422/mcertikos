@@ -62,6 +62,8 @@ enum __syscall_nr {
     SYS_hvm_handle_rdmsr,
     SYS_hvm_handle_wrmsr,
 
+	SYS_offer_shared_mem,
+	SYS_shared_mem_status,
 	MAX_SYSCALL_NR	/* XXX: always put it at the end of __syscall_nr */
 };
 
@@ -133,6 +135,9 @@ void sys_is_chan_ready(void);
 void sys_send(void);
 void sys_recv(void);
 void sys_sleep(void);
+
+void sys_offer_shared_mem(void);
+void sys_shared_mem_status(void);
 
 void sys_hvm_handle_rdmsr(void);
 void sys_hvm_handle_wrmsr(void);
