@@ -9,6 +9,7 @@
 #include <lib/trap.h>
 #include "syscall_args.h"
 #include "syscall.h"
+#include <mm/MShare.h>
 
 #define PAGESIZE			4096
 
@@ -884,5 +885,63 @@ sys_sleep(void)
 	unsigned int chid;
 	chid = syscall_get_arg2();
 	thread_sleep(chid);
+	syscall_set_errno(E_SUCC);
+}
+
+void
+sys_offer_shared_mem(void)
+{
+	unsigned int dest = syscall_get_arg2();
+	unsigned int source_va = syscall_get_arg3();
+	unsigned int source = get_curid();
+	unsigned int status;
+
+	if (dest < 0) {
+		KERN_DEBUG("Shared Memory Error: dest < 0.");
+		syscall_set_errno(E_INVAL_PID);
+	}
+	else if (dest >= NUM_PROC) {
+		KERN_DEBUG("Shared Memory Error: dest >= NUM_PROC.");
+		syscall_set_errno(E_INVAL_PID);
+	}
+	else if (source == dest) {
+		KERN_DEBUG("Shared Memory Error: source == dest.");
+		syscall_set_errno(E_INVAL_PID);
+		syscall_set_retval1(NUM_PROC);
+	}
+	else if (source_va % PAGESIZE != 0) {
+		KERN_DEBUG("Shared Memory Error: source_va %% PAGESIZE != 0.");
+		syscall_set_errno(E_INVAL_PID);
+	}
+	else if (source_va < VM_USERLO) { //TODO VM?
+		KERN_DEBUG("Shared Memory Error: source_va < VM_USERLO.");
+		syscall_set_errno(E_INVAL_ADDR);
+	}
+	else {
+		status = offer_shared_memory(source, dest, source_va);
+		syscall_set_retval1(status);
+	}
+
+	syscall_set_errno(E_SUCC);
+}
+
+void
+sys_shared_mem_status(void)
+{
+	unsigned int status;
+	unsigned int dest = syscall_get_arg2();
+	unsigned int source = get_curid();
+
+	if (dest < 0) {
+		syscall_set_errno(E_INVAL_PID);
+	}
+	else if (dest >= NUM_PROC) {
+		syscall_set_errno(E_INVAL_PID);
+	}
+	else {
+		status = shared_memory_status(source, dest);
+		syscall_set_retval1(status);
+	}
+
 	syscall_set_errno(E_SUCC);
 }

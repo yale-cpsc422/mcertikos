@@ -145,18 +145,20 @@
  * Arch-independent VMEXIT reason
  */
 
-typedef enum {
-	EXIT_REASON_NONE = 0,	/* no VMEXIT */
-	EXIT_REASON_EXTINT,	/* exit for the external interrupt */
-	EXIT_REASON_INTWIN,	/* exit for the interrupt window */
-	EXIT_REASON_IOPORT,	/* exit for accessing an I/O port */
-	EXIT_REASON_PGFLT,	/* exit for the page fault */
-	EXIT_REASON_RDMSR,	/* exit for the rdmsr instruction */
-	EXIT_REASON_WRMSR,	/* exit for the wrmsr instruction */
-	EXIT_REASON_CPUID,	/* exit for the cpuid instruction */
-	EXIT_REASON_RDTSC,	/* exit for the rdtsc/rdtscp instruction */
-	EXIT_REASON_INVAL_INSTR,/* exit for the invalid instruction */
-	EXIT_REASON_INVAL	/* invalid exit */
+typedef enum
+{
+    EXIT_REASON_NONE = 0, /* no VMEXIT */
+    EXIT_REASON_EXTINT, /* exit for the external interrupt */
+    EXIT_REASON_INTWIN, /* exit for the interrupt window */
+    EXIT_REASON_IOPORT, /* exit for accessing an I/O port */
+    EXIT_REASON_PGFLT, /* exit for the page fault */
+    EXIT_REASON_RDMSR, /* exit for the rdmsr instruction */
+    EXIT_REASON_WRMSR, /* exit for the wrmsr instruction */
+    EXIT_REASON_CPUID, /* exit for the cpuid instruction */
+    EXIT_REASON_RDTSC, /* exit for the rdtsc/rdtscp instruction */
+    EXIT_REASON_INVAL_INSTR,/* exit for the invalid instruction */
+    EXIT_REASON_HYPERCALL, /* exit for hypercall */
+    EXIT_REASON_INVAL, /* invalid exit */
 } exit_reason_t;
 
 /*
@@ -180,29 +182,33 @@ typedef enum {
 	 (reason) == VMX_EXIT_REASON_EPT_FAULT ? EXIT_REASON_PGFLT :	\
 	 (reason) == VMX_EXIT_REASON_CPUID ? EXIT_REASON_CPUID :	\
 	 (reason) == VMX_EXIT_REASON_RDTSC ? EXIT_REASON_RDTSC :	\
+	 (reason) == VMX_EXIT_REASON_VMCALL ? EXIT_REASON_HYPERCALL : \
 	 EXIT_REASON_INVAL)
 
 /*
  * VMEXIT info.
  */
 
-typedef union {
-	/* valid when exiting for I/O ports */
-	struct {
-		uint16_t  port;	/* I/O port */
-		uint8_t	  seg;	/* segment */
-		addr_sz_t aw;	/* address width */
-		data_sz_t dw;	/* data width */
-		bool      write;/* is write? */
-		bool      rep;	/* has the prefix rep? */
-		bool      str;	/* is a string operation? */
-		uintptr_t neip;	/* address of the next instruction */
-	} ioport;
+typedef union
+{
+    /* valid when exiting for I/O ports */
+    struct
+    {
+        uint16_t port; /* I/O port */
+        uint8_t seg; /* segment */
+        addr_sz_t aw; /* address width */
+        data_sz_t dw; /* data width */
+        bool write;/* is write? */
+        bool rep; /* has the prefix rep? */
+        bool str; /* is a string operation? */
+        uintptr_t neip; /* address of the next instruction */
+    } ioport;
 
-	/* valid when exiting for EPT/NPT page faults */
-	struct {
-		uintptr_t addr;	/* the fault address */
-	} pgflt;
+    /* valid when exiting for EPT/NPT page faults */
+    struct
+    {
+        uintptr_t addr; /* the fault address */
+    } pgflt;
 } exit_info_t;
 
 /*
@@ -233,11 +239,12 @@ typedef union {
 #define GUEST_SEG_TYPE_TSS_BUSY	0x3
 #define GUEST_SEG_TYPE_TSS	0xb
 
-struct guest_seg_desc {
-	uint16_t	sel;
-	uint32_t	base;
-	uint32_t	lim;
-	uint32_t	ar;
+struct guest_seg_desc
+{
+    uint16_t sel;
+    uint32_t base;
+    uint32_t lim;
+    uint32_t ar;
 };
 
 /*
@@ -251,9 +258,10 @@ struct guest_seg_desc {
  * Arch-independent inject event type
  */
 
-typedef enum {
-	EVENT_EXTINT,		/* external interrupt */
-	EVENT_EXCEPTION		/* exception */
+typedef enum
+{
+    EVENT_EXTINT, /* external interrupt */
+    EVENT_EXCEPTION /* exception */
 } guest_event_t;
 
 /*
@@ -267,10 +275,15 @@ typedef enum {
  * Instruction type
  */
 
-typedef enum {
-	INSTR_IN, INSTR_OUT, INSTR_RDMSR, INSTR_WRMSR, INSTR_CPUID, INSTR_RDTSC,
-	INSTR_HYPERCALL
+typedef enum
+{
+    INSTR_IN,
+    INSTR_OUT,
+    INSTR_RDMSR,
+    INSTR_WRMSR,
+    INSTR_CPUID,
+    INSTR_RDTSC,
+    INSTR_HYPERCALL
 } guest_instr_t;
-
 
 #endif /* !_USER_HVM_H_ */

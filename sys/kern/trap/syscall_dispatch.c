@@ -316,6 +316,12 @@ syscall_dispatch(void)
 	case SYS_sleep:
 		sys_sleep();
 		break;
+	case SYS_offer_shared_mem:
+		sys_offer_shared_mem();
+		break;
+	case SYS_shared_mem_status:
+		sys_shared_mem_status();
+		break;
 	default:
 		syscall_set_errno(E_INVAL_CALLNR);
 	}

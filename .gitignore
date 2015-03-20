@@ -15,3 +15,8 @@ Icon*
 *.swp
 *.stderr
 *.stdout
+.cproject
+.project
+.settings/
+eject.sh
+*.cerr
