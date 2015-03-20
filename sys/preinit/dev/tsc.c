@@ -6,6 +6,8 @@
 #include "timer.h"
 #include "tsc.h"
 
+volatile uint64_t tsc_per_ms;
+
 /*
  * XXX: From Linux 3.2.6: arch/x86/kernel/tsc.c: pit_calibrate_tsc()
  */
