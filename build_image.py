@@ -41,7 +41,7 @@ sector_start = out[len(out) - 1].split()[2]
 
 os.system('sudo losetup -o `expr %s \* 512` /dev/loop0 certikos.img' % sector_start)
 
-os.system('sudo mke2fs -j /dev/loop0')
+os.system('sudo mke2fs -j /dev/loop0 -L mcertikos')
 
 os.system('sudo losetup -d /dev/loop0')
 
@@ -51,6 +51,7 @@ print 'Installing the boot loader...\n\n\n'
 os.system('dd if=obj/boot/boot0 of=certikos.img bs=446 count=1 conv=notrunc')
 os.system('dd if=obj/boot/boot1 of=certikos.img bs=512 count=62 seek=1 conv=notrunc')
 os.system('sudo losetup -o `expr %s \* 512` /dev/loop1 certikos.img' % sector_start)
+os.system('sudo e2label /dev/sdf1 mcertikos')
 os.system('sudo mount /dev/loop1 /mnt')
 os.system('sudo mkdir /mnt/boot')
 os.system('sudo cp obj/boot/loader /mnt/boot/')

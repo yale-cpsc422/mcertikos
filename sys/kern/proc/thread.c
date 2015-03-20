@@ -1,4 +1,5 @@
 #include "cur_id.h"
+#include <preinit/lib/debug.h>
 
 #define TD_STATE_READY		0
 #define TD_STATE_RUN		1

@@ -12,3 +12,8 @@ misc/iso
 misc/iso/*
 *.v
 Icon*
+.cproject
+.project
+.settings/
+eject.sh
+*.cerr

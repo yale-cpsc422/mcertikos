@@ -1,5 +1,6 @@
 #include <lib/string.h>
 #include <preinit/lib/types.h>
+#include <preinit/lib/video.h>
 
 #include "console.h"
 #include "serial.h"
@@ -14,6 +15,7 @@ cons_init()
 {
 	memset(&cons, 0x0, sizeof(cons));
 	serial_init();
+	video_init();
 }
 
 void

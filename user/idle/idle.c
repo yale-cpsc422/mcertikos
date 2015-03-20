@@ -23,13 +23,13 @@ main(int argc, char **argv)
 	else
 		printf("Failed to launch pong.\n");
 
-  if ((ring0_id1 = sys_ring0_spawn(1)) != NUM_PROC)
-    printf("The first ring0 process in process %d.\n", ring0_id1);
+    if ((ring0_id1 = sys_ring0_spawn(1)) != NUM_PROC)
+        printf("The first ring0 process in process %d.\n", ring0_id1);
 	else
 		printf("Failed to launch the first ring0 process.\n");
 
-  if ((ring0_id2 = sys_ring0_spawn(2)) != NUM_PROC)
-    printf("The second ring0 process in process %d.\n", ring0_id2); 
+    if ((ring0_id2 = sys_ring0_spawn(2)) != NUM_PROC)
+        printf("The second ring0 process in process %d.\n", ring0_id2); 
 	else
 		printf("Failed to launch the second ring0 process.\n");
   */
