@@ -453,6 +453,44 @@ sys_recv(uint32_t *val)
 }
 
 static gcc_inline int
+sys_ssend(uint32_t chid, unsigned int *buffer,
+          uint32_t scount, unsigned int *actualsent)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_ssend),
+		       "b" (chid),
+		       "c" (buffer),
+           "d" (scount),
+           "S" (actualsent)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
+sys_srecv(uint32_t pid, unsigned int *buffer,
+          uint32_t rcount, unsigned int *actualreceived)
+{
+	int errno;
+
+	asm volatile("int %1"
+		     : "=a" (errno)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_srecv),
+           "b" (pid),
+           "c" (buffer),
+           "d" (rcount),
+           "S" (actualreceived)
+		     : "cc", "memory");
+
+	return errno;
+}
+
+static gcc_inline int
 sys_is_chan_ready(void)
 {
 	int errno;

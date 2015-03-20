@@ -52,8 +52,8 @@ endif
 # Uncomment following two lines when you suspect differences between gcc and
 # compcert cause problems.
 
-#CCOMP		:= gcc
-#CCOMP_CFLAGS	:= -MD -Wall -Werror -Wno-strict-aliasing -Wno-unused-function -pipe -fno-builtin -nostdinc -fno-stack-protector -m32 -D__COMPCERT__
+CCOMP		:= gcc
+CCOMP_CFLAGS	:= -MD -Wall -Wno-strict-aliasing -Wno-unused-function -pipe -fno-builtin -nostdinc -fno-stack-protector -m32 -D__COMPCERT__
 endif
 
 # other tools

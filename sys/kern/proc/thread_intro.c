@@ -1,5 +1,10 @@
 #define NUM_PROC	64
 
+#include <preinit/lib/debug.h>
+
+extern unsigned int tdq_get_head(unsigned int chid);
+extern unsigned int tdq_get_tail(unsigned int chid);
+
 struct TCB {
 	unsigned int state;
 	unsigned int prev;
@@ -15,6 +20,7 @@ tcb_init(unsigned int pid)
 	TCBPool_LOC[pid].prev = NUM_PROC;
 	TCBPool_LOC[pid].next = NUM_PROC;
 }
+
 
 unsigned int
 tcb_get_state(unsigned int pid)
@@ -50,4 +56,30 @@ void
 tcb_set_next(unsigned int pid, unsigned int next_pid)
 {
 	TCBPool_LOC[pid].next = next_pid;
+}
+
+void
+tcb_log_queue(unsigned int chid)
+{
+  KERN_DEBUG("/*****QUEUE CONTENTS*****/\n");
+  KERN_DEBUG("Queue: %d\n", chid);
+  unsigned int head = tdq_get_head(chid);
+  unsigned int tail = tdq_get_tail(chid);
+
+  KERN_DEBUG("HEAD: %d\n", head);
+  KERN_DEBUG("TAIL: %d\n", tail);
+
+  if (head != NUM_PROC) {
+    unsigned int curid = head;
+    unsigned int count = 0;
+    do {
+      KERN_DEBUG("Content[%d] = %d\n", count, curid);
+      curid = tcb_get_next(curid);
+      count++;
+    } while (curid != NUM_PROC);
+  } else {
+    KERN_ASSERT(head == tail);
+    KERN_DEBUG("EMPTY\n");
+  }
+  KERN_DEBUG("/*****END OF QUEUE CONTENTS*****/\n\n");
 }

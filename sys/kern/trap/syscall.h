@@ -41,6 +41,8 @@ enum __syscall_nr {
 	SYS_is_chan_ready,
 	SYS_send,
 	SYS_recv,
+  SYS_ssend,    /* synchronous ipc send */
+  SYS_srecv,    /* synchronous ipc recv */
   SYS_get_tsc_per_ms,
 	/*
 	 * HVM system calls
@@ -132,6 +134,8 @@ void sys_hvm_set_tsc_offset(void);
 void sys_is_chan_ready(void);
 void sys_send(void);
 void sys_recv(void);
+void sys_ssend(void);
+void sys_srecv(void);
 void sys_sleep(void);
 
 void sys_hvm_handle_rdmsr(void);

@@ -12,3 +12,6 @@ misc/iso
 misc/iso/*
 *.v
 Icon*
+*.swp
+*.stderr
+*.stdout

@@ -5,15 +5,27 @@
 int
 main(int argc, char **argv)
 {
-	int ball = 1;
+	unsigned int balls[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9 };
 
-	while (1) 
-  {
-		printf("ping %d!\n", ball);
-		if (sys_send(3, ball++) == E_IPC)
-			sys_sleep(3);
-		//yield();
-    break;
-	}
+  unsigned int actualsent;
+  unsigned int status =
+      sys_ssend(3, balls, 9, &actualsent);
+
+  if (status == E_IPC)
+    printf("Bad thing happend in ping.\n");
+  else if (status == E_INVAL_PID)
+    printf("Trying to send balls to a dead process.\n");
+
+  printf("Ping actually sent %d balls.\n", actualsent);
+
+//  printf("ping.\n");
+
+  /*
+  while(1) {
+    //printf("ping yielding\n");
+    yield();
+  }
+  */
+
 	return 0;
 }

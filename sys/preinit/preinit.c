@@ -46,6 +46,7 @@ preinit(uintptr_t mbi_addr)
 	disk_init();
 	pci_init();
 
+<<<<<<< HEAD
   set_vendor();
   if (cpuvendor == AMD) {
     KERN_DEBUG("vendor detected: AMD.\n");
@@ -58,6 +59,20 @@ preinit(uintptr_t mbi_addr)
   else {
     KERN_PANIC("unknown cpu vendor.\n");
   }
+=======
+    set_vendor();
+    if (cpuvendor == AMD) {
+        KERN_DEBUG("vendor detected: AMD.\n");
+	      //svm_hw_init();
+        KERN_DEBUG("svm hw initialized.\n");
+    }
+    else if (cpuvendor == INTEL) {
+        KERN_DEBUG("vendor detected: INTEL.\n");
+    }
+    else {
+        KERN_PANIC("unknown cpu vendor.\n");
+    }
+>>>>>>> hengchu_ipc
 
 	/* enable interrupts */
 	intr_enable(IRQ_TIMER);

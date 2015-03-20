@@ -1,6 +1,8 @@
 #define NUM_PROC	64
 #define NUM_CHAN	64
 
+#include <preinit/lib/debug.h>
+
 struct TDQ {
 	unsigned int head;
 	unsigned int tail;

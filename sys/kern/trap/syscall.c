@@ -112,17 +112,18 @@ sys_ring0_spawn(void)
     new_pid = ring0proc_create(id);
 
     if (new_pid == NUM_PROC) {
-		  syscall_set_errno(E_INVAL_PID);
-		  syscall_set_retval1(NUM_PROC);
-	  } else {
-		  syscall_set_errno(E_SUCC);
-		  syscall_set_retval1(new_pid);
-	  }
+		syscall_set_errno(E_INVAL_PID);
+		syscall_set_retval1(NUM_PROC);
+	} else {
+		syscall_set_errno(E_SUCC);
+		syscall_set_retval1(new_pid);
+	}
 }
 
 extern uint8_t _binary___obj_user_vmm_vmm_start[];
 extern uint8_t _binary___obj_user_pingpong_ping_start[];
 extern uint8_t _binary___obj_user_pingpong_pong_start[];
+extern uint8_t _binary___obj_user_pingpong_ding_start[];
 
 void
 sys_spawn(void)
@@ -139,7 +140,9 @@ sys_spawn(void)
 		elf_addr = _binary___obj_user_pingpong_ping_start;
 	} else if (elf_id == 2) {
 		elf_addr = _binary___obj_user_pingpong_pong_start;
-	} else {
+	} else if (elf_id == 3) {
+    elf_addr = _binary___obj_user_pingpong_ding_start;
+  } else {
 		syscall_set_errno(E_INVAL_PID);
 		syscall_set_retval1(NUM_PROC);
 		return;
@@ -305,6 +308,7 @@ sys_disk_cap(void)
 void
 sys_get_tsc_per_ms(void)
 {
+  //KERN_DEBUG("tsc per ms: %llu.\n", tsc_per_ms);
 	syscall_set_retval1(tsc_per_ms >> 32);
 	syscall_set_retval2(tsc_per_ms & 0xffffffff);
 	syscall_set_errno(E_SUCC);
@@ -393,7 +397,7 @@ sys_hvm_mmap(void)
 	cur_pid = get_curid();
 	gpa = syscall_get_arg2();
 	hva = syscall_get_arg3();
-  mem_type = syscall_get_arg4();
+    mem_type = syscall_get_arg4();
 
 	if (hva % PAGESIZE != 0 || gpa % PAGESIZE != 0 ||
 	    !(VM_USERLO <= hva && hva + PAGESIZE <= VM_USERHI)) {
@@ -401,21 +405,21 @@ sys_hvm_mmap(void)
 		return;
 	}
 
-  hpa = pt_read(cur_pid, hva);
+        hpa = pt_read(cur_pid, hva);
 
-  if ((hpa & PTE_P) == 0) {
-      pt_resv(cur_pid, hva, PTE_P | PTE_U | PTE_W);
-      hpa = pt_read(cur_pid, hva);
-  }
+        if ((hpa & PTE_P) == 0) {
+            pt_resv(cur_pid, hva, PTE_P | PTE_U | PTE_W);
+            hpa = pt_read(cur_pid, hva);
+        }
 
-  hpa = (hpa & 0xfffff000) + (hva % PAGESIZE);
+        hpa = (hpa & 0xfffff000) + (hva % PAGESIZE);
 
-  if (cpuvendor == AMD) {
-      npt_insert(gpa, hpa);
-  }
-  else if (cpuvendor == INTEL) {
-      vmx_set_mmap(gpa, hpa, mem_type);
-  }
+    if (cpuvendor == AMD) {
+        npt_insert(gpa, hpa);
+    }
+    else if (cpuvendor == INTEL) {
+        vmx_set_mmap(gpa, hpa, mem_type);
+    }
 
 	syscall_set_errno(E_SUCC);
 }
@@ -487,12 +491,12 @@ sys_hvm_set_seg(void)
 		return;
 	}
 
-  if (cpuvendor == AMD) {
-	  vmcb_set_seg(seg, sel, base, lim, ar);
-  }
-  else if (cpuvendor == INTEL) {
-    vmx_set_desc(seg, sel, base, lim, ar);
-  }
+    if (cpuvendor == AMD) {
+	    vmcb_set_seg(seg, sel, base, lim, ar);
+    }
+    else if (cpuvendor == INTEL) {
+        vmx_set_desc(seg, sel, base, lim, ar);
+    }
 
 	syscall_set_errno(E_SUCC);
 }
@@ -766,6 +770,14 @@ sys_hvm_handle_wrmsr(void)
 extern unsigned int is_chan_ready(void);
 extern unsigned int send(unsigned int chid, unsigned int content);
 extern unsigned int recv(void);
+extern unsigned int ssend(unsigned int chid,
+                          uintptr_t    vaddr,
+                          unsigned int scount,
+                          uintptr_t    actualsentva);
+extern unsigned int srecv(unsigned int pid,
+                          uintptr_t    vaddr,
+                          unsigned int rcount,
+                          uintptr_t    actualreceivedva);
 extern void thread_sleep(unsigned int chid);
 
 void
@@ -805,12 +817,65 @@ sys_send(void)
 }
 
 void
+sys_ssend(void)
+{
+  unsigned int chid;
+  unsigned int retval;
+  unsigned int sbufferva;
+  unsigned int scount;
+  unsigned int actualsentva;
+
+  chid      = syscall_get_arg2();
+  sbufferva = syscall_get_arg3();
+  scount    = syscall_get_arg4();
+  actualsentva = syscall_get_arg5();
+
+  if (!(0 <= chid && chid < NUM_CHAN)) {
+    syscall_set_errno(E_INVAL_CHID);
+    return;
+  }
+
+  retval = ssend(chid, sbufferva, scount, actualsentva);
+
+  if (retval == 1)
+    syscall_set_errno(E_SUCC);
+  else if (retval == 2)
+    syscall_set_errno(E_INVAL_PID);
+  else
+    syscall_set_errno(E_IPC);
+}
+
+void
 sys_recv(void)
 {
 	unsigned int val;
 	val = recv();
 	syscall_set_retval1(val);
 	syscall_set_errno(E_SUCC);
+}
+
+void
+sys_srecv(void)
+{
+  unsigned int val;
+  unsigned int pid;
+  unsigned int rbufferva;
+  unsigned int rcount;
+  unsigned int actualreceivedva;
+
+  pid = syscall_get_arg2();
+  rbufferva = syscall_get_arg3();
+  rcount = syscall_get_arg4();
+  actualreceivedva = syscall_get_arg5();
+
+  val = srecv(pid, rbufferva, rcount, actualreceivedva);
+
+  if (val == 1)
+    syscall_set_errno(E_SUCC);
+  else if (val == 2)
+    syscall_set_errno(E_INVAL_PID);
+  else
+    syscall_set_errno(E_IPC);
 }
 
 void

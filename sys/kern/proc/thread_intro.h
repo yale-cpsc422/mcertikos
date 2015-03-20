@@ -17,6 +17,7 @@ void tcb_set_prev(unsigned int pid, unsigned int prev_pid);
 
 unsigned int tcb_get_next(unsigned int pid);
 void tcb_set_next(unsigned int pid, unsigned int next_pid);
+void tcb_log_queue(unsigned int chid);
 
 /*
  * Primitives derived from lower layers.
