@@ -30,7 +30,7 @@ main(int argc, char **argv)
     printf("ball[%d] = %d\n", i, receivebuffer[i]);
   }
 
-//  printf("pong.\n");
+  //printf("pong.\n");
 
   /*
   while(1) {
