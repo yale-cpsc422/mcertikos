@@ -481,4 +481,43 @@ sys_sleep(unsigned int chid)
 	return errno;
 }
 
+static gcc_inline unsigned int
+sys_offer_shared_mem(uint32_t dest, volatile void * buffer, uint32_t *val)
+{
+	int errno;
+	uint32_t ret_val;
+
+	asm volatile("int %2"
+		     : "=a" (errno),
+		       "=b" (ret_val)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_offer_shared_mem),
+		       "b" (dest),
+		       "c" ((uint32_t) buffer)
+		     : "cc", "memory");
+
+	if (errno == E_SUCC) *val = ret_val;
+
+	return errno;
+}
+
+static gcc_inline int
+sys_shared_mem_status(uint32_t dest, uint32_t *val)
+{
+	int errno;
+	uint32_t ret_val;
+
+	asm volatile("int %2"
+		     : "=a" (errno),
+		       "=b" (ret_val)
+		     : "i" (T_SYSCALL),
+		       "a" (SYS_shared_mem_status),
+		       "b" (dest)
+		     : "cc", "memory");
+
+	if (errno == E_SUCC) *val = ret_val;
+
+	return errno;
+}
+
 #endif /* !_USER_SYSCALL_H_ */
