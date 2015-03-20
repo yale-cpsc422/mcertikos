@@ -8,6 +8,8 @@ main(int argc, char **argv)
 	unsigned int balls[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9 };
 
   unsigned int actualsent;
+
+  printf("Ping sent 9 balls to pong.\n");
   unsigned int status =
       sys_ssend(3, balls, 9, &actualsent);
 
