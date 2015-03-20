@@ -5,6 +5,10 @@
 
 void pt_resv(unsigned int pid, unsigned int vaddr, unsigned int perm);
 
+void
+pt_resv2(unsigned int proc_index1, unsigned int vaddr1,
+	unsigned int proc_index2, unsigned int vaddr2);
+
 unsigned int pt_copyin(unsigned int pmap_id,
 		       unsigned int uva, char *kva, unsigned int len);
 unsigned int pt_copyout(char *kva,
