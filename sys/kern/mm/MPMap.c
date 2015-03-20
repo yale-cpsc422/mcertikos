@@ -5,21 +5,6 @@
 #define PTE_W		0x002	/* Writeable */
 #define PTE_U		0x004	/* User-accessible */
 
-void
-pt_resv2(unsigned int proc_index1, unsigned int vaddr1,
-	unsigned int proc_index2, unsigned int vaddr2)
-{
-	unsigned int paddr_index;
-	paddr_index = palloc();
-	//KERN_DEBUG("pt_insert(%u, %u, %u, ...)\n", proc_index1, vaddr1, paddr_index * PAGESIZE);
-	pt_insert(proc_index1, vaddr1, paddr_index * PAGESIZE,
-		PTE_P | PTE_U | PTE_W);
-	//KERN_DEBUG("pt_insert(%u, %u, %u, ...)\n", proc_index2, vaddr2, paddr_index * PAGESIZE);
-	pt_insert(proc_index2, vaddr2, paddr_index * PAGESIZE,
-		PTE_P | PTE_U | PTE_W);
-}
-
-
 #define VM_USERHI	0xf0000000
 #define VM_USERLO	0x40000000
 

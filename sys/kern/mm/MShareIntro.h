@@ -31,7 +31,7 @@ void set_shared_mem_pages(unsigned int source, unsigned int dest, unsigned int s
  * Derived from lower layers.
  */
 
- unsigned int pt_resv2(unsigned int pmap_id1, unsigned int va1,
+ void pt_resv2(unsigned int pmap_id1, unsigned int va1,
 	unsigned int pmap_id2, unsigned int va2);
 
 #endif

@@ -3,6 +3,10 @@
 
 #define NUM_PROC	64
 #define MagicNumber 1048577
+#define PAGESIZE	4096
+#define PTE_P		0x001	/* Present */
+#define PTE_W		0x002	/* Writeable */
+#define PTE_U		0x004	/* User-accessible */
 
 void
 pmap_init(unsigned int mbi_addr)
@@ -30,6 +34,21 @@ pt_resv(unsigned int proc_index, unsigned int vaddr, unsigned int perm)
     return result;
 }   
 
+void
+pt_resv2(unsigned int proc_index1, unsigned int vaddr1,
+	unsigned int proc_index2, unsigned int vaddr2)
+{
+	unsigned int paddr_index;
+	paddr_index = palloc();
+	//KERN_DEBUG("pt_insert(%u, %u, %u, ...)\n", proc_index1, vaddr1, paddr_index * PAGESIZE);
+	pt_insert(proc_index1, vaddr1, paddr_index * PAGESIZE,
+		PTE_P | PTE_U | PTE_W);
+	//KERN_DEBUG("pt_insert(%u, %u, %u, ...)\n", proc_index2, vaddr2, paddr_index * PAGESIZE);
+	pt_insert(proc_index2, vaddr2, paddr_index * PAGESIZE,
+		PTE_P | PTE_U | PTE_W);
+}
+
+/*
 unsigned int
 pt_resv2(unsigned int proc_index, unsigned int vaddr, unsigned int perm, unsigned int proc_index2, unsigned int vaddr2, unsigned int perm2)
 {   
@@ -46,6 +65,7 @@ pt_resv2(unsigned int proc_index, unsigned int vaddr, unsigned int perm, unsigne
     }
     return result;
 }
+*/
 
 unsigned int
 pt_new(void)

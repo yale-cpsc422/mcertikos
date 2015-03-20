@@ -4,7 +4,7 @@
 #ifdef _KERN_
 
 unsigned int pt_resv(unsigned int, unsigned int, unsigned int);
-unsigned int pt_resv2(unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
+void pt_resv2(unsigned int, unsigned int, unsigned int, unsigned int);
 void pmap_init(unsigned int mbi_addr);
 unsigned int pt_new(void);
 
