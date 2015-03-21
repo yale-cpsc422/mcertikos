@@ -238,3 +238,20 @@ endif
 ifneq "$(strip $(TRACE_HYPERCALL) $(TRACE_VIRT_ALL))" ""
 KERN_DEBUG_FLAGS	+= -DTRACE_HYPERCALL -DTRACE_VIRT -DDEBUG_HVM -DDEBUG_MSG
 endif
+
+# If set, enable application setting vmm
+ifneq "$(strip $(CONFIG_APP_VMM))" ""
+KERN_DEBUG_FLAGS	+= -DCONFIG_APP_VMM
+endif
+
+# If set, enable application setting user proc
+ifneq "$(strip $(CONFIG_APP_USER_PROC))" ""
+KERN_DEBUG_FLAGS	+= -DCONFIG_APP_USER_PROC
+endif
+
+# If set, enable application setting ring zero proc
+ifneq "$(strip $(CONFIG_APP_RING0_PROC))" ""
+KERN_DEBUG_FLAGS	+= -DCONFIG_APP_RING0_PROC
+endif
+
+

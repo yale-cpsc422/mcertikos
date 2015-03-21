@@ -689,53 +689,50 @@ dump_vmx_info(void)
 }
 
 void
-vmx_init(unsigned int mbi_addr)
+vmx_init (unsigned int mbi_addr)
 {
     extern uint8_t vmx_return_from_guest[];
     int rw;
 
     KERN_DEBUG("In vmx init.\n");
 
-	  sched_init(mbi_addr);
+    sched_init (mbi_addr);
 
     VMX_DEBUG("Before vmx_hw_init.\n");
-    dump_vmx_info();
-    vmx_hw_init();
+    dump_vmx_info ();
+    vmx_hw_init ();
     VMX_DEBUG("\n\nAfter vmx_hw_init.\n");
-    dump_vmx_info();
+    dump_vmx_info ();
     KERN_DEBUG("vmx hw initialized.\n");
 
-    memset(&vmcs, 0, sizeof(vmcs));
-    memset(msr_bitmap, 0, sizeof(msr_bitmap));
-    memset(io_bitmap, 0, sizeof(io_bitmap));
+    memset (&vmcs, 0, sizeof(vmcs));
+    memset (msr_bitmap, 0, sizeof(msr_bitmap));
+    memset (io_bitmap, 0, sizeof(io_bitmap));
 
     // intercept all io ports
     uint32_t *bitmap = (uint32_t *) io_bitmap;
-    memset(bitmap, 0xff, PAGESIZE * 2);
+    memset (bitmap, 0xff, PAGESIZE * 2);
 
     // intercept all msrs
     rw = 0;
     char *rdmsr_bitmap = msr_bitmap;
     char *wrmsr_bitmap = (char *) ((uintptr_t) msr_bitmap + 0x800);
 
-    memset(rdmsr_bitmap, (rw & 0x1) ? 0xf : 0x0, 2048);
-    memset(wrmsr_bitmap, (rw & 0x2) ? 0xf : 0x0, 2048);
+    memset (rdmsr_bitmap, (rw & 0x1) ? 0xf : 0x0, 2048);
+    memset (wrmsr_bitmap, (rw & 0x2) ? 0xf : 0x0, 2048);
 
     vmx.vmcs = &vmcs;
     vmx.pml4ept = ept.pml4;
     vmx.msr_bitmap = msr_bitmap;
     vmx.io_bitmap = io_bitmap;
-    vmx.vmcs->identifier = rdmsr(MSR_VMX_BASIC) & 0xffffffff;
+    vmx.vmcs->identifier = rdmsr (MSR_VMX_BASIC) & 0xffffffff;
     vmx.g_rip = 0xfff0;
-    vmcs_set_defaults
-        (vmx.vmcs, vmx.pml4ept, vmx_info.pinbased_ctls,
-         vmx_info.procbased_ctls, vmx_info.procbased_ctls2,
-         vmx_info.exit_ctls, vmx_info.entry_ctls, vmx.msr_bitmap,
-         vmx.io_bitmap, (char *) ((uintptr_t) vmx.io_bitmap+PAGESIZE),
-         1,
-         vmx_info.cr0_ones_mask, vmx_info.cr0_zeros_mask,
-         vmx_info.cr4_ones_mask, vmx_info.cr4_zeros_mask,
-         (uintptr_t) vmx_return_from_guest);
+    vmcs_set_defaults (vmx.vmcs, vmx.pml4ept, vmx_info.pinbased_ctls,
+        vmx_info.procbased_ctls, vmx_info.procbased_ctls2, vmx_info.exit_ctls,
+        vmx_info.entry_ctls, vmx.msr_bitmap, vmx.io_bitmap,
+        (char *) ((uintptr_t) vmx.io_bitmap + PAGESIZE), 1,
+        vmx_info.cr0_ones_mask, vmx_info.cr0_zeros_mask, vmx_info.cr4_ones_mask,
+        vmx_info.cr4_zeros_mask, (uintptr_t) vmx_return_from_guest);
     vmx.vpid = 1;
     vmx.g_cr2 = 0;
     vmx.g_dr0 = vmx.g_dr1 = vmx.g_dr2 = vmx.g_dr3 = 0;
