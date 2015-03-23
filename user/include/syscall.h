@@ -141,6 +141,36 @@ sys_get_tsc_per_ms(int vmid)
 }
 
 static gcc_inline int
+sys_start_trace (int id)
+{
+    int errno;
+
+    asm volatile("int %1"
+            : "=a" (errno)
+            : "i" (T_SYSCALL),
+            "a" (SYS_start_trace),
+            "b" (id)
+            : "cc", "memory");
+
+    return errno;
+}
+
+static gcc_inline int
+sys_stop_trace (int id)
+{
+    int errno;
+
+    asm volatile("int %1"
+            : "=a" (errno)
+            : "i" (T_SYSCALL),
+            "a" (SYS_stop_trace),
+            "b" (id)
+            : "cc", "memory");
+
+    return errno;
+}
+
+static gcc_inline int
 sys_hvm_run_vm(int vmid)
 {
 	int errno;

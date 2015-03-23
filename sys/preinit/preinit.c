@@ -15,6 +15,7 @@
 #include <preinit/lib/types.h>
 
 #include <preinit/lib/debug.h>
+#include <preinit/lib/timing.h>
 
 cpu_vendor cpuvendor;
 
@@ -25,44 +26,52 @@ set_vendor()
 }
 
 void
-preinit(uintptr_t mbi_addr)
+preinit (uintptr_t mbi_addr)
 {
-	seg_init();
+    seg_init ();
 
-	enable_sse();
+    enable_sse ();
 
-	cons_init();
+    cons_init ();
     KERN_DEBUG("cons initialized.\n");
 
-	tsc_init();
+    tsc_init ();
     KERN_DEBUG("tsc initialized.\n");
 
-	intr_init();
+#ifdef PROFILING
+    profiling_init ();
+    KERN_DEBUG("profiling initialized.\n");
+#endif
+
+    intr_init ();
     KERN_DEBUG("intr initialized.\n");
 
-  /* 	ide_init(); */
-  /* KERN_DEBUG("ide initialized.\n"); */
+    /* 	ide_init(); */
+    /* KERN_DEBUG("ide initialized.\n"); */
 
-	disk_init();
-	pci_init();
+    disk_init ();
+    pci_init ();
 
-  set_vendor();
-  if (cpuvendor == AMD) {
-    KERN_DEBUG("vendor detected: AMD.\n");
-	  svm_hw_init();
-    KERN_DEBUG("svm hw initialized.\n");
-  }
-  else if (cpuvendor == INTEL) {
-    KERN_DEBUG("vendor detected: INTEL.\n");
-  }
-  else {
-    KERN_PANIC("unknown cpu vendor.\n");
-  }
+    set_vendor ();
+    if (cpuvendor == AMD)
+    {
+        KERN_DEBUG("vendor detected: AMD.\n");
+        svm_hw_init ();
+        KERN_DEBUG("svm hw initialized.\n");
+    }
+    else if (cpuvendor == INTEL)
+    {
+        KERN_DEBUG("vendor detected: INTEL.\n");
+    }
+    else
+    {
+        KERN_PANIC("unknown cpu vendor.\n");
+    }
 
-	/* enable interrupts */
-	intr_enable(IRQ_TIMER);
-	intr_enable(IRQ_KBD);
-	intr_enable(IRQ_SERIAL13);
+    /* enable interrupts */
+    intr_enable (IRQ_TIMER);
+    intr_enable (IRQ_KBD);
+    intr_enable (IRQ_SERIAL13);
 
-	pmmap_init(mbi_addr);
+    pmmap_init (mbi_addr);
 }

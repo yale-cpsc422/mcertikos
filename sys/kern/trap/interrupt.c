@@ -21,8 +21,9 @@ static int
 timer_intr_handler (void)
 {
     intr_eoi ();
-
+#ifdef PROFILING
     periodic();
+#endif
     return 0;
 }
 

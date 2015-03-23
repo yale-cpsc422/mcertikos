@@ -5,15 +5,28 @@
 int
 main(int argc, char **argv)
 {
-	int ball = 1;
-
-	while (1) 
-  {
-		printf("ping %d!\n", ball);
-		if (sys_send(3, ball++) == E_IPC)
-			sys_sleep(3);
-		/* sys_yield(); */
-    break;
+	uint64_t t1, t2;
+	int i;
+	for (i = 0; i < 5; i ++)
+	{
+        sys_start_trace (0);
+        t1 = rdtsc ();
+        sys_get_tsc_per_ms(0);
+        t2 = rdtsc ();
+        sys_stop_trace (0);
 	}
+
+    sys_start_trace (0);
+    t1 = rdtsc ();
+    sys_get_tsc_per_ms(0);
+    t2 = rdtsc ();
+    sys_stop_trace (0);
+    printf ("t1 = %llu, t2 = %llu\n", t1, t2);
+
+    end:
+    goto end;
+
+    printf("should never be here!");
+
 	return 0;
 }

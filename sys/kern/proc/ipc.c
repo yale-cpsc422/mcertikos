@@ -67,23 +67,30 @@ recv(void)
 extern cpu_vendor cpuvendor;
 
 void
-proc_init(unsigned int mbi_addr)
+proc_init (unsigned int mbi_addr)
 {
-	unsigned int i;
-    
-    set_vendor(); //sets the cpu vendor bit.
+    unsigned int i;
 
+    set_vendor (); //sets the cpu vendor bit.
 
-  if (cpuvendor == AMD) {
-    vmcb_init(mbi_addr);
-  }
-  else if(cpuvendor == INTEL) {
-    vmx_init(mbi_addr);
-  }
+#ifdef CONFIG_APP_VMM
+    if (cpuvendor == AMD)
+    {
+        vmcb_init (mbi_addr);
+    }
+    else if (cpuvendor == INTEL)
+    {
+        vmx_init (mbi_addr);
+    }
+#endif
 
-	i = 0;
-	while (i < NUM_CHAN) {
-		init_chan(i, 0, 0);
-		i++;
-	}
+#if defined(CONFIG_APP_USER_PROC) || defined (CONFIG_APP_RING0_PROC)
+    sched_init (mbi_addr);
+#endif
+
+    i = 0;
+    while (i < NUM_CHAN) {
+        init_chan(i, 0, 0);
+        i++;
+    }
 }
