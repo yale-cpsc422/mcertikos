@@ -28,10 +28,19 @@ pt_out(void)
 {
 }
 
-void
+static unsigned int current_pt = 99999;
+
+inline void
 set_PT(unsigned int index)
 {
+  current_pt = index;
 	set_pt((unsigned int *) PTPool_LOC[index].pdir);
+}
+
+inline unsigned int
+get_pt()
+{
+  return current_pt;
 }
 
 void

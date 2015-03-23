@@ -32,12 +32,18 @@ enum __syscall_nr {
 	 * common system calls
 	 */
 	SYS_puts = 0,	/* output a string to the screen */
-    SYS_ring0_spawn, /* create a new ring0 process */
+  SYS_ring0_spawn, /* create a new ring0 process */
 	SYS_spawn,	/* create a new process */
-	SYS_yield,	/* yield to another process */
-	SYS_sleep,
+	SYS_hvm_run_vm,
+  SYS_hvm_handle_rdmsr,
+  SYS_hvm_handle_wrmsr,
 	SYS_disk_op,	/* perform a disk operation */
 	SYS_disk_cap,	/* get the capacity of a disk in bytes */
+
+	SYS_offer_shared_mem,
+	SYS_shared_mem_status,
+	SYS_yield,	/* yield to another process */
+	SYS_sleep,
 	SYS_is_chan_ready,
 	SYS_send,
 	SYS_recv,
@@ -45,7 +51,6 @@ enum __syscall_nr {
 	/*
 	 * HVM system calls
 	 */
-	SYS_hvm_run_vm,
 	SYS_hvm_get_exitinfo,
 	SYS_hvm_mmap,
 	SYS_hvm_set_seg,
@@ -59,11 +64,6 @@ enum __syscall_nr {
   SYS_hvm_get_tsc_offset,
   SYS_hvm_set_tsc_offset,
 
-    SYS_hvm_handle_rdmsr,
-    SYS_hvm_handle_wrmsr,
-
-	SYS_offer_shared_mem,
-	SYS_shared_mem_status,
 	MAX_SYSCALL_NR	/* XXX: always put it at the end of __syscall_nr */
 };
 
