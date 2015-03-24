@@ -19,8 +19,8 @@ kern_main (void)
 {
     unsigned int idle_pid;
 
-    KERN_DEBUG("In kernel main.\n");
     idle_pid = proc_create (_binary___obj_user_idle_idle_start);
+    KERN_DEBUG("idle process %d is created.\n", idle_pid);
 
     KERN_INFO("Start user-space ... \n");
 

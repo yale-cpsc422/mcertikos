@@ -13,7 +13,7 @@ KERN_SRCFILES	+= $(KERN_DIR)/kern/virt/svm/vmcb_op.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/virt/svm/svm.c
 
 $(KERN_OBJDIR)/kern/virt/svm/%.o: $(KERN_DIR)/kern/virt/svm/%.c
-	@echo + ccomp[KERN/kern] $<
+	@echo + $(COMP_NAME)[KERN/kern] $<
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
 

@@ -32,24 +32,31 @@ enum __syscall_nr {
 	 * common system calls
 	 */
 	SYS_puts = 0,	/* output a string to the screen */
-    SYS_ring0_spawn, /* create a new ring0 process */
+	SYS_ring0_spawn, /* create a new ring0 process */
 	SYS_spawn,	/* create a new process */
-	SYS_yield,	/* yield to another process */
-	SYS_sleep,
+	SYS_hvm_run_vm,
+	SYS_hvm_handle_rdmsr,
+	SYS_hvm_handle_wrmsr,
+	SYS_offer_shared_mem,
+	SYS_shared_mem_status,
+    SYS_hvm_mmap,
+    SYS_start_trace,
+    SYS_stop_trace,
+    SYS_ssend,    /* synchronous ipc send */
+    SYS_srecv,    /* synchronous ipc recv */
 	SYS_disk_op,	/* perform a disk operation */
 	SYS_disk_cap,	/* get the capacity of a disk in bytes */
+
+	SYS_yield,	/* yield to another process */
+	SYS_sleep,
 	SYS_is_chan_ready,
 	SYS_send,
 	SYS_recv,
-  SYS_ssend,    /* synchronous ipc send */
-  SYS_srecv,    /* synchronous ipc recv */
-  SYS_get_tsc_per_ms,
+	SYS_get_tsc_per_ms,
 	/*
 	 * HVM system calls
 	 */
-	SYS_hvm_run_vm,
 	SYS_hvm_get_exitinfo,
-	SYS_hvm_mmap,
 	SYS_hvm_set_seg,
 	SYS_hvm_set_reg,
 	SYS_hvm_get_reg,
@@ -58,14 +65,9 @@ enum __syscall_nr {
 	SYS_hvm_check_int_shadow,
 	SYS_hvm_check_pending_event,
 	SYS_hvm_intercept_int_window,
-  SYS_hvm_get_tsc_offset,
-  SYS_hvm_set_tsc_offset,
+	SYS_hvm_get_tsc_offset,
+	SYS_hvm_set_tsc_offset,
 
-    SYS_hvm_handle_rdmsr,
-    SYS_hvm_handle_wrmsr,
-
-	SYS_offer_shared_mem,
-	SYS_shared_mem_status,
 	MAX_SYSCALL_NR	/* XXX: always put it at the end of __syscall_nr */
 };
 
@@ -82,6 +84,7 @@ enum __error_nr {
 	E_INVAL_PORT,
 	E_INVAL_HVM,
 	E_INVAL_CHID,
+	E_INVAL_ID,     /* general invalid id */
 	E_DISK_OP,	/* disk operation failure */
 	E_HVM_VMRUN,
 	E_HVM_MMAP,
@@ -120,6 +123,9 @@ void sys_yield(void);
 void sys_disk_op(void);
 void sys_disk_cap(void);
 void sys_get_tsc_per_ms(void);
+void sys_start_trace(void);
+void sys_stop_trace(void);
+
 void sys_hvm_run_vm(void);
 void sys_hvm_get_exitinfo(void);
 void sys_hvm_mmap(void);

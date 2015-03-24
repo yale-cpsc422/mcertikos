@@ -51,6 +51,14 @@ main (int argc, char **argv)
         printf ("Failed to launch VMM.\n");
 #endif
 
+#ifdef CONFIG_APP_USER_PROFILE
+    pid_t unit_pid;
+    if ((unit_pid = spawn (4)) != NUM_PROC)
+        printf ("unit in process %d.\n", unit_pid);
+    else
+        printf ("Failed to launch unit.\n");
+#endif
+
     while (1)
         yield ();
 

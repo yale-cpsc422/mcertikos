@@ -181,5 +181,7 @@ struct video terminal;
 void video_init(void);
 void video_putc(int c);
 extern void video_update();
+void video_set_cursor (int x, int y);
+void video_clear_screen ();
 
 #endif /* !_KERN_DEV_VIDEO_H_ */

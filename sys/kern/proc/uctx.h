@@ -37,6 +37,7 @@ void pfree(unsigned int idx);
 unsigned int pt_read(unsigned int pid, unsigned int va);
 void pt_resv(unsigned int pid, unsigned int vaddr, unsigned int perm);
 
+unsigned int get_pt(void);
 void set_pt(unsigned int idx);
 
 void pt_in(void);

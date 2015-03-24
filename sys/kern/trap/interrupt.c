@@ -1,6 +1,7 @@
 #include <preinit/dev/intr.h>
 #include <lib/trap.h>
 #include <preinit/lib/debug.h>
+#include <preinit/lib/timing.h>
 
 #include "exception.h"
 
@@ -11,58 +12,46 @@
  */
 
 static int
-spurious_intr_handler(void)
+spurious_intr_handler (void)
 {
-	return 0;
-}
-
-static unsigned long long jiffies = 0ull;
-#define PERIOD  1000
-
-static void
-periodic (void)
-{
-    jiffies ++;
-    if (jiffies % PERIOD == 0)
-    {
-        vprintf(".");
-    }
+    return 0;
 }
 
 static int
-timer_intr_handler(void)
+timer_intr_handler (void)
 {
-	intr_eoi();
-
-	//    periodic();
-
-	return 0;
+    intr_eoi ();
+#ifdef PROFILING
+    periodic();
+#endif
+    return 0;
 }
 
 static int
-default_intr_handler(void)
+default_intr_handler (void)
 {
-	intr_eoi();
-	return 0;
+    intr_eoi ();
+    return 0;
 }
 
 void
-interrupt_handler(void)
+interrupt_handler (void)
 {
-	unsigned int cur_pid;
-	unsigned int trapno;
+    unsigned int cur_pid;
+    unsigned int trapno;
 
-	cur_pid = get_curid();
-	trapno = uctx_get(cur_pid, U_TRAPNO);
+    cur_pid = get_curid ();
+    trapno = uctx_get (cur_pid, U_TRAPNO);
 
-	switch (trapno) {
-	case T_IRQ0+IRQ_SPURIOUS:
-		spurious_intr_handler();
-		break;
-	case T_IRQ0+IRQ_TIMER:
-		timer_intr_handler();
-		break;
-	default:
-		default_intr_handler();
-	}
+    switch (trapno)
+    {
+    case T_IRQ0 + IRQ_SPURIOUS:
+        spurious_intr_handler ();
+        break;
+    case T_IRQ0 + IRQ_TIMER:
+        timer_intr_handler ();
+        break;
+    default:
+        default_intr_handler ();
+    }
 }

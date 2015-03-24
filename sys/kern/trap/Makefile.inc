@@ -10,7 +10,7 @@ KERN_SRCFILES	+= $(KERN_DIR)/kern/trap/exception.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/trap/trap.c
 
 $(KERN_OBJDIR)/kern/trap/%.o: $(KERN_DIR)/kern/trap/%.c
-	@echo + ccomp[KERN/kern] $<
+	@echo + $(COMP_NAME)[KERN/kern] $<
 	@mkdir -p $(@D)
 	$(V)$(CC) $(KERN_CFLAGS) -c -o $@ $<
 

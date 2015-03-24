@@ -4,6 +4,7 @@
 #include <preinit/lib/x86.h>
 #include <preinit/dev/disk.h>
 #include <preinit/dev/tsc.h>
+#include <preinit/lib/timing.h>
 #include <virt/svm/svm.h>
 #include <virt/vmx/vmx.h>
 #include <lib/trap.h>
@@ -125,6 +126,7 @@ extern uint8_t _binary___obj_user_vmm_vmm_start[];
 extern uint8_t _binary___obj_user_pingpong_ping_start[];
 extern uint8_t _binary___obj_user_pingpong_pong_start[];
 extern uint8_t _binary___obj_user_pingpong_ding_start[];
+extern uint8_t _binary___obj_user_profile_unit_start[];
 
 void
 sys_spawn(void)
@@ -142,8 +144,10 @@ sys_spawn(void)
 	} else if (elf_id == 2) {
 		elf_addr = _binary___obj_user_pingpong_pong_start;
 	} else if (elf_id == 3) {
-    elf_addr = _binary___obj_user_pingpong_ding_start;
-  } else {
+    	elf_addr = _binary___obj_user_pingpong_ding_start;
+	} else if (elf_id == 4)	{
+	    elf_addr = _binary___obj_user_profile_unit_start;
+	} else {
 		syscall_set_errno(E_INVAL_PID);
 		syscall_set_retval1(NUM_PROC);
 		return;
@@ -163,8 +167,12 @@ sys_spawn(void)
 void
 sys_yield(void)
 {
+    trace_add(TR_YIELD, "yield enter");
+
 	thread_yield();
 	syscall_set_errno(E_SUCC);
+
+    trace_add(TR_YIELD, "yield exit");
 }
 
 static int
@@ -309,11 +317,50 @@ sys_disk_cap(void)
 void
 sys_get_tsc_per_ms(void)
 {
-  //KERN_DEBUG("tsc per ms: %llu.\n", tsc_per_ms);
+    trace_add(TR_GET_TSC_PER_MS, "enter syscall tsc_per_ms");
+    // KERN_DEBUG("tsc per ms: %llu.\n", tsc_per_ms);
 	syscall_set_retval1(tsc_per_ms >> 32);
 	syscall_set_retval2(tsc_per_ms & 0xffffffff);
 	syscall_set_errno(E_SUCC);
+    trace_add(TR_GET_TSC_PER_MS, "exit syscall tsc_per_ms");
 }
+
+void
+sys_start_trace(void)
+{
+    unsigned int id = syscall_get_arg2();
+
+    if (id < 0 || id >= MAX_TRACES)
+    {
+        syscall_set_errno(E_INVAL_ID);
+        return ;
+    }
+
+    // KERN_DEBUG("start trace %d\n", id);
+
+    trace_init((trace_id_t) id);
+    trace_enable((trace_id_t) id);
+    syscall_set_errno(E_SUCC);
+}
+
+void
+sys_stop_trace(void)
+{
+    unsigned int id = syscall_get_arg2();
+
+    if (id < 0 || id >= MAX_TRACES)
+    {
+        syscall_set_errno(E_INVAL_ID);
+        return ;
+    }
+
+    // KERN_DEBUG("stop trace %d\n", id);
+
+    trace_disable((trace_id_t) id);
+    trace_dump((trace_id_t) id);
+    syscall_set_errno(E_SUCC);
+}
+
 
 void
 sys_hvm_run_vm(void)

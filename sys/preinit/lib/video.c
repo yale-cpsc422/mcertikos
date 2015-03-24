@@ -39,6 +39,7 @@ video_init(void)
 	terminal.crt_pos = pos;
 	terminal.active_console = 0;
 }
+
 void
 video_putc(int c)
 {
@@ -110,3 +111,18 @@ video_putc(int c)
 	*/
 }
 
+void
+video_set_cursor (int x, int y)
+{
+    terminal.crt_pos = x * CRT_COLS + y;
+}
+
+void
+video_clear_screen ()
+{
+    int i;
+    for (i = 0; i < CRT_SIZE; i++)
+    {
+        terminal.crt_buf[i] = ' ';
+    }
+}

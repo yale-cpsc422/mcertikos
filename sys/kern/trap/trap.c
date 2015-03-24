@@ -1,5 +1,7 @@
 #include <lib/string.h>
 #include <lib/trap.h>
+#include <kern/trap/syscall_args.h>
+#include <kern/trap/syscall.h>
 #include "interrupt.h"
 
 #define NUM_PROC	64
@@ -15,14 +17,18 @@ trap(tf_t *tf)
 	cur_pid = get_curid();
 	memcpy(UCTX_LOC[cur_pid], tf, sizeof(tf_t));
 
-	set_pt(0);
-
-	if (T_DIVIDE <= tf->trapno && tf->trapno <= T_SECEV)
+	if (T_DIVIDE <= tf->trapno && tf->trapno <= T_SECEV) {
+		set_pt(0);
 		exception_handler();
+  }
 	else if (T_IRQ0+IRQ_TIMER <= tf->trapno && tf->trapno <= T_IRQ0+IRQ_IDE2)
 		interrupt_handler();
-	else if (tf->trapno == T_SYSCALL)
+	else if (tf->trapno == T_SYSCALL) {
+		unsigned int nr = syscall_get_arg1();
+		if (nr <= SYS_disk_cap)
+	    	set_pt(0);
 		syscall_dispatch();
+  }
 
 	proc_start_user();
 }

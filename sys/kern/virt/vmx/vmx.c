@@ -34,6 +34,7 @@
 #include <preinit/lib/debug.h>
 #include <preinit/lib/types.h>
 #include <preinit/lib/x86.h>
+#include <preinit/lib/timing.h>
 #include <preinit/dev/pic.h>
 #include <preinit/dev/vmx_drv.h>
 
@@ -527,9 +528,131 @@ vmx_get_tsc_offset(void)
    return vmcs_read64(VMCS_TSC_OFFSET);
 }
 
+#ifdef PROFILING_HYPERCALL
+void gcc_inline
+start_profile()
+{
+}
+
+static int last_vmexit_reason = -1;
+static int last_exit_qualification = 0;
+
+pf_record_id gcc_inline
+vmexit2recid(int vmexit)
+{
+    switch (vmexit)
+    {
+    case -1: return REC_VMEXIT_ALL;
+    case EXIT_REASON_EXCEPTION: return REC_VMEXIT_EXCEPTION;
+    case EXIT_REASON_EXT_INTR: return REC_VMEXIT_EXT_INTR;
+    case EXIT_REASON_TRIPLE_FAULT: return REC_VMEXIT_TRIPLE_FAUL;
+    case EXIT_REASON_INIT: return REC_VMEXIT_INIT;
+    case EXIT_REASON_SIPI: return REC_VMEXIT_SIPI;
+    case EXIT_REASON_IO_SMI: return REC_VMEXIT_IO_SMI;
+    case EXIT_REASON_SMI: return REC_VMEXIT_SMI;
+    case EXIT_REASON_INTR_WINDOW: return REC_VMEXIT_INTR_WINDOW;
+    case EXIT_REASON_NMI_WINDOW: return REC_VMEXIT_NMI_WINDOW;
+    case EXIT_REASON_TASK_SWITCH: return REC_VMEXIT_TASK_SWITCH;
+    case EXIT_REASON_CPUID: return REC_VMEXIT_CPUID;
+    case EXIT_REASON_GETSEC: return REC_VMEXIT_GETSEC;
+    case EXIT_REASON_HLT: return REC_VMEXIT_HLT;
+    case EXIT_REASON_INVD: return REC_VMEXIT_INVD;
+    case EXIT_REASON_INVLPG: return REC_VMEXIT_INVLPG;
+    case EXIT_REASON_RDPMC: return REC_VMEXIT_RDPMC;
+    case EXIT_REASON_RDTSC: return REC_VMEXIT_RDTSC;
+    case EXIT_REASON_RSM: return REC_VMEXIT_RSM;
+    case EXIT_REASON_VMCALL: return REC_VMEXIT_VMCALL;
+    case EXIT_REASON_VMCLEAR: return REC_VMEXIT_VMCLEAR;
+    case EXIT_REASON_VMLAUNCH: return REC_VMEXIT_VMLAUNCH;
+    case EXIT_REASON_VMPTRLD: return REC_VMEXIT_VMPTRLD;
+    case EXIT_REASON_VMPTRST: return REC_VMEXIT_VMPTRST;
+    case EXIT_REASON_VMREAD: return REC_VMEXIT_VMREAD;
+    case EXIT_REASON_VMRESUME: return REC_VMEXIT_VMRESUME;
+    case EXIT_REASON_VMWRITE: return REC_VMEXIT_VMWRITE;
+    case EXIT_REASON_VMXOFF: return REC_VMEXIT_VMXOFF;
+    case EXIT_REASON_VMXON: return REC_VMEXIT_VMXON;
+    case EXIT_REASON_CR_ACCESS: return REC_VMEXIT_CR_ACCESS;
+    case EXIT_REASON_DR_ACCESS: return REC_VMEXIT_DR_ACCESS;
+    case EXIT_REASON_INOUT: return REC_VMEXIT_INOUT;
+    case EXIT_REASON_RDMSR: return REC_VMEXIT_RDMSR;
+    case EXIT_REASON_WRMSR: return REC_VMEXIT_WRMSR;
+    case EXIT_REASON_INVAL_VMCS: return REC_VMEXIT_INVAL_VMCS;
+    case EXIT_REASON_INVAL_MSR: return REC_VMEXIT_INVAL_MSR;
+    case EXIT_REASON_MWAIT: return REC_VMEXIT_MWAIT;
+    case EXIT_REASON_MTF: return REC_VMEXIT_MTF;
+    case EXIT_REASON_MONITOR: return REC_VMEXIT_MONITOR;
+    case EXIT_REASON_PAUSE: return REC_VMEXIT_PAUSE;
+    case EXIT_REASON_MCE: return REC_VMEXIT_MCE;
+    case EXIT_REASON_TPR: return REC_VMEXIT_TPR;
+    case EXIT_REASON_APIC: return REC_VMEXIT_APIC;
+    case EXIT_REASON_GDTR_IDTR: return REC_VMEXIT_GDTR_IDTR;
+    case EXIT_REASON_LDTR_TR: return REC_VMEXIT_LDTR_TR;
+    case EXIT_REASON_EPT_FAULT: return REC_VMEXIT_EPT_FAULT;
+    case EXIT_REASON_EPT_MISCONFIG: return REC_VMEXIT_EPT_MISCONFIG;
+    case EXIT_REASON_INVEPT: return REC_VMEXIT_INVEPT;
+    case EXIT_REASON_RDTSCP: return REC_VMEXIT_RDTSCP;
+    case EXIT_REASON_VMX_PREEMPT: return REC_VMEXIT_VMX_PREEMPT;
+    case EXIT_REASON_INVVPID: return REC_VMEXIT_INVVPID;
+    case EXIT_REASON_WBINVD: return REC_VMEXIT_WBINVD;
+    case EXIT_REASON_XSETBV: return REC_VMEXIT_XSETBV;
+    case EXIT_REASON_RDRAND: return REC_VMEXIT_RDRAND;
+    case EXIT_REASON_INVPCID: return REC_VMEXIT_INVPCID;
+    case EXIT_REASON_VMFUNC: return REC_VMEXIT_VMFUNC;
+    default: return REC_VMEXIT_ALL;
+    }
+}
+#endif
+
 void
 vmx_run_vm()
 {
+#ifdef PROFILING
+    uint64_t interval = stopwatch_stop(STW_VMEXIT);
+
+    pf_record_id rid = vmexit2recid(last_vmexit_reason);
+    pf_record(REC_VMEXIT_ALL, interval);
+    pf_record(rid, interval);
+    if (last_vmexit_reason == EXIT_REASON_INOUT)
+    {
+        int port = EXIT_QUAL_IO_PORT(last_exit_qualification);
+        if (port >= 0x3f8 && port <= 0x3ff)
+        {
+            pf_record(REC_VMEXIT_INOUT_SERIAL, interval);
+        }
+        else if (port >= 0x40 && port <= 0x43)
+        {
+            pf_record(REC_VMEXIT_INOUT_VPIT, interval);
+        }
+        else if ((port >= 0x20 && port <= 0x21)
+                || (port >= 0xa0 && port <= 0xa1)
+                || (port >= 0x4d0 && port <= 0x4d1)
+                || (port >= 0xcf8 && port <= 0xd00))
+        {
+            pf_record (REC_VMEXIT_INOUT_VPIC, interval);
+        }
+        else if (port >= 0x70 && port <= 0x71)
+        {
+            pf_record(REC_VMEXIT_INOUT_NVRAM, interval);
+        }
+        else if (port >= 0x60 && port <= 0x64)
+        {
+            pf_record(REC_VMEXIT_INOUT_KBD, interval);
+        }
+        else if ((port >= 0xc000 && port <= 0xc03f)
+                || (port >= 0x1f0 && port <= 0x22f))
+        {
+            pf_record (REC_VMEXIT_INOUT_VIRTIO, interval);
+        }
+        else
+        {
+            pf_record (REC_VMEXIT_INOUT_OTHERS, interval);
+        }
+
+
+    }
+
+#endif
+
     vmptrld(vmx.vmcs);
 
     vmcs_write32(VMCS_GUEST_RIP, vmx.g_rip);
@@ -655,6 +778,12 @@ vmx_run_vm()
     vmx.g_rip = vmcs_read32(VMCS_GUEST_RIP);
     vmx.exit_reason = vmcs_read32(VMCS_EXIT_REASON);
     vmx.exit_qualification = vmcs_read32(VMCS_EXIT_QUALIFICATION);
+
+#ifdef PROFILING
+    last_vmexit_reason = vmx.exit_reason;
+    last_exit_qualification = vmx.exit_qualification;
+    stopwatch_start(STW_VMEXIT);
+#endif
 
     if (unlikely(vmx.exit_reason & EXIT_REASON_ENTRY_FAIL)) {
         KERN_DEBUG("VM-entry failure: reason %d, qualification %d.\n",

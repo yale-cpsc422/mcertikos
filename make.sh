@@ -36,14 +36,29 @@ error_file="error.cerr"
 build_log="build.log"
 error_file_swp=".${error_file}.swp"
 
-FLAGS="DEBUG_MSG=1 SERIAL_DEBUG=1 CONFIG_APP_VMM=1"
+FLAGS="DEBUG_MSG=1 SERIAL_DEBUG=1 PROFILING_ALL=1 CONFIG_APP_USER_PROFILE=1"
 
 need_clean="no"
+use_gcc="no"
 
-if [ "$1" = "rebuild" ]; then
-	need_clean="yes"
-	shift
-fi
+for i in "$@"
+do
+	case $i in
+		rebuild)
+		need_clean="yes"
+		shift
+		;;
+		gcc)
+		use_gcc="yes"
+		shift
+		;;
+		*)
+		;;
+	esac
+done
+
+echo "clean: " $need_clean ", gcc: " $use_gcc
+echo "target: " $@
 
 target="$@"
 clear_screen
@@ -55,7 +70,12 @@ if [ "$need_clean" = "yes" ]; then
 	make clean
 fi
 
-make $FLAGS ${target} 2> ${error_file} 1>> ${error_file} 1> ${build_log}
+marg=""
+if [ "$use_gcc" = "yes" ]; then
+	marg="USE_GCC=1"
+fi
+
+make -j ${marg} $FLAGS ${target} 2> ${error_file} 1>> ${error_file} 1> ${build_log}
 status=$?
 
 if [ "$status" != "0" ]; then
@@ -66,10 +86,11 @@ if [ "$status" != "0" ]; then
 		gnome-terminal --geometry=100x40 -e "vim error.cerr"
 	fi
 else
-	num_cc=$( grep -c '+ cc' build.log )
+	num_cc=$( grep -c '+ cc\[' build.log )
+	num_ccomp=$( grep -c '+ ccomp' build.log )
 	num_ld=$( grep -c '+ ld' build.log )
 	num_as=$( grep -c '+ as' build.log )
-	title "[as: ${num_as}, cc: ${num_cc}, ld: ${num_ld}]"
+	title "[as: ${num_as}, cc: ${num_cc}, ccomp: ${num_ccomp}, ld: ${num_ld}]"
 fi
 check $status
 

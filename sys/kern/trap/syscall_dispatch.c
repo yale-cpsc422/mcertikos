@@ -103,9 +103,16 @@ syscall_dispatch(void)
 		 */
 		sys_disk_cap();
 		break;
-  case SYS_get_tsc_per_ms:
-    sys_get_tsc_per_ms();
-    break;
+    case SYS_get_tsc_per_ms:
+        sys_get_tsc_per_ms ();
+        break;
+    case SYS_start_trace:
+        sys_start_trace ();
+        break;
+    case SYS_stop_trace:
+        sys_stop_trace ();
+        break;
+
   case SYS_hvm_get_tsc_offset:
     sys_hvm_get_tsc_offset();
     break;

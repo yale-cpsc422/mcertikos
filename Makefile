@@ -9,7 +9,18 @@ V		:=
 endif
 
 ARCH		:= i386
-ENABLE_CCOMP	:= 1
+
+COMP_NAME	:= "ccomp"
+
+ifdef USE_GCC
+	ENABLE_CCOMP	:= 0
+	COMP_NAME		:= "cc"
+else
+	ENABLE_CCOMP	:= 1
+	COMP_NAME		:= "ccomp"
+endif
+
+
 
 # Cross-compiler toolchain
 #
@@ -38,17 +49,18 @@ LD		:= $(GCCPREFIX)ld
 CFLAGS		:= -MD -Wall -Werror -Wno-strict-aliasing -Wno-unused-function -pipe -fno-builtin -nostdinc -fno-stack-protector
 LDFLAGS		:= -nostdlib
 
-ifdef ENABLE_CCOMP
-#CCOMP		:= ccomp
-#CCOMP_CFLAGS	:= -finline-asm -fpacked-structs -fno-sse
+ifeq (ENABLE_CCOMP, 1)
+CCOMP		:= ccomp
+CCOMP_CFLAGS	:= -finline-asm -fpacked-structs -fno-sse
 
-#CLIGHTGEN	:= clightgen
-#CLIGHTGEN_FLAGS	:= -fall
+CLIGHTGEN	:= clightgen
+CLIGHTGEN_FLAGS	:= -fall
 
-#ifeq ($(V),)
-#CCOMP_CFLAGS	+= -v
-#endif
+ifeq ($(V),)
+CCOMP_CFLAGS	+= -v
+endif
 
+else
 # Uncomment following two lines when you suspect differences between gcc and
 # compcert cause problems.
 
@@ -91,6 +103,7 @@ QEMUOPTS_BIOS	:= -L $(UTILSDIR)/qemu/
 
 
 all: boot sys user
+	@echo "Use compcert: $(ENABLE_CCOMP)"
 	@echo "All targets are done."
 
 install_img: install_boot install_sys install_user

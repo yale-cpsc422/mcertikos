@@ -1,4 +1,4 @@
-#include <lib/gcc.h>
+#include <preinit/lib/gcc.h>
 #include <preinit/lib/debug.h>
 
 #include "MALOp.h"
@@ -21,10 +21,19 @@ pt_out(void)
 {
 }
 
+static unsigned int current_pt = 99999;
+
 void
 set_pt(unsigned int index)
 {
+	current_pt = index;
 	set_cr3(PTPool_LOC[index]);
+}
+
+unsigned int gcc_inline
+get_pt ()
+{
+    return current_pt;
 }
 
 unsigned int
