@@ -84,7 +84,7 @@ proc_init (unsigned int mbi_addr)
     }
 #endif
 
-#if defined(CONFIG_APP_USER_PROC) || defined (CONFIG_APP_RING0_PROC)
+#if defined(CONFIG_APP_USER_PROC) || defined (CONFIG_APP_RING0_PROC) || defined(CONFIG_APP_USER_PROFILE)
     sched_init (mbi_addr);
 #endif
 

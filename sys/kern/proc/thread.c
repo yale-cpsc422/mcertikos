@@ -1,5 +1,6 @@
 #include "cur_id.h"
 #include <preinit/lib/debug.h>
+#include <preinit/lib/timing.h>
 
 #define TD_STATE_READY		0
 #define TD_STATE_RUN		1
@@ -57,6 +58,8 @@ thread_yield(void)
 	unsigned int old_cur_pid;
 	unsigned int new_cur_pid;
 
+    trace_add(TR_YIELD, "enter thread_yield");
+
 	old_cur_pid = get_curid();
 	tcb_set_state(old_cur_pid, TD_STATE_READY);
 	tdq_enqueue(NUM_CHAN, old_cur_pid);
@@ -67,6 +70,8 @@ thread_yield(void)
 
 	if (old_cur_pid != new_cur_pid)
 		kctx_switch(old_cur_pid, new_cur_pid);
+
+    trace_add(TR_YIELD, "leave thread_yield");
 }
 
 void

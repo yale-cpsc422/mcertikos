@@ -16,7 +16,7 @@ KERN_SRCFILES	+= $(KERN_DIR)/kern/mm/MShareIntro.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/mm/MShare.c
 
 $(KERN_OBJDIR)/kern/mm/%.o: $(KERN_DIR)/kern/mm/%.c
-	@echo + ccomp[KERN/kern] $<
+	@echo + $(COMP_NAME)[KERN/kern] $<
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
 

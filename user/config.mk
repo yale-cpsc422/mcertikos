@@ -123,5 +123,11 @@ ifneq "$(strip $(CONFIG_APP_RING0_PROC))" ""
 USER_CFLAGS	+= -DCONFIG_APP_RING0_PROC
 endif
 
+# If set, enable application setting profiling
+ifneq "$(strip $(CONFIG_APP_USER_PROFILE))" ""
+USER_CFLAGS	+= -DCONFIG_APP_USER_PROFILE
+endif
+
+
 
 

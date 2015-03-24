@@ -64,8 +64,10 @@ proc_start_user(void)
 
 	unsigned int cur_pid = get_curid();
 
-	tss_switch(cur_pid);
-	set_PT(cur_pid);
+  if (get_pt() != cur_pid) {
+    tss_switch(cur_pid);
+    set_PT(cur_pid);
+  }
 	trap_return((void *) UCTX_LOC[cur_pid]);
 }
 

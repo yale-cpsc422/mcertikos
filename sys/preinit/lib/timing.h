@@ -173,6 +173,7 @@ typedef struct trace {
 typedef enum
 {
     TR_YIELD = 0,
+    TR_GET_TSC_PER_MS,
     MAX_TRACES
 } trace_id_t;
 

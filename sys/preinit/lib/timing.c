@@ -362,15 +362,14 @@ trace_dump (trace_id_t id)
 
     int i;
     trace_t * tr = &traces[id];
-    KERN_INFO("%d trace points: ", tr->current);
+    KERN_INFO("[%d] %d trace points: \n", (int) id, tr->current);
     for (i = 0; i < tr->current; i++)
     {
-        KERN_INFO ("%s: %llu, ", tr->ti[i].name, tr->ti[i].tsc);
+        KERN_INFO ("%s: %llu\n", tr->ti[i].name, tr->ti[i].tsc);
     }
-    KERN_INFO(".\n");
 }
 
-#ifdef CONFIG_APP_VMM
+#if defined(CONFIG_APP_VMM) && defined(PROFILING)
 static uint32_t
 action_print_vmexit (void * p)
 {
@@ -400,7 +399,7 @@ action_print_vmexit (void * p)
 
 runnable_t periodic_run[] =
     {
-#ifdef CONFIG_APP_VMM
+#if defined(CONFIG_APP_VMM) && defined(PROFILING)
         { .enable = TRUE,
           .period = IRQ_PERIOD(1),
           .param = NULL,

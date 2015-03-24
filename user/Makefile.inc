@@ -14,8 +14,9 @@ include $(USER_DIR)/lib/Makefile.inc
 include $(USER_DIR)/idle/Makefile.inc
 include $(USER_DIR)/vmm/Makefile.inc
 include $(USER_DIR)/pingpong/Makefile.inc
+include $(USER_DIR)/profile/Makefile.inc
 
-user: lib idle vmm pingpong
+user: lib idle vmm pingpong profile
 	@echo All targets of user are done.
 
 install_user:

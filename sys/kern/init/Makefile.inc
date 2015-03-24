@@ -5,7 +5,7 @@ OBJDIRS		+= $(KERN_OBJDIR)/kern/init
 KERN_SRCFILES	+= $(KERN_DIR)/kern/init/init.c
 
 $(KERN_OBJDIR)/kern/init/%.o: $(KERN_DIR)/kern/init/%.c
-	@echo + ccomp[KERN/kern] $<
+	@echo + $(COMP_NAME)[KERN/kern] $<
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
 

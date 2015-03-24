@@ -11,22 +11,22 @@ main (int argc, char **argv)
 
 #ifdef CONFIG_APP_USER_PROC
 
-    pid_t ping_pid;//, pong_pid, ding_pid;
+    pid_t ping_pid, pong_pid, ding_pid;
 
     if ((ping_pid = spawn (1)) != NUM_PROC)
         printf ("ping in process %d.\n", ping_pid);
     else
         printf ("Failed to launch ping.\n");
 
-//    if ((pong_pid = spawn (2)) != NUM_PROC)
-//        printf ("pong in process %d.\n", pong_pid);
-//    else
-//        printf ("Failed to launch pong.\n");
-//
-//    if ((ding_pid = spawn (3)) != NUM_PROC)
-//        printf ("ding in process %d.\n", ding_pid);
-//    else
-//        printf ("Failed to launch ding.\n");
+    if ((pong_pid = spawn (2)) != NUM_PROC)
+        printf ("pong in process %d.\n", pong_pid);
+    else
+        printf ("Failed to launch pong.\n");
+
+    if ((ding_pid = spawn (3)) != NUM_PROC)
+        printf ("ding in process %d.\n", ding_pid);
+    else
+        printf ("Failed to launch ding.\n");
 #endif
 
 #ifdef CONFIG_APP_RING0_PROC
@@ -49,6 +49,14 @@ main (int argc, char **argv)
         printf ("VMM in process %d.\n", vmm_pid);
     else
         printf ("Failed to launch VMM.\n");
+#endif
+
+#ifdef CONFIG_APP_USER_PROFILE
+    pid_t unit_pid;
+    if ((unit_pid = spawn (4)) != NUM_PROC)
+        printf ("unit in process %d.\n", unit_pid);
+    else
+        printf ("Failed to launch unit.\n");
 #endif
 
     while (1)
