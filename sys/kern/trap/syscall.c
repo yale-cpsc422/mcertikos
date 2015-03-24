@@ -127,13 +127,15 @@ extern uint8_t _binary___obj_user_pingpong_ping_start[];
 extern uint8_t _binary___obj_user_pingpong_pong_start[];
 extern uint8_t _binary___obj_user_pingpong_ding_start[];
 extern uint8_t _binary___obj_user_profile_unit_start[];
-
+extern uint8_t _binary___obj_user_profile_dummy_start[];
 void
 sys_spawn(void)
 {
 	unsigned int new_pid;
 	unsigned int elf_id;
 	void *elf_addr;
+
+	tri(TR_SPAWN, "enter spawn");
 
 	elf_id = syscall_get_arg2();
 
@@ -147,9 +149,13 @@ sys_spawn(void)
     	elf_addr = _binary___obj_user_pingpong_ding_start;
 	} else if (elf_id == 4)	{
 	    elf_addr = _binary___obj_user_profile_unit_start;
+    } else if (elf_id == 5) {
+        elf_addr = _binary___obj_user_profile_dummy_start;
 	} else {
 		syscall_set_errno(E_INVAL_PID);
 		syscall_set_retval1(NUM_PROC);
+
+		tri(TR_SPAWN, "spawn error");
 		return;
 	}
 
@@ -162,17 +168,19 @@ sys_spawn(void)
 		syscall_set_errno(E_SUCC);
 		syscall_set_retval1(new_pid);
 	}
+
+	tri(TR_SPAWN, "leave spawn");
 }
 
 void
 sys_yield(void)
 {
-    trace_add(TR_YIELD, "yield enter");
+    tri(TR_YIELD, "yield enter");
 
 	thread_yield();
 	syscall_set_errno(E_SUCC);
 
-    trace_add(TR_YIELD, "yield exit");
+	tri(TR_YIELD, "yield exit");
 }
 
 static int
@@ -317,12 +325,14 @@ sys_disk_cap(void)
 void
 sys_get_tsc_per_ms(void)
 {
-    trace_add(TR_GET_TSC_PER_MS, "enter syscall tsc_per_ms");
+    tri(TR_GET_TSC_PER_MS, "enter syscall tsc_per_ms");
+
     // KERN_DEBUG("tsc per ms: %llu.\n", tsc_per_ms);
 	syscall_set_retval1(tsc_per_ms >> 32);
 	syscall_set_retval2(tsc_per_ms & 0xffffffff);
 	syscall_set_errno(E_SUCC);
-    trace_add(TR_GET_TSC_PER_MS, "exit syscall tsc_per_ms");
+
+	tri(TR_GET_TSC_PER_MS, "exit syscall tsc_per_ms");
 }
 
 void

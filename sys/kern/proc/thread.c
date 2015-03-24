@@ -25,14 +25,20 @@ unsigned int
 thread_spawn(void *entry)
 {
 	unsigned int pid;
+    tri(TR_SPAWN, "enter thread_spawn");
 
 	pid = kctx_new(entry);
+
+    tri(TR_SPAWN, "complete kctx_new");
+
 	tcb_set_state(pid, TD_STATE_READY);
 	tdq_enqueue(NUM_CHAN, pid);
 
   //KERN_DEBUG("JUST SPAWN A NEW THREAD ID = %d\n", pid);
   //KERN_DEBUG("THREAD_STATE: %d\n", tcb_get_state(pid));
 //  tcb_log_queue(64);
+
+    tri(TR_SPAWN, "leave thread_spawn");
 
 	return pid;
 }

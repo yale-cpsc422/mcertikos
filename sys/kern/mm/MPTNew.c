@@ -1,5 +1,6 @@
 #include "MPTBit.h"
 #include <preinit/lib/debug.h>
+#include <preinit/lib/timing.h>
 
 #define NUM_PROC	64
 #define MagicNumber 1048577
@@ -26,11 +27,19 @@ pt_resv(unsigned int proc_index, unsigned int vaddr, unsigned int perm)
 {
     unsigned int pi;
     unsigned int result;
+    tri(TR_PGFLT, "enter pt_resv");
+
+    tri(TR_PGFLT, "before palloc");
     pi = palloc();
+    tri(TR_PGFLT, "end palloc");
+
+    tri(TR_PGFLT, "before pt_insert");
     if (pi == 0)
       result = MagicNumber;
     else
       result = pt_insert(proc_index, vaddr, pi, perm);
+
+    tri(TR_PGFLT, "end pt_insert");
     return result;
 }   
 

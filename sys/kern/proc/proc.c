@@ -4,6 +4,7 @@
 #include <lib/seg.h>
 #include <lib/trap.h>
 #include <kern/ring0proc/ring0proc.h>
+#include <preinit/lib/timing.h>
 
 #include "uctx.h"
 
@@ -63,9 +64,15 @@ proc_start_user(void)
 	unsigned int cur_pid = get_curid();
 
 	if (get_pt() != cur_pid) {
+	    tri(TR_PGFLT, "before tss_switch");
+
 	    tss_switch(cur_pid);
+
+        tri(TR_PGFLT, "before set_pt pid");
 	    set_pt(cur_pid);
 	}
+
+	tri(TR_PGFLT, "before trap return");
 	trap_return((void *) UCTX_LOC[cur_pid]);
 }
 
@@ -74,9 +81,15 @@ proc_create(void *elf_addr)
 {
 	unsigned int pid;
 
+	tri(TR_SPAWN, "enter proc_create");
+
 	pid = thread_spawn((void *) proc_start_user);
 
+    tri(TR_SPAWN, "begin elf_load");
+
 	elf_load(elf_addr, pid);
+
+    tri(TR_SPAWN, "complete elf_load");
 
 	uctx_set(pid, U_ES, CPU_GDT_UDATA | 3);
 	uctx_set(pid, U_DS, CPU_GDT_UDATA | 3);
@@ -85,6 +98,8 @@ proc_create(void *elf_addr)
 	uctx_set(pid, U_ESP, VM_USERHI);
 	uctx_set(pid, U_EFLAGS, FL_IF);
 	uctx_set(pid, U_EIP, elf_entry(elf_addr));
+
+    tri(TR_SPAWN, "leave proc_create");
 
 	return pid;
 }

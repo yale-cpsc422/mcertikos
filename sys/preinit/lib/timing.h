@@ -173,7 +173,9 @@ typedef struct trace {
 typedef enum
 {
     TR_YIELD = 0,
-    TR_GET_TSC_PER_MS,
+    TR_GET_TSC_PER_MS = 1,
+    TR_SPAWN = 2,
+    TR_PGFLT = 3,
     MAX_TRACES
 } trace_id_t;
 
@@ -183,6 +185,18 @@ void trace_enable (trace_id_t id);
 void trace_disable (trace_id_t id);
 void trace_add (trace_id_t id, const char * name);
 void trace_dump (trace_id_t id);
+
+
+#ifdef PROFILING
+#define tri(id, name) do { \
+        trace_add ((id), (name)); \
+    } while (0)
+#else
+
+#define tri(id, name) do { \
+    } while (0)
+
+#endif
 
 
 

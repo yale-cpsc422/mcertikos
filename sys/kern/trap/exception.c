@@ -1,6 +1,7 @@
 #include <preinit/lib/debug.h>
 #include <lib/trap.h>
 #include <lib/x86.h>
+#include <preinit/lib/timing.h>
 #include "syscall_dispatch.h"
 
 #define PAGESIZE	4096
@@ -29,6 +30,8 @@ pgflt_handler(void)
 	unsigned int errno;
 	unsigned int fault_va;
 
+    tri(TR_PGFLT, "enter pgflt_handler");
+
 	cur_pid = get_curid();
 	errno = uctx_get(cur_pid, U_ERRNO);
 	fault_va = rcr2();
@@ -43,6 +46,7 @@ pgflt_handler(void)
 	}
 
 	pt_resv(cur_pid, rounddown(fault_va, PAGESIZE), PTE_W | PTE_U | PTE_P);
+    tri(TR_PGFLT, "leave pgflt_handler");
 }
 
 void
@@ -50,6 +54,7 @@ exception_handler(void)
 {
 	unsigned int cur_pid;
 	unsigned int trapno;
+    tri(TR_PGFLT, "enter exception_handler");
 
 	cur_pid = get_curid();
 	trapno = uctx_get(cur_pid, U_TRAPNO);
@@ -58,4 +63,6 @@ exception_handler(void)
 		pgflt_handler();
 	else
 		default_exception_handler();
+
+	tri(TR_PGFLT, "leave exception_handler");
 }
