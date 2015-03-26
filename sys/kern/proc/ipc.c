@@ -1,6 +1,7 @@
 #include <preinit/lib/types.h>
 #include <preinit/lib/debug.h>
 #include <preinit/preinit.h>
+#include <lib/string.h>
 
 #include "ipc_intro.h"
 #include "sync_ipc_intro.h"
@@ -169,13 +170,16 @@ srecv (unsigned int pid, uintptr_t vaddr, unsigned int rcount)
 
         unsigned int asize = MIN(rcount, scount);
 
-        unsigned int i;
         unsigned int *rbuff = getkernelpa (chid, vaddr);
         unsigned int *sbuff = getkernelpa (pid, senderva);
+        memcpy(rbuff, sbuff, asize * sizeof(unsigned int));
+        /*
+        unsigned int i;
         for (i = 0; i < asize; i++)
         {
             rbuff[i] = sbuff[i];
         }
+        */
 
         remove_node_from_list (chid, pid);
 

@@ -31,7 +31,7 @@ function error
 	echo -e "${red} $1 ${NC}"
 }
 
-disk="sdf"
+disk="sdc"
 error_file="error.cerr"
 build_log="build.log"
 error_file_swp=".${error_file}.swp"
@@ -84,7 +84,7 @@ if [ "$status" != "0" ]; then
 	if [ -e "${error_file_swp}" ]; then
 		echo "please reopen error report."
 	else
-		gnome-terminal --geometry=100x40 -e "vim error.cerr"
+	  cat error.cerr
 	fi
 else
 	num_cc=$( grep -c '+ cc\[' build.log )

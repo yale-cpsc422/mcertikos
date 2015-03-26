@@ -5,6 +5,8 @@
 #define TD_STATE_RUN		1
 
 extern uint8_t _binary___obj_user_idle_idle_start[];
+extern uint8_t _binary___obj_user_pingpong_ping_start[];
+extern uint8_t _binary___obj_user_pingpong_pong_start[];
 
 extern void proc_init(unsigned int mbi_addr);
 extern unsigned int proc_create(void *elf_addr);
@@ -19,8 +21,10 @@ kern_main (void)
 {
     unsigned int idle_pid;
 
-    idle_pid = proc_create (_binary___obj_user_idle_idle_start);
-    KERN_DEBUG("idle process %d is created.\n", idle_pid);
+    KERN_DEBUG("In kernel main.\n");
+    idle_pid = proc_create (_binary___obj_user_pingpong_ping_start);
+    proc_create (_binary___obj_user_pingpong_pong_start);
+    KERN_DEBUG("process ping %d is created.\n", idle_pid);
 
     KERN_INFO("Start user-space ... \n");
 

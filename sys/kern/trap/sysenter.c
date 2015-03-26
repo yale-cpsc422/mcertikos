@@ -18,9 +18,6 @@ trap_dump (ef_t *ef)
     if (ef == NULL)
         return;
 
-    uintptr_t base = (uintptr_t) ef;
-
-//    KERN_DEBUG("trapframe at %x\n", base);
     dprintf ("\t%08x:\tedi:   \t\t%08x\n", &ef->regs.edi, ef->regs.edi);
     dprintf ("\t%08x:\tesi:   \t\t%08x\n", &ef->regs.esi, ef->regs.esi);
     dprintf ("\t%08x:\tebp:   \t\t%08x\n", &ef->regs.ebp, ef->regs.ebp);
