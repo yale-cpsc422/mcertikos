@@ -24,6 +24,11 @@
 #define MSR_EFER	0xc0000080
 # define MSR_EFER_SVME	(1<<12)		/* for AMD processors */
 
+/* sysenter */
+#define SYSENTER_CS_MSR     0x174u
+#define SYSENTER_ESP_MSR    0x175u
+#define SYSENTER_EIP_MSR    0x176u
+
 void ltr(uint16_t sel);
 void lcr0(uint32_t val);
 uint32_t rcr0(void);

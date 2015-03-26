@@ -6,7 +6,6 @@
 #include "sync_ipc_intro.h"
 
 #define NUM_CHAN	   64
-#define MAX_BUFFSIZE 32 // At most 32 integer at a time
 
 #define PTE_P		0x001	/* Present */
 
@@ -81,8 +80,7 @@ send (unsigned int chid, unsigned int content)
  *
  */
 unsigned int
-ssend (unsigned int chid, uintptr_t vaddr, unsigned int scount,
-       uintptr_t actualsentva)
+ssend (unsigned int chid, uintptr_t vaddr, unsigned int scount)
 {
     unsigned int myid = get_curid ();
 
@@ -93,25 +91,24 @@ ssend (unsigned int chid, uintptr_t vaddr, unsigned int scount,
     // Return error code if trying
     // to send to dead process.
     if (chidstate == 3)
-        return 2;
+        return MAX_BUFFSIZE + 2;
 
     if (0 <= chid && chid < NUM_CHAN)
     {
         // Set actual sent number
-        unsigned int *asentpa = getkernelpa (myid, actualsentva);
-        *asentpa = MIN(scount, MAX_BUFFSIZE);
+        unsigned int asize = MIN(scount, MAX_BUFFSIZE);
 
-        set_node_data (myid, vaddr, MIN(scount, MAX_BUFFSIZE));
+        set_node_data (myid, vaddr, asize);
         append_node_to_list (chid, myid);
 
         thread_wakeup2 (chid);
         thread_sleep2 ();
 
-        return 1; // success
+        return asize; // success
     }
     else
     {
-        return 0; // bad chid
+        return MAX_BUFFSIZE + 1; // bad chid
     }
 }
 
@@ -148,8 +145,7 @@ recv (void)
  *
  */
 unsigned int
-srecv (unsigned int pid, uintptr_t vaddr, unsigned int rcount,
-       uintptr_t actualreceivedva)
+srecv (unsigned int pid, uintptr_t vaddr, unsigned int rcount)
 {
     unsigned int chid;
     unsigned int info;
@@ -162,7 +158,7 @@ srecv (unsigned int pid, uintptr_t vaddr, unsigned int rcount,
     // Return error code if trying
     // to receive from dead process.
     if (chidstate == 3)
-        return 2;
+        return MAX_BUFFSIZE + 2;
 
     unsigned int senderva;
     unsigned int scount;
@@ -171,13 +167,12 @@ srecv (unsigned int pid, uintptr_t vaddr, unsigned int rcount,
     {
         get_node_data (pid, &senderva, &scount);
 
-        unsigned int *arecvpa = getkernelpa (chid, actualreceivedva);
-        *arecvpa = MIN(rcount, scount);
+        unsigned int asize = MIN(rcount, scount);
 
         unsigned int i;
         unsigned int *rbuff = getkernelpa (chid, vaddr);
         unsigned int *sbuff = getkernelpa (pid, senderva);
-        for (i = 0; i < *arecvpa; i++)
+        for (i = 0; i < asize; i++)
         {
             rbuff[i] = sbuff[i];
         }
@@ -185,13 +180,13 @@ srecv (unsigned int pid, uintptr_t vaddr, unsigned int rcount,
         remove_node_from_list (chid, pid);
 
         thread_wakeup2 (pid);
-        return 1;
+        return asize;
     }
     else
     {
         thread_sleep2 ();
         goto retry;
-        return 0; // This should not be reachable
+        return MAX_BUFFSIZE + 1;
     }
 }
 
@@ -206,7 +201,7 @@ proc_init (unsigned int mbi_addr)
 
 #ifdef CONFIG_APP_VMM
     if (cpuvendor == AMD)
-    {
+    {ssend
         vmcb_init (mbi_addr);
     }
     else if (cpuvendor == INTEL)

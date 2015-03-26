@@ -17,6 +17,8 @@
 #include <preinit/lib/debug.h>
 #include <preinit/lib/timing.h>
 
+#include <kern/trap/sysenter.h>
+
 cpu_vendor cpuvendor;
 
 void
@@ -42,6 +44,9 @@ preinit (uintptr_t mbi_addr)
     profiling_init ();
     KERN_DEBUG("profiling initialized.\n");
 #endif
+
+    sysenter_init();
+    KERN_DEBUG("sysenter initialized.\n");
 
     intr_init ();
     KERN_DEBUG("intr initialized.\n");

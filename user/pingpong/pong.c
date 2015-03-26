@@ -1,53 +1,46 @@
 #include <proc.h>
 #include <stdio.h>
 #include <syscall.h>
+#include <sysenter.h>
 
 int
-main(int argc, char **argv)
+main (int argc, char **argv)
 {
 
-  unsigned int receivebuffer[32];
-  unsigned int actualreceived;
+    unsigned int receivebuffer[32];
 
-  unsigned int status =
-    sys_srecv(2, receivebuffer, 32, &actualreceived);
+    unsigned int status = fast_sys_srecv (2, receivebuffer, 32);
 
-  if (status == E_IPC)
-    printf("Bad thing happened in pong.\n");
-  else if (status == E_INVAL_PID)
-    printf("Trying to receive from dead process.\n");
+    printf ("size 2: %d\n", status);
 
-  printf("Pong received %d balls from ping.\n", actualreceived);
-  printf("Status: %d\n", status);
+//    if (status == E_IPC)
+//        printf ("Bad thing happened in pong.\n");
+//    else if (status == E_INVAL_PID)
+//        printf ("Trying to receive from dead process.\n");
 
-  unsigned int i;
-  for (i = 0; i < actualreceived; i++) {
-    printf("ball[%d] = %d\n", i, receivebuffer[i]);
-  }
-  printf("\n");
+//    printf ("Status: %d\n", status);
 
-  status = sys_srecv(4, receivebuffer, 32, &actualreceived);
+    status = fast_sys_srecv (4, receivebuffer, 32);
+    printf ("size 4: %d\n", status);
 
-  if (status == E_IPC)
-    printf("Bad thing happened in pong.\n");
-  else if (status == E_INVAL_PID)
-    printf("Trying to receive from dead process.\n");
+    while (1)
+    {
+        fast_sys_yield ();
+    }
 
-  printf("Pong received %d balls from ding.\n", actualreceived);
-  printf("Status: %d\n", status);
-  for (i = 0; i < actualreceived; i++) {
-    printf("ball[%d] = %d\n", i, receivebuffer[i]);
-  }
-  printf("\n");
+//    if (status == E_IPC)
+//        printf ("Bad thing happened in pong.\n");
+//    else if (status == E_INVAL_PID)
+//        printf ("Trying to receive from dead process.\n");
 
-  //printf("pong.\n");
+    //printf("pong.\n");
 
-  /*
-  while(1) {
-    //printf("pong yielding\n");
-    yield();
-  }
-  */
+    /*
+     while(1) {
+     //printf("pong yielding\n");
+     yield();
+     }
+     */
 
-	return 0;
+    return 0;
 }

@@ -80,3 +80,4 @@ outsw(int port, const void *addr, int cnt)
 			 "d" (port), "0" (addr), "1" (cnt)      :
 			 "cc");
 }
+

@@ -1,5 +1,6 @@
 #include <mm/MPMap.h>
 #include <preinit/lib/timing.h>
+#include <lib/x86.h>
 
 #define NUM_PROC	64
 
@@ -31,9 +32,9 @@ extern void cswitch(struct kctx *from_kctx, struct kctx *to_kctx);
 void
 kctx_switch(unsigned int from_pid, unsigned int to_pid)
 {
-    trace_add(TR_YIELD, "before cswitch");
+    tri(TR_YIELD, "before cswitch");
 
 	cswitch(&kctx_pool[from_pid], &kctx_pool[to_pid]);
 
-    trace_add(TR_YIELD, "after cswitch");
+	tri(TR_YIELD, "after cswitch");
 }

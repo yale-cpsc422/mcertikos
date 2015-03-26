@@ -17,13 +17,13 @@ cswitch:
 	movl    %esp, 0(%eax)
 
 	/* load the new kernel context */
-        movl    0(%edx), %esp
-        movl    4(%edx), %edi
-        movl    8(%edx), %esi
-        movl    12(%edx), %ebx
-        movl    16(%edx), %ebp
-        movl    20(%edx), %ecx
-	    movl	%ecx, 0(%esp)
+	movl    0(%edx), %esp
+	movl    4(%edx), %edi
+	movl    8(%edx), %esi
+	movl    12(%edx), %ebx
+	movl    16(%edx), %ebp
+	movl    20(%edx), %ecx
+	movl	%ecx, 0(%esp)
 
-        xor     %eax, %eax
+	xor     %eax, %eax
 	ret

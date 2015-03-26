@@ -3,12 +3,15 @@
 #include <kern/trap/syscall_args.h>
 #include <kern/trap/syscall.h>
 #include <preinit/lib/timing.h>
+#include <preinit/lib/debug.h>
 #include "interrupt.h"
 
 #define NUM_PROC	64
 #define UCTX_SIZE	17
 
 extern unsigned int UCTX_LOC[NUM_PROC][UCTX_SIZE];
+
+extern unsigned int get_pt ();
 
 void
 trap (tf_t *tf)
@@ -20,11 +23,7 @@ trap (tf_t *tf)
 
     if (T_DIVIDE <= tf->trapno && tf->trapno <= T_SECEV)
     {
-        tri(TR_PGFLT, "enter trap: exception");
-        tri(TR_PGFLT, "before set_pt 0");
         set_pt (0);
-        tri(TR_PGFLT, "end set_pt 0");
-
         exception_handler ();
     }
     else if (T_IRQ0 + IRQ_TIMER <= tf->trapno && tf->trapno <= T_IRQ0 + IRQ_IDE2)
@@ -40,6 +39,5 @@ trap (tf_t *tf)
         syscall_dispatch ();
     }
 
-    tri(TR_PGFLT, "before proc_start_user");
     proc_start_user ();
 }

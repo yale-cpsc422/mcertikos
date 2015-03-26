@@ -8,6 +8,7 @@ KERN_SRCFILES	+= $(KERN_DIR)/kern/trap/syscall_dispatch.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/trap/interrupt.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/trap/exception.c
 KERN_SRCFILES	+= $(KERN_DIR)/kern/trap/trap.c
+KERN_SRCFILES	+= $(KERN_DIR)/kern/trap/sysenter.c
 
 $(KERN_OBJDIR)/kern/trap/%.o: $(KERN_DIR)/kern/trap/%.c
 	@echo + $(COMP_NAME)[KERN/kern] $<

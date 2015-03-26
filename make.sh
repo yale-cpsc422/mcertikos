@@ -36,7 +36,8 @@ error_file="error.cerr"
 build_log="build.log"
 error_file_swp=".${error_file}.swp"
 
-FLAGS="DEBUG_MSG=1 SERIAL_DEBUG=1 PROFILING_ALL=1 CONFIG_APP_VMM=1"
+# FLAGS="DEBUG_MSG=1 SERIAL_DEBUG=1 PROFILING_ALL=1 CONFIG_APP_USER_PROC=1"
+FLAGS="DEBUG_MSG=1 SERIAL_DEBUG=1 CONFIG_APP_USER_PROC=1"
 
 need_clean="no"
 use_gcc="no"

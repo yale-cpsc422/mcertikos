@@ -11,6 +11,7 @@
 #include "syscall_args.h"
 #include "syscall.h"
 #include <mm/MShare.h>
+#include <kern/proc/sync_ipc_intro.h>
 
 #define PAGESIZE			4096
 
@@ -371,6 +372,16 @@ sys_stop_trace(void)
     syscall_set_errno(E_SUCC);
 }
 
+void
+sys_get_pid(void)
+{
+    unsigned int cur_pid;
+
+    cur_pid = get_curid();
+
+    syscall_set_retval1(cur_pid);
+    syscall_set_errno(E_SUCC);
+}
 
 void
 sys_hvm_run_vm(void)
@@ -830,12 +841,10 @@ extern unsigned int send(unsigned int chid, unsigned int content);
 extern unsigned int recv(void);
 extern unsigned int ssend(unsigned int chid,
                           uintptr_t    vaddr,
-                          unsigned int scount,
-                          uintptr_t    actualsentva);
+                          unsigned int scount);
 extern unsigned int srecv(unsigned int pid,
                           uintptr_t    vaddr,
-                          unsigned int rcount,
-                          uintptr_t    actualreceivedva);
+                          unsigned int rcount);
 extern void thread_sleep(unsigned int chid);
 
 void
@@ -881,23 +890,21 @@ sys_ssend(void)
   unsigned int retval;
   unsigned int sbufferva;
   unsigned int scount;
-  unsigned int actualsentva;
 
   chid      = syscall_get_arg2();
   sbufferva = syscall_get_arg3();
   scount    = syscall_get_arg4();
-  actualsentva = syscall_get_arg5();
 
   if (!(0 <= chid && chid < NUM_CHAN)) {
     syscall_set_errno(E_INVAL_CHID);
     return;
   }
 
-  retval = ssend(chid, sbufferva, scount, actualsentva);
+  retval = ssend(chid, sbufferva, scount);
 
-  if (retval == 1)
+  if (retval - MAX_BUFFSIZE <= 0)
     syscall_set_errno(E_SUCC);
-  else if (retval == 2)
+  else if (retval - MAX_BUFFSIZE == 2)
     syscall_set_errno(E_INVAL_PID);
   else
     syscall_set_errno(E_IPC);
@@ -919,18 +926,16 @@ sys_srecv(void)
   unsigned int pid;
   unsigned int rbufferva;
   unsigned int rcount;
-  unsigned int actualreceivedva;
 
   pid = syscall_get_arg2();
   rbufferva = syscall_get_arg3();
   rcount = syscall_get_arg4();
-  actualreceivedva = syscall_get_arg5();
 
-  val = srecv(pid, rbufferva, rcount, actualreceivedva);
+  val = srecv(pid, rbufferva, rcount);
 
-  if (val == 1)
+  if (val - MAX_BUFFSIZE <= 0)
     syscall_set_errno(E_SUCC);
-  else if (val == 2)
+  else if (val - MAX_BUFFSIZE == 2)
     syscall_set_errno(E_INVAL_PID);
   else
     syscall_set_errno(E_IPC);

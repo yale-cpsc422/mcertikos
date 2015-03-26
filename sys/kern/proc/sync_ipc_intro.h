@@ -3,6 +3,8 @@
 
 #ifdef _KERN_
 
+#define MAX_BUFFSIZE 1000
+
 void
 init_ipc_node(unsigned int pid);
 

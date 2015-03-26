@@ -1,6 +1,7 @@
 #include <proc.h>
 #include <stdio.h>
 #include <syscall.h>
+#include <sysenter.h>
 
 #define NUM_PROC 64
 
@@ -60,7 +61,7 @@ main (int argc, char **argv)
 #endif
 
     while (1)
-        yield ();
+        fast_sys_yield ();
 
     return 0;
 }

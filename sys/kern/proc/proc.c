@@ -3,6 +3,8 @@
 #include <lib/gcc.h>
 #include <lib/seg.h>
 #include <lib/trap.h>
+#include <lib/x86.h>
+#include <preinit/lib/x86.h>
 #include <kern/ring0proc/ring0proc.h>
 #include <preinit/lib/timing.h>
 
@@ -60,6 +62,7 @@ void
 proc_start_user(void)
 {
 	extern unsigned int UCTX_LOC[NUM_PROC][UCTX_SIZE];
+	extern char STACK_LOC[NUM_PROC][PAGESIZE];
 
 	unsigned int cur_pid = get_curid();
 
@@ -70,6 +73,8 @@ proc_start_user(void)
 
         tri(TR_PGFLT, "before set_pt pid");
 	    set_pt(cur_pid);
+
+	    wrmsr(SYSENTER_ESP_MSR, (uint32_t) (&STACK_LOC[cur_pid][PAGESIZE-4]));
 	}
 
 	tri(TR_PGFLT, "before trap return");

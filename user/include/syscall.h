@@ -484,7 +484,7 @@ sys_recv(uint32_t *val)
 
 static gcc_inline int
 sys_ssend(uint32_t chid, unsigned int *buffer,
-          uint32_t scount, unsigned int *actualsent)
+          uint32_t scount)
 {
 	int errno;
 
@@ -494,8 +494,7 @@ sys_ssend(uint32_t chid, unsigned int *buffer,
 		       "a" (SYS_ssend),
 		       "b" (chid),
 		       "c" (buffer),
-           "d" (scount),
-           "S" (actualsent)
+           "d" (scount)
 		     : "cc", "memory");
 
 	return errno;
@@ -503,7 +502,7 @@ sys_ssend(uint32_t chid, unsigned int *buffer,
 
 static gcc_inline int
 sys_srecv(uint32_t pid, unsigned int *buffer,
-          uint32_t rcount, unsigned int *actualreceived)
+          uint32_t rcount)
 {
 	int errno;
 
@@ -513,8 +512,7 @@ sys_srecv(uint32_t pid, unsigned int *buffer,
 		       "a" (SYS_srecv),
            "b" (pid),
            "c" (buffer),
-           "d" (rcount),
-           "S" (actualreceived)
+           "d" (rcount)
 		     : "cc", "memory");
 
 	return errno;
