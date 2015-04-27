@@ -176,9 +176,6 @@ struct gatedesc {
 	(gate).gd_off_31_16 = (uint32_t) (off) >> 16;		\
 }
 
-segdesc_t	gdt[CPU_GDT_NDESC];
-tss_t		tss[64];
-
 void seg_init(void);
 
 #endif /* !__ASSEMBLER__ */

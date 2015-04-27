@@ -22,9 +22,9 @@ kern_main (void)
     unsigned int idle_pid;
 
     KERN_DEBUG("In kernel main.\n");
-    idle_pid = proc_create (_binary___obj_user_pingpong_ping_start);
-    proc_create (_binary___obj_user_pingpong_pong_start);
-    KERN_DEBUG("process ping %d is created.\n", idle_pid);
+    idle_pid = proc_create (_binary___obj_user_idle_idle_start);
+
+    KERN_DEBUG("process idle %d is created.\n", idle_pid);
 
     KERN_INFO("Start user-space ... \n");
 

@@ -69,9 +69,11 @@ enable_sse(void)
 	uint32_t cr0, cr4;
 
 	cr4 = rcr4() | CR4_OSFXSR | CR4_OSXMMEXCPT;
+	FENCE();
 	lcr4(cr4);
 
 	cr0 = rcr0() | CR0_MP;
+	FENCE();
 	cr0 &= ~ (CR0_EM | CR0_TS);
 }
 

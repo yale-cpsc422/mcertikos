@@ -64,7 +64,7 @@ tsc2s (int64_t tsc)
 void gcc_inline
 tsc2time (uint64_t tsc, char * output)
 {
-    int64_t t1, t2;
+    int64_t t1, t2 = 0;
     char * unit;
 
     if ((t1 = tsc2s (tsc)) == 0)

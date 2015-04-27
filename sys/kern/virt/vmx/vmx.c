@@ -817,11 +817,14 @@ dump_vmx_info(void)
                       vmx_info.cr4_ones_mask, vmx_info.cr4_zeros_mask);
 }
 
+
+extern int vmx_enable(void);
+
 void
 vmx_init (unsigned int mbi_addr)
 {
     extern uint8_t vmx_return_from_guest[];
-    int rw;
+    int rw, error;
 
     KERN_DEBUG("In vmx init.\n");
 
@@ -829,7 +832,14 @@ vmx_init (unsigned int mbi_addr)
 
     VMX_DEBUG("Before vmx_hw_init.\n");
     dump_vmx_info ();
-    vmx_hw_init ();
+//    vmx_hw_init ();
+
+    /* enable VMX */
+    error = vmx_enable();
+    if (error) {
+        KERN_PANIC("Cannot enable VMX.\n");
+    }
+
     VMX_DEBUG("\n\nAfter vmx_hw_init.\n");
     dump_vmx_info ();
     KERN_DEBUG("vmx hw initialized.\n");
@@ -854,7 +864,7 @@ vmx_init (unsigned int mbi_addr)
     vmx.pml4ept = ept.pml4;
     vmx.msr_bitmap = msr_bitmap;
     vmx.io_bitmap = io_bitmap;
-    vmx.vmcs->identifier = rdmsr (MSR_VMX_BASIC) & 0xffffffff;
+    vmx.vmcs->identifier = rdmsr (MSR_VMX_BASIC) & 0xffffffffull;
     vmx.g_rip = 0xfff0;
     vmcs_set_defaults (vmx.vmcs, vmx.pml4ept, vmx_info.pinbased_ctls,
         vmx_info.procbased_ctls, vmx_info.procbased_ctls2, vmx_info.exit_ctls,

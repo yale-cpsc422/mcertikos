@@ -205,7 +205,7 @@ proc_init (unsigned int mbi_addr)
 
 #ifdef CONFIG_APP_VMM
     if (cpuvendor == AMD)
-    {ssend
+    {
         vmcb_init (mbi_addr);
     }
     else if (cpuvendor == INTEL)

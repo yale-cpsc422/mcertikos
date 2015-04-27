@@ -41,6 +41,8 @@ void insl(int port, void *addr, int cnt);
 void outb(int port, uint8_t data);
 void outsw(int port, const void *addr, int cnt);
 
+#define FENCE() asm volatile ("mfence" ::: "memory")
+
 #define LOW8(x)  ((x) & 0xffu)
 #define HIGH8(x)  (((x) >> 8) & 0xffu)
 

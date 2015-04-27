@@ -18,9 +18,9 @@
 extern struct vmx_info vmx_info;
 
 /*
- * Enable VMX. 
+ * Enable VMX.
  */
-static int 
+int
 vmx_enable(void)
 {
     int error;
@@ -176,13 +176,6 @@ vmx_hw_init(void)
     vmx_info.cr4_zeros_mask = ~fixed0 & ~fixed1;
     VMX_DEBUG("CR4 1s mask 0x%llx, 0s mask 0x%llx.\n",
           vmx_info.cr4_ones_mask, vmx_info.cr4_zeros_mask);
-
-    /* enable VMX */
-    error = vmx_enable();
-    if (error) {
-        VMX_DEBUG("Cannot enable VMX.\n");
-        return error;
-    }
 
     return 0;
 }

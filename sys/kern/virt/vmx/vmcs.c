@@ -12,6 +12,10 @@
 
 struct vmcs vmcs gcc_aligned(PAGESIZE);
 
+extern segdesc_t	gdt_LOC[CPU_GDT_NDESC];
+extern tss_t		tss_LOC[64];
+
+
 gcc_inline uint16_t
 vmcs_read16(uint32_t encoding)
 {
@@ -109,8 +113,8 @@ vmcs_set_defaults(struct vmcs *vmcs, uint64_t *pml4ept, uint32_t pinbased_ctls,
     /* host segment base address */
     vmcs_write32(VMCS_HOST_FS_BASE, 0);
     vmcs_write32(VMCS_HOST_GS_BASE, 0);
-    vmcs_write32(VMCS_HOST_TR_BASE, (uintptr_t) &tss);
-    vmcs_write32(VMCS_HOST_GDTR_BASE, (uintptr_t) &gdt);
+    vmcs_write32(VMCS_HOST_TR_BASE, (uintptr_t) tss_LOC);
+    vmcs_write32(VMCS_HOST_GDTR_BASE, (uintptr_t) gdt_LOC);
     vmcs_write32(VMCS_HOST_IDTR_BASE, (uintptr_t) idt);
 
     /* host control registers */

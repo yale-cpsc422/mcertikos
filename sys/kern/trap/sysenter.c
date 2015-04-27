@@ -4,9 +4,10 @@
 #include <lib/x86.h>
 #include <preinit/lib/x86.h>
 #include <preinit/lib/seg.h>
-#include <kern/trap/sysenter.h>
+#include <lib/sysenter.h>
 #include <kern/proc/uctx.h>
 #include <preinit/lib/timing.h>
+#include <lib/sysenter.h>
 
 #define PAGESIZE    4096
 #define NUM_PROC    64

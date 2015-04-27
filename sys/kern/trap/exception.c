@@ -12,12 +12,46 @@
 #define PTE_W		0x002	/* Writeable */
 #define PTE_U		0x004	/* User-accessible */
 
+#define NUM_PROC	64
+#define UCTX_SIZE	17
+
+static void
+trap_dump(tf_t *tf)
+{
+	if (tf == NULL)
+		return;
+
+	uintptr_t base = (uintptr_t) tf;
+
+	KERN_DEBUG("trapframe at %x\n", base);
+	KERN_DEBUG("\t%08x:\tedi:   \t\t%08x\n", &tf->regs.edi, tf->regs.edi);
+	KERN_DEBUG("\t%08x:\tesi:   \t\t%08x\n", &tf->regs.esi, tf->regs.esi);
+	KERN_DEBUG("\t%08x:\tebp:   \t\t%08x\n", &tf->regs.ebp, tf->regs.ebp);
+	KERN_DEBUG("\t%08x:\tesp:   \t\t%08x\n", &tf->regs.oesp, tf->regs.oesp);
+	KERN_DEBUG("\t%08x:\tebx:   \t\t%08x\n", &tf->regs.ebx, tf->regs.ebx);
+	KERN_DEBUG("\t%08x:\tedx:   \t\t%08x\n", &tf->regs.edx, tf->regs.edx);
+	KERN_DEBUG("\t%08x:\tecx:   \t\t%08x\n", &tf->regs.ecx, tf->regs.ecx);
+	KERN_DEBUG("\t%08x:\teax:   \t\t%08x\n", &tf->regs.eax, tf->regs.eax);
+	KERN_DEBUG("\t%08x:\tes:    \t\t%08x\n", &tf->es, tf->es);
+	KERN_DEBUG("\t%08x:\tds:    \t\t%08x\n", &tf->ds, tf->ds);
+	KERN_DEBUG("\t%08x:\ttrapno:\t\t%08x\n", &tf->trapno, tf->trapno);
+	KERN_DEBUG("\t%08x:\terr:   \t\t%08x\n", &tf->err, tf->err);
+	KERN_DEBUG("\t%08x:\teip:   \t\t%08x\n", &tf->eip, tf->eip);
+	KERN_DEBUG("\t%08x:\tcs:    \t\t%08x\n", &tf->cs, tf->cs);
+	KERN_DEBUG("\t%08x:\teflags:\t\t%08x\n", &tf->eflags, tf->eflags);
+	KERN_DEBUG("\t%08x:\tesp:   \t\t%08x\n", &tf->esp, tf->esp);
+	KERN_DEBUG("\t%08x:\tss:    \t\t%08x\n", &tf->ss, tf->ss);
+}
+
+extern unsigned int UCTX_LOC[NUM_PROC][UCTX_SIZE];
+
 void
 default_exception_handler(void)
 {
 	unsigned int cur_pid;
 
 	cur_pid = get_curid();
+	trap_dump((tf_t *) UCTX_LOC[cur_pid]);
 
 	KERN_PANIC("Trap %d @ 0x%08x.\n",
 		   uctx_get(cur_pid, U_TRAPNO), uctx_get(cur_pid, U_EIP));

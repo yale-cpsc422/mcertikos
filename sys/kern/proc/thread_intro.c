@@ -64,7 +64,9 @@ tcb_log_queue(unsigned int chid)
   KERN_DEBUG("/*****QUEUE CONTENTS*****/\n");
   KERN_DEBUG("Queue: %d\n", chid);
   unsigned int head = tdq_get_head(chid);
+#ifdef DEBUG_MSG
   unsigned int tail = tdq_get_tail(chid);
+#endif
 
   KERN_DEBUG("HEAD: %d\n", head);
   KERN_DEBUG("TAIL: %d\n", tail);
