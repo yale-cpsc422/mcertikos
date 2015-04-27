@@ -110,6 +110,10 @@ else
 	exit 1
 fi
 
+title "convert to vmware hard disk"
+qemu-img convert -p -O vmdk certikos.img certikos.vmdk
+check $?
+
 title "write image to usb stick"
 sudo dd if=certikos.img of=/dev/${disk} bs=2M conv=notrunc,noerror
 check $?

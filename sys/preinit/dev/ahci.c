@@ -797,6 +797,9 @@ int
 ahci_pci_attach(struct pci_func *f)
 {
 	/* XXX: only attach the first AHCI controller */
+
+	KERN_DEBUG("found ahci storage device.\n");
+
 	if (ahci_inited == TRUE)
 		return 1;
 

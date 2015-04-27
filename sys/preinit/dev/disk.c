@@ -159,7 +159,7 @@ disk_capacity(struct disk_dev *dev)
 }
 
 struct disk_dev *
-disk_get_dev(int nr)
+disk_get_dev (int nr)
 {
 	int i = 0;
 	struct disk_dev *dev = NULL;
@@ -167,7 +167,8 @@ disk_get_dev(int nr)
 	if (nr < 0)
 		return NULL;
 
-	SLIST_FOREACH(dev, &all_disk_devices, entry) {
+	SLIST_FOREACH(dev, &all_disk_devices, entry)
+	{
 		if (i == nr)
 			return dev;
 		i++;
