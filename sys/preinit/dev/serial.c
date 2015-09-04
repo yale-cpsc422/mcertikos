@@ -11,12 +11,10 @@
  * Adapted for PIOS by Bryan Ford at Yale University.
  */
 
-#include <lib/trap.h>
 #include <preinit/lib/types.h>
 #include <lib/x86.h>
 
 #include "console.h"
-#include "intr.h"
 #include "serial.h"
 
 #define COM1		0x3F8
@@ -141,7 +139,7 @@ serial_intenable(void)
 {
 	if (serial_exists) {
 		outb(COM1+COM_IER, 1);
-		intr_enable(IRQ_SERIAL13);
+		//intr_enable(IRQ_SERIAL13);
 		serial_intr();
 	}
 }

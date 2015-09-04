@@ -1,5 +1,3 @@
-#include <preinit/dev/intr.h>
-
 #include <preinit/lib/debug.h>
 #include <preinit/lib/gcc.h>
 #include <preinit/lib/stdarg.h>
@@ -66,7 +64,7 @@ debug_panic(const char *file, int line, const char *fmt,...)
 
 	dprintf("Kernel Panic !!!\n");
 
-	intr_local_disable();
+	//intr_local_disable();
 	halt();
 }
 

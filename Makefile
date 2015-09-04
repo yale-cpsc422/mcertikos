@@ -99,10 +99,10 @@ QEMUOPTS_BIOS	:= -L $(UTILSDIR)/qemu/
 
 # Targets
 
-.PHONY: all boot dev kern lib sys user deps
+.PHONY: all boot dev kern lib sys deps
 
 
-all: boot sys user
+all: boot sys
 	@echo "Use compcert: $(ENABLE_CCOMP)"
 	@echo "All targets are done."
 
@@ -136,7 +136,6 @@ cscope:
 
 # Sub-makefiles
 include boot/Makefile.inc
-include user/Makefile.inc
 include sys/Makefile.inc
 
 deps: $(OBJDIR)/.deps

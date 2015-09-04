@@ -40,8 +40,8 @@ error_file_swp=".${error_file}.swp"
 FLAGS="DEBUG_MSG=1 SERIAL_DEBUG=1 CONFIG_APP_VMM=1"
 # FLAGS="DEBUG_MSG=1 SERIAL_DEBUG=1 CONFIG_APP_USER_PROC=1"
 
-need_clean="no"
-use_gcc="no"
+need_clean="yes"
+use_gcc="yes"
 
 for i in "$@"
 do
@@ -97,37 +97,6 @@ fi
 check $status
 
 title "build image"
-sudo ./build_image.py
+./make_image.py
 check $?
-
-title "check $disk is a usb stick"
-model=$( cat /sys/block/${disk}/device/model  )
-
-if [[ $model == "USB Flash Drive"* ]]; then
-	echo "yes"
-else
-	echo "no, ${disk} is a ${model}. abort!"
-	exit 1
-fi
-
-title "convert to vmware hard disk"
-qemu-img convert -p -O vmdk certikos.img certikos.vmdk
-check $?
-
-title "write image to usb stick"
-sudo dd if=certikos.img of=/dev/${disk} bs=2M conv=notrunc,noerror
-check $?
-
-title "all done!"
-eject_script="
-#!/bin/bash
-
-sync
-sudo sync
-sudo eject ${disk}
-"
-echo -e "$eject_script" > eject.sh
-chmod u+x eject.sh
-
-echo -e "please use ${green}./eject.sh${NC} to safely remove the USB stick"
 
