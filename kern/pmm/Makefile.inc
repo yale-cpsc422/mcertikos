@@ -1,16 +1,16 @@
 # -*-Makefile-*-
 
-OBJDIRS		+= $(KERN_OBJDIR)/kern/mm
+OBJDIRS		+= $(KERN_OBJDIR)/pmm
 
-KERN_SRCFILES	+= $(KERN_DIR)/kern/mm/MALInit.c
-KERN_SRCFILES	+= $(KERN_DIR)/kern/mm/MALOp.c
+KERN_SRCFILES	+= $(KERN_DIR)/pmm/MALInit.c
+KERN_SRCFILES	+= $(KERN_DIR)/pmm/MALOp.c
 
-$(KERN_OBJDIR)/kern/mm/%.o: $(KERN_DIR)/kern/mm/%.c
-	@echo + $(COMP_NAME)[KERN/kern] $<
+$(KERN_OBJDIR)/pmm/%.o: $(KERN_DIR)/pmm/%.c
+	@echo + $(COMP_NAME)[KERN/pmm] $<
 	@mkdir -p $(@D)
 	$(V)$(CCOMP) $(CCOMP_KERN_CFLAGS) -c -o $@ $<
 
-$(KERN_OBJDIR)/kern/mm/%.o: $(KERN_DIR)/kern/mm/%.S
-	@echo + as[KERN/kern] $<
+$(KERN_OBJDIR)/pmm/%.o: $(KERN_DIR)/pmm/%.S
+	@echo + as[KERN/pmm] $<
 	@mkdir -p $(@D)
 	$(V)$(CC) $(KERN_CFLAGS) -c -o $@ $<

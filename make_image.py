@@ -36,7 +36,7 @@ os.environ["LIBGUESTFS_BACKEND"] = "direct"
 info (color.HEADER,  '\ncopying kernel files...')
 run('mkdir -v -p ./disk/boot')
 run('cp -v obj/boot/loader ./disk/boot/')
-run('cp -v obj/sys/kernel ./disk/boot/')
+run('cp -v obj/kern/kernel ./disk/boot/')
 
 info (color.HEADER, '\ncreating disk...')
 run('virt-make-fs --type=ext2 --label=certikos --partition=mbr disk certikos.img')

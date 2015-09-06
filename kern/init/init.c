@@ -1,6 +1,6 @@
 #include <lib/debug.h>
 #include <lib/types.h>
-#include <kern/mm/MALOp.h>
+#include <pmm/MALOp.h>
 
 #define NUM_CHAN		64
 #define TD_STATE_RUN		1

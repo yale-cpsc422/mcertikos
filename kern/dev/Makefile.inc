@@ -10,11 +10,11 @@ KERN_SRCFILES	+= $(KERN_DIR)/dev/mboot.c
 
 
 $(KERN_OBJDIR)/dev/%.o: $(KERN_DIR)/dev/%.c
-	@echo + cc[PREINIT/dev] $<
+	@echo + cc[KERN/dev] $<
 	@mkdir -p $(@D)
 	$(V)$(CC) $(KERN_CFLAGS) -c -o $@ $<
 
 $(KERN_OBJDIR)/dev/%.o: $(KERN_DIR)/dev/%.S
-	@echo + as[PREINIT/dev] $<
+	@echo + as[KERN/dev] $<
 	@mkdir -p $(@D)
 	$(V)$(CC) $(KERN_CFLAGS) -c -o $@ $<
