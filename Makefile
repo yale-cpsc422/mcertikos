@@ -12,15 +12,8 @@ ARCH		:= i386
 
 COMP_NAME	:= "ccomp"
 
-ifdef USE_GCC
-	ENABLE_CCOMP	:= 0
-	COMP_NAME		:= "cc"
-else
-	ENABLE_CCOMP	:= 1
-	COMP_NAME		:= "ccomp"
-endif
-
-
+ENABLE_CCOMP	:= 0
+COMP_NAME		:= "cc"
 
 # Cross-compiler toolchain
 #
@@ -99,10 +92,10 @@ QEMUOPTS_BIOS	:= -L $(UTILSDIR)/qemu/
 
 # Targets
 
-.PHONY: all boot dev kern lib sys deps
+.PHONY: all boot kern deps
 
 
-all: boot sys
+all: boot kern
 	@echo "Use compcert: $(ENABLE_CCOMP)"
 	@echo "All targets are done."
 
@@ -123,7 +116,7 @@ qemu-bios: $(CERTIKOS_IMG)
 	$(V)$(QEMU) $(QEMUOPTS) $(QEMUOPTS_BIOS)
 
 iso: all
-	$(V)cp $(OBJDIR)/sys/kernel $(UTILSDIR)/iso/boot/kernel
+	$(V)cp $(OBJDIR)/kern/kernel $(UTILSDIR)/iso/boot/kernel
 	$(V)grub-mkrescue -o $(CERTIKOS_IMG) $(UTILSDIR)/iso
 
 package:
@@ -136,7 +129,7 @@ cscope:
 
 # Sub-makefiles
 include boot/Makefile.inc
-include sys/Makefile.inc
+include kern/Makefile.inc
 
 deps: $(OBJDIR)/.deps
 
