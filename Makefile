@@ -78,7 +78,7 @@ endif
 # If this is the first time building CertiKOS64, please follow the instructions
 # in HOW_TO_MAKE_DISK_IMAGE to create a disk image file manually and put it in
 # directory $(OBJDIR)/ (default: obj/)
-CERTIKOS_IMG	:= $(OBJDIR)/certikos.img
+CERTIKOS_IMG	:= certikos.img
 
 # bochs
 BOCHS		:= bochs
@@ -86,17 +86,18 @@ BOCHS_OPT	:= -q
 
 # qemu
 QEMU		:= qemu-system-x86_64
-QEMUOPTS	:= -smp 4 -hda $(CERTIKOS_IMG) -serial mon:stdio -m 256 -k en-us
+QEMUOPTS	:= -smp 1 -hda $(CERTIKOS_IMG) -serial mon:stdio -m 4096 -k en-us
 QEMUOPTS_KVM	:= -cpu host -enable-kvm
 QEMUOPTS_BIOS	:= -L $(UTILSDIR)/qemu/
 
 # Targets
 
-.PHONY: all boot kern deps
+.PHONY: all boot kern deps qemu
 
 
 all: boot kern
 	@echo "Use compcert: $(ENABLE_CCOMP)"
+	@./make_image.py
 	@echo "All targets are done."
 
 install_img: install_boot install_sys install_user
