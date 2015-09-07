@@ -3,7 +3,7 @@
 
 #ifdef _KERN_
 
-void mem_init(unsigned int);
+void physical_mem_init(unsigned int);
 
 #endif /* _KERN_ */
 

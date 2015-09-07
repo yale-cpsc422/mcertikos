@@ -14,7 +14,7 @@ kern_main (void)
 void
 kern_init (uintptr_t mbi_addr)
 {
-    mem_init (mbi_addr);
+    physical_mem_init (mbi_addr);
 
     KERN_DEBUG("Kernel initialized.\n");
 

@@ -2,13 +2,13 @@
 #define _KERN_MM_MALINIT_H_
 
 unsigned int get_nps(void);
-void set_nps(unsigned int nps);
+void set_nps(unsigned int);
 
-unsigned int is_norm(unsigned int idx);
-void set_norm(unsigned int idx, unsigned int val);
+unsigned int at_is_norm(unsigned int);
+void at_set_perm(unsigned int, unsigned int);
 
-unsigned int at_get(unsigned int idx);
-void at_set(unsigned int idx, unsigned int val);
+unsigned int at_is_allocated(unsigned int);
+void at_set_allocated(unsigned int, unsigned int);
 
 
 #ifdef _KERN_
