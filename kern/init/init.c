@@ -1,6 +1,6 @@
 #include <lib/debug.h>
 #include <lib/types.h>
-#include <pmm/MALOp.h>
+#include <pmm/MATInit/export.h>
 
 #define NUM_CHAN		64
 #define TD_STATE_RUN		1

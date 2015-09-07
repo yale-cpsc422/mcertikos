@@ -1,12 +1,11 @@
 static unsigned int NPS_LOC;
 
-struct A {
+struct ATStruct {
 	unsigned int isnorm;
 	unsigned int allocated;
-  unsigned int c;
 };
 
-static struct A AT_LOC[1 << 20];
+static struct ATStruct AT_LOC[1 << 20];
 
 unsigned int
 get_nps(void)
@@ -44,7 +43,6 @@ set_norm(unsigned int set_norm_index, unsigned int norm_val)
 {
 	AT_LOC[set_norm_index].isnorm = norm_val;
 	AT_LOC[set_norm_index].allocated = 0;
-	AT_LOC[set_norm_index].c = 0;
 }
 
 unsigned int
@@ -65,20 +63,4 @@ void
 at_set(unsigned int at_set_index, unsigned int allocated_val)
 {
 	AT_LOC[at_set_index].allocated = allocated_val;
-}
-
-unsigned int
-at_get_c (unsigned int at_get_c_index)
-{
-    unsigned int c;
-
-    c = AT_LOC[at_get_c_index].c;
-
-    return c;
-}
-
-void
-at_set_c (unsigned int at_set_c_index, unsigned int c_val)
-{
-    AT_LOC[at_set_c_index].c = c_val;
 }
