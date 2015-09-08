@@ -20,9 +20,7 @@ physical_mem_init(unsigned int mbi_addr)
 {
   unsigned int nps;
 
-  //Define your local variables here.
-	unsigned int i, j, isnorm, maxs, size, flag;
-	unsigned int s, l;
+  // TODO: Define your local variables here.
 
   //Calls the lower layer initializatin primitives.
   //The parameter mbi_addr shell not be used in the further code.
@@ -33,17 +31,7 @@ physical_mem_init(unsigned int mbi_addr)
    * Hint: Think of it as the highest address possible in the ranges of the memory map table,
    *       divided by the page size.
    */
-	i = 0;
-	size = get_size();
-	nps = 0;
-	while (i < size) {
-		s = get_mms(i);
-		l = get_mml(i);
-		maxs = (s + l) / PAGESIZE + 1;
-		if (maxs > nps)
-			nps = maxs;
-		i++;
-	}
+  // TODO
 
 	set_nps(nps); // Setting the value computed above to NUM_PAGES.
 
@@ -71,30 +59,7 @@ physical_mem_init(unsigned int mbi_addr)
    *    That means there may be some gaps between the ranges.
    *    You should still set the permission of those pages in allocation table to 0.
    */
-	i = 0;
-	while (i < nps) {
-		if (i < VM_USERLO_PI || i >= VM_USERHI_PI) {
-			at_set_perm(i, 1);
-		} else {
-			j = 0;
-			flag = 0;
-			isnorm = 0;
-			while (j < size && flag == 0) {
-				s = get_mms(j);
-				l = get_mml(j);
-				isnorm = is_usable(j);
-				if (s <= i * PAGESIZE && l + s >= (i + 1) * PAGESIZE) {
-					flag = 1;
-				}
-				j++;
-			}
-			if (flag == 1 && isnorm == 1)
-				at_set_perm(i, 2);
-			else
-				at_set_perm(i, 0);
-		}
-		i++;
-	}
+  // TODO
 }
 
 
