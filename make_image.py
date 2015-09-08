@@ -11,6 +11,7 @@ Following instructions will create a disk image with following disk geometry par
 import os, subprocess
 import shlex
 import sys
+import re
 
 class color:
     HEADER = '\033[95m'
@@ -23,38 +24,46 @@ class color:
     UNDERLINE = '\033[4m'
 
 def info(c, s):
-	print c + s + color.ENDC
+    print c + s + color.ENDC
+
+
+def panic(s):
+    print color.BOLD + color.FAIL + s + color.ENDC
+    sys.exit(1)
+
+def run(cmd):
+    if os.system(cmd) != 0:
+        panic ("%s executed with error. exit." % cmd)
+
+def exe(cmd):
+    proc = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE)
+    (out, err) = proc.communicate()
+    return out
+
+def grep(s, pattern):
+    return '\n'.join(re.findall(r'^.*%s.*?$'%pattern,s,flags=re.M))
 
 info (color.HEADER, 'Building Certikos Image...')
 
-def run(cmd):
-	if os.system(cmd) != 0:
-		print color.FAIL + "%s executed with error. exit." % cmd + color.ENDC
-		sys.exit(1)
-
-os.environ["LIBGUESTFS_BACKEND"] = "direct"
-info (color.HEADER,  '\ncopying kernel files...')
-run('mkdir -v -p ./disk/boot')
-run('cp -v obj/boot/loader ./disk/boot/')
-run('cp -v obj/kern/kernel ./disk/boot/')
-
 info (color.HEADER, '\ncreating disk...')
-run('virt-make-fs --type=ext2 --label=certikos --partition=mbr disk certikos.img')
+run(('dd if=/dev/zero of=certikos.img bs=512 count=%d' % (130 * 16 * 63)))
+run('parted -s certikos.img \"mktable msdos mkpart primary 2048s -1s set 1 boot on\"')
 info (color.OKGREEN, 'done.')
 
 info (color.HEADER,  '\nwriting mbr...')
 run('dd if=obj/boot/boot0 of=certikos.img bs=446 count=1 conv=notrunc')
 run('dd if=obj/boot/boot1 of=certikos.img bs=512 count=62 seek=1 conv=notrunc')
-run('parted -s certikos.img \"set 1 boot on\" 2>/dev/null')
+info (color.OKGREEN, 'done.')
+
+info (color.HEADER,  '\ncopying kernel files...')
+loc = int(grep(exe('fdisk -l certikos.img'), 'certikos.img1').split()[2])
+if loc == 0:
+    panic ("cannot find valid partition.");
+
+info (color.OKBLUE, 'kernel starts at sector %d' % loc)
+run('dd if=obj/sys/kernel of=certikos.img bs=512 seek=%d conv=notrunc' % loc)
 
 info (color.OKGREEN + color.BOLD, '\nAll done.')
 sys.exit(0)
-
-
-os.system('fusermount -u mnt 2>/dev/null')
-os.system('mkdir ./mnt/ 2>/dev/null')
-run('guestmount -a certikos.img -m /dev/sda1 --rw ./mnt/')
-
-run('fusermount -u mnt')
 
 
