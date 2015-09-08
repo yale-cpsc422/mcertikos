@@ -38,7 +38,7 @@ start:
 	/* store the booting device id */
 	xorl	%eax, %eax
 	movb	%dl, %al
-	movl	%eax, (BOOT0 - 4)
+	movl	%eax, BOOT0 - 4
 
 	/* set up the stack */
 	movw  $(BOOT0 - 4), %bp
