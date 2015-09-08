@@ -37,7 +37,7 @@ boot1main (uint32_t dev, mbr_t * mbr, bios_smap_t *smap)
 
 }
 
-#define ELFHDR		((elfhdr *) 0x10000)
+#define ELFHDR		((elfhdr *) 0x20000)
 
 uint32_t
 load_kernel(uint32_t dkernel)
@@ -57,6 +57,8 @@ load_kernel(uint32_t dkernel)
 	for (; ph < eph; ph++)
 	{
 		readsection(ph->p_va, ph->p_memsz, ph->p_offset, dkernel);
+		puti(ph->p_va);
+		puti(ph->p_offset);
 	}
 
 	return (ELFHDR->e_entry & 0xFFFFFF);

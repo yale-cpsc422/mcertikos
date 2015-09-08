@@ -53,7 +53,7 @@ void
 puti (int32_t i)
 {
 	char str[8];
-	itoa (i, str);
+	itoh (i, str);
 	putline (str);
 }
 
@@ -87,9 +87,11 @@ reverse (char s[])
 	}
 }
 
+
+
 /* itoa:  convert n to characters in s */
 void
-itoa (int n, char s[])
+itox (int n, char s[], int root, char * table)
 {
 	int i, sign;
 
@@ -98,12 +100,27 @@ itoa (int n, char s[])
 	i = 0;
 	do
 	{ /* generate digits in reverse order */
-		s[i++] = n % 10 + '0'; /* get next digit */
-	} while ((n /= 10) > 0); /* delete it */
+		s[i++] = table[n % root]; /* get next digit */
+	} while ((n /= root) > 0); /* delete it */
 	if (sign < 0)
 		s[i++] = '-';
 	s[i] = '\0';
 	reverse (s);
+}
+
+void
+itoa (int n, char s[])
+{
+	static char dec[] = "0123456789";
+	itox(n, s, 10, dec);
+}
+
+
+void
+itoh (int n, char s[])
+{
+	static char hex[] = "0123456789abcdef";
+	itox(n, s, 16, hex);
 }
 
 
@@ -147,7 +164,6 @@ readsection (uint32_t va, uint32_t count, uint32_t offset, uint32_t lba)
 
 	va &= 0xFFFFFF;
 	end_va = va + count;
-
 	// round down to sector boundary
 	va &= ~(SECTOR_SIZE - 1);
 

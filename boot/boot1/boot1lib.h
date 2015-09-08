@@ -1,5 +1,11 @@
 #ifndef _CERTIKOS_BOOT_LIB_H_
 #define _CERTIKOS_BOOT_LIB_H_
+
+/**
+ * gcc
+ */
+#define gcc_packed		__attribute__((packed))
+
 /**
  * types
  */
@@ -104,9 +110,9 @@ typedef struct mbr
 		uint8_t last_chs[3];
 		uint32_t first_lba;
 		uint32_t sectors_count;
-	}__attribute__((packed)) partition[4];
+	}gcc_packed partition[4];
 	uint8_t signature[2];
-}__attribute__((packed)) mbr_t;
+}gcc_packed mbr_t;
 
 void readsector (void *dst, uint32_t offset);
 
@@ -121,7 +127,7 @@ struct bios_smap {
 	uint64_t base_addr;
 	uint64_t length;
 	uint32_t type;
-} __attribute__((packed)) bios_smap_t;
+} gcc_packed bios_smap_t;
 
 /**
  * elf
