@@ -188,4 +188,4 @@ gdtdesc:
 
 /* reserve space for memory map */
 smap:
-	.space 0xc00
+	.space 0xc00, 0

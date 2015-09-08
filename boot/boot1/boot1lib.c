@@ -27,10 +27,14 @@ puts (int r, int c, int color, const char *string)
 
 static int row = 0;
 
+char * blank =
+"                                                                                ";
+
 void
 putline (char * s)
 {
-	puts (row = (row >= CRT_ROWS) ? 0 : row + 1, 0, VGA_CLR_WHITE, s);
+	puts (row = (row >= CRT_ROWS) ? 0 : row + 1, 0, VGA_CLR_BLACK, blank);
+	puts (row, 0, VGA_CLR_WHITE, s);
 }
 
 void
@@ -49,12 +53,13 @@ panic (char * m)
 	}
 }
 
+static char puti_str[40];
+
 void
 puti (int32_t i)
 {
-	char str[8];
-	itoh (i, str);
-	putline (str);
+	itoh (i, puti_str);
+	putline (puti_str);
 }
 
 
@@ -86,8 +91,6 @@ reverse (char s[])
 		s[j] = c;
 	}
 }
-
-
 
 /* itoa:  convert n to characters in s */
 void

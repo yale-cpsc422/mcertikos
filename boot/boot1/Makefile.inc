@@ -8,7 +8,7 @@ BOOT1_OBJFILES += $(OBJDIR)/boot/exec_kernel.o
 $(OBJDIR)/boot/boot1: $(BOOT1_OBJFILES) $(BOOT_LIB_OBJFILES)
 	@echo + ld[BOOT] $@
 	$(V)$(LD) $(BOOT_LDFLAGS) -N -e start -Ttext 0x7e00 -o $@.elf $^ $(GCC_LIB32)
-	$(V)$(OBJDUMP) -S $@.elf > $@.asm
+	$(V)$(OBJDUMP) -z -D -S $@.elf > $@.asm
 	$(V)$(OBJCOPY) -S -O binary $@.elf $@
 	$(V)$(NM) -n $@.elf > $@.sym
 	$(V)$(PERL) $(UTILSDIR)/check_size.pl 31744 $@

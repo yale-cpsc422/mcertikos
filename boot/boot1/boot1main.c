@@ -34,6 +34,7 @@ boot1main (uint32_t dev, mbr_t * mbr, bios_smap_t *smap)
 	uint32_t entry = load_kernel(bootable_lba);
 
 	putline ("Start kernel ...\n");
+
 	exec_kernel (entry, &mboot_info);
 
 	panic ("Fail to load kernel.");
@@ -57,11 +58,10 @@ load_kernel(uint32_t dkernel)
 	// load each program segment (ignores ph flags)
 	ph = (proghdr *) ((uint8_t *) ELFHDR + ELFHDR->e_phoff);
 	eph = ph + ELFHDR->e_phnum;
+
 	for (; ph < eph; ph++)
 	{
 		readsection(ph->p_va, ph->p_memsz, ph->p_offset, dkernel);
-		puti(ph->p_va);
-		puti(ph->p_offset);
 	}
 
 	return (ELFHDR->e_entry & 0xFFFFFF);
@@ -71,16 +71,17 @@ mboot_info_t *
 parse_e820 (bios_smap_t *smap)
 {
 	bios_smap_t *p;
+	uint32_t mmap_len;
 	p = smap;
-	mboot_info.mmap_length = 0;
+	mmap_len = 0;
 	putline ("* E820 Memory Map *");
 	while (p->base_addr != 0 || p->length != 0 || p->type != 0)
 	{
 		puti (p->base_addr);
-		p += 1;
-		mboot_info.mmap_length += sizeof(bios_smap_t);
+		p ++;
+		mmap_len += sizeof(bios_smap_t);
 	}
-
+	mboot_info.mmap_length = mmap_len;
 	mboot_info.mmap_addr = (uint32_t) smap;
 	return &mboot_info;
 }
