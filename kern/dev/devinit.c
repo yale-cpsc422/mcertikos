@@ -12,6 +12,7 @@ devinit (uintptr_t mbi_addr)
 
     cons_init ();
     KERN_DEBUG("cons initialized.\n");
+    KERN_DEBUG("devinit mbi_adr: %d\n", mbi_addr);
 
     pmmap_init (mbi_addr);
 }

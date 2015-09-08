@@ -5,6 +5,9 @@ uint32_t load_kernel(uint32_t dkernel);
 
 extern void exec_kernel(uint32_t, mboot_info_t *);
 
+mboot_info_t mboot_info =
+	{ .flags = (1 << 6), };
+
 void
 boot1main (uint32_t dev, mbr_t * mbr, bios_smap_t *smap)
 {
@@ -25,13 +28,15 @@ boot1main (uint32_t dev, mbr_t * mbr, bios_smap_t *smap)
 	if (i == 4)
 		panic ("Cannot find bootable partition!");
 
-	mboot_info_t * mi = parse_e820(smap);
+	//mboot_info_t * mi = 
+  parse_e820(smap);
 
 	putline ("Load kernel ...\n");
 	uint32_t entry = load_kernel(bootable_lba);
 
 	putline ("Start kernel ...\n");
-	exec_kernel (entry, mi);
+  puti((uint32_t)(&mboot_info));
+	exec_kernel (entry, &mboot_info);
 
 	panic ("Fail to load kernel.");
 
@@ -61,9 +66,6 @@ load_kernel(uint32_t dkernel)
 
 	return (ELFHDR->e_entry & 0xFFFFFF);
 }
-
-static mboot_info_t mboot_info =
-	{ .flags = (1 << 6), };
 
 mboot_info_t *
 parse_e820 (bios_smap_t *smap)

@@ -41,8 +41,8 @@ start:
 	movl	%eax, (BOOT0 - 4)
 
 	/* set up the stack */
-	movw	$(BOOT0 - 4), %bp
-	movw	$(BOOT0 - 4), %sp
+	movw  $0x60000, %bp
+	movw  $0x60000, %sp
 
 	/* set to normal (80x25 text) video mode */
 set_video_mode:

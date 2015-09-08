@@ -61,7 +61,7 @@ if loc == 0:
     panic ("cannot find valid partition.");
 
 info (color.OKBLUE, 'kernel starts at sector %d' % loc)
-run('dd if=obj/sys/kernel of=certikos.img bs=512 seek=%d conv=notrunc' % loc)
+run('dd if=obj/kern/kernel of=certikos.img bs=512 seek=%d conv=notrunc' % loc)
 
 info (color.OKGREEN + color.BOLD, '\nAll done.')
 sys.exit(0)
