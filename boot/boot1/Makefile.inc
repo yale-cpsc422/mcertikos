@@ -1,8 +1,9 @@
 # -*-Makefile-*-
 
 BOOT1_OBJFILES += $(OBJDIR)/boot/boot1.o
+BOOT1_OBJFILES += $(OBJDIR)/boot/boot1lib.o
 BOOT1_OBJFILES += $(OBJDIR)/boot/boot1main.o
-BOOT1_OBJFILES += $(OBJDIR)/boot/chainload.o
+BOOT1_OBJFILES += $(OBJDIR)/boot/exec_kernel.o
 
 $(OBJDIR)/boot/boot1: $(BOOT1_OBJFILES) $(BOOT_LIB_OBJFILES)
 	@echo + ld[BOOT] $@
@@ -14,7 +15,7 @@ $(OBJDIR)/boot/boot1: $(BOOT1_OBJFILES) $(BOOT_LIB_OBJFILES)
 $(OBJDIR)/boot/%.o: boot/boot1/%.c
 	@echo + cc[BOOT] $<
 	@mkdir -p $(@D)
-	$(V)$(CC) -nostdinc $(BOOT_CFLAGS) -Os -c -o $@ $<
+	$(V)$(CC) -nostdinc $(BOOT_CFLAGS) -Iboot/boot1 -Os -c -o $@ $<
 
 $(OBJDIR)/boot/%.o: boot/boot1/%.S
 	@echo + as[BOOT] $<

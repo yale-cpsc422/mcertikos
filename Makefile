@@ -46,7 +46,7 @@ OBJDIRS		:=
 # Compiler and Linker
 CC		:= $(GCCPREFIX)gcc
 LD		:= $(GCCPREFIX)ld
-CFLAGS		:= -MD -Wall -Werror -Wno-strict-aliasing -Wno-unused-function -pipe -fno-builtin -nostdinc -fno-stack-protector
+CFLAGS		:= -MD -Wall  -Wno-strict-aliasing -Wno-unused-function -pipe -fno-builtin -nostdinc -fno-stack-protector
 LDFLAGS		:= -nostdlib
 
 ifeq (ENABLE_CCOMP, 1)

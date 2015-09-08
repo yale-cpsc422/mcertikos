@@ -4,18 +4,36 @@
  * - boot1 is put just after MBR and before the first partition, i.e. from
  *   sector 2 to sector 63.
  *
- * - boot1 is loaded at 0x7c00 by boot0. boot0 passes two parameters to boot1,
- *   the first of which is the booting device id and the second of which is LBA
- *   of the first bootable partition.
+ * - boot1 is loaded at 0x7e00 by boot0. boot0 passes one parameters to boot1,
+ *   which is the booting device id.
  *
- * - boot1 loads /boot/loader on the first bootable partition.
+ * - boot1 loads kernel on the first bootable partition.
+ *
+ *   the memory layout at start is as described in following figure:
+ *      :                              : (stack starts from here)
+ *      +------------------------------+ <- BOOT0 - 4
+ *      |   the booting device id      |
+ *      +------------------------------+ <- BOOT0 (0x7c00)
+ *      |             BOOT0            |
+ *      |     (partition table)  0x55aa|
+ *      +------------------------------+ <- BOOT1 (0x7e00)
+ *      |                              |
+ *      |                        [smap]|
+ *      +------------------------------+
+ *      :                              :
+ *
  */
+
+ 	.set BOOT0, 0x7c00		# load address
+	.set BOOT1, 0x7e00		# start address of boot1
+
+	.set PR_TABLE, BOOT0+0x1be	# address of the partition table
+	.set PR_BOOTABLE, 0x80		# bootable partition
+
 
 	.set PROT_MODE_CSEG, 0x8	# kernel code segment selector
 	.set PROT_MODE_DSEG, 0x10	# kernel data segment selector
 	.set CR0_PE_ON, 0x1		# protected mode enable flag
-
-	.set LOAD, 0x7e00
 
 	.set SMAP_SIG, 0x0534D4150	# "SMAP"
 
@@ -25,34 +43,19 @@ start:
 	cli
 	cld
 
-	/*
-	 * clear segment registers
-	 */
-	xorw	%ax, %ax
-	movw    %ax, %ds
-	movw    %ax, %es
-	movw    %ax, %ss
-
-	/*
-	 * XXX: remember that the first 8 bytes below LOAD are reserverd to
-	 *      store the information of the booting device
-	 */
-
-	/* set up the stack */
-	movw	$(LOAD - 8), %bp
-	movw	$(LOAD - 8), %sp
-
-	/*
-	 * set to normal (80x25 text) video mode
-	 */
-set_video_mode:
-	movw	$0x0F00, %ax
-	int	$0x10			# get the video mode
-	cmpb	$0x03, %al
-	je	set_video_mode.2	# video mode is already set
-set_video_mode.1:
-	movw	$0x0003, %ax
-	int	$0x10
+	/* enable A20 */
+seta20.1:
+	inb	$0x64, %al
+	testb	$0x2, %al
+	jnz	seta20.1
+	movb	$0xd1, %al
+	outb	%al, $0x64
+seta20.2:
+	inb	$0x64, %al
+	testb	$0x2, %al
+	jnz	seta20.2
+	movb	$0xdf, %al
+	outb	%al, $0x60
 
 	/*
 	 * print starting message
@@ -119,11 +122,11 @@ protcseg:
 
 	/*
 	 * jump to the C part
+	 * (dev, lba, smap)
 	 */
 	pushl	$smap
-	movl	(LOAD-4), %eax
-	pushl	%eax
-	movl	(LOAD-8), %eax
+	pushl	$BOOT0
+	movl	(BOOT0-4), %eax
 	pushl	%eax
 	call	boot1main
 
@@ -149,9 +152,12 @@ putstr.2:
 
 STARTUP_MSG:
 	.ascii	"Start boot1 ...\r\n\0"
+
 E820_FAIL_MSG:
 	.ascii	"error when detecting memory map\r\n\0"
 
+NO_BOOTABLE_MSG:
+	.ascii	"No bootable partition.\r\n\0"
 
 	.p2align	2	/* force 4-byte alignment */
 /* bootstrap GDT */

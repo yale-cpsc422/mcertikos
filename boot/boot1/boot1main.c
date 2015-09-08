@@ -1,102 +1,84 @@
-#include <types.h>
-#include <ext2.h>
-#include <elf.h>
-#include <x86.h>
-#include <stdio.h>
-#include <debug.h>
-#include <bios.h>
-#include <console.h>
-#include <fs.h>
-#include <ext2.h>
-#include <gcc.h>
+#include <boot1lib.h>
 
-#ifdef ENABLE_BOOT_CF
+mboot_info_t * parse_e820(bios_smap_t *smap);
+uint32_t load_kernel(uint32_t dkernel);
 
-struct mbr {
-	uint8_t bootloader[436];
-	uint8_t disk_sig[10];
-	struct {
-		uint8_t bootable;
-#define INACTIVE_PARTITION	0x00
-#define BOOTABLE_PARTITION	0x80
-		uint8_t first_chs[3];
-		uint8_t id;
-#define EMPTY_PARTITION		0x00
-#define LINUX_PARTITION		0x83
-#define EXTENDED_PARTITION	0x5
-		uint8_t last_chs[3];
-		uint32_t first_lba;
-		uint32_t sectors_count;
-	} gcc_packed partition[4];
-	uint8_t signature[2];
-} gcc_packed;
+extern void exec_kernel(uint32_t, mboot_info_t *);
 
-static struct mbr MBR;
-static uint8_t vbs[SECTOR_SIZE];
-
-extern void chainload(void *vbs);
-
-#endif /* ENABLE_BOOT_CF */
-
-static void load_loader(uint32_t, uint32_t, bios_smap_t *);
-
-void boot1main(uint32_t dev, uint32_t start_sect_idx, bios_smap_t *smap)
+void
+boot1main (uint32_t dev, mbr_t * mbr, bios_smap_t *smap)
 {
-	cons_init();
-	/* debug("Console is initialized.\n"); */
+	roll(3); putline("Start boot1 main ...");
 
-	/* debug("dev = %x, start_sect_idx = %x, smap = %x\n", */
-	/*       dev, start_sect_idx, smap); */
-
-#ifdef ENABLE_BOOT_CF
-	read_sector(dev, 0, &MBR);
-
-	if (MBR.partition[0].bootable != BOOTABLE_PARTITION) {
-		uint32_t lba = MBR.partition[1].first_lba;
-		read_sector(dev, MBR.partition[1].first_lba, &MBR);
-		read_sector(dev, MBR.partition[0].first_lba + lba, vbs);
-		cprintf("Chainloading from LBA %d ... \n",
-			lba + MBR.partition[0].first_lba);
-		chainload(vbs);
-	} else {
-#endif /* ENABLE_BOOT_CF */
-		ext2_fs_init(dev, start_sect_idx);
-		/* debug("Data structure for EXT2 filesystem is initialized.\n"); */
-
-		cprintf("Load /boot/loader ...\n");
-		load_loader(dev, start_sect_idx, smap);
-#ifdef ENABLE_BOOT_CF
+	// search bootable partition
+	int i;
+	uint32_t bootable_lba = 0;
+	for (i = 0; i < 4; i++)
+	{
+		if ( mbr->partition[i].bootable == BOOTABLE_PARTITION)
+		{
+			bootable_lba = mbr->partition[i].first_lba;
+			break;
+		}
 	}
-#endif /* ENABLE_BOOT_CF */
+
+	if (i == 4)
+		panic ("Cannot find bootable partition!");
+
+	mboot_info_t * mi = parse_e820(smap);
+
+	putline ("Load kernel ...\n");
+	uint32_t entry = load_kernel(bootable_lba);
+
+	putline ("Start kernel ...\n");
+	exec_kernel (entry, mi);
+
+	panic ("Fail to load kernel.");
+
 }
 
-static void load_loader(uint32_t dev, uint32_t start_sect_idx, bios_smap_t *smap)
+#define ELFHDR		((elfhdr *) 0x10000)
+
+uint32_t
+load_kernel(uint32_t dkernel)
 {
-	uint8_t elf_buf[SECTOR_SIZE * 8];
-	elfhdr *ELFHDR = (elfhdr *)elf_buf;
+	// load kernel from the beginning of the first bootable partition
+	proghdr *ph, *eph;
 
-	ext2_inode_t inode;
-	uint32_t inode_idx;
+	readsection((uint32_t) ELFHDR, SECTOR_SIZE * 8, 0, dkernel);
 
-	inode_idx = find_file("/boot/loader");
-	if (inode_idx == EXT2_BAD_INO)
-		panic("Cannot find the kernel.\n");
-	read_inode(inode_idx, &inode);
-
-	ext2_fsread(&inode, (uint8_t *)ELFHDR, 0, SECTOR_SIZE * 8);
-
+	// is this a valid ELF?
 	if (ELFHDR->e_magic != ELF_MAGIC)
-		panic("/boot/loader is not a valid ELF file.\n");
+		panic ("Kernel is not a valid elf.");
 
-	/* debug("Load sections\n"); */
-	proghdr *ph = (proghdr *) ((uint8_t *) ELFHDR + ELFHDR->e_phoff);
-	int i;
-	for (i = 0; i < ELFHDR->e_phnum; i++, ph++) {
-		ext2_fsread(&inode, (uint8_t *)ph->p_pa, ph->p_offset, ph->p_filesz);
+	// load each program segment (ignores ph flags)
+	ph = (proghdr *) ((uint8_t *) ELFHDR + ELFHDR->e_phoff);
+	eph = ph + ELFHDR->e_phnum;
+	for (; ph < eph; ph++)
+	{
+		readsection(ph->p_va, ph->p_memsz, ph->p_offset, dkernel);
 	}
 
-	/* debug("Start /boot/loader (%x)\n", ELFHDR->e_entry); */
+	return (ELFHDR->e_entry & 0xFFFFFF);
+}
 
-	((void (*)(uint32_t, uint32_t, bios_smap_t *))
-	 (ELFHDR->e_entry & 0xFFFFFFFF)) (dev, start_sect_idx, smap);
+static mboot_info_t mboot_info =
+	{ .flags = (1 << 6), };
+
+mboot_info_t *
+parse_e820 (bios_smap_t *smap)
+{
+	bios_smap_t *p;
+	p = smap;
+	mboot_info.mmap_length = 0;
+	putline ("* E820 Memory Map *");
+	while (p->base_addr != 0 || p->length != 0 || p->type != 0)
+	{
+		puti (p->base_addr);
+		p += 1;
+		mboot_info.mmap_length += sizeof(bios_smap_t);
+	}
+
+	mboot_info.mmap_addr = (uint32_t) smap;
+	return &mboot_info;
 }
