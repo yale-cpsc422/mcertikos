@@ -38,7 +38,7 @@ video_init(void)
 	terminal.crt_buf = (uint16_t*) cp;
 	terminal.crt_pos = pos;
 	terminal.active_console = 0;
-  video_clear_screen();
+//  video_clear_screen();
 }
 
 void

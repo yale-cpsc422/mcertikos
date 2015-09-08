@@ -140,7 +140,6 @@ void
 pmmap_init(uintptr_t mbi_addr)
 {
 	KERN_INFO("\n");
-  KERN_INFO("mbi_adr: %d\n", mbi_addr);
 
 	mboot_info_t *mbi = (mboot_info_t *) mbi_addr;
 	mboot_mmap_t *p = (mboot_mmap_t *) mbi->mmap_addr;
