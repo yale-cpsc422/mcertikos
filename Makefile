@@ -96,8 +96,10 @@ QEMUOPTS_BIOS	:= -L $(UTILSDIR)/qemu/
 
 
 all: boot kern
-	@echo "Use compcert: $(ENABLE_CCOMP)"
 	@./make_image.py
+ifdef TEST
+	$(V)$(QEMU) $(QEMUOPTS)
+endif
 	@echo "All targets are done."
 
 install_img: install_boot install_sys install_user

@@ -11,6 +11,5 @@ unsigned int at_is_allocated(unsigned int);
 void at_set_allocated(unsigned int, unsigned int);
 
 
-#ifdef _KERN_
-
+#endif
 

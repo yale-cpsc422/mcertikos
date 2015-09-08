@@ -17,7 +17,7 @@ struct ATStruct {
   /**
    * Whether the page is allocated.
    * 0: unallocated
-   * 1: allocated
+   * >0: allocated
    */
 	unsigned int allocated;
 };
@@ -70,7 +70,7 @@ at_is_norm(unsigned int page_index)
 /**
  * The setter function for the physical page permission.
  * Sets the permission of the page with given index.
- * It also mark the page as unallocated.
+ * It also marks the page as unallocated.
  */
 void
 at_set_perm(unsigned int page_index, unsigned int norm_val)

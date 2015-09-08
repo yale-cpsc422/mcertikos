@@ -3,6 +3,9 @@
 OBJDIRS		+= $(KERN_OBJDIR)/pmm/MATInit
 
 KERN_SRCFILES	+= $(KERN_DIR)/pmm/MATInit/MATInit.c
+ifdef TEST
+KERN_SRCFILES	+= $(KERN_DIR)/pmm/MATInit/test.c
+endif
 
 $(KERN_OBJDIR)/pmm/MATInit/%.o: $(KERN_DIR)/pmm/MATInit/%.c
 	@echo + $(COMP_NAME)[KERN/pmm/MATInit] $<

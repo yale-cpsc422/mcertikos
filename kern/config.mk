@@ -238,3 +238,8 @@ endif
 ifneq "$(strip $(TRACE_HYPERCALL) $(TRACE_VIRT_ALL))" ""
 KERN_DEBUG_FLAGS	+= -DTRACE_HYPERCALL -DTRACE_VIRT -DDEBUG_HVM -DDEBUG_MSG
 endif
+
+# If set, enable the test mode.
+ifneq "$(TEST)" ""
+KERN_DEBUG_FLAGS += -DTEST
+endif
