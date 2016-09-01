@@ -47,11 +47,8 @@
 void vprintfmt(void (*putch)(int, void *), void *, const char *, va_list);
 
 void debug_info(const char *, ...);
-int vprintf(const char *, ...);
-int sprintf(char *buf, const char *fmt, ...);
 #ifdef DEBUG_MSG
 
-int vdprintf(const char *, va_list);
 int dprintf(const char *, ...);
 
 

@@ -1,5 +1,6 @@
 #include <lib/debug.h>
 #include <lib/types.h>
+#include <lib/monitor.h>
 #include <pmm/MATInit/export.h>
 
 #define NUM_CHAN		64
@@ -14,7 +15,7 @@ extern bool test_MATOp(void);
 static void
 kern_main (void)
 {
-    KERN_DEBUG("In kernel main.\n");
+    KERN_DEBUG("In kernel main.\n\n");
 
     #ifdef TEST
     dprintf("Testing the MATIntro layer...\n");
@@ -38,12 +39,14 @@ kern_main (void)
       dprintf("Test failed.\n");
     dprintf("\n");
     #endif
+
+    monitor(NULL);
 }
 
 void
 kern_init (uintptr_t mbi_addr)
 {
-    physical_mem_init (mbi_addr);
+    pmem_init (mbi_addr);
 
     KERN_DEBUG("Kernel initialized.\n");
 

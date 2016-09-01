@@ -86,7 +86,8 @@ void panic(char * m);
  */
 int strlen (const char *s);
 void reverse (char s[]);
-void itoa (int n, char s[]);
+void itoa (int n, char* s);
+void itoh (int n, char* s);
 
 /**
  * disk

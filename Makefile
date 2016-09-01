@@ -84,21 +84,27 @@ CERTIKOS_IMG	:= certikos.img
 BOCHS		:= bochs
 BOCHS_OPT	:= -q
 
+# try to generate a unique GDB port
+GDBPORT	:= $(shell expr `id -u` % 5000 + 25000)
+ 
 # qemu
 QEMU		:= qemu-system-x86_64
-QEMUOPTS	:= -smp 1 -hda $(CERTIKOS_IMG) -serial mon:stdio -m 2048 -k en-us
+QEMUOPTS	:= -smp 1 -hda $(CERTIKOS_IMG) -serial mon:stdio -gdb tcp::$(GDBPORT) -m 2048 -k en-us
 QEMUOPTS_KVM	:= -cpu host -enable-kvm
 QEMUOPTS_BIOS	:= -L $(UTILSDIR)/qemu/
 
 # Targets
 
-.PHONY: all boot kern deps qemu
+.PHONY: all boot kern deps qemu qemu-nox qemu-gdb
 
 
 all: boot kern
 	@./make_image.py
 ifdef TEST
-	$(V)$(QEMU) $(QEMUOPTS)
+	@echo "***"
+	@echo "*** Use Ctrl-a x to exit qemu"
+	@echo "***"
+	$(V)$(QEMU) -nographic $(QEMUOPTS)
 endif
 	@echo "All targets are done."
 
@@ -109,8 +115,34 @@ bochs: $(CERTIKOS_IMG) .bochsrc
 	@echo + start bochs
 	$(V)$(BOCHS) $(BOCHS_OPT)
 
-qemu: $(CERTIKOS_IMG)
+.gdbinit: .gdbinit.tmpl
+	sed "s/localhost:1234/localhost:$(GDBPORT)/" < $^ > $@
+	@./scripts/set_auto_load.sh
+
+#	QEMU doesn't truncate the pcap file.  Work around this.
+pre-qemu: .gdbinit
+	@rm -f qemu.pcap
+
+qemu: $(CERTIKOS_IMG) pre-qemu
 	$(V)$(QEMU) $(QEMUOPTS)
+
+qemu-nox: $(CERTIKOS_IMG) pre-qemu
+	@echo "***"
+	@echo "*** Use Ctrl-a x to exit qemu"
+	@echo "***"
+	$(V)$(QEMU) -nographic $(QEMUOPTS)
+
+qemu-gdb: $(CERTIKOS_IMG) pre-qemu
+	@echo "***"
+	@echo "*** Now run 'gdb'." 1>&2
+	@echo "***"
+	$(V)$(QEMU) $(QEMUOPTS) -S
+
+qemu-nox-gdb: $(CERTIKOS_IMG) pre-qemu
+	@echo "***"
+	@echo "*** Now run 'gdb'." 1>&2
+	@echo "***"
+	$(V)$(QEMU) -nographic $(QEMUOPTS) -S
 
 qemu-kvm: $(CERTIKOS_IMG)
 	$(V)$(QEMU) $(QEMUOPTS) $(QEMUOPTS_KVM)
@@ -143,5 +175,5 @@ $(OBJDIR)/.deps: $(foreach dir, $(OBJDIRS), $(wildcard $(dir)/*.d))
 -include $(OBJDIR)/.deps
 
 clean:
-	$(V)rm -rf $(OBJDIR)
+	$(V)rm -rf $(OBJDIR) .gdbinit certikos.img
 	$(V)find . -name "*.[v]" -delete

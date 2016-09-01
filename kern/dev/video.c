@@ -76,7 +76,6 @@ video_putc(int c)
 
 	if (terminal.crt_pos >= CRT_SIZE) {
 		int i;
-
 		memmove(terminal.crt_buf, terminal.crt_buf + CRT_COLS,
 			(CRT_SIZE - CRT_COLS) * sizeof(uint16_t));
 		for (i = CRT_SIZE - CRT_COLS; i < CRT_SIZE; i++)

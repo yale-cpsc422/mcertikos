@@ -120,7 +120,7 @@ itoa (int n, char s[])
 
 
 void
-itoh (int n, char s[])
+itoh (int n, char* s)
 {
 	static char hex[] = "0123456789abcdef";
 	itox(n, s, 16, hex);

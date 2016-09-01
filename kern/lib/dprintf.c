@@ -2,7 +2,6 @@
 
 #include <dev/console.h>
 #include <dev/serial.h>
-#include <dev/video.h>
 
 #include <lib/debug.h>
 #include <lib/stdarg.h>
@@ -19,8 +18,7 @@ cputs (const char *str)
 {
     while (*str)
     {
-        serial_putc (*str);
-        video_putc (*str);
+        cons_putc (*str);
         str += 1;
     }
 }
@@ -61,61 +59,6 @@ dprintf (const char *fmt, ...)
 
     va_start(ap, fmt);
     cnt = vdprintf (fmt, ap);
-    va_end(ap);
-
-    return cnt;
-}
-
-/***********************************
- * Video single version
- ***********************************/
-
-
-static void
-vcputs (const char *str)
-{
-    while (*str)
-    {
-        video_putc (*str ++);
-    }
-}
-
-static void
-vputch (int ch, struct dprintbuf *b)
-{
-    b->buf[b->idx++] = ch;
-    if (b->idx == CONSOLE_BUFFER_SIZE - 1)
-    {
-        b->buf[b->idx] = 0;
-        vcputs (b->buf);
-        b->idx = 0;
-    }
-    b->cnt++;
-}
-
-int
-vvdprintf (const char *fmt, va_list ap)
-{
-    struct dprintbuf b;
-
-    b.idx = 0;
-    b.cnt = 0;
-    vprintfmt ((void*) vputch, &b, fmt, ap);
-
-    b.buf[b.idx] = 0;
-    vcputs (b.buf);
-
-    return b.cnt;
-}
-
-int
-vprintf (const char *fmt, ...)
-{
-    va_list ap;
-    int cnt;
-
-    va_start(ap, fmt);
-    cnt = vvdprintf (fmt, ap);
     va_end(ap);
 
     return cnt;

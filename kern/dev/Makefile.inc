@@ -5,6 +5,7 @@ OBJDIRS		+= $(KERN_OBJDIR)/dev
 KERN_SRCFILES	+= $(KERN_DIR)/dev/video.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/console.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/serial.c
+KERN_SRCFILES	+= $(KERN_DIR)/dev/keyboard.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/devinit.c
 KERN_SRCFILES	+= $(KERN_DIR)/dev/mboot.c
 

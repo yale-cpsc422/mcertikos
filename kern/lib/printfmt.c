@@ -184,9 +184,7 @@ vprintfmt(putch_t putch, void *putdat, const char *fmt, va_list ap)
 
 			// (unsigned) octal
 		case 'o':
-			num = getuint(&ap, lflag);
-			base = 8;
-			goto number;
+      // TODO
 
 			// pointer
 		case 'p':
@@ -218,46 +216,4 @@ vprintfmt(putch_t putch, void *putdat, const char *fmt, va_list ap)
 			break;
 		}
 	}
-}
-
-struct sprintbuf {
-    char *buf;
-    char *ebuf;
-    int cnt;
-};
-
-static void
-sprintputch(int ch, struct sprintbuf *b)
-{
-    b->cnt++;
-    if (b->buf < b->ebuf)
-        *b->buf++ = ch;
-}
-
-int
-vsprintf(char *buf, const char *fmt, va_list ap)
-{
-    //assert(buf != NULL);
-    struct sprintbuf b = {buf, (char*)(intptr_t)~0, 0};
-
-    // print the string to the buffer
-    vprintfmt((void*)sprintputch, &b, fmt, ap);
-
-    // null terminate the buffer
-    *b.buf = '\0';
-
-    return b.cnt;
-}
-
-int
-sprintf(char *buf, const char *fmt, ...)
-{
-    va_list ap;
-    int rc;
-
-    va_start(ap, fmt);
-    rc = vsprintf(buf, fmt, ap);
-    va_end(ap);
-
-    return rc;
 }

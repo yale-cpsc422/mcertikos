@@ -73,9 +73,13 @@ pmmap_insert(uintptr_t start, uintptr_t end, uint32_t type)
 	}
 
 	if (last_slot == NULL)
+  {
 		SLIST_INSERT_HEAD(&pmmap_list, free_slot, next);
+  }
 	else
+  {
 		SLIST_INSERT_AFTER(last_slot, free_slot, next);
+  }
 }
 
 static void
@@ -105,7 +109,7 @@ pmmap_merge(void)
 	 */
 	SLIST_FOREACH(slot, &pmmap_list, next) {
 		sublist_nr = PMMAP_SUBLIST_NR(slot->type);
-		KERN_ASSERT(sublist_nr != -1);
+    KERN_ASSERT(sublist_nr != -1);
 		if (last_slot[sublist_nr] != NULL)
 			SLIST_INSERT_AFTER(last_slot[sublist_nr], slot,
 					   type_next);
@@ -171,6 +175,7 @@ pmmap_init(uintptr_t mbi_addr)
 		type = p->type;
 
 		pmmap_insert(start, end, type);
+    //pmmap_dump();
 
 	next:
 		p = (mboot_mmap_t *) (((uint32_t) p) + sizeof(mboot_mmap_t)/* p->size */);
