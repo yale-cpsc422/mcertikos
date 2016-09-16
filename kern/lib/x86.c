@@ -3,14 +3,6 @@
 #include <lib/string.h>
 #include "x86.h"
 
-gcc_inline uint32_t
-read_ebp(void)
-{
-	uint32_t ebp;
-	__asm __volatile("movl %%ebp,%0" : "=rm" (ebp));
-	return ebp;
-}
-
 gcc_inline void
 lldt(uint16_t sel)
 {

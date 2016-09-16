@@ -30,14 +30,14 @@ struct ATStruct {
 static struct ATStruct AT[1 << 20];
 
 //The getter function for NUM_PAGES.
-unsigned int gcc_inline
+unsigned int
 get_nps(void)
 {
 	return NUM_PAGES;
 }
 
 //The setter function for NUM_PAGES.
-void gcc_inline
+void
 set_nps(unsigned int nps)
 {
 	NUM_PAGES = nps;

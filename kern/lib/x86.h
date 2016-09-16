@@ -29,7 +29,17 @@
 #define SYSENTER_ESP_MSR    0x175u
 #define SYSENTER_EIP_MSR    0x176u
 
-uint32_t read_ebp(void);
+//uint32_t read_ebp(void);
+
+static inline uint32_t __attribute__((always_inline))
+read_ebp(void)
+{
+	uint32_t ebp;
+	__asm __volatile("movl %%ebp,%0" : "=rm" (ebp));
+	return ebp;
+}
+
+
 void lldt(uint16_t);
 void cli(void);
 void sti(void);
