@@ -13,13 +13,13 @@ struct ATStruct {
    * 1: Kernel only.
    * >1: Normal (avaiable).
    */
-	unsigned int perm; 
+    unsigned int perm;
   /**
    * Whether the page is allocated.
    * 0: unallocated
    * >0: allocated
    */
-	unsigned int allocated;
+    unsigned int allocated;
 };
 
 /**
@@ -30,17 +30,15 @@ struct ATStruct {
 static struct ATStruct AT[1 << 20];
 
 //The getter function for NUM_PAGES.
-unsigned int
-get_nps(void)
+unsigned int get_nps(void)
 {
-	return NUM_PAGES;
+    return NUM_PAGES;
 }
 
 //The setter function for NUM_PAGES.
-void
-set_nps(unsigned int nps)
+void set_nps(unsigned int nps)
 {
-	NUM_PAGES = nps;
+    NUM_PAGES = nps;
 }
 
 /**
@@ -48,11 +46,10 @@ set_nps(unsigned int nps)
  * If the page with the given index has the normal permission,
  * then returns 1, otherwise returns 0.
  */
-unsigned int
-at_is_norm(unsigned int page_index)
+unsigned int at_is_norm(unsigned int page_index)
 {
-  //TODO
-  return 0;
+    //TODO
+    return 0;
 }
 
 /**
@@ -60,29 +57,26 @@ at_is_norm(unsigned int page_index)
  * Sets the permission of the page with given index.
  * It also marks the page as unallocated.
  */
-void
-at_set_perm(unsigned int page_index, unsigned int norm_val)
+void at_set_perm(unsigned int page_index, unsigned int norm_val)
 {
-  //TODO
+    //TODO
 }
 
 /**
  * The getter function for the physical page allocation flag.
  * Returns 0 if the page is not allocated. O.w., returns 1.
  */
-unsigned int
-at_is_allocated(unsigned int page_index)
+unsigned int at_is_allocated(unsigned int page_index)
 {
-  //TODO
-  return 0;
+    //TODO
+    return 0;
 }
 
 /**
  * The setter function for the physical page allocation flag.
  * Set the flag of the page with given index to the given value.
  */
-void
-at_set_allocated(unsigned int page_index, unsigned int allocated)
+void at_set_allocated(unsigned int page_index, unsigned int allocated)
 {
-  //TODO
+    //TODO
 }

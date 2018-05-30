@@ -1,6 +1,6 @@
 /*-
  * Copyright (c) 1991, 1993
- *	The Regents of the University of California.  All rights reserved.
+ *    The Regents of the University of California.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,7 +26,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- *	@(#)queue.h	8.5 (Berkeley) 8/20/94
+ *    @(#)queue.h    8.5 (Berkeley) 8/20/94
  * $FreeBSD$
  */
 
@@ -36,7 +36,7 @@
  */
 
 #ifndef _SYS_PREINTI_LIB_QUEUE_H_
-#define	_SYS_PREINIT_LIB_QUEUE_H_
+#define _SYS_PREINIT_LIB_QUEUE_H_
 
 #ifdef _KERN_
 
@@ -82,115 +82,121 @@
  * For details on the use of these macros, see the queue(3) manual page.
  *
  *
- *				SLIST	LIST	STAILQ	TAILQ
- * _HEAD			+	+	+	+
- * _HEAD_INITIALIZER		+	+	+	+
- * _ENTRY			+	+	+	+
- * _INIT			+	+	+	+
- * _EMPTY			+	+	+	+
- * _FIRST			+	+	+	+
- * _NEXT			+	+	+	+
- * _PREV			-	-	-	+
- * _LAST			-	-	+	+
- * _FOREACH			+	+	+	+
- * _FOREACH_SAFE		+	+	+	+
- * _FOREACH_REVERSE		-	-	-	+
- * _FOREACH_REVERSE_SAFE	-	-	-	+
- * _INSERT_HEAD			+	+	+	+
- * _INSERT_BEFORE		-	+	-	+
- * _INSERT_AFTER		+	+	+	+
- * _INSERT_TAIL			-	-	+	+
- * _CONCAT			-	-	+	+
- * _REMOVE_AFTER		+	-	+	-
- * _REMOVE_HEAD			+	-	+	-
- * _REMOVE			+	+	+	+
- * _SWAP			+	+	+	+
+ *                              SLIST   LIST    STAILQ  TAILQ
+ * _HEAD                        +       +       +       +
+ * _HEAD_INITIALIZER            +       +       +       +
+ * _ENTRY                       +       +       +       +
+ * _INIT                        +       +       +       +
+ * _EMPTY                       +       +       +       +
+ * _FIRST                       +       +       +       +
+ * _NEXT                        +       +       +       +
+ * _PREV                        -       -       -       +
+ * _LAST                        -       -       +       +
+ * _FOREACH                     +       +       +       +
+ * _FOREACH_SAFE                +       +       +       +
+ * _FOREACH_REVERSE             -       -       -       +
+ * _FOREACH_REVERSE_SAFE        -       -       -       +
+ * _INSERT_HEAD                 +       +       +       +
+ * _INSERT_BEFORE               -       +       -       +
+ * _INSERT_AFTER                +       +       +       +
+ * _INSERT_TAIL                 -       -       +       +
+ * _CONCAT                      -       -       +       +
+ * _REMOVE_AFTER                +       -       +       -
+ * _REMOVE_HEAD                 +       -       +       -
+ * _REMOVE                      +       +       +       +
+ * _SWAP                        +       +       +       +
  *
  */
 
 /*
  * Singly-linked List declarations.
  */
-#define	SLIST_HEAD(name, type)						\
-struct name {								\
-	struct type *slh_first;	/* first element */			\
-}
+#define SLIST_HEAD(name, type)                          \
+    struct name {                                       \
+        struct type *slh_first;    /* first element */  \
+    }
 
-#define	SLIST_HEAD_INITIALIZER(head)					\
-	{ NULL }
+#define SLIST_HEAD_INITIALIZER(head) { NULL }
 
-#define	SLIST_ENTRY(type)						\
-struct {								\
-	struct type *sle_next;	/* next element */			\
-}
+#define SLIST_ENTRY(type)                               \
+    struct {                                            \
+        struct type *sle_next;    /* next element */    \
+    }
 
 /*
  * Singly-linked List functions.
  */
-#define	SLIST_EMPTY(head)	((head)->slh_first == NULL)
+#define SLIST_EMPTY(head)    ((head)->slh_first == NULL)
 
-#define	SLIST_FIRST(head)	((head)->slh_first)
+#define SLIST_FIRST(head)    ((head)->slh_first)
 
-#define	SLIST_FOREACH(var, head, field)					\
-	for ((var) = SLIST_FIRST((head));				\
-	    (var);							\
-	    (var) = SLIST_NEXT((var), field))
+#define SLIST_FOREACH(var, head, field)      \
+    for ((var) = SLIST_FIRST((head));        \
+         (var);                              \
+         (var) = SLIST_NEXT((var), field))
 
-#define	SLIST_FOREACH_SAFE(var, head, field, tvar)			\
-	for ((var) = SLIST_FIRST((head));				\
-	    (var) && ((tvar) = SLIST_NEXT((var), field), 1);		\
-	    (var) = (tvar))
+#define SLIST_FOREACH_SAFE(var, head, field, tvar)          \
+    for ((var) = SLIST_FIRST((head));                       \
+         (var) && ((tvar) = SLIST_NEXT((var), field), 1);   \
+         (var) = (tvar))
 
-#define	SLIST_FOREACH_PREVPTR(var, varp, head, field)			\
-	for ((varp) = &SLIST_FIRST((head));				\
-	    ((var) = *(varp)) != NULL;					\
-	    (varp) = &SLIST_NEXT((var), field))
+#define SLIST_FOREACH_PREVPTR(var, varp, head, field)  \
+    for ((varp) = &SLIST_FIRST((head));                \
+         ((var) = *(varp)) != NULL;                    \
+         (varp) = &SLIST_NEXT((var), field))
 
-#define	SLIST_INIT(head) do {						\
-	SLIST_FIRST((head)) = NULL;					\
-} while (0)
+#define SLIST_INIT(head)             \
+    do {                             \
+        SLIST_FIRST((head)) = NULL;  \
+    } while (0)
 
-#define	SLIST_INSERT_AFTER(slistelm, elm, field) do {			\
-	SLIST_NEXT((elm), field) = SLIST_NEXT((slistelm), field);	\
-	SLIST_NEXT((slistelm), field) = (elm);				\
-} while (0)
+#define SLIST_INSERT_AFTER(slistelm, elm, field)                    \
+    do {                                                            \
+        SLIST_NEXT((elm), field) = SLIST_NEXT((slistelm), field);   \
+        SLIST_NEXT((slistelm), field) = (elm);                      \
+    } while (0)
 
-#define	SLIST_INSERT_HEAD(head, elm, field) do {			\
-	SLIST_NEXT((elm), field) = SLIST_FIRST((head));			\
-	SLIST_FIRST((head)) = (elm);					\
-} while (0)
+#define SLIST_INSERT_HEAD(head, elm, field)                 \
+    do {                                                    \
+        SLIST_NEXT((elm), field) = SLIST_FIRST((head));     \
+        SLIST_FIRST((head)) = (elm);                        \
+    } while (0)
 
-#define	SLIST_NEXT(elm, field)	((elm)->field.sle_next)
+#define SLIST_NEXT(elm, field)    ((elm)->field.sle_next)
 
-#define	SLIST_REMOVE(head, elm, type, field) do {			\
-	QMD_SAVELINK(oldnext, (elm)->field.sle_next);			\
-	if (SLIST_FIRST((head)) == (elm)) {				\
-		SLIST_REMOVE_HEAD((head), field);			\
-	}								\
-	else {								\
-		struct type *curelm = SLIST_FIRST((head));		\
-		while (SLIST_NEXT(curelm, field) != (elm))		\
-			curelm = SLIST_NEXT(curelm, field);		\
-		SLIST_REMOVE_AFTER(curelm, field);			\
-	}								\
-	TRASHIT(*oldnext);						\
-} while (0)
+#define SLIST_REMOVE(head, elm, type, field)            \
+    do {                                                \
+        QMD_SAVELINK(oldnext, (elm)->field.sle_next);   \
+        if (SLIST_FIRST((head)) == (elm)) {             \
+            SLIST_REMOVE_HEAD((head), field);           \
+        }                                               \
+        else {                                          \
+            struct type *curelm = SLIST_FIRST((head));  \
+            while (SLIST_NEXT(curelm, field) != (elm))  \
+            curelm = SLIST_NEXT(curelm, field);         \
+            SLIST_REMOVE_AFTER(curelm, field);          \
+        }                                               \
+        TRASHIT(*oldnext);                              \
+    } while (0)
 
-#define SLIST_REMOVE_AFTER(elm, field) do {				\
-	SLIST_NEXT(elm, field) =					\
-	    SLIST_NEXT(SLIST_NEXT(elm, field), field);			\
-} while (0)
+#define SLIST_REMOVE_AFTER(elm, field)              \
+    do {                                            \
+        SLIST_NEXT(elm, field) =                    \
+        SLIST_NEXT(SLIST_NEXT(elm, field), field);  \
+    } while (0)
 
-#define	SLIST_REMOVE_HEAD(head, field) do {				\
-	SLIST_FIRST((head)) = SLIST_NEXT(SLIST_FIRST((head)), field);	\
-} while (0)
+#define SLIST_REMOVE_HEAD(head, field)                                  \
+    do {                                                                \
+        SLIST_FIRST((head)) = SLIST_NEXT(SLIST_FIRST((head)), field);   \
+    } while (0)
 
-#define SLIST_SWAP(head1, head2, type) do {				\
-	struct type *swap_first = SLIST_FIRST(head1);			\
-	SLIST_FIRST(head1) = SLIST_FIRST(head2);			\
-	SLIST_FIRST(head2) = swap_first;				\
-} while (0)
+#define SLIST_SWAP(head1, head2, type)                  \
+    do {                                                \
+        struct type *swap_first = SLIST_FIRST(head1);   \
+        SLIST_FIRST(head1) = SLIST_FIRST(head2);        \
+        SLIST_FIRST(head2) = swap_first;                \
+    } while (0)
 
-#endif /* _KERN_ */
+#endif                                                  /* _KERN_ */
 
-#endif /* !_SYS_PREINIT_LIB_QUEUE_H_ */
+#endif                                                  /* !_SYS_PREINIT_LIB_QUEUE_H_ */

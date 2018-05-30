@@ -4,29 +4,29 @@
 
 int MATOp_test1()
 {
-  int page_index = palloc();
-  if (page_index < 262144) {
+    int page_index = palloc();
+    if (page_index < 262144) {
+        pfree(page_index);
+        dprintf("test 1 failed.\n");
+        return 1;
+    }
+    if (at_is_norm(page_index) != 1) {
+        pfree(page_index);
+        dprintf("test 1 failed.\n");
+        return 1;
+    }
+    if (at_is_allocated(page_index) != 1) {
+        pfree(page_index);
+        dprintf("test 1 failed.\n");
+        return 1;
+    }
     pfree(page_index);
-    dprintf("test 1 failed.\n");
-    return 1;
-  }
-  if (at_is_norm(page_index) != 1) {
-    pfree(page_index);
-    dprintf("test 1 failed.\n");
-    return 1;
-  }
-  if (at_is_allocated(page_index) != 1) {
-    pfree(page_index);
-    dprintf("test 1 failed.\n");
-    return 1;
-  }
-  pfree(page_index);
-  if (at_is_allocated(page_index) != 0) {
-    dprintf("test 1 failed.\n");
-    return 1;
-  }
-  dprintf("test 1 passed.\n");
-  return 0;
+    if (at_is_allocated(page_index) != 0) {
+        dprintf("test 1 failed.\n");
+        return 1;
+    }
+    dprintf("test 1 passed.\n");
+    return 0;
 }
 
 
@@ -45,12 +45,12 @@ int MATOp_test1()
  */
 int MATOp_test_own()
 {
-  // TODO (optional)
-  // dprintf("own test passed.\n");
-  return 0;
+    // TODO (optional)
+    // dprintf("own test passed.\n");
+    return 0;
 }
 
 int test_MATOp()
 {
-  return MATOp_test1() + MATOp_test_own();
+    return MATOp_test1() + MATOp_test_own();
 }

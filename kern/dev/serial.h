@@ -19,8 +19,8 @@
 void serial_init(void);
 void serial_putc(char c);
 void serial_intenable(void);
-void serial_intr(void); // irq 4
+void serial_intr(void);            // irq 4
 
-#endif /* _KERN_ */
+#endif                            /* _KERN_ */
 
-#endif /* !_SYS_PREINIT_DEV_SERIAL_H_ */
+#endif                            /* !_SYS_PREINIT_DEV_SERIAL_H_ */

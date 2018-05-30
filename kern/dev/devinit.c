@@ -6,16 +6,15 @@
 #include "console.h"
 #include "mboot.h"
 
-void
-devinit (uintptr_t mbi_addr)
+void devinit(uintptr_t mbi_addr)
 {
     seg_init();
 
-    enable_sse ();
+    enable_sse();
 
-    cons_init ();
+    cons_init();
     KERN_DEBUG("cons initialized.\n");
     KERN_DEBUG("devinit mbi_adr: %d\n", mbi_addr);
 
-    pmmap_init (mbi_addr);
+    pmmap_init(mbi_addr);
 }

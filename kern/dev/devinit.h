@@ -7,6 +7,6 @@
 
 void devinit(uintptr_t);
 
-#endif /* _KERN_ */
+#endif                            /* _KERN_ */
 
-#endif /* !_KERN_PREINIT_H_ */
+#endif                            /* !_KERN_PREINIT_H_ */
