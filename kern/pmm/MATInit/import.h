@@ -6,8 +6,8 @@
 /**
  * Premitives that are already implemented in this lab.
  */
-void set_nps(unsigned int);        // Sets the number of avaiable pages.
-void at_set_perm(unsigned int, unsigned int);    // Sets the permission of the physical page with given index.
+void set_nps(unsigned int);                    // Sets the number of avaiable pages.
+void at_set_perm(unsigned int, unsigned int);  // Sets the permission of the physical page with given index.
 
 /**
  * Getter and setter functions for the physical memory map table.
@@ -31,6 +31,6 @@ unsigned int is_usable(unsigned int);  // Whether the range with given row index
  */
 unsigned int devinit(unsigned int);
 
-#endif                            /* _KERN_ */
+#endif  /* _KERN_ */
 
-#endif                            /* !_KERN_MM_MALINIT_H_ */
+#endif  /* !_KERN_MM_MALINIT_H_ */

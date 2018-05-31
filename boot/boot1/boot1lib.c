@@ -87,9 +87,9 @@ void itox(int n, char s[], int root, char *table)
     if ((sign = n) < 0)            /* record sign */
         n = -n;                    /* make n positive */
     i = 0;
-    do {                        /* generate digits in reverse order */
-        s[i++] = table[n % root];    /* get next digit */
-    } while ((n /= root) > 0);    /* delete it */
+    do {                           /* generate digits in reverse order */
+        s[i++] = table[n % root];  /* get next digit */
+    } while ((n /= root) > 0);     /* delete it */
     if (sign < 0)
         s[i++] = '-';
     s[i] = '\0';
@@ -123,12 +123,12 @@ void readsector(void *dst, uint32_t offset)
     // wait for disk to be ready
     waitdisk();
 
-    outb(0x1F2, 1);                // count = 1
+    outb(0x1F2, 1);     // count = 1
     outb(0x1F3, offset);
     outb(0x1F4, offset >> 8);
     outb(0x1F5, offset >> 16);
     outb(0x1F6, (offset >> 24) | 0xE0);
-    outb(0x1F7, 0x20);            // cmd 0x20 - read sectors
+    outb(0x1F7, 0x20);  // cmd 0x20 - read sectors
 
     // wait for disk to be ready
     waitdisk();

@@ -6,6 +6,6 @@
 unsigned int palloc(void);
 void pfree(unsigned int pfree_index);
 
-#endif                            /* _KERN_ */
+#endif  /* _KERN_ */
 
-#endif                            /* !_KERN_MM_MALOP_H_ */
+#endif  /* !_KERN_MM_MALOP_H_ */

@@ -150,8 +150,8 @@ void vprintfmt(putch_t putch, void *putdat, const char *fmt, va_list ap)
                 for (width -= strnlen(p, precision); width > 0; width--)
                     putch(padc, putdat);
             for (;
-                 (ch = *p++) != '\0' &&
-                 (precision < 0 || --precision >= 0); width--)
+                 (ch = *p++) != '\0' && (precision < 0 || --precision >= 0);
+                 width--)
                 if (altflag && (ch < ' ' || ch > '~'))
                     putch('?', putdat);
                 else

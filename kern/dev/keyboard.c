@@ -4,17 +4,17 @@
 
 /***** Keyboard input code *****/
 
-#define NO    0
+#define NO 0
 
-#define SHIFT   (1<<0)
+#define SHIFT (1<<0)
 #define CTL   (1<<1)
 #define ALT   (1<<2)
 
-#define CAPSLOCK  (1<<3)
-#define NUMLOCK   (1<<4)
-#define SCROLLLOCK  (1<<5)
+#define CAPSLOCK   (1<<3)
+#define NUMLOCK    (1<<4)
+#define SCROLLLOCK (1<<5)
 
-#define E0ESC   (1<<6)
+#define E0ESC (1<<6)
 
 static uint8_t shiftcode[256] = {
     [0x1D] = CTL,
@@ -43,12 +43,12 @@ static uint8_t normalmap[256] = {
     NO,   NO,   NO,   NO,   NO,   NO,   NO,   '7',  // 0x40
     '8',  '9',  '-',  '4',  '5',  '6',  '+',  '1',
     '2',  '3',  '0',  '.',  NO,   NO,   NO,   NO,   // 0x50
-    [0xC7] = KEY_HOME,        [0x9C] = '\n' /*KP_Enter*/,
-    [0xB5] = '/' /*KP_Div*/,  [0xC8] = KEY_UP,
-    [0xC9] = KEY_PGUP,        [0xCB] = KEY_LF,
-    [0xCD] = KEY_RT,          [0xCF] = KEY_END,
-    [0xD0] = KEY_DN,          [0xD1] = KEY_PGDN,
-    [0xD2] = KEY_INS,         [0xD3] = KEY_DEL
+    [0xC7] = KEY_HOME,          [0x9C] = '\n' /* KP_Enter */,
+    [0xB5] = '/' /* KP_Div */,  [0xC8] = KEY_UP,
+    [0xC9] = KEY_PGUP,          [0xCB] = KEY_LF,
+    [0xCD] = KEY_RT,            [0xCF] = KEY_END,
+    [0xD0] = KEY_DN,            [0xD1] = KEY_PGDN,
+    [0xD2] = KEY_INS,           [0xD3] = KEY_DEL
 };
 
 static uint8_t shiftmap[256] = {
@@ -63,12 +63,12 @@ static uint8_t shiftmap[256] = {
     NO,   NO,   NO,   NO,   NO,   NO,   NO,   '7',  // 0x40
     '8',  '9',  '-',  '4',  '5',  '6',  '+',  '1',
     '2',  '3',  '0',  '.',  NO,   NO,   NO,   NO,   // 0x50
-    [0xC7] = KEY_HOME,        [0x9C] = '\n' /*KP_Enter*/,
-    [0xB5] = '/' /*KP_Div*/,  [0xC8] = KEY_UP,
-    [0xC9] = KEY_PGUP,        [0xCB] = KEY_LF,
-    [0xCD] = KEY_RT,          [0xCF] = KEY_END,
-    [0xD0] = KEY_DN,          [0xD1] = KEY_PGDN,
-    [0xD2] = KEY_INS,         [0xD3] = KEY_DEL
+    [0xC7] = KEY_HOME,          [0x9C] = '\n' /* KP_Enter */,
+    [0xB5] = '/' /* KP_Div */,  [0xC8] = KEY_UP,
+    [0xC9] = KEY_PGUP,          [0xCB] = KEY_LF,
+    [0xCD] = KEY_RT,            [0xCF] = KEY_END,
+    [0xD0] = KEY_DN,            [0xD1] = KEY_PGDN,
+    [0xD2] = KEY_INS,           [0xD3] = KEY_DEL
 };
 
 #define C(x) (x - '@')
@@ -140,7 +140,7 @@ static int kbd_proc_data(void)
     // Ctrl-Alt-Del: reboot
     if (!(~shift & (CTL | ALT)) && c == KEY_DEL) {
         dprintf("Rebooting!\n");
-        outb(0x92, 0x3);        // courtesy of Chris Frost
+        outb(0x92, 0x3);  // courtesy of Chris Frost
     }
 
     return c;

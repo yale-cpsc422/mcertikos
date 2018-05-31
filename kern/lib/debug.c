@@ -27,7 +27,7 @@ void debug_normal(const char *file, int line, const char *fmt, ...)
     va_end(ap);
 }
 
-#define DEBUG_TRACEFRAMES    10
+#define DEBUG_TRACEFRAMES 10
 
 static void debug_trace(uintptr_t ebp, uintptr_t * eips)
 {
@@ -35,8 +35,8 @@ static void debug_trace(uintptr_t ebp, uintptr_t * eips)
     uintptr_t *frame = (uintptr_t *) ebp;
 
     for (i = 0; i < DEBUG_TRACEFRAMES && frame; i++) {
-        eips[i] = frame[1];                /* saved %eip */
-        frame = (uintptr_t *) frame[0];    /* saved %ebp */
+        eips[i] = frame[1];              /* saved %eip */
+        frame = (uintptr_t *) frame[0];  /* saved %ebp */
     }
     for (; i < DEBUG_TRACEFRAMES; i++)
         eips[i] = 0;
@@ -75,4 +75,4 @@ void debug_warn(const char *file, int line, const char *fmt, ...)
     va_end(ap);
 }
 
-#endif                            /* DEBUG_MSG */
+#endif  /* DEBUG_MSG */

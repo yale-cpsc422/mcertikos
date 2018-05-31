@@ -8,7 +8,7 @@
 #include <lib/monitor.h>
 #include <dev/console.h>
 
-#define CMDBUF_SIZE    80        // enough for one VGA text line
+#define CMDBUF_SIZE 80  // enough for one VGA text line
 
 struct Command {
     const char *name;
@@ -22,7 +22,7 @@ static struct Command commands[] = {
     {"kerninfo", "Display information about the kernel", mon_kerninfo},
 };
 
-#define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
+#define NCOMMANDS (sizeof(commands) / sizeof(commands[0]))
 
 /***** Implementations of basic kernel monitor commands *****/
 
@@ -58,7 +58,7 @@ int mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 /***** Kernel monitor command interpreter *****/
 
 #define WHITESPACE "\t\r\n "
-#define MAXARGS 16
+#define MAXARGS    16
 
 static int runcmd(char *buf, struct Trapframe *tf)
 {

@@ -42,7 +42,6 @@ void video_init(void)
 
 void video_putc(int c)
 {
-
     // if no attribute given, then use black on white
     if (!(c & ~0xFF))
         c |= 0x0700;
@@ -68,7 +67,7 @@ void video_putc(int c)
         video_putc(' ');
         break;
     default:
-        terminal.crt_buf[terminal.crt_pos++] = c;    /* write the character */
+        terminal.crt_buf[terminal.crt_pos++] = c;  /* write the character */
         break;
     }
 

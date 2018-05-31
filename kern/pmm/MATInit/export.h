@@ -5,6 +5,6 @@
 
 void pmem_init(unsigned int);
 
-#endif                            /* _KERN_ */
+#endif  /* _KERN_ */
 
-#endif                            /* !_KERN_MM_MALINIT_H_ */
+#endif  /* !_KERN_MM_MALINIT_H_ */

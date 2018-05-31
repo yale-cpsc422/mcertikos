@@ -38,7 +38,7 @@ void boot1main(uint32_t dev, mbr_t * mbr, bios_smap_t * smap)
 
 }
 
-#define ELFHDR        ((elfhdr *) 0x20000)
+#define ELFHDR ((elfhdr *) 0x20000)
 
 uint32_t load_kernel(uint32_t dkernel)
 {

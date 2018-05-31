@@ -5,25 +5,24 @@
 
 #include <lib/types.h>
 
-typedef
-    struct mboot_info {
+typedef struct mboot_info {
     uint32_t flags;
 
     /* if bit 0 of flags is set */
-    uint32_t mem_lower;            /* the amount of the loer memory */
-    uint32_t mem_upper;            /* the amount of the higher memory */
+    uint32_t mem_lower;  /* the amount of the loer memory */
+    uint32_t mem_upper;  /* the amount of the higher memory */
 
     /* if bit 1 of flags is set */
     struct {
-        uint8_t driver;            /* BIOS disk device number */
-        uint8_t part1;             /* top-level partition number */
-        uint8_t part2;             /* second-level partition number */
-        uint8_t part3;             /* third-level partition number */
+        uint8_t driver;  /* BIOS disk device number */
+        uint8_t part1;   /* top-level partition number */
+        uint8_t part2;   /* second-level partition number */
+        uint8_t part3;   /* third-level partition number */
     } boot_device;
 
     /* if bit 2 of flags is set */
-    uint32_t cmdline;            /* the address of a zerom terminated
-                                    command string passed to kernel */
+    uint32_t cmdline;  /* the address of a zerom terminated
+                          command string passed to kernel */
 
     /* if bit 3 of flags is set */
     uint32_t mods_count;
@@ -46,10 +45,10 @@ typedef
     } syms;
 
     /* if bit 6 of flags is set */
-    uint32_t mmap_length;        /* length of the buffer containing
-                                    the memory map */
-    uint32_t mmap_addr;          /* address of the buffer containing
-                                    the memory map */
+    uint32_t mmap_length;  /* length of the buffer containing
+                              the memory map */
+    uint32_t mmap_addr;    /* address of the buffer containing
+                              the memory map */
 
     /* if bit 7 of flags is set */
     uint32_t drives_length;
@@ -83,16 +82,16 @@ typedef struct mboot_mmap {
 } mboot_mmap_t;
 
 /* memory types */
-#define MEM_RAM         1
-#define MEM_RESERVED    2
-#define MEM_ACPI        3
-#define MEM_NVS         4
+#define MEM_RAM      1
+#define MEM_RESERVED 2
+#define MEM_ACPI     3
+#define MEM_NVS      4
 
 void pmmap_init(uintptr_t mbi_addr);
 int pmmap_entries_nr(void);
 uint32_t pmmap_get_entry_start(int idx);
 uint32_t pmmap_get_entry_length(int idx);
 
-#endif                            /* _KERN_ */
+#endif  /* _KERN_ */
 
-#endif                            /* !_KERN_LIB_MBOOT_H_ */
+#endif  /* !_KERN_LIB_MBOOT_H_ */

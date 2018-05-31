@@ -3,8 +3,8 @@
 #include <lib/monitor.h>
 #include <pmm/MATInit/export.h>
 
-#define NUM_CHAN        64
-#define TD_STATE_RUN    1
+#define NUM_CHAN     64
+#define TD_STATE_RUN 1
 
 #ifdef TEST
 extern bool test_MATIntro(void);

@@ -19,6 +19,6 @@ unsigned int at_is_allocated(unsigned int);
 // Mark the allocation flag of the page with the given index using the given value.
 void at_set_allocated(unsigned int, unsigned int);
 
-#endif                            /* _KERN_ */
+#endif  /* _KERN_ */
 
-#endif                            /* !_KERN_MM_MALOP_H_ */
+#endif  /* !_KERN_MM_MALOP_H_ */

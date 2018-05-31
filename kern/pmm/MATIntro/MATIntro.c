@@ -1,6 +1,6 @@
 #include <lib/gcc.h>
 
-//Number of physical pages that are actually available in the machine.
+// Number of physical pages that are actually available in the machine.
 static unsigned int NUM_PAGES;
 
 /**
@@ -29,13 +29,13 @@ struct ATStruct {
  */
 static struct ATStruct AT[1 << 20];
 
-//The getter function for NUM_PAGES.
+// The getter function for NUM_PAGES.
 unsigned int get_nps(void)
 {
     return NUM_PAGES;
 }
 
-//The setter function for NUM_PAGES.
+// The setter function for NUM_PAGES.
 void set_nps(unsigned int nps)
 {
     NUM_PAGES = nps;
@@ -48,7 +48,7 @@ void set_nps(unsigned int nps)
  */
 unsigned int at_is_norm(unsigned int page_index)
 {
-    //TODO
+    // TODO
     return 0;
 }
 
@@ -59,7 +59,7 @@ unsigned int at_is_norm(unsigned int page_index)
  */
 void at_set_perm(unsigned int page_index, unsigned int norm_val)
 {
-    //TODO
+    // TODO
 }
 
 /**
@@ -68,7 +68,7 @@ void at_set_perm(unsigned int page_index, unsigned int norm_val)
  */
 unsigned int at_is_allocated(unsigned int page_index)
 {
-    //TODO
+    // TODO
     return 0;
 }
 
@@ -78,5 +78,5 @@ unsigned int at_is_allocated(unsigned int page_index)
  */
 void at_set_allocated(unsigned int page_index, unsigned int allocated)
 {
-    //TODO
+    // TODO
 }

@@ -7,8 +7,8 @@
 #include <lib/stdarg.h>
 
 struct dprintbuf {
-    int idx;                    /* current buffer index */
-    int cnt;                    /* total bytes printed so far */
+    int idx;  /* current buffer index */
+    int cnt;  /* total bytes printed so far */
     char buf[CONSOLE_BUFFER_SIZE];
 };
 
@@ -57,4 +57,4 @@ int dprintf(const char *fmt, ...)
     return cnt;
 }
 
-#endif                            /* DEBUG_MSG */
+#endif  /* DEBUG_MSG */

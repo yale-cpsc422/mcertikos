@@ -4,18 +4,18 @@
 /**
  * gcc
  */
-#define gcc_packed        __attribute__((packed))
+#define gcc_packed __attribute__((packed))
 
 /**
  * types
  */
-typedef __signed char int8_t;
-typedef unsigned char uint8_t;
-typedef short int16_t;
-typedef unsigned short uint16_t;
-typedef int int32_t;
-typedef unsigned int uint32_t;
-typedef long long int64_t;
+typedef __signed char      int8_t;
+typedef unsigned char      uint8_t;
+typedef short              int16_t;
+typedef unsigned short     uint16_t;
+typedef int                int32_t;
+typedef unsigned int       uint32_t;
+typedef long long          int64_t;
 typedef unsigned long long uint64_t;
 
 /**
@@ -50,25 +50,25 @@ static inline void insl(int port, void *addr, int cnt)
  * video
  */
 
-#define CRT_ROWS    25
-#define CRT_COLS    80
+#define CRT_ROWS 25
+#define CRT_COLS 80
 
-#define VGA_CLR_BLACK           0
-#define VGA_CLR_BLUE            1
-#define VGA_CLR_GREEN           2
-#define VGA_CLR_CYAN            3
-#define VGA_CLR_RED             4
-#define VGA_CLR_MAGENTA         5
-#define VGA_CLR_BROWN           6
-#define VGA_CLR_LIGHT_GRAY      7
-#define VGA_CLR_DARK_GRAY       8
-#define VGA_CLR_LIGHT_BLUE      9
-#define VGA_CLR_LIGHT_GREEN     10
-#define VGA_CLR_LIGHT_CYAN      11
-#define VGA_CLR_LIGHT_RED       12
-#define VGA_CLR_LIGHT_MAGENTA   13
-#define VGA_CLR_YELLOW          14
-#define VGA_CLR_WHITE           15
+#define VGA_CLR_BLACK         0
+#define VGA_CLR_BLUE          1
+#define VGA_CLR_GREEN         2
+#define VGA_CLR_CYAN          3
+#define VGA_CLR_RED           4
+#define VGA_CLR_MAGENTA       5
+#define VGA_CLR_BROWN         6
+#define VGA_CLR_LIGHT_GRAY    7
+#define VGA_CLR_DARK_GRAY     8
+#define VGA_CLR_LIGHT_BLUE    9
+#define VGA_CLR_LIGHT_GREEN   10
+#define VGA_CLR_LIGHT_CYAN    11
+#define VGA_CLR_LIGHT_RED     12
+#define VGA_CLR_LIGHT_MAGENTA 13
+#define VGA_CLR_YELLOW        14
+#define VGA_CLR_WHITE         15
 
 int puts(int r, int c, int color, const char *string);
 void putline(char *s);
@@ -87,20 +87,20 @@ void itoh(int n, char *s);
 /**
  * disk
  */
-#define SECTOR_SIZE    512
+#define SECTOR_SIZE 512
 
 typedef struct mbr {
     uint8_t bootloader[436];
     uint8_t disk_sig[10];
     struct {
         uint8_t bootable;
-#define INACTIVE_PARTITION    0x00
-#define BOOTABLE_PARTITION    0x80
+#define INACTIVE_PARTITION 0x00
+#define BOOTABLE_PARTITION 0x80
         uint8_t first_chs[3];
         uint8_t id;
-#define EMPTY_PARTITION        0x00
-#define LINUX_PARTITION        0x83
-#define EXTENDED_PARTITION     0x5
+#define EMPTY_PARTITION    0x00
+#define LINUX_PARTITION    0x83
+#define EXTENDED_PARTITION 0x5
         uint8_t last_chs[3];
         uint32_t first_lba;
         uint32_t sectors_count;
@@ -116,8 +116,7 @@ void readsection(uint32_t va, uint32_t count, uint32_t offset,
 /**
  * physical memory map
  */
-typedef
-    struct bios_smap {
+typedef struct bios_smap {
     uint32_t size;
     uint64_t base_addr;
     uint64_t length;
@@ -127,11 +126,11 @@ typedef
 /**
  * elf
  */
-#define ELF_MAGIC 0x464C457FU    /* "\x7FELF" in little endian */
+#define ELF_MAGIC 0x464C457FU  /* "\x7FELF" in little endian */
 
 // ELF header
 typedef struct elfhdf {
-    uint32_t e_magic;            // must equal ELF_MAGIC
+    uint32_t e_magic;  // must equal ELF_MAGIC
     uint8_t e_elf[12];
     uint16_t e_type;
     uint16_t e_machine;
@@ -164,25 +163,24 @@ typedef struct proghdr {
  * mboot
  */
 /* Provided by bootloader */
-typedef
-    struct mboot_info {
+typedef struct mboot_info {
     uint32_t flags;
 
     /* if bit 0 of flags is set */
-    uint32_t mem_lower;            /* the amount of the loer memory */
-    uint32_t mem_upper;            /* the amount of the higher memory */
+    uint32_t mem_lower;  /* the amount of the loer memory */
+    uint32_t mem_upper;  /* the amount of the higher memory */
 
     /* if bit 1 of flags is set */
     struct {
-        uint8_t driver;            /* BIOS disk device number */
-        uint8_t part1;            /* top-level partition number */
-        uint8_t part2;            /* second-level partition number */
-        uint8_t part3;            /* third-level partition number */
+        uint8_t driver;  /* BIOS disk device number */
+        uint8_t part1;   /* top-level partition number */
+        uint8_t part2;   /* second-level partition number */
+        uint8_t part3;   /* third-level partition number */
     } boot_device;
 
     /* if bit 2 of flags is set */
-    uint32_t cmdline;            /* the address of a zerom terminated
-                                   command string passed to kernel */
+    uint32_t cmdline;  /* the address of a zerom terminated
+                          command string passed to kernel */
 
     /* if bit 3 of flags is set */
     uint32_t mods_count;
@@ -205,10 +203,10 @@ typedef
     } syms;
 
     /* if bit 6 of flags is set */
-    uint32_t mmap_length;        /* length of the buffer containing
-                                   the memory map */
-    uint32_t mmap_addr;            /* address of the buffer containing
-                                   the memory map */
+    uint32_t mmap_length;  /* length of the buffer containing
+                              the memory map */
+    uint32_t mmap_addr;    /* address of the buffer containing
+                              the memory map */
 
     /* if bit 7 of flags is set */
     uint32_t drives_length;

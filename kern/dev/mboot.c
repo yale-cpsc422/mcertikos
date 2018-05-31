@@ -5,7 +5,7 @@
 
 #include "mboot.h"
 
-#define PAGESIZE        4096
+#define PAGESIZE 4096
 
 struct pmmap {
     uintptr_t start;
@@ -18,15 +18,15 @@ struct pmmap {
 static struct pmmap pmmap_slots[128];
 static int pmmap_slots_next_free = 0;
 
-static SLIST_HEAD(, pmmap) pmmap_list;    /* all memory regions */
+static SLIST_HEAD(, pmmap) pmmap_list;  /* all memory regions */
 static SLIST_HEAD(, pmmap) pmmap_sublist[4];
 
 enum __pmmap_type { PMMAP_USABLE, PMMAP_RESV, PMMAP_ACPI, PMMAP_NVS };
 
-#define PMMAP_SUBLIST_NR(type)                \
-    (((type) == MEM_RAM) ? PMMAP_USABLE :     \
-     ((type) == MEM_RESERVED) ? PMMAP_RESV :  \
-     ((type) == MEM_ACPI) ? PMMAP_ACPI :      \
+#define PMMAP_SUBLIST_NR(type)               \
+    (((type) == MEM_RAM) ? PMMAP_USABLE :    \
+     ((type) == MEM_RESERVED) ? PMMAP_RESV : \
+     ((type) == MEM_ACPI) ? PMMAP_ACPI :     \
      ((type) == MEM_NVS) ? PMMAP_NVS : -1)
 
 static uintptr_t max_usable_memory = 0;
@@ -150,7 +150,7 @@ void pmmap_init(uintptr_t mbi_addr)
         uintptr_t start, end;
         uint32_t type;
 
-        if (p->base_addr_high != 0)    /* ignore address above 4G */
+        if (p->base_addr_high != 0)  /* ignore address above 4G */
             goto next;
         else
             start = p->base_addr_low;
@@ -166,8 +166,7 @@ void pmmap_init(uintptr_t mbi_addr)
         //pmmap_dump();
 
       next:
-        p = (mboot_mmap_t *) (((uint32_t) p) +
-                              sizeof(mboot_mmap_t) /* p->size */ );
+        p = (mboot_mmap_t *) (((uint32_t) p) + sizeof(mboot_mmap_t) /* p->size */);
     }
 
     /* merge overlapped memory regions */
