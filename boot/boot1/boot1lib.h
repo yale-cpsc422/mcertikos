@@ -70,7 +70,6 @@ static inline void insl(int port, void *addr, int cnt)
 #define VGA_CLR_YELLOW          14
 #define VGA_CLR_WHITE           15
 
-
 int puts(int r, int c, int color, const char *string);
 void putline(char *s);
 void puti(int32_t i);

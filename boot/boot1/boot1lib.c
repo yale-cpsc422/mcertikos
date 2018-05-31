@@ -12,7 +12,6 @@ void putc(int l, int color, char ch)
     *(p + 1) = color;
 }
 
-
 int puts(int r, int c, int color, const char *string)
 {
     int l = r * 80 + c;
@@ -53,7 +52,6 @@ void puti(int32_t i)
     itoh(i, puti_str);
     putline(puti_str);
 }
-
 
 /**
  * string
@@ -104,13 +102,11 @@ void itoa(int n, char s[])
     itox(n, s, 10, dec);
 }
 
-
 void itoh(int n, char *s)
 {
     static char hex[] = "0123456789abcdef";
     itox(n, s, 16, hex);
 }
-
 
 /**
  * disk

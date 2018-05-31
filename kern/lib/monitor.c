@@ -10,7 +10,6 @@
 
 #define CMDBUF_SIZE    80        // enough for one VGA text line
 
-
 struct Command {
     const char *name;
     const char *desc;
@@ -55,8 +54,6 @@ int mon_backtrace(int argc, char **argv, struct Trapframe *tf)
     // TODO
     return 0;
 }
-
-
 
 /***** Kernel monitor command interpreter *****/
 
@@ -109,7 +106,6 @@ void monitor(struct Trapframe *tf)
     dprintf("Welcome to the mCertiKOS kernel monitor!\n");
     dprintf("\n****************************************\n\n");
     dprintf("Type 'help' for a list of commands.\n");
-
 
     while (1) {
         buf = (char *) readline("$> ");

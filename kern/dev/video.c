@@ -81,7 +81,6 @@ void video_putc(int c)
         terminal.crt_pos -= CRT_COLS;
     }
 
-
     /* move that little blinky thing */
     outb(addr_6845, 14);
     outb(addr_6845 + 1, terminal.crt_pos >> 8);

@@ -150,8 +150,6 @@
 #define VGA_SAVE_MODE  8        /* save/restore video mode      */
 #define VGA_SAVE_CMAP  16       /* save/restore color map/DAC   */
 
-
-
 #define CRT_ROWS    25
 #define CRT_COLS    80
 #define CRT_SIZE    (CRT_ROWS * CRT_COLS)

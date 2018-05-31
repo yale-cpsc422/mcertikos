@@ -38,7 +38,6 @@ static inline uint32_t __attribute__ ((always_inline)) read_ebp(void)
     return ebp;
 }
 
-
 void lldt(uint16_t);
 void cli(void);
 void sti(void);

@@ -29,8 +29,6 @@
 
 #endif                            /* __COMPCERT__ */
 
-
-
 #endif                            /* _KERN_ */
 
 #endif                            /* !_SYS_LIB_GCC_H_ */

@@ -15,7 +15,6 @@
 #define KEY_INS   0xE8
 #define KEY_DEL   0xE9
 
-
 /* This is i8042reg.h + kbdreg.h from NetBSD. */
 
 #define KBSTATP   0x64            /* kbd controller status port(I) */

@@ -21,7 +21,6 @@ unsigned int palloc()
     return 0;
 }
 
-
 /**
  * Free of a physical page.
  *

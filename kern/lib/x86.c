@@ -119,8 +119,6 @@ gcc_inline void smp_wmb(void)
     __asm __volatile("" ::: "memory");
 }
 
-
-
 gcc_inline void ltr(uint16_t sel)
 {
     __asm __volatile("ltr %0" :: "r"(sel));

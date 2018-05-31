@@ -26,7 +26,6 @@ int MATInit_test1()
     return 0;
 }
 
-
 /**
  * Write Your Own Test Script (optional)
  *

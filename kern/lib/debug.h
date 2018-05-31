@@ -52,7 +52,6 @@ void debug_info(const char *, ...);
 
 int dprintf(const char *, ...);
 
-
 void debug_normal(const char *, int, const char *, ...);
 void debug_warn(const char *, int, const char *, ...);
 void debug_panic(const char *, int, const char *, ...);
