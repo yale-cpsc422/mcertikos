@@ -5,6 +5,8 @@
 
 #include <lib/types.h>
 
+extern int vdprintf(const char *fmt, va_list ap);
+
 void debug_info(const char *fmt, ...)
 {
 #ifdef DEBUG_MSG
