@@ -20,7 +20,7 @@
 	.set BOOT0, 0x7c00		# load address
 	.set BOOT1, 0x7e00		# start address of boot1
 
-	.set PR_TABLE, BOOT0+0x1be	# address of the partition table
+	.set PR_TABLE, BOOT0 + 0x1be	# address of the partition table
 	.set PR_BOOTABLE, 0x80		# bootable partition
 
 	.globl start
@@ -41,8 +41,8 @@ start:
 	movl	%eax, BOOT0 - 4
 
 	/* set up the stack */
-	movw  $(BOOT0 - 4), %bp
-	movw  $(BOOT0 - 4), %sp
+	movw	$(BOOT0 - 4), %bp
+	movw	$(BOOT0 - 4), %sp
 
 	/* set to normal (80x25 text) video mode */
 set_video_mode:
@@ -95,9 +95,7 @@ putstr.2:
 	ret
 
 STARTUP_MSG:
-	.ascii	"Start boot0 ...\r\n\0"
+	.ascii "Start boot0 ...\r\n\0"
 
 LOAD_FAIL_MSG:
-	.ascii	"Error during loading boot1.\r\n\0"
-
-
+	.ascii "Error during loading boot1.\r\n\0"

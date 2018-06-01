@@ -1,6 +1,6 @@
-	.set  MBOOT_INFO_MAGIC, 0x2badb002
+	.set MBOOT_INFO_MAGIC, 0x2badb002
 
-	.globl	exec_kernel
+	.globl exec_kernel
 	.code32
 exec_kernel:
 	cli

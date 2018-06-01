@@ -27,7 +27,7 @@
  	.set BOOT0, 0x7c00		# load address
 	.set BOOT1, 0x7e00		# start address of boot1
 
-	.set PR_TABLE, BOOT0+0x1be	# address of the partition table
+	.set PR_TABLE, BOOT0 + 0x1be	# address of the partition table
 	.set PR_BOOTABLE, 0x80		# bootable partition
 
 
@@ -70,7 +70,7 @@ set_video_mode.2:
 e820:
 	xorl	%ebx, %ebx		# ebx must be 0 when first calling e820
 	movl	$SMAP_SIG, %edx		# edx must be 'SMAP' when calling e820
-	movw	$(smap+4), %di		# set the address of the output buffer
+	movw	$(smap + 4), %di	# set the address of the output buffer
 e820.1:
 	movl	$20, %ecx		# set the size of the output buffer
 	movl	$0xe820, %eax		# set the BIOS service code
@@ -126,7 +126,7 @@ protcseg:
 	 */
 	pushl	$smap
 	pushl	$BOOT0
-	movl	(BOOT0-4), %eax
+	movl	(BOOT0 - 4), %eax
 	pushl	%eax
 	call	boot1main
 
@@ -151,31 +151,31 @@ putstr.2:
 	ret
 
 STARTUP_MSG:
-	.ascii	"Start boot1 ...\r\n\0"
+	.ascii "Start boot1 ...\r\n\0"
 
 E820_FAIL_MSG:
-	.ascii	"error when detecting memory map\r\n\0"
+	.ascii "error when detecting memory map\r\n\0"
 
 NO_BOOTABLE_MSG:
-	.ascii	"No bootable partition.\r\n\0"
+	.ascii "No bootable partition.\r\n\0"
 
-	.p2align	2	/* force 4-byte alignment */
+	.p2align 2	/* force 4-byte alignment */
 /* bootstrap GDT */
 gdt:
-	.word	0, 0
-	.byte	0, 0, 0, 0
+	.word 0, 0
+	.byte 0, 0, 0, 0
 
 	/* code segment */
-	.word	0xFFFF, 0
-	.byte	0, 0x9A, 0xCF, 0
+	.word 0xFFFF, 0
+	.byte 0, 0x9A, 0xCF, 0
 
 	/* data segment */
-	.word	0xFFFF, 0
-	.byte	0, 0x92, 0xCF, 0
+	.word 0xFFFF, 0
+	.byte 0, 0x92, 0xCF, 0
 
 	/* 16 bit real mode CS */
-	.word	0xFFFF, 0
-	.byte	0, 0x9E, 0, 0
+	.word 0xFFFF, 0
+	.byte 0, 0x9E, 0, 0
 
 	/* 16 bit real mode DS */
 	.word	0xFFFF, 0
@@ -183,8 +183,8 @@ gdt:
 
 /* GDT descriptor */
 gdtdesc:
-	.word	0x27			/* limit */
-	.long	gdt			/* addr */
+	.word 0x27	/* limit */
+	.long gdt	/* addr */
 
 /* reserve space for memory map */
 smap:
