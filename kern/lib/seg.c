@@ -66,12 +66,6 @@ void seg_init(void)
     ltr(CPU_GDT_TSS);
 
     /*
-     * Load IDT.
-     */
-    //extern pseudodesc_t idt_pd;
-    //asm volatile("lidt %0" : : "m" (idt_pd));
-
-    /*
      * Initialize all TSS structures for processes.
      */
     unsigned int pid;

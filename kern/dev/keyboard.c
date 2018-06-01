@@ -3,7 +3,6 @@
 #include "keyboard.h"
 
 /***** Keyboard input code *****/
-
 #define NO 0
 
 #define SHIFT (1<<0)

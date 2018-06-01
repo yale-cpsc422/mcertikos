@@ -56,7 +56,6 @@ void puti(int32_t i)
 /**
  * string
  */
-
 int strlen(const char *s)
 {
     int n;
@@ -66,7 +65,7 @@ int strlen(const char *s)
     return n;
 }
 
-/* reverse:  reverse string s in place */
+/* reverse: reverse string s in place */
 void reverse(char s[])
 {
     int i, j;
@@ -79,7 +78,7 @@ void reverse(char s[])
     }
 }
 
-/* itoa:  convert n to characters in s */
+/* itoa: convert n to characters in s */
 void itox(int n, char s[], int root, char *table)
 {
     int i, sign;

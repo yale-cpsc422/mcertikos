@@ -163,7 +163,6 @@ void pmmap_init(uintptr_t mbi_addr)
         type = p->type;
 
         pmmap_insert(start, end, type);
-        //pmmap_dump();
 
       next:
         p = (mboot_mmap_t *) (((uint32_t) p) + sizeof(mboot_mmap_t) /* p->size */);

@@ -173,7 +173,6 @@ struct vga_state {
     uint8_t cr[256];
 };
 
-//int active_console;
 struct video terminal;
 
 void video_init(void);

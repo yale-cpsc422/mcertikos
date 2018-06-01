@@ -6,8 +6,7 @@
 #include <lib/debug.h>
 
 #include "video.h"
-//tmphack
-//#include<dev/serial.h>
+
 void video_init(void)
 {
     volatile uint16_t *cp;
@@ -37,7 +36,6 @@ void video_init(void)
     terminal.crt_buf = (uint16_t *) cp;
     terminal.crt_pos = pos;
     terminal.active_console = 0;
-//  video_clear_screen();
 }
 
 void video_putc(int c)
@@ -85,26 +83,6 @@ void video_putc(int c)
     outb(addr_6845 + 1, terminal.crt_pos >> 8);
     outb(addr_6845, 15);
     outb(addr_6845 + 1, terminal.crt_pos);
-
-    //tmphack
-    //static  int tmpcount = 0;
-    /*static    int tmpcount = 0 ;
-       int i;
-       if(tmpcount <11946)
-       {
-       for (i = 0;
-       !(inb(COM1 + COM_LSR) & COM_LSR_TXRDY) && i < 12800;//is_transimit_empty
-       i++)
-       {
-       inb(0x84);
-       inb(0x84);
-       inb(0x84);
-       inb(0x84);
-       }
-       outb(COM1+COM_TX, c);
-       tmpcount++;
-       }
-     */
 }
 
 void video_set_cursor(int x, int y)

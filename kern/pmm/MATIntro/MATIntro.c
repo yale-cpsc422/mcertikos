@@ -7,18 +7,18 @@ static unsigned int NUM_PAGES;
  * Structure represeting infomatin for one physical page.
  */
 struct ATStruct {
-  /**
-   * The permission of the page.
-   * 0: Reserved by the BIOS.
-   * 1: Kernel only.
-   * >1: Normal (avaiable).
-   */
+    /**
+     * The permission of the page.
+     * 0: Reserved by the BIOS.
+     * 1: Kernel only.
+     * >1: Normal (avaiable).
+     */
     unsigned int perm;
-  /**
-   * Whether the page is allocated.
-   * 0: unallocated
-   * >0: allocated
-   */
+    /**
+     * Whether the page is allocated.
+     * 0: unallocated
+     * >0: allocated
+     */
     unsigned int allocated;
 };
 

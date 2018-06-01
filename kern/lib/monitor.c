@@ -25,7 +25,6 @@ static struct Command commands[] = {
 #define NCOMMANDS (sizeof(commands) / sizeof(commands[0]))
 
 /***** Implementations of basic kernel monitor commands *****/
-
 int mon_help(int argc, char **argv, struct Trapframe *tf)
 {
     int i;
@@ -56,7 +55,6 @@ int mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 }
 
 /***** Kernel monitor command interpreter *****/
-
 #define WHITESPACE "\t\r\n "
 #define MAXARGS    16
 

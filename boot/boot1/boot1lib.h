@@ -49,7 +49,6 @@ static inline void insl(int port, void *addr, int cnt)
 /**
  * video
  */
-
 #define CRT_ROWS 25
 #define CRT_COLS 80
 

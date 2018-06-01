@@ -61,7 +61,6 @@ debug_panic(const char *file, int line, const char *fmt, ...)
 
     dprintf("Kernel Panic !!!\n");
 
-    //intr_local_disable();
     halt();
 }
 
