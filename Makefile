@@ -13,7 +13,7 @@ ARCH		:= i386
 COMP_NAME	:= "ccomp"
 
 ENABLE_CCOMP	:= 0
-COMP_NAME		:= "cc"
+COMP_NAME	:= "cc"
 
 # Cross-compiler toolchain
 #
@@ -25,7 +25,7 @@ COMP_NAME		:= "cc"
 
 # try to infer the correct GCCPREFIX
 ifndef GCCPREFIX
-GCCPREFIX := $(shell sh misc/gccprefix.sh)
+GCCPREFIX	:= $(shell sh misc/gccprefix.sh)
 endif
 
 # Directories
@@ -70,9 +70,9 @@ NM		:= $(GCCPREFIX)nm
 CSCOPE		:= cscope
 
 # others
-GCC_LIB32 := $(shell $(CC) $(CFLAGS) -m32 -print-libgcc-file-name)
+GCC_LIB32	:= $(shell $(CC) $(CFLAGS) -m32 -print-libgcc-file-name)
 ifeq ($(ARCH), amd64)
-GCC_LIB64 := $(shell $(CC) $(CFLAGS) -m64 -print-libgcc-file-name)
+GCC_LIB64	:= $(shell $(CC) $(CFLAGS) -m64 -print-libgcc-file-name)
 endif
 
 # If this is the first time building CertiKOS64, please follow the instructions
@@ -85,7 +85,7 @@ BOCHS		:= bochs
 BOCHS_OPT	:= -q
 
 # try to generate a unique GDB port
-GDBPORT	:= $(shell expr `id -u` % 5000 + 25000)
+GDBPORT		:= $(shell expr `id -u` % 5000 + 25000)
 
 # qemu
 QEMU		:= qemu-system-x86_64

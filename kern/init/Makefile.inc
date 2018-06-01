@@ -1,9 +1,9 @@
 # -*-Makefile-*-
 
-OBJDIRS		+= $(KERN_OBJDIR)/init
+OBJDIRS += $(KERN_OBJDIR)/init
 
-KERN_SRCFILES	+= $(KERN_DIR)/init/init.c
-KERN_SRCFILES	+= $(KERN_DIR)/init/entry.S
+KERN_SRCFILES += $(KERN_DIR)/init/init.c
+KERN_SRCFILES += $(KERN_DIR)/init/entry.S
 
 $(KERN_OBJDIR)/init/%.o: $(KERN_DIR)/init/%.c
 	@echo + $(COMP_NAME)[KERN/init] $<

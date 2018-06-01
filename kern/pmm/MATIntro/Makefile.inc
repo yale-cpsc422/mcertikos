@@ -1,10 +1,10 @@
 # -*-Makefile-*-
 
-OBJDIRS		+= $(KERN_OBJDIR)/pmm/MATIntro
+OBJDIRS += $(KERN_OBJDIR)/pmm/MATIntro
 
-KERN_SRCFILES	+= $(KERN_DIR)/pmm/MATIntro/MATIntro.c
+KERN_SRCFILES += $(KERN_DIR)/pmm/MATIntro/MATIntro.c
 ifdef TEST
-KERN_SRCFILES	+= $(KERN_DIR)/pmm/MATIntro/test.c
+KERN_SRCFILES += $(KERN_DIR)/pmm/MATIntro/test.c
 endif
 
 $(KERN_OBJDIR)/pmm/MATIntro/%.o: $(KERN_DIR)/pmm/MATIntro/%.c

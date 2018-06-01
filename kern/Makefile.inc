@@ -5,7 +5,7 @@ KERN_OBJDIR	:= $(OBJDIR)/kern
 
 OBJDIRS		+= $(KERN_OBJDIR)
 
-DEBUG_MSG = 1
+DEBUG_MSG	:= 1
 
 # Arch-independent compiling and linking options
 KERN_CFLAGS	:= $(CFLAGS) -D_KERN_ -I$(KERN_DIR) -I$(KERN_DIR)/kern -I. -m32
@@ -21,7 +21,7 @@ KERN_CFLAGS	+= -O2
 endif
 
 KERN_LDFLAGS	:= $(LDFLAGS) -e start -m elf_i386 -Ttext=0x00100000
-GCC_LIBS        := $(GCC_LIB32)
+GCC_LIBS	:= $(GCC_LIB32)
 
 # Sub-makefiles
 include		$(KERN_DIR)/config.mk
@@ -34,7 +34,7 @@ KERN_CFLAGS	+= $(KERN_DEBUG_FLAGS)
 KERN_CFLAGS	+= -DSERIAL_DEBUG -DDEBUG_MSG
 ifdef ENABLE_CCOMP
 CCOMP_KERN_CFLAGS += $(KERN_DEBUG_FLAGS)
-CLIGHTGEN_FLAGS	  += $(KERN_DEBUG_FLAGS)
+CLIGHTGEN_FLAGS   += $(KERN_DEBUG_FLAGS)
 endif
 
 # Object files of kernel
