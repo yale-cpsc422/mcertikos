@@ -9,8 +9,8 @@ int MATIntro_test1()
     for (i = 0; i < 10; i++) {
         set_nps(rn10[i]);
         if (get_nps() != rn10[i]) {
+            dprintf("test 1.1 failed (i = %d): (%d != %d)\n", i, get_nps(), rn10[i]);
             set_nps(nps);
-            dprintf("test 1 failed.\n");
             return 1;
         }
     }
@@ -23,26 +23,26 @@ int MATIntro_test2()
 {
     at_set_perm(0, 0);
     if (at_is_norm(0) != 0 || at_is_allocated(0) != 0) {
+        dprintf("test 2.1 failed: (%d != 0 || %d != 0)\n", at_is_norm(0), at_is_allocated(0));
         at_set_perm(0, 0);
-        dprintf("test 2 failed.\n");
         return 1;
     }
     at_set_perm(0, 1);
     if (at_is_norm(0) != 0 || at_is_allocated(0) != 0) {
+        dprintf("test 2.2 failed: (%d != 0 || %d != 0)\n", at_is_norm(0), at_is_allocated(0));
         at_set_perm(0, 0);
-        dprintf("test 2 failed.\n");
         return 1;
     }
     at_set_perm(0, 2);
     if (at_is_norm(0) != 1 || at_is_allocated(0) != 0) {
+        dprintf("test 2.3 failed: (%d != 1 || %d != 0)\n", at_is_norm(0), at_is_allocated(0));
         at_set_perm(0, 0);
-        dprintf("test 2 failed.\n");
         return 1;
     }
     at_set_perm(0, 100);
     if (at_is_norm(0) != 1 || at_is_allocated(0) != 0) {
+        dprintf("test 2.4 failed: (%d != 1 || %d != 0)\n", at_is_norm(0), at_is_allocated(0));
         at_set_perm(0, 0);
-        dprintf("test 2 failed.\n");
         return 1;
     }
     at_set_perm(0, 0);
@@ -54,20 +54,20 @@ int MATIntro_test3()
 {
     at_set_allocated(1, 0);
     if (at_is_allocated(1) != 0) {
+        dprintf("test 3.1 failed: (%d != 0)\n", at_is_allocated(1));
         at_set_allocated(1, 0);
-        dprintf("test 3 failed.\n");
         return 1;
     }
     at_set_allocated(1, 1);
     if (at_is_allocated(1) != 1) {
+        dprintf("test 3.2 failed: (%d != 1)\n", at_is_allocated(1));
         at_set_allocated(1, 0);
-        dprintf("test 3 failed.\n");
         return 1;
     }
     at_set_allocated(1, 100);
     if (at_is_allocated(1) != 1) {
+        dprintf("test 3.3 failed: (%d != 1)\n", at_is_allocated(1));
         at_set_allocated(1, 0);
-        dprintf("test 3 failed.\n");
         return 1;
     }
     at_set_allocated(1, 0);
@@ -97,6 +97,5 @@ int MATIntro_test_own()
 
 int test_MATIntro()
 {
-    return MATIntro_test1() + MATIntro_test2() + MATIntro_test3() +
-        MATIntro_test_own();
+    return MATIntro_test1() + MATIntro_test2() + MATIntro_test3() + MATIntro_test_own();
 }
