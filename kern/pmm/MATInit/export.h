@@ -3,7 +3,7 @@
 
 #ifdef _KERN_
 
-void pmem_init(unsigned int);
+void pmem_init(unsigned int mbi_addr);
 
 #endif  /* _KERN_ */
 

@@ -1,4 +1,5 @@
-sudo apt-get install libc6-dev-i386
-
-Notice:
-* Our elf loader cannot initialize static variable. Thus, please make sure to initialize static variable manually in user process.
+Compile: make / make all
+Run tests: make clean && make TEST=1
+Run in qemu: make qemu / make qemu-nox
+Debug with gdb: make qemu-gdb / make qemu-nox-gdb
+                (in another terminal) gdb

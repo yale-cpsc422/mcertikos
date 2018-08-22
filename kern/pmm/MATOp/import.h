@@ -11,13 +11,13 @@
 unsigned int get_nps(void);
 
 // Whether the page with the given index has the normal permission.
-unsigned int at_is_norm(unsigned int);
+unsigned int at_is_norm(unsigned int page_index);
 
 // Whether the page with the given index is already allocated.
-unsigned int at_is_allocated(unsigned int);
+unsigned int at_is_allocated(unsigned int page_index);
 
 // Mark the allocation flag of the page with the given index using the given value.
-void at_set_allocated(unsigned int, unsigned int);
+void at_set_allocated(unsigned int page_index, unsigned int allocated);
 
 #endif  /* _KERN_ */
 

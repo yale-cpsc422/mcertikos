@@ -64,7 +64,7 @@ void at_set_perm(unsigned int page_index, unsigned int norm_val)
 
 /**
  * The getter function for the physical page allocation flag.
- * Returns 0 if the page is not allocated. O.w., returns 1.
+ * Returns 0 if the page is not allocated, otherwise returns 1.
  */
 unsigned int at_is_allocated(unsigned int page_index)
 {
