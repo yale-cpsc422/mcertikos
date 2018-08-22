@@ -18,9 +18,9 @@ COMP_NAME	:= "cc"
 # Cross-compiler toolchain
 #
 # This Makefile will automatically use a cross-compiler toolchain installed
-# as 'pios-*' or 'i386-elf-*', if one exists.  If the host tools ('gcc',
+# as 'pios-*' or 'i386-elf-*', if one exists. If the host tools ('gcc',
 # 'objdump', and so forth) compile for a 32-bit x86 ELF target, that will
-# be detected as well.  If you have the right compiler toolchain installed
+# be detected as well. If you have the right compiler toolchain installed
 # using a different name, set GCCPREFIX explicitly in conf/env.mk
 
 # try to infer the correct GCCPREFIX
@@ -97,7 +97,6 @@ QEMUOPTS_BIOS	:= -L $(UTILSDIR)/qemu/
 
 .PHONY: all boot kern deps qemu qemu-nox qemu-gdb
 
-
 all: boot kern
 	@./make_image.py
 ifdef TEST
@@ -119,7 +118,7 @@ bochs: $(CERTIKOS_IMG) .bochsrc
 	sed "s/localhost:1234/localhost:$(GDBPORT)/" < $^ > $@
 	@./scripts/set_auto_load.sh
 
-#	QEMU doesn't truncate the pcap file.  Work around this.
+# QEMU doesn't truncate the pcap file. Work around this.
 pre-qemu: .gdbinit
 	@rm -f qemu.pcap
 

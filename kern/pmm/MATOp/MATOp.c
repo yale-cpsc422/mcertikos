@@ -10,9 +10,9 @@
  *    (Q: Do you have to scan allocation table from index 0? Recall how you have
  *    initialized the table in pmem_init.)
  *    Then mark the page as allocated in the allocation table and return the page
- *    index of the page found. In the case when there is no avaiable page found,
+ *    index of the page found. In the case when there is no available page found,
  *    return 0.
- * 2. Optimize the code with the memorization techniques so that you do not have to
+ * 2. Optimize the code with the memoization techniques so that you do not have to
  *    scan the allocation table from scratch every time.
  */
 unsigned int palloc()

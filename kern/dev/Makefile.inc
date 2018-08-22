@@ -9,7 +9,6 @@ KERN_SRCFILES += $(KERN_DIR)/dev/keyboard.c
 KERN_SRCFILES += $(KERN_DIR)/dev/devinit.c
 KERN_SRCFILES += $(KERN_DIR)/dev/mboot.c
 
-
 $(KERN_OBJDIR)/dev/%.o: $(KERN_DIR)/dev/%.c
 	@echo + cc[KERN/dev] $<
 	@mkdir -p $(@D)

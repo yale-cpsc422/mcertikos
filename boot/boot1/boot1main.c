@@ -1,13 +1,13 @@
 #include <boot1lib.h>
 
-mboot_info_t *parse_e820(bios_smap_t * smap);
+mboot_info_t *parse_e820(bios_smap_t *smap);
 uint32_t load_kernel(uint32_t dkernel);
 
 extern void exec_kernel(uint32_t, mboot_info_t *);
 
 mboot_info_t mboot_info = {.flags = (1 << 6), };
 
-void boot1main(uint32_t dev, mbr_t * mbr, bios_smap_t * smap)
+void boot1main(uint32_t dev, mbr_t *mbr, bios_smap_t *smap)
 {
     roll(3);
     putline("Start boot1 main ...");
@@ -62,7 +62,7 @@ uint32_t load_kernel(uint32_t dkernel)
     return (ELFHDR->e_entry & 0xFFFFFF);
 }
 
-mboot_info_t *parse_e820(bios_smap_t * smap)
+mboot_info_t *parse_e820(bios_smap_t *smap)
 {
     bios_smap_t *p;
     uint32_t mmap_len;

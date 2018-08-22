@@ -30,7 +30,6 @@
 	.set PR_TABLE, BOOT0 + 0x1be	# address of the partition table
 	.set PR_BOOTABLE, 0x80		# bootable partition
 
-
 	.set PROT_MODE_CSEG, 0x8	# kernel code segment selector
 	.set PROT_MODE_DSEG, 0x10	# kernel data segment selector
 	.set CR0_PE_ON, 0x1		# protected mode enable flag

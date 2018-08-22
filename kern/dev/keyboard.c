@@ -99,7 +99,7 @@ static uint8_t *charcode[4] = {
 };
 
 /*
- * Get data from the keyboard.  If we finish a character, return it.  Else 0.
+ * Get data from the keyboard. If we finish a character, return it. Else 0.
  * Return -1 if no data.
  */
 static int kbd_proc_data(void)

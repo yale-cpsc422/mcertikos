@@ -9,7 +9,7 @@ typedef struct mboot_info {
     uint32_t flags;
 
     /* if bit 0 of flags is set */
-    uint32_t mem_lower;  /* the amount of the loer memory */
+    uint32_t mem_lower;  /* the amount of the lower memory */
     uint32_t mem_upper;  /* the amount of the higher memory */
 
     /* if bit 1 of flags is set */
@@ -21,7 +21,7 @@ typedef struct mboot_info {
     } boot_device;
 
     /* if bit 2 of flags is set */
-    uint32_t cmdline;  /* the address of a zerom terminated
+    uint32_t cmdline;  /* the address of a zero-terminated
                           command string passed to kernel */
 
     /* if bit 3 of flags is set */

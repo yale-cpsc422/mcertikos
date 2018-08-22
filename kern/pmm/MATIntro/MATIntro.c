@@ -4,14 +4,14 @@
 static unsigned int NUM_PAGES;
 
 /**
- * Structure represeting infomatin for one physical page.
+ * Structure representing information for one physical page.
  */
 struct ATStruct {
     /**
      * The permission of the page.
      * 0: Reserved by the BIOS.
      * 1: Kernel only.
-     * >1: Normal (avaiable).
+     * >1: Normal (available).
      */
     unsigned int perm;
     /**

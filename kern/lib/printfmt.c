@@ -38,7 +38,7 @@ printnum(putch_t putch, void *putdat,
  * Get an unsigned int of various possible sizes from a varargs list,
  * depending on the lflag parameter.
  */
-static unsigned long long getuint(va_list * ap, int lflag)
+static unsigned long long getuint(va_list *ap, int lflag)
 {
     if (lflag >= 2)
         return va_arg(*ap, unsigned long long);
@@ -52,7 +52,7 @@ static unsigned long long getuint(va_list * ap, int lflag)
  * Same as getuint but signed - can't use getuint
  * because of sign extension
  */
-static long long getint(va_list * ap, int lflag)
+static long long getint(va_list *ap, int lflag)
 {
     if (lflag >= 2)
         return va_arg(*ap, long long);

@@ -109,13 +109,13 @@ void serial_init(void)
     outb(COM1 + COM_DLL, 0x0001 & 0xff);
     outb(COM1 + COM_DLM, 0x0001 >> 8);
 
-    /* Set the line status.  */
+    /* Set the line status. */
     outb(COM1 + COM_LCR, COM_LCR_WLEN8 & ~COM_LCR_DLAB);
 
-    /* Enable the FIFO.  */
+    /* Enable the FIFO. */
     outb(COM1 + COM_FCR, 0xc7);
 
-    /* Turn on DTR, RTS, and OUT2.  */
+    /* Turn on DTR, RTS, and OUT2. */
     outb(COM1 + COM_MCR, 0x0b);
 
     // Clear any preexisting overrun indications and interrupts

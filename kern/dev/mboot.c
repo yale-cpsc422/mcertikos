@@ -84,7 +84,7 @@ static void pmmap_merge(void)
     int sublist_nr;
 
     /*
-     * Step 1: Merge overlaped entries in pmmap_list.
+     * Step 1: Merge overlapped entries in pmmap_list.
      */
     SLIST_FOREACH(slot, &pmmap_list, next) {
         if ((next_slot = SLIST_NEXT(slot, next)) == NULL)
@@ -98,7 +98,7 @@ static void pmmap_merge(void)
     }
 
     /*
-     * Step 2: Create the specfic lists: pmmap_usable, pmmap_resv,
+     * Step 2: Create the specific lists: pmmap_usable, pmmap_resv,
      *         pmmap_acpi, pmmap_nvs.
      */
     SLIST_FOREACH(slot, &pmmap_list, next) {

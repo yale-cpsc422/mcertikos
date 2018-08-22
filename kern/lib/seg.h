@@ -66,7 +66,7 @@ typedef struct pseudodesc {
 #define STS_LDT  0x2  /* Local Descriptor Table */
 #define STS_T16B 0x3  /* Busy 16-bit TSS */
 #define STS_CG16 0x4  /* 16-bit Call Gate */
-#define STS_TG   0x5  /* Task Gate / Coum Transmitions */
+#define STS_TG   0x5  /* Task Gate / Coum Transmissions */
 #define STS_IG16 0x6  /* 16-bit Interrupt Gate */
 #define STS_TG16 0x7  /* 16-bit Trap Gate */
 #define STS_T32A 0x9  /* Available 32-bit TSS */

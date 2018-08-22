@@ -31,7 +31,7 @@ void debug_normal(const char *file, int line, const char *fmt, ...)
 
 #define DEBUG_TRACEFRAMES 10
 
-static void debug_trace(uintptr_t ebp, uintptr_t * eips)
+static void debug_trace(uintptr_t ebp, uintptr_t *eips)
 {
     int i;
     uintptr_t *frame = (uintptr_t *) ebp;

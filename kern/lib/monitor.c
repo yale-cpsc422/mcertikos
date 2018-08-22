@@ -14,7 +14,7 @@ struct Command {
     const char *name;
     const char *desc;
     // return -1 to force monitor to exit
-    int (*func)(int argc, char **argv, struct Trapframe * tf);
+    int (*func)(int argc, char **argv, struct Trapframe *tf);
 };
 
 static struct Command commands[] = {
