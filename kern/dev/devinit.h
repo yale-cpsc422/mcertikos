@@ -5,7 +5,7 @@
 
 #include <lib/types.h>
 
-void devinit(uintptr_t);
+void devinit(uintptr_t mbi_addr);
 
 #endif  /* _KERN_ */
 

@@ -45,16 +45,17 @@
         debug_info(fmt, ##__VA_ARGS__); \
     } while (0)
 
-void vprintfmt(void (*putch)(int, void *), void *, const char *, va_list);
+void vprintfmt(void (*putch)(int, void *), void *putdat, const char *fmt,
+               va_list ap);
 
-void debug_info(const char *, ...);
+void debug_info(const char *fmt, ...);
 #ifdef DEBUG_MSG
 
-int dprintf(const char *, ...);
+int dprintf(const char *fmt, ...);
 
-void debug_normal(const char *, int, const char *, ...);
-void debug_warn(const char *, int, const char *, ...);
-void debug_panic(const char *, int, const char *, ...);
+void debug_normal(const char *file, int line, const char *fmt, ...);
+void debug_warn(const char *file, int line, const char *fmt, ...);
+void debug_panic(const char *file, int line, const char *fmt, ...);
 
 #else
 

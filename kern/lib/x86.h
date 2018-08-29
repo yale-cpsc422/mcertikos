@@ -36,19 +36,20 @@ static inline uint32_t __attribute__ ((always_inline)) read_ebp(void)
     return ebp;
 }
 
-void lldt(uint16_t);
+void lldt(uint16_t sel);
 void cli(void);
 void sti(void);
-uint64_t rdmsr(uint32_t);
-void wrmsr(uint32_t, uint64_t);
+uint64_t rdmsr(uint32_t msr);
+void wrmsr(uint32_t msr, uint64_t newval);
 void halt(void);
 uint64_t rdtsc(void);
 void enable_sse(void);
-void cpuid(uint32_t, uint32_t *, uint32_t *, uint32_t *, uint32_t *);
+void cpuid(uint32_t info, uint32_t *eaxp, uint32_t *ebxp, uint32_t *ecxp,
+           uint32_t *edxp);
 cpu_vendor vender(void);
 uint32_t rcr3(void);
-void outl(int, uint32_t);
-uint32_t inl(int);
+void outl(int port, uint32_t data);
+uint32_t inl(int port);
 void smp_wmb(void);
 void ltr(uint16_t sel);
 void lcr0(uint32_t val);
