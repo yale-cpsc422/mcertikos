@@ -68,6 +68,7 @@ OBJCOPY		:= $(GCCPREFIX)objcopy
 DD		:= $(GCCPREFIX)dd
 NM		:= $(GCCPREFIX)nm
 CSCOPE		:= cscope
+GDB		:= $(GCCPREFIX)gdb
 
 # others
 GCC_LIB32	:= $(shell $(CC) $(CFLAGS) -m32 -print-libgcc-file-name)
@@ -133,13 +134,13 @@ qemu-nox: $(CERTIKOS_IMG) pre-qemu
 
 qemu-gdb: $(CERTIKOS_IMG) pre-qemu
 	@echo "***"
-	@echo "*** Now run 'gdb'." 1>&2
+	@echo "*** Now run 'make gdb in another terminal'." 1>&2
 	@echo "***"
 	$(V)$(QEMU) $(QEMUOPTS) -S
 
 qemu-nox-gdb: $(CERTIKOS_IMG) pre-qemu
 	@echo "***"
-	@echo "*** Now run 'gdb'." 1>&2
+	@echo "*** Now run 'make gdb in another terminal'." 1>&2
 	@echo "***"
 	$(V)$(QEMU) -nographic $(QEMUOPTS) -S
 
@@ -160,6 +161,9 @@ cscope:
 	$(V)rm -rf cscope.*
 	$(V)find . -name "*.[chsS]" > cscope.files
 	$(V)cscope -bkq -i cscope.files
+
+gdb: pre-qemu
+	$(GDB)
 
 # Sub-makefiles
 include boot/Makefile.inc
