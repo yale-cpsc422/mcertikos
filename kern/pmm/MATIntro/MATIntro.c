@@ -57,7 +57,7 @@ unsigned int at_is_norm(unsigned int page_index)
  * Sets the permission of the page with given index.
  * It also marks the page as unallocated.
  */
-void at_set_perm(unsigned int page_index, unsigned int norm_val)
+void at_set_perm(unsigned int page_index, unsigned int perm)
 {
     // TODO
 }

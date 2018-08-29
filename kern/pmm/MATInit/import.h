@@ -9,7 +9,7 @@
 // Sets the number of available pages.
 void set_nps(unsigned int nps);
 // Sets the permission of the physical page with given index.
-void at_set_perm(unsigned int page_index, unsigned int norm_val);
+void at_set_perm(unsigned int page_index, unsigned int perm);
 
 /**
  * Getter and setter functions for the physical memory map table.
