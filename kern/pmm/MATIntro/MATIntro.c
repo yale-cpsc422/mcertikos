@@ -67,7 +67,7 @@ unsigned int at_is_norm(unsigned int page_index)
  */
 void at_set_perm(unsigned int page_index, unsigned int perm)
 {
-    AT[page_index].perm = norm_val;
+    AT[page_index].perm = perm;
     AT[page_index].allocated = 0;
 }
 
