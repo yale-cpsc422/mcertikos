@@ -134,13 +134,13 @@ qemu-nox: $(CERTIKOS_IMG) pre-qemu
 
 qemu-gdb: $(CERTIKOS_IMG) pre-qemu
 	@echo "***"
-	@echo "*** Now run 'make gdb in another terminal'." 1>&2
+	@echo "*** Now run 'make gdb' in another terminal." 1>&2
 	@echo "***"
 	$(V)$(QEMU) $(QEMUOPTS) -S
 
 qemu-nox-gdb: $(CERTIKOS_IMG) pre-qemu
 	@echo "***"
-	@echo "*** Now run 'make gdb in another terminal'." 1>&2
+	@echo "*** Now run 'make gdb' in another terminal." 1>&2
 	@echo "***"
 	$(V)$(QEMU) -nographic $(QEMUOPTS) -S
 
