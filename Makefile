@@ -81,10 +81,6 @@ endif
 # directory $(OBJDIR)/ (default: obj/)
 CERTIKOS_IMG	:= certikos.img
 
-# bochs
-BOCHS		:= bochs
-BOCHS_OPT	:= -q
-
 # try to generate a unique GDB port
 GDBPORT		:= $(shell expr `id -u` % 5000 + 25000)
 
@@ -107,13 +103,6 @@ ifdef TEST
 	$(V)$(QEMU) -nographic $(QEMUOPTS)
 endif
 	@echo "All targets are done."
-
-install_img: install_boot install_sys install_user
-	@echo "CertiKOS is installed on the disk image."
-
-bochs: $(CERTIKOS_IMG) .bochsrc
-	@echo + start bochs
-	$(V)$(BOCHS) $(BOCHS_OPT)
 
 .gdbinit: .gdbinit.tmpl
 	sed "s/localhost:1234/localhost:$(GDBPORT)/" < $^ > $@
@@ -149,10 +138,6 @@ qemu-kvm: $(CERTIKOS_IMG)
 
 qemu-bios: $(CERTIKOS_IMG)
 	$(V)$(QEMU) $(QEMUOPTS) $(QEMUOPTS_BIOS)
-
-iso: all
-	$(V)cp $(OBJDIR)/kern/kernel $(UTILSDIR)/iso/boot/kernel
-	$(V)grub-mkrescue -o $(CERTIKOS_IMG) $(UTILSDIR)/iso
 
 package:
 	$(V)tar czf ../certikos.tar.gz --exclude=obj --exclude=cscope.* .
