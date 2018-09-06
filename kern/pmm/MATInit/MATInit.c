@@ -20,8 +20,8 @@
 void pmem_init(unsigned int mbi_addr)
 {
     unsigned int nps;
-    unsigned int idx, pmmap_size, cur_nps;
-    unsigned int idx2, flag, isnorm, start, len;
+    unsigned int pg_idx, pmmap_size, cur_nps;
+    unsigned int entry_idx, flag, isnorm, start, len;
 
     // Calls the lower layer initialization primitive.
     // The parameter mbi_addr should not be used in the further code.
@@ -34,14 +34,14 @@ void pmem_init(unsigned int mbi_addr)
      *       divided by the page size.
      */
     nps = 0;
-    idx = 0;
+    entry_idx = 0;
     pmmap_size = get_size();
-    while (idx < pmmap_size) {
-        cur_nps = (get_mms(idx) + get_mml(idx)) / PAGESIZE + 1;
+    while (entry_idx < pmmap_size) {
+        cur_nps = (get_mms(entry_idx) + get_mml(entry_idx)) / PAGESIZE + 1;
         if (nps < cur_nps) {
             nps = cur_nps;
         }
-        idx++;
+        entry_idx++;
     }
 
     set_nps(nps);  // Setting the value computed above to NUM_PAGES.
@@ -69,30 +69,30 @@ void pmem_init(unsigned int mbi_addr)
      *    the addresses are in a usable range. Currently, we do not utilize partial pages,
      *    so in that case, you should consider those pages as unavailable.
      */
-    idx = 0;
-    while (idx < nps) {
-        if (idx < VM_USERLO_PI || VM_USERHI_PI <= idx) {
-            at_set_perm(idx, 1);
+    pg_idx = 0;
+    while (pg_idx < nps) {
+        if (pg_idx < VM_USERLO_PI || VM_USERHI_PI <= pg_idx) {
+            at_set_perm(pg_idx, 1);
         } else {
-            idx2 = 0;
+            entry_idx = 0;
             flag = 0;
             isnorm = 0;
-            while (idx2 < pmmap_size && !flag) {
-                isnorm = is_usable(idx2);
-                start = get_mms(idx2);
-                len = get_mml(idx2);
-                if (start <= idx * PAGESIZE && (idx + 1) * PAGESIZE <= start + len) {
+            while (entry_idx < pmmap_size && !flag) {
+                isnorm = is_usable(entry_idx);
+                start = get_mms(entry_idx);
+                len = get_mml(entry_idx);
+                if (start <= pg_idx * PAGESIZE && (pg_idx + 1) * PAGESIZE <= start + len) {
                     flag = 1;
                 }
-                idx2++;
+                entry_idx++;
             }
 
             if (flag && isnorm) {
-                at_set_perm(idx, 2);
+                at_set_perm(pg_idx, 2);
             } else {
-                at_set_perm(idx, 0);
+                at_set_perm(pg_idx, 0);
             }
         }
-        idx++;
+        pg_idx++;
     }
 }
