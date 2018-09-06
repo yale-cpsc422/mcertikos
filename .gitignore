@@ -20,3 +20,4 @@ Icon*
 .settings/
 eject.sh
 *.cerr
+.gdbinit
