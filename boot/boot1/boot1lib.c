@@ -138,8 +138,7 @@ void readsector(void *dst, uint32_t offset)
 
 // Read 'count' bytes at 'offset' from kernel into virtual address 'va'.
 // Might copy more than asked
-void
-readsection(uint32_t va, uint32_t count, uint32_t offset, uint32_t lba)
+void readsection(uint32_t va, uint32_t count, uint32_t offset, uint32_t lba)
 {
     uint32_t end_va;
 
