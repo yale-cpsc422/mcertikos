@@ -58,9 +58,8 @@ gcc_inline void enable_sse(void)
     cr0 &= ~(CR0_EM | CR0_TS);
 }
 
-gcc_inline void
-cpuid(uint32_t info,
-      uint32_t *eaxp, uint32_t *ebxp, uint32_t *ecxp, uint32_t *edxp)
+gcc_inline void cpuid(uint32_t info, uint32_t *eaxp, uint32_t *ebxp,
+                      uint32_t *ecxp, uint32_t *edxp)
 {
     uint32_t eax, ebx, ecx, edx;
     __asm __volatile("cpuid"
