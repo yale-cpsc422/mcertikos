@@ -28,9 +28,9 @@ void pmem_init(unsigned int mbi_addr)
     devinit(mbi_addr);
 
     /**
-     * Calculate the number of actual number of available physical pages and
+     * Calculate the total number of physical pages provided by the hardware and
      * store it into the local variable nps.
-     * Hint: Think of it as the highest address possible in the ranges of the memory map table,
+     * Hint: Think of it as the highest address in the ranges of the memory map table,
      *       divided by the page size.
      */
     // TODO

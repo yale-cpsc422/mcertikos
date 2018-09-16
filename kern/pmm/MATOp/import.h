@@ -7,10 +7,10 @@
  * The getter and setter functions implemented in the MATIntro layer.
  */
 
-// The number of available physical pages.
+// The total number of physical pages.
 unsigned int get_nps(void);
 
-// Whether the page with the given index has the normal permission.
+// Whether the page with the given index has normal permissions.
 unsigned int at_is_norm(unsigned int page_index);
 
 // Whether the page with the given index is already allocated.

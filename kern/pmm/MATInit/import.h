@@ -20,8 +20,8 @@ void at_set_perm(unsigned int page_index, unsigned int perm);
  * the range, and a flag indicating whether that memory address range is usable
  * by the kernel.
  * E.g., A row (10000, 1000, 1) represents that the physical address range
- * (10000, 11000) is available to the kernel, while a row (11000, 300, 0) represents
- * that the range (11000, 11300) is reserved by the BIOS and is not available for the
+ * [10000, 11000) is available to the kernel, while a row (11000, 300, 0) represents
+ * that the range [11000, 11300) is reserved by the BIOS and is not available for the
  * kernel to use.
  */
 unsigned int get_size(void);               // The number of rows in the table.
