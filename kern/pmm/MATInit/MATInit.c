@@ -1,4 +1,5 @@
 #include <lib/debug.h>
+#include <lib/types.h>
 #include "import.h"
 
 #define PAGESIZE     4096
@@ -20,7 +21,7 @@
 void pmem_init(unsigned int mbi_addr)
 {
     unsigned int nps;
-    unsigned int pg_idx, pmmap_size, cur_nps;
+    unsigned int pg_idx, pmmap_size, cur_addr, highest_addr;
     unsigned int entry_idx, flag, isnorm, start, len;
 
     // Calls the lower layer initialization primitive.
@@ -37,13 +38,14 @@ void pmem_init(unsigned int mbi_addr)
     entry_idx = 0;
     pmmap_size = get_size();
     while (entry_idx < pmmap_size) {
-        cur_nps = (get_mms(entry_idx) + get_mml(entry_idx)) / PAGESIZE + 1;
-        if (nps < cur_nps) {
-            nps = cur_nps;
+        cur_addr = get_mms(entry_idx) + get_mml(entry_idx);
+        if (nps < cur_addr) {
+            nps = cur_addr;
         }
         entry_idx++;
     }
 
+    nps = ROUNDDOWN(nps, PAGESIZE) / PAGESIZE;
     set_nps(nps);  // Setting the value computed above to NUM_PAGES.
 
     /**
