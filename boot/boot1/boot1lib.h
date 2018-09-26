@@ -23,27 +23,27 @@ typedef unsigned long long uint64_t;
  */
 static inline void outb(int port, uint8_t data)
 {
-    __asm __volatile("outb %0,%w1" :: "a"(data), "d"(port));
+    __asm __volatile ("outb %0,%w1" :: "a" (data), "d" (port));
 }
 
 static inline void outw(int port, uint16_t data)
 {
-    __asm __volatile("outw %0,%w1" :: "a"(data), "d"(port));
+    __asm __volatile ("outw %0,%w1" :: "a" (data), "d" (port));
 }
 
 static inline uint8_t inb(int port)
 {
     uint8_t data;
-    __asm __volatile("inb %w1,%0" : "=a"(data) : "d"(port));
+    __asm __volatile ("inb %w1,%0" : "=a" (data) : "d" (port));
     return data;
 }
 
 static inline void insl(int port, void *addr, int cnt)
 {
-    __asm __volatile("cld\n\trepne\n\tinsl"
-                     : "=D" (addr), "=c" (cnt)
-                     : "d" (port), "0" (addr), "1" (cnt)
-                     : "memory", "cc");
+    __asm __volatile ("cld\n\trepne\n\tinsl"
+                      : "=D" (addr), "=c" (cnt)
+                      : "d" (port), "0" (addr), "1" (cnt)
+                      : "memory", "cc");
 }
 
 /**
