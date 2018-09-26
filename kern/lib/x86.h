@@ -32,7 +32,7 @@
 static inline uint32_t __attribute__ ((always_inline)) read_ebp(void)
 {
     uint32_t ebp;
-    __asm __volatile("movl %%ebp,%0" : "=rm"(ebp));
+    __asm __volatile ("movl %%ebp,%0" : "=rm" (ebp));
     return ebp;
 }
 
