@@ -1,5 +1,7 @@
-#ifndef _KERN_MM_MALINIT_H_
-#define _KERN_MM_MALINIT_H_
+#ifndef _KERN_PMM_MATINTRO_H_
+#define _KERN_PMM_MATINTRO_H_
+
+#ifdef _KERN_
 
 unsigned int get_nps(void);
 void set_nps(unsigned int page_index);
@@ -10,4 +12,6 @@ void at_set_perm(unsigned int page_index, unsigned int perm);
 unsigned int at_is_allocated(unsigned int page_index);
 void at_set_allocated(unsigned int page_index, unsigned int allocated);
 
-#endif
+#endif  /* _KERN_ */
+
+#endif  /* !_KERN_PMM_MATINTRO_H_ */

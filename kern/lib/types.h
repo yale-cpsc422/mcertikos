@@ -1,5 +1,7 @@
-#ifndef _LIB_TYPES_H_
-#define _LIB_TYPES_H_
+#ifndef _KERN_LIB_TYPES_H_
+#define _KERN_LIB_TYPES_H_
+
+#ifdef _KERN_
 
 typedef signed char        int8_t;
 typedef unsigned char      uint8_t;
@@ -62,4 +64,6 @@ uint32_t roundup(uint32_t b, uint32_t n);
 
 typedef enum { UNKNOWN_CPU, INTEL, AMD } cpu_vendor;
 
-#endif  /* !_LIB_TYPES_H_ */
+#endif  /* _KERN_ */
+
+#endif  /* !_KERN_LIB_TYPES_H_ */

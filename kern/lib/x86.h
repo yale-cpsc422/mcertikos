@@ -1,5 +1,5 @@
-#ifndef _KERN_X86_H_
-#define _KERN_X86_H_
+#ifndef _KERN_LIB_X86_H_
+#define _KERN_LIB_X86_H_
 
 #ifdef _KERN_
 
@@ -70,4 +70,4 @@ void outsw(int port, const void *addr, int cnt);
 
 #endif  /* _KERN_ */
 
-#endif  /* !_KERN_X86_H_ */
+#endif  /* !_KERN_LIB_X86_H_ */

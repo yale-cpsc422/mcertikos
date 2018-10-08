@@ -1,5 +1,5 @@
-#ifndef _CERTIKOS_BOOT_LIB_H_
-#define _CERTIKOS_BOOT_LIB_H_
+#ifndef _BOOT_BOOT1_BOOT1LIB_H_
+#define _BOOT_BOOT1_BOOT1LIB_H_
 
 /**
  * gcc
@@ -229,4 +229,4 @@ typedef struct mboot_info {
     uint32_t vbe_interface_len;
 } mboot_info_t;
 
-#endif
+#endif  /* !_BOOT_BOOT1_BOOT1LIB_H_ */

@@ -1,5 +1,5 @@
-#ifndef _SYS_PREINIT_DEV_KEYBOARD_H_
-#define _SYS_PREINIT_DEV_KEYBOARD_H_
+#ifndef _KERN_DEV_KEYBOARD_H_
+#define _KERN_DEV_KEYBOARD_H_
 
 #ifdef _KERN_
 
@@ -84,4 +84,4 @@ void keyboard_intr(void);  // irq 4
 
 #endif  /* _KERN_ */
 
-#endif  /* !_SYS_PREINIT_DEV_KEYBOARD_H_ */
+#endif  /* !_KERN_DEV_KEYBOARD_H_ */

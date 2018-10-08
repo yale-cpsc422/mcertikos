@@ -1,5 +1,5 @@
-#ifndef _KERN_LIB_MBOOT_H_
-#define _KERN_LIB_MBOOT_H_
+#ifndef _KERN_DEV_MBOOT_H_
+#define _KERN_DEV_MBOOT_H_
 
 #ifdef _KERN_
 
@@ -94,4 +94,4 @@ uint32_t pmmap_get_entry_length(int idx);
 
 #endif  /* _KERN_ */
 
-#endif  /* !_KERN_LIB_MBOOT_H_ */
+#endif  /* !_KERN_DEV_MBOOT_H_ */

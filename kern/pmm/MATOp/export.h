@@ -1,5 +1,5 @@
-#ifndef _KERN_MM_MALOP_H_
-#define _KERN_MM_MALOP_H_
+#ifndef _KERN_PMM_MATOP_H_
+#define _KERN_PMM_MATOP_H_
 
 #ifdef _KERN_
 
@@ -8,4 +8,4 @@ void pfree(unsigned int pfree_index);
 
 #endif  /* _KERN_ */
 
-#endif  /* !_KERN_MM_MALOP_H_ */
+#endif  /* !_KERN_PMM_MATOP_H_ */
