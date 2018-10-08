@@ -1,5 +1,5 @@
-#ifndef _SYS_PREINIT_LIB_SEG_H_
-#define _SYS_PREINIT_LIB_SEG_H_
+#ifndef _KERN_LIB_SEG_H_
+#define _KERN_LIB_SEG_H_
 
 #ifdef _KERN_
 
@@ -51,7 +51,7 @@ typedef struct pseudodesc {
         (unsigned) (base) >> 24                                 \
     }
 
-#endif
+#endif  /* !__ASSEMBLER__ */
 
 /* Application segment type bits ('app' bit = 1) */
 #define STA_X 0x8  /* Executable segment */
@@ -182,4 +182,4 @@ void seg_init(void);
 
 #endif  /* _KERN_ */
 
-#endif  /* !_SYS_PREINIT_LIB_SEG_H_ */
+#endif  /* !_KERN_LIB_SEG_H_ */

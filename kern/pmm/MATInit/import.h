@@ -1,5 +1,5 @@
-#ifndef _KERN_MM_MALINIT_H_
-#define _KERN_MM_MALINIT_H_
+#ifndef _KERN_PMM_MATINIT_H_
+#define _KERN_PMM_MATINIT_H_
 
 #ifdef _KERN_
 
@@ -38,4 +38,4 @@ void devinit(unsigned int mbi_addr);
 
 #endif  /* _KERN_ */
 
-#endif  /* !_KERN_MM_MALINIT_H_ */
+#endif  /* !_KERN_PMM_MATINIT_H_ */

@@ -1,5 +1,5 @@
-#ifndef _KERN_STRING_H_
-#define _KERN_STRING_H_
+#ifndef _KERN_LIB_STRING_H_
+#define _KERN_LIB_STRING_H_
 
 #ifdef _KERN_
 
@@ -16,4 +16,4 @@ char *strchr(const char *s, char c);
 
 #endif  /* _KERN_ */
 
-#endif  /* !_KERN_STRING_H_ */
+#endif  /* !_KERN_LIB_STRING_H_ */
