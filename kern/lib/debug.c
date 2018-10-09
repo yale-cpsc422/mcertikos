@@ -44,8 +44,7 @@ static void debug_trace(uintptr_t ebp, uintptr_t *eips)
         eips[i] = 0;
 }
 
-gcc_noinline void
-debug_panic(const char *file, int line, const char *fmt, ...)
+gcc_noinline void debug_panic(const char *file, int line, const char *fmt, ...)
 {
     int i;
     uintptr_t eips[DEBUG_TRACEFRAMES];
