@@ -24,7 +24,7 @@
  *
  */
 
- 	.set BOOT0, 0x7c00		# load address
+	.set BOOT0, 0x7c00		# load address
 	.set BOOT1, 0x7e00		# start address of boot1
 
 	.set PR_TABLE, BOOT0 + 0x1be	# address of the partition table
