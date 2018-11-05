@@ -25,7 +25,7 @@
     do {                                                     \
         if (!(x))                                            \
             KERN_PANIC("Kernel assertion failed: %s\n", #x); \
-    } while(0)
+    } while (0)
 #else   /* !DEBUG_MSG */
 #define KERN_DEBUG(...) do {} while (0)
 
