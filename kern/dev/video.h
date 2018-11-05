@@ -143,12 +143,12 @@
 #define VGA_GR06_GRAPHICS_MODE 0x01
 
 /* VGA State Save and Restore */
-#define VGA_SAVE_FONT0 1  /* save/restore plane 2 fonts   */
-#define VGA_SAVE_FONT1 2  /* save/restore plane 3 fonts   */
-#define VGA_SAVE_TEXT  4  /* save/restore plane 0/1 fonts */
-#define VGA_SAVE_FONTS 7  /* save/restore all fonts       */
-#define VGA_SAVE_MODE  8  /* save/restore video mode      */
-#define VGA_SAVE_CMAP  16 /* save/restore color map/DAC   */
+#define VGA_SAVE_FONT0 1   /* save/restore plane 2 fonts   */
+#define VGA_SAVE_FONT1 2   /* save/restore plane 3 fonts   */
+#define VGA_SAVE_TEXT  4   /* save/restore plane 0/1 fonts */
+#define VGA_SAVE_FONTS 7   /* save/restore all fonts       */
+#define VGA_SAVE_MODE  8   /* save/restore video mode      */
+#define VGA_SAVE_CMAP  16  /* save/restore color map/DAC   */
 
 #define CRT_ROWS 25
 #define CRT_COLS 80
