@@ -86,7 +86,8 @@ GDBPORT		:= $(shell expr `id -u` % 5000 + 25000)
 
 # qemu
 QEMU		:= qemu-system-x86_64
-QEMUOPTS	:= -smp 1 -drive id=disk,file=$(CERTIKOS_IMG),format=raw,if=ide -serial mon:stdio -gdb tcp::$(GDBPORT) -m 2048 -k en-us
+QEMUOPTS	:= -smp 1 -drive id=disk,file=$(CERTIKOS_IMG),format=raw,if=ide -serial mon:stdio -gdb tcp::$(GDBPORT) -m 2048 -k en-us -no-reboot
+QEMUOPTS_TCG	:= -icount shift=auto
 QEMUOPTS_KVM	:= -cpu host -enable-kvm
 QEMUOPTS_BIOS	:= -L $(UTILSDIR)/qemu/
 
@@ -113,31 +114,31 @@ pre-qemu: .gdbinit
 	@rm -f qemu.pcap
 
 qemu: $(CERTIKOS_IMG) pre-qemu
-	$(V)$(QEMU) $(QEMUOPTS)
+	$(V)$(QEMU) $(QEMUOPTS) $(QEMUOPTS_TCG)
 
 qemu-nox: $(CERTIKOS_IMG) pre-qemu
 	@echo "***"
 	@echo "*** Use Ctrl-a x to exit qemu"
 	@echo "***"
-	$(V)$(QEMU) -nographic $(QEMUOPTS)
+	$(V)$(QEMU) -nographic $(QEMUOPTS) $(QEMUOPTS_TCG)
 
 qemu-gdb: $(CERTIKOS_IMG) pre-qemu
 	@echo "***"
 	@echo "*** Now run 'make gdb' in another terminal." 1>&2
 	@echo "***"
-	$(V)$(QEMU) $(QEMUOPTS) -S
+	$(V)$(QEMU) $(QEMUOPTS) $(QEMUOPTS_TCG) -S
 
 qemu-nox-gdb: $(CERTIKOS_IMG) pre-qemu
 	@echo "***"
 	@echo "*** Now run 'make gdb' in another terminal." 1>&2
 	@echo "***"
-	$(V)$(QEMU) -nographic $(QEMUOPTS) -S
+	$(V)$(QEMU) -nographic $(QEMUOPTS) $(QEMUOPTS_TCG) -S
 
 qemu-kvm: $(CERTIKOS_IMG)
 	$(V)$(QEMU) $(QEMUOPTS) $(QEMUOPTS_KVM)
 
 qemu-bios: $(CERTIKOS_IMG)
-	$(V)$(QEMU) $(QEMUOPTS) $(QEMUOPTS_BIOS)
+	$(V)$(QEMU) $(QEMUOPTS) $(QEMUOPTS_TCG) $(QEMUOPTS_BIOS)
 
 package:
 	$(V)tar czf ../certikos.tar.gz --exclude=obj --exclude=cscope.* .
