@@ -154,7 +154,6 @@
 #define CRT_COLS 80
 #define CRT_SIZE (CRT_ROWS * CRT_COLS)
 
-unsigned addr_6845;
 struct video {
     uint16_t *crt_buf;
     uint16_t crt_pos;
@@ -172,8 +171,6 @@ struct vga_state {
     uint8_t cr_index;
     uint8_t cr[256];
 };
-
-struct video terminal;
 
 void video_init(void);
 void video_putc(int c);

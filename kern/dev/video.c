@@ -7,6 +7,9 @@
 
 #include "video.h"
 
+static unsigned addr_6845;
+static struct video terminal;
+
 void video_init(void)
 {
     volatile uint16_t *cp;
