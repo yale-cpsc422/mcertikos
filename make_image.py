@@ -24,11 +24,11 @@ class color:
     UNDERLINE = '\033[4m'
 
 def info(c, s):
-    print c + s + color.ENDC
+    print(c + s + color.ENDC)
 
 
 def panic(s):
-    print color.BOLD + color.FAIL + s + color.ENDC
+    print(color.BOLD + color.FAIL + s + color.ENDC)
     sys.exit(1)
 
 def run(cmd):
@@ -38,10 +38,10 @@ def run(cmd):
 def exe(cmd):
     proc = subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE)
     (out, err) = proc.communicate()
-    return out
+    return out.decode('utf-8')
 
 def grep(s, pattern):
-    return '\n'.join(re.findall(r'^.*%s.*?$'%pattern,s,flags=re.M))
+    return '\n'.join(re.findall(r'^.*{}.*?$'.format(pattern),s,flags=re.M))
 
 info (color.HEADER, 'Building Certikos Image...')
 
@@ -58,7 +58,7 @@ info (color.OKGREEN, 'done.')
 info (color.HEADER,  '\ncopying kernel files...')
 loc = int(grep(exe('fdisk -l certikos.img'), 'certikos.img1').split()[2])
 if loc == 0:
-    panic ("cannot find valid partition.");
+    panic ("cannot find valid partition.")
 
 info (color.OKBLUE, 'kernel starts at sector %d' % loc)
 run('dd if=obj/kern/kernel of=certikos.img bs=512 seek=%d conv=notrunc' % loc)
