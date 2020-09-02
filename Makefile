@@ -85,7 +85,7 @@ CERTIKOS_IMG	:= certikos.img
 GDBPORT		:= $(shell expr `id -u` % 5000 + 25000)
 
 # qemu
-QEMU		:= qemu-system-x86_64
+QEMU		:= qemu-system-i386
 QEMUOPTS	:= -smp 1 -drive id=disk,file=$(CERTIKOS_IMG),format=raw,if=ide -serial mon:stdio -gdb tcp::$(GDBPORT) -m 2048 -k en-us -no-reboot
 QEMUOPTS_TCG	:= -icount shift=auto
 QEMUOPTS_KVM	:= -cpu host -enable-kvm
