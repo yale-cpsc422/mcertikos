@@ -2,11 +2,16 @@
 // controlling the kernel and exploring the system interactively.
 
 #include <lib/debug.h>
+#include <lib/elf.h>
 #include <lib/types.h>
+#include <lib/gcc.h>
 #include <lib/string.h>
 #include <lib/x86.h>
 #include <lib/monitor.h>
 #include <dev/console.h>
+#include <pmm/MContainer/export.h>
+#include <vmm/MPTIntro/export.h>
+#include <vmm/MPTNew/export.h>
 
 #define CMDBUF_SIZE 80  // enough for one VGA text line
 
@@ -20,6 +25,7 @@ struct Command {
 static struct Command commands[] = {
     {"help", "Display this list of commands", mon_help},
     {"kerninfo", "Display information about the kernel", mon_kerninfo},
+    {"runproc", "Run the dummy user process", mon_start_user},
 };
 
 #define NCOMMANDS (sizeof(commands) / sizeof(commands[0]))
@@ -51,6 +57,31 @@ int mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
 int mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 {
     // TODO
+    return 0;
+}
+
+unsigned int CID = 0;
+extern uint8_t _binary___obj_proc_dummy_dummy_start[];
+
+typedef void (*entry_t)(void);
+
+int mon_start_user(int argc, char **argv, struct Trapframe *tf)
+{
+    if (CID != 0) {
+        dprintf("The process is already running. "
+                 "If you want to run the program again, please restart qemu.\n");
+        return 0;
+    }
+
+    uint8_t *exe = _binary___obj_proc_dummy_dummy_start;
+    CID = alloc_mem_quota(0, container_get_quota(0));
+    elf_load(exe, CID);
+    dprintf("Program 0x%08x is loaded.\n", exe);
+
+    set_pdir_base(CID);
+    entry_t entry = (entry_t) elf_entry(exe);
+    entry();
+
     return 0;
 }
 

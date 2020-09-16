@@ -29,6 +29,7 @@ include		$(KERN_DIR)/dev/Makefile.inc
 include		$(KERN_DIR)/lib/Makefile.inc
 include		$(KERN_DIR)/init/Makefile.inc
 include		$(KERN_DIR)/pmm/Makefile.inc
+include		$(KERN_DIR)/vmm/Makefile.inc
 
 KERN_CFLAGS	+= $(KERN_DEBUG_FLAGS)
 KERN_CFLAGS	+= -DSERIAL_DEBUG -DDEBUG_MSG
@@ -42,10 +43,14 @@ KERN_SRCFILES	:= $(wildcard $(KERN_SRCFILES))
 KERN_OBJFILES	:= $(patsubst %.c, $(OBJDIR)/%.o, $(KERN_SRCFILES))
 KERN_OBJFILES	:= $(patsubst %.S, $(OBJDIR)/%.o, $(KERN_OBJFILES))
 
+USER_BINFILES_INC := cat ./obj/gen/user_procs.inc
+
 # Targets
 
-kern: $(KERN_OBJDIR)/kernel
+kern: $(KERN_OBJFILES) $(KERN_BINFILES)
 	@echo All targets of kernel are done.
+
+link: $(KERN_OBJDIR)/kernel
 
 install_kern: $(KERN_OBJDIR)/kernel $(CERTIKOS_IMG)
 	@echo + copy kernel to /boot/kernel
@@ -59,8 +64,8 @@ kern_coq: $(KERN_CCOMP_SRC)
 	$(V)$(CLIGHTGEN) $(CLIGHTGEN_FLAGS) $(KERN_CCOMP_SRC)
 
 # Link kernel
-$(KERN_OBJDIR)/kernel: $(KERN_OBJFILES) $(KERN_BINFILES)
+$(KERN_OBJDIR)/kernel: $(KERN_OBJFILES) $(KERN_BINFILES) $(USER_BINFILES) ./obj/gen/user_procs.inc
 	@echo + ld[KERN] $@
-	$(V)$(LD) -o $@ $(KERN_LDFLAGS) $(KERN_OBJFILES) $(GCC_LIBS) -b binary $(KERN_BINFILES)
+	$(V)$(LD) -o $@ $(KERN_LDFLAGS) $(KERN_OBJFILES) $(GCC_LIBS) -b binary $(KERN_BINFILES) $(shell $(USER_BINFILES_INC))
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym

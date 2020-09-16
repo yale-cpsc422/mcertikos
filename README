@@ -3,3 +3,12 @@ Run tests: make clean && make TEST=1
 Run in qemu: make qemu / make qemu-nox
 Debug with gdb: make qemu-gdb / make qemu-nox-gdb
                 (in another terminal) gdb
+
+To use your solutions from lab 1: git merge lab1
+To use sample lab 1 solutions: copy files in samples/ to appropriate directories
+
+List here the following info:
+1. who you have worked with
+2. whether you coded this assignment together, and if not, who worked on which part
+3. brief description of what you have implemented
+4. and anything else you would like us to know

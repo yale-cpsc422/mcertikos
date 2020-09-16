@@ -14,6 +14,7 @@ void monitor(struct Trapframe *tf);
 int mon_help(int argc, char **argv, struct Trapframe *tf);
 int mon_kerninfo(int argc, char **argv, struct Trapframe *tf);
 int mon_backtrace(int argc, char **argv, struct Trapframe *tf);
+int mon_start_user(int argc, char **argv, struct Trapframe *tf);
 
 #endif  /* _KERN_ */
 

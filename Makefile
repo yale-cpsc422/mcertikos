@@ -85,7 +85,7 @@ CERTIKOS_IMG	:= certikos.img
 GDBPORT		:= $(shell expr `id -u` % 5000 + 25000)
 
 # qemu
-QEMU		:= qemu-system-i386
+QEMU		:= qemu-system-x86_64
 QEMUOPTS	:= -smp 1 -drive id=disk,file=$(CERTIKOS_IMG),format=raw,if=ide -serial mon:stdio -gdb tcp::$(GDBPORT) -m 2048 -k en-us -no-reboot
 QEMUOPTS_TCG	:= -icount shift=auto
 QEMUOPTS_KVM	:= -cpu host -enable-kvm
@@ -93,9 +93,9 @@ QEMUOPTS_BIOS	:= -L $(UTILSDIR)/qemu/
 
 # Targets
 
-.PHONY: all boot kern deps qemu qemu-nox qemu-gdb
+.PHONY: all boot kern user deps qemu qemu-nox qemu-gdb user_lib user_procs
 
-all: boot kern
+all: boot kern user link
 	@./make_image.py
 ifdef TEST
 	@echo "***"
@@ -148,12 +148,15 @@ cscope:
 	$(V)find . -name "*.[chsS]" > cscope.files
 	$(V)cscope -bkq -i cscope.files
 
+user: user_lib user_procs gen
+
 gdb: pre-qemu
 	$(GDB)
 
 # Sub-makefiles
 include boot/Makefile.inc
 include kern/Makefile.inc
+include user/Makefile.inc
 
 deps: $(OBJDIR)/.deps
 
