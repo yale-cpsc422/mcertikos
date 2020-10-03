@@ -1,6 +1,6 @@
+#include <proc.h>
 #include <stdarg.h>
 #include <stdio.h>
-#include <syscall.h>
 
 void debug(const char *file, int line, const char *fmt, ...)
 {

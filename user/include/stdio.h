@@ -21,10 +21,4 @@ void printfmt(void (*f)(int, void *), void *buf, const char *fmt, ...);
 void vprintfmt(void (*f)(int, void *), void *buf, const char *fmt,
                va_list ap);
 
-/*
- * reads up a line of up to size - 1 chars from keyboard into buf
- * and null terminates it
- */
-void gets(char *buf, int size);
-
 #endif  /* _USER_STDIO_H_ */

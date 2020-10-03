@@ -1,3 +1,8 @@
+/* Trap handler entry and exit code. */
+/* See COPYRIGHT for copyright information. */
+
+#include <lib/seg.h>
+#include <lib/trap.h>
 #include <dev/intr.h>
 
 /* The TRAPHANDLER macro defines a globally-visible function for handling
@@ -65,14 +70,6 @@ TRAPHANDLER_NOEC(Xirq_mouse,	T_IRQ0 + IRQ_MOUSE)
 TRAPHANDLER_NOEC(Xirq_coproc,	T_IRQ0 + IRQ_COPROCESSOR)
 TRAPHANDLER_NOEC(Xirq_ide1,	T_IRQ0 + IRQ_IDE1)
 TRAPHANDLER_NOEC(Xirq_ide2,	T_IRQ0 + IRQ_IDE2)
-TRAPHANDLER_NOEC(Xirq_ehci1,	T_IRQ0 + IRQ_EHCI_1)
-TRAPHANDLER_NOEC(Xirq17,	T_IRQ0 + 17)
-TRAPHANDLER_NOEC(Xirq18,	T_IRQ0 + 18)
-TRAPHANDLER_NOEC(Xirq19,	T_IRQ0 + 19)
-TRAPHANDLER_NOEC(Xirq20,	T_IRQ0 + 20)
-TRAPHANDLER_NOEC(Xirq21,	T_IRQ0 + 21)
-TRAPHANDLER_NOEC(Xirq22,	T_IRQ0 + 22)
-TRAPHANDLER_NOEC(Xirq_ehci2,	T_IRQ0 + IRQ_EHCI_2)
 
 /* syscall */
 TRAPHANDLER_NOEC(Xsyscall,	T_SYSCALL)
@@ -85,6 +82,7 @@ TRAPHANDLER     (Xdefault,	T_DEFAULT)
 	.p2align 4, 0x90	/* 16-byte alignment, nop filled */
 _alltraps:
 	cli			# make sure there is no nested trap
+	cld
 
 	pushl	%ds		# build context
 	pushl	%es
@@ -103,14 +101,11 @@ _alltraps:
 //
 // Trap return code.
 // C code in the kernel will call this function to return from a trap,
-// providing the
-// Restore the CPU state from a given trapframe struct
+// providing the restore the CPU state from a given trapframe struct
 // and return from the trap using the processor's 'iret' instruction.
-// This function does not return to the caller,
-// since the new CPU state this function loads
-// replaces the caller's stack pointer and other registers.
+// This function does not return to the caller since the new CPU state
+// this function loads replaces the caller's stack pointer and other registers.
 //
-
 	.globl trap_return
 	.type trap_return, @function
 	.p2align 4, 0x90	/* 16-byte alignment, nop filled */
@@ -120,4 +115,4 @@ trap_return:
 	popl	%es		// restore data segment registers
 	popl	%ds
 	addl	$8, %esp	// skip tf_trapno and tf_errcode
-	ret			// return from trap handler
+	iret			// return from trap handler

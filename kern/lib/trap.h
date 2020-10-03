@@ -3,7 +3,16 @@
 
 #ifdef _KERN_
 
-#define PFE_PR 0x1  /* Page fault caused by protection violation */
+#define PFE_PR        0x1         /* Page fault caused by protection violation */
+#define CPU_GDT_UCODE 0x18        /* user text */
+#define CPU_GDT_UDATA 0x20        /* user data */
+#define VM_USERHI     0xf0000000
+#define VM_USERLO     0x40000000
+#define FL_IF         0x00000200  /* Interrupt Flag */
+
+#ifndef __ASSEMBLER__
+
+#include <lib/types.h>
 
 typedef struct pushregs {
     uint32_t edi;
@@ -39,6 +48,8 @@ typedef struct tf_t {
 } tf_t;
 
 void trap_return(tf_t *tf);
+
+#endif  /* !__ASSEMBLER__ */
 
 #endif  /* _KERN_ */
 

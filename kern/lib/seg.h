@@ -177,6 +177,7 @@ typedef struct gatedesc {
 }
 
 void seg_init(void);
+void tss_switch(uint32_t pid);
 
 #endif  /* !__ASSEMBLER__ */
 
