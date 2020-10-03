@@ -1,4 +1,5 @@
 #include <lib/debug.h>
+#include <lib/types.h>
 #include "import.h"
 
 #define PAGESIZE     4096
@@ -20,8 +21,8 @@
 void pmem_init(unsigned int mbi_addr)
 {
     unsigned int nps;
-
-    // TODO: Define your local variables here.
+    unsigned int pg_idx, pmmap_size, cur_addr, highest_addr;
+    unsigned int entry_idx, flag, isnorm, start, len;
 
     // Calls the lower layer initialization primitive.
     // The parameter mbi_addr should not be used in the further code.
@@ -33,8 +34,18 @@ void pmem_init(unsigned int mbi_addr)
      * Hint: Think of it as the highest address in the ranges of the memory map table,
      *       divided by the page size.
      */
-    // TODO
+    nps = 0;
+    entry_idx = 0;
+    pmmap_size = get_size();
+    while (entry_idx < pmmap_size) {
+        cur_addr = get_mms(entry_idx) + get_mml(entry_idx);
+        if (nps < cur_addr) {
+            nps = cur_addr;
+        }
+        entry_idx++;
+    }
 
+    nps = ROUNDDOWN(nps, PAGESIZE) / PAGESIZE;
     set_nps(nps);  // Setting the value computed above to NUM_PAGES.
 
     /**
@@ -60,5 +71,30 @@ void pmem_init(unsigned int mbi_addr)
      *    the addresses are in a usable range. Currently, we do not utilize partial pages,
      *    so in that case, you should consider those pages as unavailable.
      */
-    // TODO
+    pg_idx = 0;
+    while (pg_idx < nps) {
+        if (pg_idx < VM_USERLO_PI || VM_USERHI_PI <= pg_idx) {
+            at_set_perm(pg_idx, 1);
+        } else {
+            entry_idx = 0;
+            flag = 0;
+            isnorm = 0;
+            while (entry_idx < pmmap_size && !flag) {
+                isnorm = is_usable(entry_idx);
+                start = get_mms(entry_idx);
+                len = get_mml(entry_idx);
+                if (start <= pg_idx * PAGESIZE && (pg_idx + 1) * PAGESIZE <= start + len) {
+                    flag = 1;
+                }
+                entry_idx++;
+            }
+
+            if (flag && isnorm) {
+                at_set_perm(pg_idx, 2);
+            } else {
+                at_set_perm(pg_idx, 0);
+            }
+        }
+        pg_idx++;
+    }
 }
