@@ -26,15 +26,17 @@ unsigned int proc_create(void *elf_addr, unsigned int quota)
     id = get_curid();
     pid = thread_spawn((void *) proc_start_user, id, quota);
 
-    elf_load(elf_addr, pid);
+    if (pid != NUM_IDS) {
+        elf_load(elf_addr, pid);
 
-    uctx_pool[pid].es = CPU_GDT_UDATA | 3;
-    uctx_pool[pid].ds = CPU_GDT_UDATA | 3;
-    uctx_pool[pid].cs = CPU_GDT_UCODE | 3;
-    uctx_pool[pid].ss = CPU_GDT_UDATA | 3;
-    uctx_pool[pid].esp = VM_USERHI;
-    uctx_pool[pid].eflags = FL_IF;
-    uctx_pool[pid].eip = elf_entry(elf_addr);
+        uctx_pool[pid].es = CPU_GDT_UDATA | 3;
+        uctx_pool[pid].ds = CPU_GDT_UDATA | 3;
+        uctx_pool[pid].cs = CPU_GDT_UCODE | 3;
+        uctx_pool[pid].ss = CPU_GDT_UDATA | 3;
+        uctx_pool[pid].esp = VM_USERHI;
+        uctx_pool[pid].eflags = FL_IF;
+        uctx_pool[pid].eip = elf_entry(elf_addr);
+    }
 
     return pid;
 }
