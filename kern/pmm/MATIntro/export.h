@@ -3,6 +3,10 @@
 
 #ifdef _KERN_
 
+void mem_spinlock_init(void);
+void mem_lock(void);
+void mem_unlock(void);
+
 unsigned int get_nps(void);
 void set_nps(unsigned int page_index);
 

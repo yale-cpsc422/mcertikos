@@ -25,17 +25,9 @@ struct Command {
 static struct Command commands[] = {
     {"help", "Display this list of commands", mon_help},
     {"kerninfo", "Display information about the kernel", mon_kerninfo},
-    {"startuser", "Start the user idle process", mon_start_user},
 };
 
 #define NCOMMANDS (sizeof(commands) / sizeof(commands[0]))
-
-extern uint8_t _binary___obj_user_idle_idle_start[];
-extern unsigned int proc_create(void *elf_addr, unsigned int quota);
-extern void tqueue_remove(unsigned int chid, unsigned int pid);
-extern void tcb_set_state(unsigned int pid, unsigned int state);
-extern void set_curid(unsigned int curid);
-extern void kctx_switch(unsigned int from_pid, unsigned int to_pid);
 
 /***** Implementations of basic kernel monitor commands *****/
 int mon_help(int argc, char **argv, struct Trapframe *tf)
@@ -58,29 +50,6 @@ int mon_kerninfo(int argc, char **argv, struct Trapframe *tf)
     dprintf("  end    %08x\n", end);
     dprintf("Kernel executable memory footprint: %dKB\n",
             ROUNDUP(end - start, 1024) / 1024);
-    return 0;
-}
-
-int mon_backtrace(int argc, char **argv, struct Trapframe *tf)
-{
-    // TODO
-    return 0;
-}
-
-int mon_start_user(int argc, char **argv, struct Trapframe *tf)
-{
-    unsigned int idle_pid;
-    idle_pid = proc_create(_binary___obj_user_idle_idle_start, 10000);
-    KERN_DEBUG("process idle %d is created.\n", idle_pid);
-
-    KERN_INFO("Start user-space ... \n");
-
-    tqueue_remove(NUM_IDS, idle_pid);
-    tcb_set_state(idle_pid, TSTATE_RUN);
-    set_curid(idle_pid);
-    kctx_switch(0, idle_pid);
-
-    KERN_PANIC("mon_start_user() should never reach here.\n");
     return 0;
 }
 

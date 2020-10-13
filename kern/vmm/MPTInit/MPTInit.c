@@ -10,3 +10,9 @@ void paging_init(unsigned int mbi_addr)
     set_pdir_base(0);
     enable_paging();
 }
+
+void paging_init_ap(void)
+{
+    set_pdir_base(0);
+    enable_paging();
+}

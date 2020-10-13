@@ -3,6 +3,20 @@
 #include <lib/string.h>
 #include "x86.h"
 
+gcc_inline uintptr_t read_esp(void)
+{
+    uint32_t esp;
+    __asm __volatile ("movl %%esp,%0" : "=rm" (esp));
+    return esp;
+}
+
+gcc_inline uint32_t read_ebp(void)
+{
+    uint32_t ebp;
+    __asm __volatile ("movl %%ebp,%0" : "=rm" (ebp));
+    return ebp;
+}
+
 gcc_inline void lldt(uint16_t sel)
 {
     __asm __volatile ("lldt %0" :: "r" (sel));
@@ -37,6 +51,35 @@ gcc_inline void halt(void)
     __asm __volatile ("hlt");
 }
 
+gcc_inline void pause(void)
+{
+    __asm __volatile ("pause" ::: "memory");
+}
+
+gcc_inline uint32_t xchg(volatile uint32_t *addr, uint32_t newval)
+{
+    uint32_t result;
+
+    __asm __volatile ("lock; xchgl %0, %1"
+                      : "+m" (*addr), "=a" (result)
+                      : "1" (newval)
+                      : "cc");
+
+    return result;
+}
+
+gcc_inline uint32_t cmpxchg(volatile uint32_t *addr, uint32_t oldval, uint32_t newval)
+{
+    uint32_t result;
+
+    __asm __volatile ("lock; cmpxchgl %2, %0"
+                      : "+m" (*addr), "=a" (result)
+                      : "r" (newval), "a" (oldval)
+                      : "memory", "cc");
+
+    return result;
+}
+
 gcc_inline uint64_t rdtsc(void)
 {
     uint64_t rv;
@@ -65,6 +108,23 @@ gcc_inline void cpuid(uint32_t info, uint32_t *eaxp, uint32_t *ebxp,
     __asm __volatile ("cpuid"
                       : "=a" (eax), "=b" (ebx), "=c" (ecx), "=d" (edx)
                       : "a" (info));
+    if (eaxp)
+        *eaxp = eax;
+    if (ebxp)
+        *ebxp = ebx;
+    if (ecxp)
+        *ecxp = ecx;
+    if (edxp)
+        *edxp = edx;
+}
+
+gcc_inline void cpuid_subleaf(uint32_t leaf, uint32_t subleaf, uint32_t *eaxp,
+                              uint32_t *ebxp, uint32_t *ecxp, uint32_t *edxp)
+{
+    uint32_t eax, ebx, ecx, edx;
+    asm volatile ("cpuid"
+                  : "=a" (eax), "=b" (ebx), "=c" (ecx), "=d" (edx)
+                  : "a" (leaf), "c" (subleaf));
     if (eaxp)
         *eaxp = eax;
     if (ebxp)

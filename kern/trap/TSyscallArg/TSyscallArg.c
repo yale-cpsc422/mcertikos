@@ -3,82 +3,74 @@
 
 #include "import.h"
 
-extern tf_t uctx_pool[NUM_IDS];
-
 /**
  * Retrieves the system call arguments from uctx_pool that get
  * passed in from the current running process' system call.
  */
-unsigned int syscall_get_arg1(void)
+unsigned int syscall_get_arg1(tf_t *tf)
 {
-    // TODO
-    return 0;
+    return tf->regs.eax;
 }
 
-unsigned int syscall_get_arg2(void)
+unsigned int syscall_get_arg2(tf_t *tf)
 {
-    // TODO
-    return 0;
+    return tf->regs.ebx;
 }
 
-unsigned int syscall_get_arg3(void)
+unsigned int syscall_get_arg3(tf_t *tf)
 {
-    // TODO
-    return 0;
+    return tf->regs.ecx;
 }
 
-unsigned int syscall_get_arg4(void)
+unsigned int syscall_get_arg4(tf_t *tf)
 {
-    // TODO
-    return 0;
+    return tf->regs.edx;
 }
 
-unsigned int syscall_get_arg5(void)
+unsigned int syscall_get_arg5(tf_t *tf)
 {
-    // TODO
-    return 0;
+    return tf->regs.esi;
 }
 
-unsigned int syscall_get_arg6(void)
+unsigned int syscall_get_arg6(tf_t *tf)
 {
-    // TODO
-    return 0;
+    return tf->regs.edi;
 }
 
 /**
  * Sets the error number in uctx_pool that gets passed
  * to the current running process when we return to it.
  */
-void syscall_set_errno(unsigned int errno)
+void syscall_set_errno(tf_t *tf, unsigned int errno)
 {
-    // TODO
+    tf->regs.eax = errno;
 }
 
 /**
  * Sets the return values in uctx_pool that get passed
  * to the current running process when we return to it.
  */
-void syscall_set_retval1(unsigned int retval)
+void syscall_set_retval1(tf_t *tf, unsigned int retval)
 {
-    // TODO
+    tf->regs.ebx = retval;
 }
 
-void syscall_set_retval2(unsigned int retval)
+void syscall_set_retval2(tf_t *tf, unsigned int retval)
 {
-    // TODO
+    tf->regs.ecx = retval;
 }
 
-void syscall_set_retval3(unsigned int retval)
+void syscall_set_retval3(tf_t *tf, unsigned int retval)
 {
-    // TODO
+    tf->regs.edx = retval;
 }
 
-void syscall_set_retval4(unsigned int retval)
+void syscall_set_retval4(tf_t *tf, unsigned int retval)
 {
-    // TODO
+    tf->regs.esi = retval;
 }
 
-void syscall_set_retval5(unsigned int retval)
+void syscall_set_retval5(tf_t *tf, unsigned int retval)
 {
-    // TODO
+    tf->regs.edi = retval;
 }

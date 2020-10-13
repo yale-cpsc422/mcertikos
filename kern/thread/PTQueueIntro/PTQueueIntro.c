@@ -1,4 +1,5 @@
 #include <lib/x86.h>
+#include <pcpu/PCPUIntro/export.h>
 
 /**
  * The structure for thread queues.
@@ -14,17 +15,19 @@ struct TQueue {
 };
 
 /**
- * The mCertiKOS kernel needs NUM_IDS + 1 thread queues.
+ * The mCertiKOS kernel needs NUM_IDS + NUM_CPUS thread queues.
  * The first NUM_IDS thread queues are thread sleep queues for the NUM_IDS threads/processes.
  * A thread can sleep on other thread's sleeping queue, waiting for the other thread
  * to perform some related tasks and wake it up.
  * You may not need these sleeping queues in this lab, but they will be particularly helpful
  * when you implement the inter-process communication protocols later.
- * The last queue with id NUM_IDS is called the ready queue.
- * Any threads that are ready to be scheduled are pushed to the ready queue,
+ * Queues with id (NUM_IDS + cpu_id) are called ready queues, where 0 <= cpu_id < NUM_CPUS.
+ * Any threads that are ready to be scheduled are pushed to a ready queue,
  * and are scheduled in a round-robin manner.
+ * Note that ready queue is per-CPU data structure, thus the kernel allocates
+ * one ready queue for each of its CPU.
  */
-struct TQueue TQueuePool[NUM_IDS + 1];
+struct TQueue TQueuePool[NUM_IDS + NUM_CPUS];
 
 unsigned int tqueue_get_head(unsigned int chid)
 {

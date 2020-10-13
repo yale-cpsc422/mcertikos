@@ -13,6 +13,10 @@ KERN_SRCFILES += $(KERN_DIR)/dev/pic.c
 KERN_SRCFILES += $(KERN_DIR)/dev/timer.c
 KERN_SRCFILES += $(KERN_DIR)/dev/tsc.c
 KERN_SRCFILES += $(KERN_DIR)/dev/idt.S
+KERN_SRCFILES += $(KERN_DIR)/dev/acpi.c
+KERN_SRCFILES += $(KERN_DIR)/dev/lapic.c
+KERN_SRCFILES += $(KERN_DIR)/dev/ioapic.c
+KERN_SRCFILES += $(KERN_DIR)/dev/pcpu_mp.c
 KERN_SRCFILES += $(KERN_DIR)/dev/kvm.c
 
 $(KERN_OBJDIR)/dev/%.o: $(KERN_DIR)/dev/%.c

@@ -6,6 +6,8 @@
 /**
  * The getter and setter functions implemented in the MATIntro layer.
  */
+void mem_lock(void);
+void mem_unlock(void);
 
 // The total number of physical pages.
 unsigned int get_nps(void);

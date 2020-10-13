@@ -6,6 +6,8 @@
 #include <lib/trap.h>
 
 void trap(tf_t *tf);
+void exception_handler(tf_t *tf);
+void interrupt_handler(tf_t *tf);
 
 #endif  /* _KERN_ */
 

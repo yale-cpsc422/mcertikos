@@ -4,6 +4,11 @@
 #include <lib/x86.h>
 
 #include <lib/types.h>
+#include <lib/spinlock.h>
+
+void debug_init(void)
+{
+}
 
 extern int vdprintf(const char *fmt, va_list ap);
 

@@ -15,6 +15,8 @@ unsigned int tqueue_dequeue(unsigned int chid);
 unsigned int get_curid(void);
 void set_curid(unsigned int curid);
 
+void tcb_set_cpu(unsigned int pid, unsigned int cpu);
+
 #endif  /* _KERN_ */
 
 #endif  /* !_KERN_THREAD_PTHREAD_H_ */

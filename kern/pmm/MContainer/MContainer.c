@@ -1,4 +1,5 @@
 #include <lib/debug.h>
+#include <lib/spinlock.h>
 #include <lib/x86.h>
 #include "import.h"
 
@@ -12,6 +13,7 @@ struct SContainer {
 
 // mCertiKOS supports up to NUM_IDS processes
 static struct SContainer CONTAINER[NUM_IDS];
+static spinlock_t container_lks[NUM_IDS];
 
 /**
  * Initializes the container data for the root process (the one with index 0).
@@ -20,16 +22,24 @@ static struct SContainer CONTAINER[NUM_IDS];
 void container_init(unsigned int mbi_addr)
 {
     unsigned int real_quota;
-    // TODO: define your local variables here.
+    unsigned int nps, idx;
 
     pmem_init(mbi_addr);
     real_quota = 0;
 
     /**
-     * TODO: Compute the available quota and store it into the variable real_quota.
+     * Compute the available quota and store it into the variable real_quota.
      * It should be the number of the unallocated pages with the normal permission
      * in the physical memory allocation table.
      */
+    nps = get_nps();
+    idx = 1;
+    while (idx < nps) {
+        if (at_is_norm(idx) && !at_is_allocated(idx)) {
+            real_quota++;
+        }
+        idx++;
+    }
 
     KERN_DEBUG("\nreal quota: %d\n\n", real_quota);
 
@@ -38,42 +48,41 @@ void container_init(unsigned int mbi_addr)
     CONTAINER[0].parent = 0;
     CONTAINER[0].nchildren = 0;
     CONTAINER[0].used = 1;
+
+    for (idx = 0; idx < NUM_IDS; idx++) {
+        spinlock_init(&container_lks[idx]);
+    }
 }
 
 // Get the id of parent process of process # [id].
 unsigned int container_get_parent(unsigned int id)
 {
-    // TODO
-    return 0;
+    return CONTAINER[id].parent;
 }
 
 // Get the number of children of process # [id].
 unsigned int container_get_nchildren(unsigned int id)
 {
-    // TODO
-    return 0;
+    return CONTAINER[id].nchildren;
 }
 
 // Get the maximum memory quota of process # [id].
 unsigned int container_get_quota(unsigned int id)
 {
-    // TODO
-    return 0;
+    return CONTAINER[id].quota;
 }
 
 // Get the current memory usage of process # [id].
 unsigned int container_get_usage(unsigned int id)
 {
-    // TODO
-    return 0;
+    return CONTAINER[id].usage;
 }
 
 // Determines whether the process # [id] can consume an extra
 // [n] pages of memory. If so, returns 1, otherwise, returns 0.
 unsigned int container_can_consume(unsigned int id, unsigned int n)
 {
-    // TODO
-    return 0;
+    return CONTAINER[id].usage + n <= CONTAINER[id].quota;
 }
 
 /**
@@ -86,6 +95,8 @@ unsigned int container_split(unsigned int id, unsigned int quota)
 {
     unsigned int child, nc;
 
+    spinlock_acquire(&container_lks[id]);
+
     nc = CONTAINER[id].nchildren;
     child = id * MAX_CHILDREN + 1 + nc;  // container index for the child process
 
@@ -94,8 +105,18 @@ unsigned int container_split(unsigned int id, unsigned int quota)
     }
 
     /**
-     * TODO: Update the container structure of both parent and child process appropriately.
+     * Update the container structure of both parent and child process appropriately.
      */
+    CONTAINER[child].used = 1;
+    CONTAINER[child].quota = quota;
+    CONTAINER[child].usage = 0;
+    CONTAINER[child].parent = id;
+    CONTAINER[child].nchildren = 0;
+
+    CONTAINER[id].usage += quota;
+    CONTAINER[id].nchildren++;
+
+    spinlock_release(&container_lks[id]);
 
     return child;
 }
@@ -107,14 +128,31 @@ unsigned int container_split(unsigned int id, unsigned int quota)
  */
 unsigned int container_alloc(unsigned int id)
 {
-    /*
-     * TODO: Implement the function here.
-     */
-    return 0;
+    unsigned int page_index = 0;
+
+    spinlock_acquire(&container_lks[id]);
+
+    if (CONTAINER[id].usage + 1 <= CONTAINER[id].quota) {
+        CONTAINER[id].usage++;
+        page_index = palloc();
+    }
+
+    spinlock_release(&container_lks[id]);
+
+    return page_index;
 }
 
 // Frees the physical page and reduces the usage by 1.
 void container_free(unsigned int id, unsigned int page_index)
 {
-    // TODO
+    spinlock_acquire(&container_lks[id]);
+
+    if (at_is_allocated(page_index)) {
+        pfree(page_index);
+        if (CONTAINER[id].usage > 0) {
+            CONTAINER[id].usage--;
+        }
+    }
+
+    spinlock_release(&container_lks[id]);
 }

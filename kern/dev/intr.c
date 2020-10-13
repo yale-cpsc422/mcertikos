@@ -6,8 +6,16 @@
 
 #include <dev/pic.h>
 #include <dev/intr.h>
+#include <dev/lapic.h>
+#include <dev/ioapic.h>
 
-volatile static bool intr_inited = FALSE;
+#include <pcpu/PCPUIntro/export.h>
+
+extern bool pcpu_onboot(void);
+extern uint32_t pcpu_ncpu(void);
+lapicid_t pcpu_cpu_lapicid(int cpu_idx);
+
+volatile static bool using_apic = FALSE;
 
 /* Entries of interrupt handlers, defined in kern/dev/idt.S by TRAPHANDLER */
 extern char Xdivide, Xdebug, Xnmi, Xbrkpt, Xoflow, Xbound, Xillop, Xdevice,
@@ -75,30 +83,74 @@ static void intr_init_idt(void)
 
     /* default */
     SETGATE(idt[T_DEFAULT], 0, CPU_GDT_KCODE, &Xdefault, 0);
+}
 
+static void intr_install_idt(void)
+{
     asm volatile ("lidt %0" :: "m" (idt_pd));
 }
 
 void intr_init(void)
 {
-    if (intr_inited == TRUE)
-        return;
+    uint32_t dummy, edx;
 
-    pic_init();
-    intr_init_idt();
-    intr_inited = TRUE;
+    cpuid(0x00000001, &dummy, &dummy, &dummy, &edx);
+    using_apic = (edx & CPUID_FEATURE_APIC) ? TRUE : FALSE;
+    KERN_ASSERT(using_apic == TRUE);
+
+    if (pcpu_onboot())
+    {
+        /* bootstrap processor */
+        pic_init();
+        if (using_apic)
+        {
+            ioapic_init();
+            intr_init_idt();
+        }
+    }
+
+    /* all processors */
+    if (using_apic)
+    {
+        lapic_init();
+    }
+    intr_install_idt();
 }
 
-void intr_enable(uint8_t irq)
+void intr_enable(uint8_t irq, int cpunum)
 {
-    if (irq >= 16)
+    KERN_ASSERT(cpunum == 0xff || (0 <= cpunum && cpunum < pcpu_ncpu()));
+
+    if (irq >= 24)
         return;
-    pic_enable(irq);
+
+    if (using_apic == TRUE) {
+        ioapic_enable(irq, (cpunum == 0xff) ?  0xff : pcpu_cpu_lapicid(cpunum), 0, 0);
+    } else {
+        KERN_ASSERT(irq < 16);
+        pic_enable(irq);
+    }
+}
+
+void intr_enable_lapicid(uint8_t irq, int lapic_id)
+{
+    if (irq > 24)
+        return;
+
+    if (using_apic == TRUE) {
+        ioapic_enable(irq, (lapic_id == 0xff) ?  0xff : lapic_id, 0, 0);
+    } else {
+        KERN_ASSERT(irq < 16);
+        pic_enable(irq);
+    }
 }
 
 void intr_eoi(void)
 {
-    pic_eoi();
+    if (using_apic == TRUE)
+        lapic_eoi();
+    else
+        pic_eoi();
 }
 
 void intr_local_enable(void)

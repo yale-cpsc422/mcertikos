@@ -47,15 +47,16 @@
 #define IRQ_COPROCESSOR 13  /* Math coprocessor interrupt */
 #define IRQ_IDE1        14  /* IDE disk controller 1 interrupt */
 #define IRQ_IDE2        15  /* IDE disk controller 2 interrupt */
-#define IRQ_EHCI_1      16
-#define IRQ_ERROR       19
-#define IRQ_EHCI_2      23
 
 #define T_SYSCALL 48
+#define T_LTIMER  49  // Local APIC timer interrupt
+#define T_LERROR  50  // Local APIC error interrupt
+#define T_PERFCTR 51  // Performance counter overflow interrupt
 
-#define T_LTIMER  49  /* Local APIC timer interrupt */
-#define T_LERROR  50  /* Local APIC error interrupt */
-#define T_PERFCTR 51  /* Performance counter overflow interrupt */
+/* (63 ~ 71) reserved for IPI */
+#define T_IPI0       63
+#define IPI_RESCHED  0
+#define IPI_INVALC   1
 
 /* (254) Default ? */
 #define T_DEFAULT 254
@@ -63,7 +64,8 @@
 #ifndef __ASSEMBLER__
 
 void intr_init(void);
-void intr_enable(uint8_t irq);
+void intr_enable(uint8_t irq, int cpunum);
+void intr_enable_lapicid(uint8_t irg, int lapic_id);
 void intr_local_enable(void);
 void intr_local_disable(void);
 void intr_eoi(void);

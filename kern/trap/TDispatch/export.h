@@ -3,7 +3,9 @@
 
 #ifdef _KERN_
 
-void syscall_dispatch(void);
+#include <lib/trap.h>
+
+void syscall_dispatch(tf_t *tf);
 
 #endif  /* _KERN_ */
 

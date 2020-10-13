@@ -1,6 +1,7 @@
 #include <lib/string.h>
 #include <lib/types.h>
 #include <lib/debug.h>
+#include <lib/spinlock.h>
 
 #include "video.h"
 #include "console.h"

@@ -12,7 +12,9 @@
 
 #ifndef __ASSEMBLER__
 
+#include <lib/x86.h>
 #include <lib/types.h>
+#include <lib/gcc.h>
 
 typedef struct pushregs {
     uint32_t edi;
@@ -48,6 +50,12 @@ typedef struct tf_t {
 } tf_t;
 
 void trap_return(tf_t *tf);
+
+typedef void (*trap_cb_t)(tf_t *);
+
+extern trap_cb_t TRAP_HANDLER[NUM_CPUS][256];
+
+void trap_init(unsigned int cpu_idx);
 
 #endif  /* !__ASSEMBLER__ */
 

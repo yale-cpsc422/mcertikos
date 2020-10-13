@@ -1,12 +1,17 @@
 #include <lib/syscall.h>
+#include <lib/x86.h>
+#include <lib/trap.h>
+#include <lib/debug.h>
+#include <dev/intr.h>
+#include <pcpu/PCPUIntro/export.h>
 
 #include "import.h"
 
-void syscall_dispatch(void)
+void syscall_dispatch(tf_t *tf)
 {
     unsigned int nr;
 
-    nr = syscall_get_arg1();
+    nr = syscall_get_arg1(tf);
 
     switch (nr) {
     case SYS_puts:
@@ -23,7 +28,7 @@ void syscall_dispatch(void)
          * Error:
          *   E_MEM
          */
-        sys_puts();
+        sys_puts(tf);
         break;
     case SYS_spawn:
         /*
@@ -39,7 +44,7 @@ void syscall_dispatch(void)
          * Error:
          *   E_INVAL_PID
          */
-        sys_spawn();
+        sys_spawn(tf);
         break;
     case SYS_yield:
         /*
@@ -54,12 +59,15 @@ void syscall_dispatch(void)
          * Error:
          *   None.
          */
-        sys_yield();
+        sys_yield(tf);
         break;
-    case SYS_fork:
-        sys_fork();
+    case SYS_produce:
+        sys_produce(tf);
+        break;
+    case SYS_consume:
+        sys_consume(tf);
         break;
     default:
-        syscall_set_errno(E_INVAL_CALLNR);
+        syscall_set_errno(tf, E_INVAL_CALLNR);
     }
 }
