@@ -10,11 +10,16 @@
 
 extern tf_t uctx_pool[NUM_IDS];
 
+unsigned int last_active[NUM_CPUS];
+
 void proc_start_user(void)
 {
     unsigned int cur_pid = get_curid();
+    unsigned int cpu_idx = get_pcpu_idx();
+
     kstack_switch(cur_pid);
     set_pdir_base(cur_pid);
+    last_active[cpu_idx] = cur_pid;
 
     trap_return((void *) &uctx_pool[cur_pid]);
 }

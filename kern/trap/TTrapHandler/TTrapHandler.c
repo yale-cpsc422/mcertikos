@@ -122,12 +122,21 @@ void interrupt_handler(tf_t *tf)
     }
 }
 
+unsigned int last_active[NUM_CPUS];
+
 void trap(tf_t *tf)
 {
     unsigned int cur_pid = get_curid();
+    unsigned int cpu_idx = get_pcpu_idx();
     trap_cb_t handler;
 
-    set_pdir_base(0);  // switch to the kernel's page table
+    unsigned int last_pid = last_active[cpu_idx];
+
+    if (last_pid != 0)
+    {
+        set_pdir_base(0);  // switch to the kernel's page table
+        last_active[cpu_idx] = 0;
+    }
 
     handler = TRAP_HANDLER[get_pcpu_idx()][tf->trapno];
 
@@ -137,8 +146,13 @@ void trap(tf_t *tf)
         KERN_WARN("No handler for user trap 0x%x, process %d, eip 0x%08x.\n",
                   tf->trapno, cur_pid, tf->eip);
     }
+    
+    if (last_pid != 0)
+    {
+        kstack_switch(cur_pid);
+        set_pdir_base(cur_pid);
+        last_active[cpu_idx] = last_pid;
+    }
 
-    kstack_switch(cur_pid);
-    set_pdir_base(cur_pid);
     trap_return((void *) tf);
 }
