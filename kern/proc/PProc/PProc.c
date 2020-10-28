@@ -10,7 +10,7 @@
 
 extern tf_t uctx_pool[NUM_IDS];
 
-unsigned int last_active[NUM_CPUS];
+extern unsigned int last_active[NUM_CPUS];
 
 void proc_start_user(void)
 {
