@@ -12,6 +12,8 @@ USER_tests_dummy_OBJ	:= $(OBJDIR)/proc/dummy/dummy.o
 $(USER_OBJDIR)/dummy/dummy: $(USER_LIB_OBJ) $(USER_tests_dummy_OBJ)
 	@echo + ld[USER/dummy] $@
 	$(V)$(LD) -o $@ $(USER_LDFLAGS) $(USER_LIB_OBJ) $(USER_tests_dummy_OBJ) $(GCC_LIBS)
+	mv $@ $@.bak
+	$(V)$(OBJCOPY) --remove-section .note.gnu.property $@.bak $@
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym
 
