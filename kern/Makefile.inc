@@ -57,5 +57,7 @@ link: $(KERN_OBJDIR)/kernel
 $(KERN_OBJDIR)/kernel: $(KERN_OBJFILES) $(KERN_BINFILES)
 	@echo + ld[KERN] $@
 	$(V)$(LD) -o $@ $(KERN_LDFLAGS) $(KERN_OBJFILES) $(GCC_LIBS) -b binary $(KERN_BINFILES)
+	mv $@ $@.bak
+	$(V)$(OBJCOPY) --remove-section .note.gnu.property $@.bak $@
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym
