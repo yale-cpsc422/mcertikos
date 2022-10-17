@@ -13,6 +13,8 @@ idle: $(USER_OBJDIR)/idle/idle
 $(USER_OBJDIR)/idle/idle: $(USER_LIB_OBJ) $(USER_IDLE_OBJ)
 	@echo + ld[USER/idle] $@
 	$(V)$(LD) -o $@ $(USER_LDFLAGS) $(USER_LIB_OBJ) $(USER_IDLE_OBJ) $(GCC_LIBS)
+	mv $@ $@.bak
+	$(V)$(OBJCOPY) --remove-section .note.gnu.property $@.bak $@
 	$(V)$(OBJDUMP) -S $@ > $@.asm
 	$(V)$(NM) -n $@ > $@.sym
 

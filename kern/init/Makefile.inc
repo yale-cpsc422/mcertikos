@@ -25,5 +25,7 @@ $(KERN_OBJDIR)/init/boot_ap.o: $(KERN_DIR)/init/boot_ap.S
 $(KERN_OBJDIR)/init/boot_ap: $(KERN_OBJDIR)/init/boot_ap.o
 	@echo + ld[KERN/init] $<
 	$(V)$(LD) -nostdlib -m elf_i386 -e start_ap -N -Ttext 0x8000 -o $@.elf $^
+	mv $@.elf $@.bak
+	$(V)$(OBJCOPY) --remove-section .note.gnu.property $@.bak $@.elf
 	$(V)$(OBJDUMP) -S $@.elf >$@.asm
 	$(V)$(OBJCOPY) -S -O binary $@.elf $@
